@@ -1,5 +1,5 @@
 {
-  "name": "my-turborepo",
+  "name": "todaymatters-turbo",
   "private": true,
   "scripts": {
     "build": "turbo run build",
