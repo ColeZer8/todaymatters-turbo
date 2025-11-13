@@ -2,6 +2,9 @@
   "scheme": "acme",
   "userInterfaceStyle": "automatic",
   "orientation": "default",
+  "ios": {
+    "bundleIdentifier": "com.todaymatters.mobile"
+  },
   "web": {
     "output": "static"
   },

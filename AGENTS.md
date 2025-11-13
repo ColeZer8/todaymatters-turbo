@@ -8,9 +8,30 @@ This pnpm + Turborepo workspace keeps runtime code under `apps/mobile`, an Expo 
 - `pnpm build` → `turbo run build` compiles packages in topological order and caches artifacts; append `-- --filter=mobile` for app-only builds.
 - `pnpm lint`, `pnpm check-types`, `pnpm format` enforce ESLint, TypeScript, and Prettier 3.
 - Device targets: `pnpm --filter mobile ios|android|web` tunnels Expo to the requested simulator; `pnpm --filter mobile deploy` runs `expo export` plus `eas-cli`.
+- Mobile dev server: prefer `pnpm dev -- --filter=mobile` so Turbo launches the Expo CLI. The `apps/mobile/scripts/expo-dev.mjs` wrapper strips Turbo’s `--filter` flag and forces `--host localhost` so the Expo UI and any local backend stay on the same origin. Run `pnpm --filter mobile start` only when you explicitly need standalone Expo.
 
 ## Coding Style & Naming Conventions
 Write everything in TypeScript with React function components. Import shared configs via `@repo/eslint-config/base` and `@repo/typescript-config/base`. Keep screens pascal-cased (`src/app/Home.tsx`), hooks prefixed with `use`, and shared utilities under `apps/mobile/src/lib`. Use Tailwind utility ordering `layout → spacing → color → state`, avoid inline styles unless necessary, and never disable lint without a linked issue.
+
+- **Atomic design required.** Build UI from atoms → molecules → organisms → templates → pages per `docs/atomic-design.md`. Shared UI lives under `apps/mobile/src/components/{atoms,molecules,organisms,templates}`; Expo Router screens stay in `apps/mobile/src/app/**`. Always include the `### Atomic Layer` snippet in PRs and follow the documented data-boundary rules (only pages perform data fetching/mutations).
+- **Tailwind ordering.** Apply utilities in the documented order (layout → sizing → spacing → border → background/color → typography → effects → state). If a utility falls outside that list, default to the closest bucket and avoid reordering-only diffs.
+
+### General Code Style & Formatting
+- Use functional, declarative patterns (no React class components); favor composition and iteration over duplication.
+- Name variables descriptively with auxiliaries (`isLoading`, `hasError`) and structure files as: exported component → subcomponents → helpers → static content → types.
+- Prefer named exports and lowercase-dashed directories (e.g., `components/auth-wizard`).
+- Always follow Expo documentation for setup/config and rely on project tooling (`pnpm format`) for Prettier enforcement.
+
+### TypeScript Best Practices
+- Write everything in TypeScript, enable/retain strict mode, and prefer `interface` declarations to `type` aliases when describing object shapes.
+- Avoid `any` and `enum`; use specific literals, discriminated unions, or maps.
+- Type functional components with explicit props interfaces, and keep data contracts tight instead of casting.
+
+### React Native & Styling Rules
+- Favor Expo/React Native primitives plus NativeWind for styling (styled-components acceptable only when Tailwind cannot express the requirement).
+- Implement responsive design with Flexbox + `useWindowDimensions`, support dark mode via `useColorScheme`, and ensure accessibility by adding roles/ARIA/native accessibility props.
+- Use `react-native-reanimated` and `react-native-gesture-handler` for animations/gestures requiring high performance.
+- Keep shared styles in `apps/mobile/src/global.css`; avoid inline styles except for dynamic values that Tailwind cannot cover.
 
 
 ## Security & Configuration Tips
