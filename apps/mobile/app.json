@@ -1,9 +1,16 @@
 {
-  "scheme": "acme",
+  "scheme": "todaymatters",
   "userInterfaceStyle": "automatic",
   "orientation": "default",
   "ios": {
     "bundleIdentifier": "com.todaymatters.mobile"
+  },
+  "android": {
+    "package": "com.todaymatters.mobile",
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#ffffff"
+    }
   },
   "web": {
     "output": "static"
@@ -12,7 +19,7 @@
     [
       "expo-router",
       {
-        "origin": "https://n"
+        "origin": false
       }
     ]
   ],
