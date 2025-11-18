@@ -1,2 +1,4 @@
-// Barrel file for atom-level components; re-export individual atoms here.
-export {};
+export { Avatar } from "./avatar";
+export { IconButton } from "./icon-button";
+export { ProgressBar } from "./progress-bar";
+export { TextBadge } from "./text-badge";

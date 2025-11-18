@@ -1,95 +1,87 @@
-import { Link } from "expo-router";
 import React from "react";
-import { Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export default function Page() {
-  return (
-    <View className="flex flex-1">
-      <Header />
-      <Content />
-      <Footer />
-    </View>
-  );
-}
+import { HomeTemplate } from "@/components/templates";
+import type { HomeTemplateProps } from "@/types/home";
 
-function Content() {
-  return (
-    <View className="flex-1">
-      <View className="py-12 md:py-24 lg:py-32 xl:py-48">
-        <View className="px-4 md:px-6">
-          <View className="flex flex-col items-center gap-4 text-center">
-            <Text
-              role="heading"
-              className="text-3xl text-center native:text-5xl font-bold tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl"
-            >
-              Welcome to Project ACME
-            </Text>
-            <Text className="mx-auto max-w-[700px] text-lg text-center text-gray-500 md:text-xl dark:text-gray-400">
-              Discover and collaborate on acme. Explore our services now.
-            </Text>
+const homeProps: HomeTemplateProps = {
+  hero: {
+    title: "Today Matters",
+    timestamp: "Friday, November 8 · 12:32PM",
+    subtitle: "Stay rooted, stay productive",
+    actions: [
+      { id: "search", icon: "search" },
+      { id: "focus", icon: "zap" },
+      { id: "share", icon: "share-2" },
+      { id: "profile", icon: "user" },
+    ],
+    avatarName: "Today Matters",
+  },
+  verse: {
+    title: "Verse of the Day",
+    reference: "Proverbs 3:5-6",
+    highlight: "Trust in the Lord with all your heart and lean not on your own understanding.",
+    fullText:
+      "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight.",
+  },
+  nextSteps: {
+    sectionTitle: "What's Next",
+    buttonLabel: "Perfect time for prayer & reflection",
+    event: {
+      title: "Meeting with Cole",
+      timeUntil: "in 32 min",
+      attendees: "Jake, Mark, Warren and 12 others",
+      statusDetail: "Verse of the Day kickoff via Zoom",
+    },
+    reminder: "You have 32 minutes until your next event.",
+    suggestions: [
+      { id: "big3", text: 'You have room to finish "Big 3 #2: Finish Q4 Strategy Deck"' },
+      { id: "comms", text: "Catch up on 4 pending communications" },
+      { id: "sarah", text: "Send that message to Sarah" },
+    ],
+    actionCardTitle: "Hot Communications & Actions",
+    actionCardSubtitle: "Triage the most important follow-ups",
+  },
+  bigThree: [
+    { id: "1", title: "Complete Q4 Strategy Presentation", status: "completed" },
+    { id: "2", title: "Finish Q4 Strategy Deck", status: "pending" },
+    { id: "3", title: "Review and Approve Marketing Budget", status: "pending" },
+  ],
+  communications: [
+    {
+      id: "c1",
+      sender: "Connor Chamberlin",
+      subject: "Follow up from planning meeting",
+      timeAgo: "2 hours ago",
+    },
+    {
+      id: "c2",
+      sender: "Grady Delmar",
+      subject: "Re: Team Meeting Tomorrow - Agenda",
+      timeAgo: "3 hours ago",
+    },
+    {
+      id: "c3",
+      sender: "Jake Oswald",
+      subject: "Revised Schedule and Plan",
+      timeAgo: "4 hours ago",
+    },
+    {
+      id: "c4",
+      sender: "Sergy Alim",
+      subject: "Core Lead - Completed Successfully",
+      timeAgo: "5 hours ago",
+    },
+  ],
+  daySegments: [
+    { id: "doc", time: "12pm", label: "Document Review", duration: "30 min", status: "upcoming", accent: "#a48dff" },
+    { id: "lunch", time: "12pm", label: "Lunch", duration: "30 min", status: "current", accent: "#f8b133" },
+    { id: "walk", time: "12:30pm", label: "Walk", duration: "30 min", accent: "#748cff" },
+    { id: "1pm", time: "1pm", label: "—", duration: "", accent: "#d5d8e8" },
+    { id: "2pm", time: "2pm", label: "—", duration: "", accent: "#d5d8e8" },
+    { id: "3pm", time: "3pm", label: "—", duration: "", accent: "#d5d8e8" },
+  ],
+};
 
-            <View className="gap-4">
-              <Link
-                suppressHighlighting
-                className="flex h-9 items-center justify-center overflow-hidden rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-gray-50 web:shadow ios:shadow transition-colors hover:bg-gray-900/90 active:bg-gray-400/90 web:focus-visible:outline-none web:focus-visible:ring-1 focus-visible:ring-gray-950 disabled:pointer-events-none disabled:opacity-50 dark:bg-gray-50 dark:text-gray-900 dark:hover:bg-gray-50/90 dark:focus-visible:ring-gray-300"
-                href="/"
-              >
-                Explore
-              </Link>
-            </View>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function Header() {
-  const { top } = useSafeAreaInsets();
-  return (
-    <View style={{ paddingTop: top }}>
-      <View className="px-4 lg:px-6 h-14 flex items-center flex-row justify-between ">
-        <Link className="font-bold flex-1 items-center justify-center" href="/">
-          ACME
-        </Link>
-        <View className="flex flex-row gap-4 sm:gap-6">
-          <Link
-            className="text-md font-medium hover:underline web:underline-offset-4"
-            href="/"
-          >
-            About
-          </Link>
-          <Link
-            className="text-md font-medium hover:underline web:underline-offset-4"
-            href="/"
-          >
-            Product
-          </Link>
-          <Link
-            className="text-md font-medium hover:underline web:underline-offset-4"
-            href="/"
-          >
-            Pricing
-          </Link>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function Footer() {
-  const { bottom } = useSafeAreaInsets();
-  return (
-    <View
-      className="flex shrink-0 bg-gray-100 native:hidden"
-      style={{ paddingBottom: bottom }}
-    >
-      <View className="py-6 flex-1 items-start px-4 md:px-6 ">
-        <Text className={"text-center text-gray-700"}>
-          © {new Date().getFullYear()} Me
-        </Text>
-      </View>
-    </View>
-  );
+export default function HomePage() {
+  return <HomeTemplate {...homeProps} />;
 }

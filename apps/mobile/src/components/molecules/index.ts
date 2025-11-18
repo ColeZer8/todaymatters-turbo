@@ -1,2 +1,2 @@
-// Barrel file for molecule-level components; re-export molecules here.
+// Barrel for molecule-level components; currently no shared molecules required.
 export {};
