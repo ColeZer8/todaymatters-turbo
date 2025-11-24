@@ -11,12 +11,13 @@ for (let i = 0; i < rawArgs.length; i += 1) {
   if (arg === "--") {
     continue;
   }
+  // Skip Turbo filter arguments in various formats
   if (arg === "--filter") {
     // Skip the standalone value Turbo forwards after "--filter".
     i += 1;
     continue;
   }
-  if (arg.startsWith("--filter=")) {
+  if (arg.startsWith("--filter=") || arg === "filter=mobile" || arg.startsWith("filter=")) {
     continue;
   }
   forwardedArgs.push(arg);
