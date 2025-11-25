@@ -1,5 +1,5 @@
 import "../global.css";
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { handleAuthCallback } from "@/lib/supabase";
@@ -20,7 +20,10 @@ export default function Layout() {
 
   return (
     <SafeAreaProvider>
-      <Slot />
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
+      </Stack>
     </SafeAreaProvider>
   );
 }

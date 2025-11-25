@@ -1,9 +1,11 @@
 import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SectionHeader } from '../molecules/SectionHeader';
 import { ActionItem } from '../molecules/ActionItem';
 import { MessageSquare } from 'lucide-react-native';
 
 export const PendingActions = () => {
+    const router = useRouter();
     return (
         <View className="mb-8">
             <SectionHeader title="PENDING ACTIONS" />
@@ -14,6 +16,7 @@ export const PendingActions = () => {
                     description="Connor, Grady, and 2 others need attention."
                     iconBgColor="bg-red-50"
                     iconColor="#EF4444"
+                    onPress={() => router.push('/communication')}
                 />
             </View>
         </View>
