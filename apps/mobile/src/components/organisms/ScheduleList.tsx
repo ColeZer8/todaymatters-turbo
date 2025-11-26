@@ -1,12 +1,14 @@
 import { View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SectionHeader } from '../molecules/SectionHeader';
 import { ScheduleItem } from '../molecules/ScheduleItem';
 import { Sun, CheckCircle2, Video } from 'lucide-react-native';
 
 export const ScheduleList = () => {
+    const router = useRouter();
     return (
         <View className="mb-6">
-            <SectionHeader title="YOUR BIG 3 & SCHEDULE" actionText="View All" />
+            <SectionHeader title="YOUR BIG 3 & SCHEDULE" actionText="View All" onActionPress={() => router.push('/calendar')} />
             <View className="bg-white rounded-3xl px-4 py-2 shadow-sm shadow-gray-100">
                 <ScheduleItem
                     icon={Sun}
