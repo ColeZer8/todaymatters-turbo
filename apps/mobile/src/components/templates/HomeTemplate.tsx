@@ -1,5 +1,5 @@
 
-import { View } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DailyBrief } from '../organisms/DailyBrief';
 import { ScheduleList } from '../organisms/ScheduleList';
@@ -10,8 +10,8 @@ export const HomeTemplate = () => {
     const insets = useSafeAreaInsets();
 
     return (
-        <View className="flex-1 bg-white">
-            <View className="flex-1 px-6" style={{ paddingTop: insets.top + 24 }}>
+        <View style={[styles.background, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 72 }]}>
+            <View style={styles.content}>
                 <DailyBrief />
                 <ScheduleList />
                 <PendingActions />
@@ -20,3 +20,14 @@ export const HomeTemplate = () => {
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    background: {
+        flex: 1,
+        backgroundColor: '#F7FAFF',
+    },
+    content: {
+        flex: 1,
+        paddingHorizontal: 24,
+    },
+});

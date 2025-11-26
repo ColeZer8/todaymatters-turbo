@@ -1,4 +1,4 @@
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
 interface GreetingProps {
     name: string;
@@ -7,13 +7,26 @@ interface GreetingProps {
 
 export const Greeting = ({ name, date }: GreetingProps) => {
     return (
-        <View style={{ marginBottom: 12 }}>
-            <Text style={{ fontSize: 34, fontWeight: '800', lineHeight: 40, color: '#111827' }}>
-                Good morning,
-            </Text>
-            <Text style={{ fontSize: 34, fontWeight: '800', lineHeight: 40, color: '#3B82F6' }}>
-                {name}.
-            </Text>
+        <View style={styles.container}>
+            <Text style={styles.title}>Good morning,</Text>
+            <Text style={[styles.title, styles.name]}>{name}.</Text>
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    container: {
+        marginTop: 4,
+        marginBottom: 16,
+    },
+    title: {
+        fontSize: 38,
+        lineHeight: 42,
+        fontWeight: '800',
+        color: '#111827',
+        // fontFamily: 'SF Pro Display', // Assuming system font handles this or it's set globally
+    },
+    name: {
+        color: '#2563EB',
+    },
+});

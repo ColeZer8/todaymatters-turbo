@@ -1,7 +1,7 @@
 import { Text, TextProps } from 'react-native';
 
-interface TypographyProps extends TextProps {
-    variant?: 'h1' | 'h2' | 'h3' | 'body' | 'caption' | 'link';
+    interface TypographyProps extends TextProps {
+    variant?: 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'caption' | 'link';
 }
 
 export const Typography = ({ variant = 'body', className, style, ...props }: TypographyProps) => {
@@ -9,13 +9,16 @@ export const Typography = ({ variant = 'body', className, style, ...props }: Typ
 
     switch (variant) {
         case 'h1':
-            baseStyle += " text-4xl font-extrabold text-text-primary tracking-tight";
+            baseStyle += " text-6xl font-black text-text-primary tracking-tight";
+            break;
+        case 'h4':
+            baseStyle += " text-4xl font-black text-text-primary tracking-tight";
             break;
         case 'h2':
             baseStyle += " text-xs font-bold text-text-secondary uppercase tracking-[0.2em]";
             break;
         case 'h3':
-            baseStyle += " text-lg font-bold text-text-primary";
+            baseStyle += " text-[15px] font-bold text-text-primary";
             break;
         case 'body':
             baseStyle += " text-lg text-text-secondary leading-7";

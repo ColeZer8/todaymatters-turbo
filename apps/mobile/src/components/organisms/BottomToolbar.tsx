@@ -1,4 +1,4 @@
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Calendar, BarChart3, User } from 'lucide-react-native';
@@ -9,36 +9,48 @@ export const BottomToolbar = () => {
     const insets = useSafeAreaInsets();
 
     return (
-        <View style={{ 
-            backgroundColor: 'white', 
-            borderTopWidth: 1, 
-            borderTopColor: '#F3F4F6',
-            paddingBottom: insets.bottom,
-        }}>
-            <View style={{ 
-                flexDirection: 'row', 
-                justifyContent: 'space-around', 
-                alignItems: 'center', 
-                paddingHorizontal: 24, 
-                paddingTop: 12,
-                paddingBottom: 8,
-            }}>
-                <TouchableOpacity style={{ alignItems: 'center', justifyContent: 'center', padding: 8 }} onPress={() => router.push('/')}>
-                    <Icon icon={Home} size={24} color="#3B82F6" />
+        <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
+            <View style={styles.tabContent}>
+                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/')}>
+                    <Icon icon={Home} size={24} color="#2563EB" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={{ alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+                <TouchableOpacity className="items-center justify-center p-2">
                     <Icon icon={Calendar} size={24} color="#9CA3AF" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={{ alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+                <TouchableOpacity className="items-center justify-center p-2">
                     <Icon icon={BarChart3} size={24} color="#9CA3AF" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={{ alignItems: 'center', justifyContent: 'center', padding: 8 }}>
+                <TouchableOpacity className="items-center justify-center p-2">
                     <Icon icon={User} size={24} color="#9CA3AF" />
                 </TouchableOpacity>
             </View>
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    tabBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: 'rgba(226,232,240,0.9)',
+        elevation: 6,
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.05,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: -3 },
+    },
+    tabContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        height: 70,
+        paddingHorizontal: 10,
+    }
+});

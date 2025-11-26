@@ -1,4 +1,5 @@
-import { View, TouchableOpacity, Text } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import { Typography } from '../atoms/Typography';
 
 interface SectionHeaderProps {
     title: string;
@@ -8,15 +9,11 @@ interface SectionHeaderProps {
 
 export const SectionHeader = ({ title, actionText, onActionPress }: SectionHeaderProps) => {
     return (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 32 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#4B5563', letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                {title}
-            </Text>
+        <View className="flex-row justify-between items-center mb-4 mt-2">
+            <Typography variant="h2">{title}</Typography>
             {actionText && (
                 <TouchableOpacity onPress={onActionPress}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#3B82F6' }}>
-                        {actionText}
-                    </Text>
+                    <Typography variant="link">{actionText}</Typography>
                 </TouchableOpacity>
             )}
         </View>

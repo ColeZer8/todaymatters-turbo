@@ -20,7 +20,7 @@ export default function Layout() {
 
   return (
     <SafeAreaProvider>
-      <Stack>
+      <Stack screenOptions={{ animation: 'none' }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
