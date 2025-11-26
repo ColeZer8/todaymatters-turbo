@@ -1,3 +1,4 @@
+/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
@@ -17,9 +18,6 @@ module.exports = {
           light: "#FFFFFF",
           offwhite: "#F9FAFB",
         }
-      },
-      fontFamily: {
-        sans: ["System"], // Default to system font for now
       }
     },
   },
