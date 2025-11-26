@@ -3,7 +3,10 @@
   "userInterfaceStyle": "automatic",
   "orientation": "default",
   "ios": {
-    "bundleIdentifier": "com.todaymatters.mobile"
+    "bundleIdentifier": "com.todaymatters.mobile",
+    "infoPlist": {
+      "ITSAppUsesNonExemptEncryption": false
+    }
   },
   "android": {
     "package": "com.todaymatters.mobile",
@@ -24,5 +27,13 @@
     ]
   ],
   "name": "mobile",
-  "slug": "mobile"
+  "slug": "mobile",
+  "extra": {
+    "router": {
+      "origin": false
+    },
+    "eas": {
+      "projectId": "4e1c4706-73fc-4230-bc8d-a876941dbf1b"
+    }
+  }
 }
