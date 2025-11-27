@@ -114,6 +114,9 @@ importers:
       babel-preset-expo:
         specifier: ~54.0.0
         version: 54.0.7(@babel/core@7.28.5)(@babel/runtime@7.28.4)(expo@54.0.23(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.14)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-refresh@0.14.2)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       typescript:
         specifier: ~5.9.2
         version: 5.9.2
@@ -2007,6 +2010,10 @@ packages:
 
   dotenv@16.4.7:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
+    engines: {node: '>=12'}
+
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
     engines: {node: '>=12'}
 
   dunder-proto@1.0.1:
@@ -6944,6 +6951,8 @@ snapshots:
   dotenv@16.0.3: {}
 
   dotenv@16.4.7: {}
+
+  dotenv@17.2.3: {}
 
   dunder-proto@1.0.1:
     dependencies:

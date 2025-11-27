@@ -1,22 +1,26 @@
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Calendar, BarChart3, User } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
 
 export const BottomToolbar = () => {
     const router = useRouter();
+    const pathname = usePathname();
     const insets = useSafeAreaInsets();
+
+    const isHome = pathname === '/' || pathname === '/index';
+    const isCalendar = pathname === '/calendar';
 
     return (
         <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
             <View style={styles.tabContent}>
                 <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/')}>
-                    <Icon icon={Home} size={24} color="#2563EB" />
+                    <Icon icon={Home} size={24} color={isHome ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
-                <TouchableOpacity className="items-center justify-center p-2">
-                    <Icon icon={Calendar} size={24} color="#9CA3AF" />
+                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/calendar')}>
+                    <Icon icon={Calendar} size={24} color={isCalendar ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
                 <TouchableOpacity className="items-center justify-center p-2">

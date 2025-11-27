@@ -1,4 +1,4 @@
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DateNavigator } from '../molecules/DateNavigator';
 import { CalendarEventItem } from '../molecules/CalendarEventItem';
@@ -77,27 +77,36 @@ export const CalendarTemplate = () => {
     const insets = useSafeAreaInsets();
 
     return (
-        <View className="flex-1 bg-white">
+        <View style={[styles.screen, { paddingTop: Math.max(insets.top - 11, 0) }]}>
             <DateNavigator date="Friday, Nov 8" />
 
-            <ScrollView className="flex-1 px-6">
-                <View className="bg-white rounded-3xl px-4 py-2 shadow-sm shadow-gray-100 mb-6">
-                    {EVENTS.map((event) => (
-                        <CalendarEventItem
-                            key={event.id}
-                            icon={event.icon}
-                            title={event.title}
-                            subtitle={event.subtitle}
-                            time={event.time}
-                            iconBgColor={event.iconBgColor}
-                            iconColor={event.iconColor}
-                        />
-                    ))}
-                </View>
+            <ScrollView
+                className="flex-1 px-6"
+                contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}
+                showsVerticalScrollIndicator={false}
+            >
+                {EVENTS.map((event) => (
+                    <CalendarEventItem
+                        key={event.id}
+                        icon={event.icon}
+                        title={event.title}
+                        subtitle={event.subtitle}
+                        time={event.time}
+                        iconBgColor={event.iconBgColor}
+                        iconColor={event.iconColor}
+                    />
+                ))}
             </ScrollView>
 
-            <FloatingActionButton />
+            <FloatingActionButton bottomOffset={insets.bottom + 82} />
             <BottomToolbar />
         </View>
     );
 };
+
+const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: '#F7FAFF',
+    },
+});
