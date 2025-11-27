@@ -11,32 +11,55 @@ WebBrowser.maybeCompleteAuthSession();
 const redirectTo = makeRedirectUri();
 
 /**
- * Creates a session from a URL containing OAuth callback parameters.
- * Used for handling OAuth redirects from providers like Google, Apple, etc.
+ * Creates a session from a URL containing OAuth callback parameters or email confirmation tokens.
+ * Used for handling OAuth redirects and email confirmation links.
+ * 
+ * Flow for email confirmation:
+ * 1. User clicks link in email → goes to Supabase server
+ * 2. Supabase verifies token server-side
+ * 3. Supabase redirects to our app deep link with access_token & refresh_token
+ * 4. This function processes those tokens and creates a session
  */
 export const createSessionFromUrl = async (url: string): Promise<Session | null> => {
   const { params, errorCode } = QueryParams.getQueryParams(url);
 
   if (errorCode) {
-    throw new Error(`OAuth error: ${errorCode}`);
+    throw new Error(`Auth error: ${errorCode}`);
   }
 
+  // Handle OAuth callbacks and email confirmation redirects
+  // Both use access_token and refresh_token after Supabase verifies server-side
   const { access_token, refresh_token } = params;
+  if (access_token && refresh_token) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token,
+    });
 
-  if (!access_token) {
-    return null;
+    if (error) {
+      throw error;
+    }
+
+    return data.session;
   }
 
-  const { data, error } = await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
+  // Handle token_hash format (alternative email confirmation format)
+  const { token_hash, type } = params;
+  if (token_hash && type === 'email') {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash,
+      type: 'email',
+    });
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return data.session;
   }
 
-  return data.session;
+  // No valid auth parameters found
+  return null;
 };
 
 /**
@@ -84,6 +107,26 @@ export const sendMagicLink = async (email: string): Promise<void> => {
 };
 
 /**
+ * Resends a sign-up confirmation email.
+ */
+export const resendEmailConfirmation = async (email: string): Promise<void> => {
+  // Use the app's deep link scheme for email confirmation redirects
+  const emailRedirectTo = 'todaymatters://auth/confirm';
+  
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: {
+      emailRedirectTo,
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+};
+
+/**
  * Handles deep linking for authentication callbacks.
  * Call this in your root component to handle auth redirects.
  * Returns a cleanup function to remove the event listener.
@@ -106,4 +149,3 @@ export const handleAuthCallback = (): (() => void) => {
     subscription.remove();
   };
 };
-

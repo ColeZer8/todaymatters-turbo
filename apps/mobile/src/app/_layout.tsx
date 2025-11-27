@@ -9,19 +9,30 @@ export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
-    // Initialize authentication state
-    initialize();
-    // Handle deep linking for OAuth callbacks
-    const cleanup = handleAuthCallback();
-    // Cleanup listener on unmount
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+    let unsubscribeAuth: (() => void) | undefined;
+
+    const run = async () => {
+      unsubscribeAuth = await initialize();
+    };
+
+    run();
+    const cleanupLinks = handleAuthCallback();
+
+    return () => {
+      cleanupLinks();
+      unsubscribeAuth?.();
+    };
+  }, [initialize]);
 
   return (
     <SafeAreaProvider>
       <Stack screenOptions={{ animation: 'none' }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
+        <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
+        <Stack.Screen name="permissions" options={{ headerShown: false }} />
+        <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
+        <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>

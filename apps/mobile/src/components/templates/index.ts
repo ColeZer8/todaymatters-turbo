@@ -1,2 +1,8 @@
-// Barrel file for template-level components; re-export templates here.
-export {};
+export { CalendarTemplate } from './CalendarTemplate';
+export { CommunicationTemplate } from './CommunicationTemplate';
+export { HomeTemplate } from './HomeTemplate';
+export { SignInTemplate } from './SignInTemplate';
+export { SignUpTemplate } from './SignUpTemplate';
+export { ConfirmEmailTemplate } from './ConfirmEmailTemplate';
+export { PermissionsTemplate } from './PermissionsTemplate';
+export { SetupQuestionsTemplate } from './SetupQuestionsTemplate';

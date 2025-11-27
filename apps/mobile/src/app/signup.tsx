@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { InteractionManager } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
-import { SignInTemplate } from '@/components/templates';
+import { SignUpTemplate } from '@/components/templates';
 import { performOAuth } from '@/lib/supabase';
 import { useAuthStore } from '@/stores';
 
 type OAuthProvider = 'apple' | 'google';
 
-export default function SignInScreen() {
+export default function SignUpScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
-  const signIn = useAuthStore((state) => state.signIn);
+  const signUp = useAuthStore((state) => state.signUp);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
 
@@ -32,7 +32,7 @@ export default function SignInScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
-  const handleEmailPasswordSignIn = async () => {
+  const handleEmailPasswordSignUp = async () => {
     if (!email || !password) {
       setAuthError('Please enter your email and password.');
       return;
@@ -41,27 +41,27 @@ export default function SignInScreen() {
     setAuthError(null);
     setIsSubmitting(true);
     try {
-      const { session, user } = await signIn(email.trim(), password);
+      const { session, user } = await signUp(email.trim(), password);
 
-      // If Supabase requires email confirmation, session may be null
-      if (!session?.user) {
-        const targetEmail = user?.email || email.trim();
-        router.replace({ pathname: '/confirm-email', params: { email: targetEmail } });
+      if (session?.user) {
+        router.replace('/home');
+        return;
       }
+
+      // If email confirmation is required, direct to the confirm screen
+      const targetEmail = user?.email || email.trim();
+      router.replace({
+        pathname: '/confirm-email',
+        params: { email: targetEmail },
+      });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to sign in right now.';
-      const lower = message.toLowerCase();
-      if (lower.includes('confirm') || lower.includes('verification')) {
-        router.replace({ pathname: '/confirm-email', params: { email: email.trim() } });
-      } else {
-        setAuthError(message);
-      }
+      setAuthError(error instanceof Error ? error.message : 'Unable to create your account right now.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleOAuthSignIn = async (provider: OAuthProvider) => {
+  const handleOAuthSignUp = async (provider: OAuthProvider) => {
     setAuthError(null);
     setIsSubmitting(true);
     try {
@@ -74,7 +74,7 @@ export default function SignInScreen() {
   };
 
   return (
-    <SignInTemplate
+    <SignUpTemplate
       email={email}
       password={password}
       isPasswordHidden={isPasswordHidden}
@@ -84,10 +84,10 @@ export default function SignInScreen() {
       onEmailChange={setEmail}
       onPasswordChange={setPassword}
       onTogglePasswordVisibility={() => setIsPasswordHidden((prev) => !prev)}
-      onSubmit={handleEmailPasswordSignIn}
-      onApplePress={() => handleOAuthSignIn('apple')}
-      onGooglePress={() => handleOAuthSignIn('google')}
-      onNavigateToSignUp={() => router.push('/signup')}
+      onSubmit={handleEmailPasswordSignUp}
+      onApplePress={() => handleOAuthSignUp('apple')}
+      onGooglePress={() => handleOAuthSignUp('google')}
+      onNavigateToSignIn={() => router.replace('/')}
     />
   );
 }

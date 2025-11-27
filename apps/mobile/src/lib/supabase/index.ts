@@ -4,5 +4,5 @@ export {
   performOAuth,
   sendMagicLink,
   handleAuthCallback,
+  resendEmailConfirmation,
 } from './auth';
-

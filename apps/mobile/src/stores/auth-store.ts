@@ -12,11 +12,16 @@ interface AuthState {
   // Actions
   setSession: (session: Session | null) => void;
   setUser: (user: User | null) => void;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ session: Session | null; user: User | null }>;
+  signUp: (email: string, password: string) => Promise<{ session: Session | null; user: User | null }>;
   signOut: () => Promise<void>;
-  initialize: () => Promise<void>;
+  initialize: () => Promise<(() => void) | undefined>;
 }
+
+// Use the app's deep link scheme for email confirmation redirects
+// Supabase will verify the token server-side, then redirect to this URL
+// The app will handle the deep link and complete the authentication
+const emailRedirectTo = 'todaymatters://auth/confirm';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -52,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
           if (error) throw error;
 
           get().setSession(data.session);
+          return { session: data.session, user: data.user };
         } catch (error) {
           set({ isLoading: false });
           throw error;
@@ -63,14 +69,20 @@ export const useAuthStore = create<AuthState>()(
       signUp: async (email: string, password: string) => {
         set({ isLoading: true });
         try {
+          // Supabase will handle email confirmation server-side
+          // After verification, it redirects to our app's deep link
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
+            options: {
+              emailRedirectTo: emailRedirectTo,
+            },
           });
 
           if (error) throw error;
 
           get().setSession(data.session);
+          return { session: data.session, user: data.user };
         } catch (error) {
           set({ isLoading: false });
           throw error;
@@ -97,21 +109,24 @@ export const useAuthStore = create<AuthState>()(
       initialize: async () => {
         set({ isLoading: true });
         try {
-          // Get initial session
           const {
             data: { session },
           } = await supabase.auth.getSession();
           get().setSession(session);
 
-          // Listen for auth state changes
-          supabase.auth.onAuthStateChange((_event, session) => {
-            get().setSession(session);
+          const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+            get().setSession(nextSession);
           });
+
+          return () => {
+            subscription?.subscription.unsubscribe();
+          };
         } catch (error) {
           console.error('Error initializing auth:', error);
         } finally {
           set({ isLoading: false });
         }
+        return undefined;
       },
     }),
     {
@@ -126,4 +141,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-

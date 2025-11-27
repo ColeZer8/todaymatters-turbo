@@ -9,13 +9,13 @@ export const BottomToolbar = () => {
     const pathname = usePathname();
     const insets = useSafeAreaInsets();
 
-    const isHome = pathname === '/' || pathname === '/index';
+    const isHome = pathname === '/home';
     const isCalendar = pathname === '/calendar';
 
     return (
         <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
             <View style={styles.tabContent}>
-                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/')}>
+                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/home')}>
                     <Icon icon={Home} size={24} color={isHome ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
