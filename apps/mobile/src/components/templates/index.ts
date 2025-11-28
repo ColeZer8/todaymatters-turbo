@@ -6,3 +6,4 @@ export { SignUpTemplate } from './SignUpTemplate';
 export { ConfirmEmailTemplate } from './ConfirmEmailTemplate';
 export { PermissionsTemplate } from './PermissionsTemplate';
 export { SetupQuestionsTemplate } from './SetupQuestionsTemplate';
+export { DailyRhythmTemplate } from './DailyRhythmTemplate';

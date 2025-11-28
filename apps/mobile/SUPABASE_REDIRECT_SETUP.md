@@ -64,3 +64,4 @@ todaymatters://auth/confirm
 - Deep linking is already set up in `_layout.tsx` to handle these URLs
 - The `handleAuthCallback` function will process the confirmation tokens
 
+

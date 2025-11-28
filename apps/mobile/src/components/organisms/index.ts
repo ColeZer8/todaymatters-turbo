@@ -1,2 +1,2 @@
 // Barrel file for organism-level components; re-export organisms here.
-export {};
+export { TimePickerModal } from './TimePickerModal';

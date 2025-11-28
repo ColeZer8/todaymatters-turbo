@@ -7,3 +7,4 @@ export { SectionHeader } from './SectionHeader';
 export { ScheduleItem } from './ScheduleItem';
 export { AuthInput } from './AuthInput';
 export { SocialAuthButton } from './SocialAuthButton';
+export { TimeSelectionCard } from './TimeSelectionCard';

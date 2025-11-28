@@ -1,25 +1,26 @@
 import { useEffect, useState } from 'react';
 import { InteractionManager } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
-import { SetupQuestionsTemplate } from '@/components/templates';
+import { DailyRhythmTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 
-export default function SetupQuestionsScreen() {
+const createTime = (hours: number, minutes: number) => {
+  const time = new Date();
+  time.setHours(hours);
+  time.setMinutes(minutes);
+  time.setSeconds(0);
+  time.setMilliseconds(0);
+  return time;
+};
+
+export default function DailyRhythmScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const [selection, setSelection] = useState<string | null>(null);
 
-  const OPTIONS = [
-    'Student',
-    'Professional',
-    'Parent',
-    'Entrepreneur',
-    'Retired',
-    'Creative',
-    'Other',
-  ];
+  const [wakeTime, setWakeTime] = useState(() => createTime(6, 30));
+  const [sleepTime, setSleepTime] = useState(() => createTime(22, 30));
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -31,14 +32,15 @@ export default function SetupQuestionsScreen() {
   }, [isAuthenticated, isNavigationReady, router]);
 
   return (
-    <SetupQuestionsTemplate
-      step={2}
+    <DailyRhythmTemplate
+      step={3}
       totalSteps={13}
-      options={OPTIONS}
-      selectedOption={selection}
-      onSelect={setSelection}
-      onContinue={() => router.replace('/daily-rhythm')}
-      onSkip={() => router.replace('/daily-rhythm')}
+      wakeTime={wakeTime}
+      sleepTime={sleepTime}
+      onSelectWakeTime={setWakeTime}
+      onSelectSleepTime={setSleepTime}
+      onContinue={() => router.replace('/home')}
+      onBack={() => router.back()}
     />
   );
 }

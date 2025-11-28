@@ -1,0 +1,196 @@
+import { useMemo, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { ArrowLeft, ArrowRight, MoonStar, SunMedium } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { GradientButton } from '@/components/atoms';
+import { TimeSelectionCard } from '@/components/molecules';
+import { TimePickerModal } from '@/components/organisms';
+
+type PickerType = 'wake' | 'sleep' | null;
+
+interface DailyRhythmTemplateProps {
+  step?: number;
+  totalSteps?: number;
+  wakeTime: Date;
+  sleepTime: Date;
+  onSelectWakeTime: (time: Date) => void;
+  onSelectSleepTime: (time: Date) => void;
+  onContinue: () => void;
+  onBack?: () => void;
+}
+
+const formatTime = (time: Date) => {
+  const rawHour = time.getHours();
+  const hour = rawHour % 12 || 12;
+  const paddedHour = hour < 10 ? `0${hour}` : String(hour);
+  const minutes = time.getMinutes().toString().padStart(2, '0');
+  const period = rawHour >= 12 ? 'PM' : 'AM';
+
+  return `${paddedHour}:${minutes} ${period}`;
+};
+
+export const DailyRhythmTemplate = ({
+  step = 3,
+  totalSteps = 13,
+  wakeTime,
+  sleepTime,
+  onSelectWakeTime,
+  onSelectSleepTime,
+  onContinue,
+  onBack,
+}: DailyRhythmTemplateProps) => {
+  const [activePicker, setActivePicker] = useState<PickerType>(null);
+
+  const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
+  const formattedWakeTime = useMemo(() => formatTime(wakeTime), [wakeTime]);
+  const formattedSleepTime = useMemo(() => formatTime(sleepTime), [sleepTime]);
+
+  const closePicker = () => setActivePicker(null);
+
+  return (
+    <LinearGradient
+      colors={['#f5f9ff', '#eef5ff']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.gradient}
+    >
+      <StatusBar style="dark" />
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerRow}>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-sm font-semibold text-text-secondary">
+                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+              </Text>
+              {onBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onBack}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                >
+                  <ArrowLeft size={14} color="#111827" />
+                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+          </View>
+
+          <View style={styles.titleBlock}>
+            <Text className="text-3xl font-extrabold text-text-primary">Your daily rhythm</Text>
+            <Text className="text-base leading-6 text-text-secondary">
+              Let&apos;s establish your baseline hours.
+            </Text>
+          </View>
+
+          <View style={styles.cardStack}>
+            <TimeSelectionCard
+              label="Wake time"
+              value={formattedWakeTime}
+              icon={SunMedium}
+              accentColor="#E0671E"
+              accentBackground="#FFEFE4"
+              onPress={() => setActivePicker('wake')}
+            />
+            <TimeSelectionCard
+              label="Sleep time"
+              value={formattedSleepTime}
+              icon={MoonStar}
+              accentColor="#5B5CE2"
+              accentBackground="#EEF0FF"
+              onPress={() => setActivePicker('sleep')}
+            />
+          </View>
+
+          <View style={styles.actions}>
+            <GradientButton
+              label="Continue"
+              onPress={onContinue}
+              rightIcon={ArrowRight}
+            />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      <TimePickerModal
+        label="Select your wake time"
+        visible={activePicker === 'wake'}
+        initialTime={wakeTime}
+        onConfirm={(time) => {
+          onSelectWakeTime(time);
+          closePicker();
+        }}
+        onClose={closePicker}
+      />
+
+      <TimePickerModal
+        label="Select your sleep time"
+        visible={activePicker === 'sleep'}
+        initialTime={sleepTime}
+        onConfirm={(time) => {
+          onSelectSleepTime(time);
+          closePicker();
+        }}
+        onClose={closePicker}
+      />
+    </LinearGradient>
+  );
+};
+
+const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 22,
+    paddingTop: 16,
+    paddingBottom: 36,
+    gap: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#E4E8F0',
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#2563EB',
+  },
+  titleBlock: {
+    marginTop: 14,
+    gap: 8,
+  },
+  cardStack: {
+    gap: 12,
+    marginTop: 8,
+  },
+  actions: {
+    marginTop: 18,
+  },
+});

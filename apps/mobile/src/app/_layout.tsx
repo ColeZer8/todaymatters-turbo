@@ -32,6 +32,7 @@ export default function Layout() {
         <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
         <Stack.Screen name="permissions" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
+        <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />
         <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
