@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { SetupQuestionsTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 export default function SetupQuestionsScreen() {
   const router = useRouter();
@@ -32,8 +33,8 @@ export default function SetupQuestionsScreen() {
 
   return (
     <SetupQuestionsTemplate
-      step={2}
-      totalSteps={13}
+      step={ONBOARDING_STEPS.setupQuestions}
+      totalSteps={ONBOARDING_TOTAL_STEPS}
       options={OPTIONS}
       selectedOption={selection}
       onSelect={setSelection}

@@ -85,10 +85,12 @@ export const PermissionsTemplate = ({
               </LinearGradient>
             </Pressable>
 
-            <View style={styles.individualRow}>
-              <Text className="text-base font-semibold text-brand-primary">View individual permissions</Text>
-              <ChevronDown size={18} color="#2563EB" />
-            </View>
+          <View style={styles.individualRow}>
+            <Text className="text-base font-semibold text-brand-primary">View individual permissions</Text>
+            <ChevronDown size={18} color="#2563EB" />
+          </View>
+
+          <View style={styles.flexSpacer} />
 
           <GradientButton
             label="Allow & continue"
@@ -96,14 +98,7 @@ export const PermissionsTemplate = ({
             rightIcon={ArrowRight}
           />
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={onCustomizeLater}
-            style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }, styles.customizeLater]}
-          >
-            <Text className="text-lg font-semibold text-text-primary">Customize later</Text>
-            <Text className="mt-2 text-sm text-text-secondary">You can change permissions anytime in settings.</Text>
-          </Pressable>
+          {/* Removed Customize later option as requested */}
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -122,10 +117,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 22,
-    paddingTop: 12,
+    paddingHorizontal: 26,
+    paddingTop: 20,
     paddingBottom: 32,
-    gap: 18,
+    gap: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -147,13 +142,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
   },
   titleBlock: {
-    marginTop: 6,
+    marginTop: 12,
+    marginBottom: 12,
   },
   permissionsHeader: {
-    gap: 4,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   headerUnderline: {
+    display: 'none', // Hidden to cleaner look
     height: 1,
     backgroundColor: '#D7E3FF',
     width: '100%',
@@ -168,37 +164,41 @@ const styles = StyleSheet.create({
   allowPillContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   allowIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.45)',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginRight: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginRight: 16,
   },
   allowTextBlock: {
     flex: 1,
   },
   toggleShell: {
-    width: 46,
-    height: 28,
+    width: 52,
+    height: 32,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   toggleKnob: {
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#fff',
     alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   toggleKnobOn: {
     backgroundColor: '#fff',
@@ -211,7 +211,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 6,
   },
-  customizeLater: {
-    alignItems: 'center',
+  flexSpacer: {
+    flexGrow: 1,
+    minHeight: 24,
   },
 });

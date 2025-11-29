@@ -28,7 +28,12 @@ Write everything in TypeScript with React function components. Import shared con
 - Type functional components with explicit props interfaces, and keep data contracts tight instead of casting.
 
 ### React Native & Styling Rules
-- Favor Expo/React Native primitives plus NativeWind for styling (styled-components acceptable only when Tailwind cannot express the requirement).
+- **STYLING CRITICAL:** Favor `NativeWind` (`className`) over `StyleSheet.create` whenever possible. It is more robust in this specific build environment.
+- **Component Updates:** If a component style isn't updating:
+    1.  Check for duplicate files/directories (e.g., `todaymatters-turbo/apps` vs `apps/`).
+    2.  Try completely deleting and recreating the component file to bust cache.
+    3.  Switch to direct `className` (NativeWind) implementation to bypass `StyleSheet` logic.
+    4.  **Restart the Bundler** (`npx expo start -c`) if changes persist in not showing.
 - Implement responsive design with Flexbox + `useWindowDimensions`, support dark mode via `useColorScheme`, and ensure accessibility by adding roles/ARIA/native accessibility props.
 - Use `react-native-reanimated` and `react-native-gesture-handler` for animations/gestures requiring high performance.
 - Keep shared styles in `apps/mobile/src/global.css`; avoid inline styles except for dynamic values that Tailwind cannot cover.

@@ -3,6 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { DailyRhythmTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 const createTime = (hours: number, minutes: number) => {
   const time = new Date();
@@ -33,13 +34,13 @@ export default function DailyRhythmScreen() {
 
   return (
     <DailyRhythmTemplate
-      step={3}
-      totalSteps={13}
+      step={ONBOARDING_STEPS.dailyRhythm}
+      totalSteps={ONBOARDING_TOTAL_STEPS}
       wakeTime={wakeTime}
       sleepTime={sleepTime}
       onSelectWakeTime={setWakeTime}
       onSelectSleepTime={setSleepTime}
-      onContinue={() => router.replace('/home')}
+      onContinue={() => router.replace('/joy')}
       onBack={() => router.back()}
     />
   );

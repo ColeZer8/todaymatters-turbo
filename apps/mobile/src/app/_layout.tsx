@@ -33,6 +33,13 @@ export default function Layout() {
         <Stack.Screen name="permissions" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
         <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />
+        <Stack.Screen name="joy" options={{ headerShown: false }} />
+        <Stack.Screen name="drains" options={{ headerShown: false }} />
+        <Stack.Screen name="your-why" options={{ headerShown: false }} />
+        <Stack.Screen name="focus-style" options={{ headerShown: false }} />
+        <Stack.Screen name="coach-persona" options={{ headerShown: false }} />
+        <Stack.Screen name="morning-mindset" options={{ headerShown: false }} />
+        <Stack.Screen name="goals" options={{ headerShown: false }} />
         <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />

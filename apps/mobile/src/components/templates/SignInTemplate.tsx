@@ -138,6 +138,8 @@ export const SignInTemplate = ({
               </View>
             </View>
 
+            <View style={styles.flexSpacer} />
+
             <View className="flex-row items-center justify-center">
               <Text className="text-base text-text-secondary">New here?</Text>
               <Pressable
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 28,
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
   content: {
     flex: 1,
@@ -199,5 +201,9 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
     shadowOffset: { width: 0, height: 14 },
     elevation: 10,
+  },
+  flexSpacer: {
+    flexGrow: 1,
+    minHeight: 20,
   },
 });

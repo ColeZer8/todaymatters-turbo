@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/atoms';
 import { TimeSelectionCard } from '@/components/molecules';
 import { TimePickerModal } from '@/components/organisms';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 type PickerType = 'wake' | 'sleep' | null;
 
@@ -32,8 +33,8 @@ const formatTime = (time: Date) => {
 };
 
 export const DailyRhythmTemplate = ({
-  step = 3,
-  totalSteps = 13,
+  step = ONBOARDING_STEPS.dailyRhythm,
+  totalSteps = ONBOARDING_TOTAL_STEPS,
   wakeTime,
   sleepTime,
   onSelectWakeTime,
@@ -113,6 +114,8 @@ export const DailyRhythmTemplate = ({
             />
           </View>
 
+          <View style={styles.spacer} />
+
           <View style={styles.actions}>
             <GradientButton
               label="Continue"
@@ -160,10 +163,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 36,
-    gap: 16,
+    paddingHorizontal: 26,
+    paddingTop: 20,
+    paddingBottom: 32,
+    gap: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -192,5 +195,9 @@ const styles = StyleSheet.create({
   },
   actions: {
     marginTop: 18,
+  },
+  spacer: {
+    flexGrow: 1,
+    minHeight: 20,
   },
 });

@@ -5,3 +5,4 @@ export { GradientButton } from './GradientButton';
 export { Icon } from './Icon';
 export { LogoBadge } from './LogoBadge';
 export { Typography } from './Typography';
+export { Panel } from './Panel';

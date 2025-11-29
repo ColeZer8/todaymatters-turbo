@@ -7,6 +7,7 @@ import {
   NativeSyntheticEvent,
   Platform,
   Pressable,
+  requireNativeComponent,
   StyleSheet,
   Text,
   View,
@@ -122,7 +123,31 @@ export const TimePickerModal = ({
   onConfirm,
   onClose,
 }: TimePickerModalProps) => {
-  const hasNativePicker = Platform.OS === 'ios' ? Boolean(NativeModules?.RNDateTimePicker) : true;
+  const hasNativePicker =
+    Platform.OS !== 'ios'
+      ? true
+      : (() => {
+          try {
+            const hasModule =
+              Boolean(NativeModules?.RNDateTimePicker) || Boolean(NativeModules?.RNDateTimePickerManager);
+            const component = requireNativeComponent?.('RNDateTimePicker');
+            const isComponentAvailable = Boolean(component);
+            console.log('RNDateTimePicker check', {
+              platform: Platform.OS,
+              hasModule,
+              hasManager: Boolean(NativeModules?.RNDateTimePickerManager),
+              isComponentAvailable,
+              keys: Object.keys(NativeModules || {}),
+            });
+            if (!hasModule || !isComponentAvailable) {
+              console.warn('RNDateTimePicker native module not detected; rendering fallback wheel.');
+            }
+            return hasModule && isComponentAvailable;
+          } catch {
+            console.warn('RNDateTimePicker requireNativeComponent failed; rendering fallback wheel.');
+            return false;
+          }
+        })();
   const [selectedTime, setSelectedTime] = useState(initialTime);
   const [hourIndex, setHourIndex] = useState(() => getInitialIndex('hour', initialTime));
   const [minuteIndex, setMinuteIndex] = useState(() => getInitialIndex('minute', initialTime));

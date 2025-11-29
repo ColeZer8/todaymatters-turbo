@@ -1,9 +1,11 @@
 import { GradientButton } from '@/components/atoms';
+import { TextChoiceCard } from '@/components/molecules';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowRight } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 interface SetupQuestionsTemplateProps {
   step?: number;
@@ -16,8 +18,8 @@ interface SetupQuestionsTemplateProps {
 }
 
 export const SetupQuestionsTemplate = ({
-  step = 2,
-  totalSteps = 5,
+  step = ONBOARDING_STEPS.setupQuestions,
+  totalSteps = ONBOARDING_TOTAL_STEPS,
   options,
   selectedOption,
   onSelect,
@@ -48,34 +50,31 @@ export const SetupQuestionsTemplate = ({
             <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
           </View>
 
-          <View style={styles.titleBlock}>
-            <Text className="text-3xl font-extrabold text-text-primary">Who are you?</Text>
-            <Text className="mt-3 text-base leading-6 text-text-secondary">
-              Help us categorize your primary focus.
-            </Text>
-          </View>
-
           <View style={styles.contentWidth}>
+            <View style={styles.titleBlock}>
+              <Text className="text-3xl font-extrabold text-text-primary">Who are you?</Text>
+              <Text className="mt-3 text-base leading-6 text-text-secondary">
+                Help us categorize your primary focus.
+              </Text>
+            </View>
+
             <View style={styles.choiceList}>
+              {/* Options list */}
               {options.map((option) => {
                 const isActive = option === selectedOption;
                 return (
-                  <Pressable
+                  <TextChoiceCard
                     key={option}
-                    accessibilityRole="button"
+                    label={option}
+                    selected={isActive}
                     onPress={() => onSelect(option)}
-                    style={({ pressed }) => [
-                      styles.choiceCard,
-                      isActive && styles.choiceCardActive,
-                      pressed && { opacity: 0.95 },
-                    ]}
-                  >
-                    <Text style={[styles.choiceText, isActive && styles.choiceTextActive]}>{option}</Text>
-                  </Pressable>
+                  />
                 );
               })}
             </View>
           </View>
+
+          <View style={styles.flexSpacer} />
 
           <View style={styles.contentWidth}>
             <GradientButton
@@ -85,14 +84,15 @@ export const SetupQuestionsTemplate = ({
             />
           </View>
 
-          {onSkip ? (
+          {/* Skip button removed per request */}
+          {/* {onSkip ? (
             <Text
               className="text-base font-semibold text-text-primary text-center mt-2"
               onPress={onSkip}
             >
               Skip for now
             </Text>
-            ) : null}
+            ) : null} */}
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -116,10 +116,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 36,
-    gap: 16,
+    paddingHorizontal: 26,
+    paddingTop: 20,
+    paddingBottom: 32,
+    gap: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -140,39 +140,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
   },
   titleBlock: {
-    marginTop: 6,
-    gap: 6,
+    marginTop: 4,
+    gap: 4,
   },
   choiceList: {
-    gap: 14,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 20,
   },
-  choiceCard: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#D1DBEC',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
-    paddingHorizontal: 18,
-    width: '100%',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  choiceCardActive: {
-    borderColor: '#2F6FEB',
-    backgroundColor: '#EAF2FF',
-    shadowOpacity: 0.09,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  choiceText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  choiceTextActive: {
-    color: '#2563EB',
+  flexSpacer: {
+    flexGrow: 1,
+    minHeight: 20,
   },
 });
