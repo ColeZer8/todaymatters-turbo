@@ -148,6 +148,13 @@ export const TimePickerModal = ({
             return false;
           }
         })();
+  useEffect(() => {
+    console.log('RNDateTimePicker module snapshot', {
+      platform: Platform.OS,
+      pickerModule: NativeModules?.RNDateTimePicker,
+      pickerManager: NativeModules?.RNDateTimePickerManager,
+    });
+  }, []);
   const [selectedTime, setSelectedTime] = useState(initialTime);
   const [hourIndex, setHourIndex] = useState(() => getInitialIndex('hour', initialTime));
   const [minuteIndex, setMinuteIndex] = useState(() => getInitialIndex('minute', initialTime));

@@ -88,6 +88,24 @@ yarn exec turbo dev --filter=web
 pnpm exec turbo dev --filter=web
 ```
 
+### Mobile Development (Expo)
+
+To develop the mobile app, run the following commands from the workspace root:
+
+```sh
+# Start dev server
+pnpm --filter mobile start
+
+# Or use Turbo (runs your expo-dev.mjs wrapper)
+pnpm dev -- --filter=mobile
+
+# Run on iOS simulator
+pnpm --filter mobile ios
+
+# Run on Android emulator
+pnpm --filter mobile android
+```
+
 ### Remote Caching
 
 > [!TIP]
