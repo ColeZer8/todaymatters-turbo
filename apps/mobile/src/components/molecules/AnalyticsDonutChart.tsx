@@ -12,6 +12,7 @@ interface AnalyticsDonutChartProps {
   radius?: number;
   strokeWidth?: number;
   label?: string;
+  startAngle?: number;
 }
 
 export const AnalyticsDonutChart = ({
@@ -19,6 +20,7 @@ export const AnalyticsDonutChart = ({
   radius = 64,
   strokeWidth = 48,
   label,
+  startAngle = -90,
 }: AnalyticsDonutChartProps) => {
   const circumference = 2 * Math.PI * radius;
   const total = data.reduce((sum, slice) => sum + slice.value, 0) || 1;
@@ -30,7 +32,7 @@ export const AnalyticsDonutChart = ({
         width={(radius + strokeWidth) * 2}
         viewBox={`0 0 ${(radius + strokeWidth) * 2} ${(radius + strokeWidth) * 2}`}
       >
-        <G rotation={-90} origin={`${radius + strokeWidth}, ${radius + strokeWidth}`}>
+        <G rotation={startAngle} origin={`${radius + strokeWidth}, ${radius + strokeWidth}`}>
           {data.reduce<{ start: number; elements: JSX.Element[] }>((acc, slice, index) => {
             const slicePercent = slice.value / total;
             const dashLength = circumference * slicePercent;
@@ -76,11 +78,11 @@ export const AnalyticsDonutChart = ({
       <View className="absolute items-center justify-center">
         <View
           className="items-center justify-center rounded-full bg-white shadow-sm shadow-[#0f172a1a]"
-          style={{ height: 110, width: 110 }}
+          style={{ height: 102, width: 102 }}
         >
           <View
             className="items-center justify-center rounded-full bg-white"
-            style={{ height: 72, width: 72 }}
+            style={{ height: 66, width: 66 }}
           >
             {label ? (
               <Text

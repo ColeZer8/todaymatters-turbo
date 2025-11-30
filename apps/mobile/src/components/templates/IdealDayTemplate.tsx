@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, PanResponder, Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowRight, Edit3, Plus, Trash2 } from 'lucide-react-native';
-import Svg, { Circle, G, Path } from 'react-native-svg';
 import { GradientButton } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import type { IdealDayCategory } from '@/stores/ideal-day-store';
+import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
 
 interface IdealDayTemplateProps {
   step?: number;
@@ -31,73 +31,6 @@ const WEEKDAY_KEYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const palette = ['#4F8BFF', '#22A776', '#F59E0B', '#EC4899', '#F97316', '#7C3AED', '#10B981'];
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const Ring = ({ segments, totalHours }: { segments: { value: number; color: string }[]; totalHours: number }) => {
-  const radius = 48;
-  let startAngle = -90;
-
-  const paths = segments.map((segment) => {
-    const percent = clamp(segment.value / 24, 0, 1);
-    const sweep = percent * 360;
-    const endAngle = startAngle + sweep;
-    const largeArc = sweep > 180 ? 1 : 0;
-    const startRad = (Math.PI / 180) * startAngle;
-    const endRad = (Math.PI / 180) * endAngle;
-    const x1 = 60 + radius * Math.cos(startRad);
-    const y1 = 60 + radius * Math.sin(startRad);
-    const x2 = 60 + radius * Math.cos(endRad);
-    const y2 = 60 + radius * Math.sin(endRad);
-    startAngle = endAngle;
-    return {
-      d: `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`,
-      color: segment.color,
-    };
-  });
-
-  const planned = clamp(totalHours, 0, 24);
-
-  return (
-    <Svg width={140} height={140} viewBox="0 0 120 120">
-      <Circle cx="60" cy="60" r="48" stroke="#E5EAF5" strokeWidth="16" fill="none" />
-      <G strokeWidth="16" fill="none" strokeLinecap="round">
-        {paths.map((p, idx) => (
-          <Path key={idx} d={p.d} stroke={p.color} />
-        ))}
-      </G>
-      <Text
-        accessibilityRole="text"
-        style={{
-          position: 'absolute',
-          top: 44,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          fontWeight: '800',
-          fontSize: 22,
-          color: '#2563EB',
-        }}
-      >
-        {planned}h
-      </Text>
-      <Text
-        accessibilityRole="text"
-        style={{
-          position: 'absolute',
-          top: 72,
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          fontWeight: '700',
-          fontSize: 12,
-          color: '#6B7280',
-          letterSpacing: 1,
-        }}
-      >
-        PLANNED
-      </Text>
-    </Svg>
-  );
-};
 
 interface SliderBarProps {
   id: string;
@@ -145,11 +78,9 @@ const SliderBar = ({ label, color, hours, maxHours, onChange, onDelete }: Slider
 
   return (
     <View className="flex-row items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-3">
-      <View className="h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: `${color}22` }}>
-        <View className="h-5 w-5 rounded-full" style={{ backgroundColor: color }} />
-      </View>
+      <View className="h-full w-2 rounded-full" style={{ backgroundColor: color }} />
       <View className="flex-1 gap-2">
-        <Text className="text-base font-semibold text-text-primary">{label}</Text>
+        <Text className="text-base font-semibold" style={{ color }}>{label}</Text>
         <View
           className="h-4 rounded-full bg-[#EFF2F7]"
           onLayout={handleLayout}
@@ -162,7 +93,9 @@ const SliderBar = ({ label, color, hours, maxHours, onChange, onDelete }: Slider
           />
         </View>
       </View>
-      <Text className="w-10 text-right text-base font-semibold text-text-primary">{hours}</Text>
+      <View className="min-w-[44px] rounded-lg border border-[#E5E7EB] bg-white px-2 py-1">
+        <Text className="text-right text-base font-semibold text-text-primary">{hours}</Text>
+      </View>
       {onDelete ? (
         <Pressable
           onPress={onDelete}
@@ -215,7 +148,8 @@ export const IdealDayTemplate = ({
       }
     >
       <View className="mt-4 gap-4">
-        <View className="flex-row items-center justify-center gap-2 rounded-full bg-[#EAF1FF] px-3 py-1">
+        <View className="rounded-2xl border border-[#E5E7EB] bg-white px-3 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
+          <View className="flex-row items-center justify-center gap-2 rounded-full bg-[#F2F6FF] px-2 py-1">
           {DAY_TYPES.map((tab) => (
             <Pressable
               key={tab.key}
@@ -229,31 +163,45 @@ export const IdealDayTemplate = ({
           ))}
         </View>
 
-        <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center justify-between mt-3">
           {WEEKDAY_KEYS.map((day, idx) => (
             <View
               key={`${day}-${idx}`}
-              className={`h-12 w-12 items-center justify-center rounded-xl ${idx < 5 ? 'bg-brand-primary' : 'bg-[#F4F7FB]'}`}
+              className={`h-12 w-12 items-center justify-center rounded-lg ${idx < 5 ? 'bg-brand-primary' : 'bg-[#F4F7FB]'}`}
             >
               <Text className={`text-base font-semibold ${idx < 5 ? 'text-white' : 'text-text-secondary'}`}>{day}</Text>
             </View>
           ))}
         </View>
-
-        <View className="items-center">
-          <Ring totalHours={totalHours} segments={segments} />
+        <Text className="text-center text-xs font-semibold text-text-tertiary mt-2">NO DAYS SAVED</Text>
         </View>
 
-        <View className="rounded-2xl border border-[#E4E8F0] bg-white px-3 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
+        <View className="items-center">
+          <View className="relative items-center justify-center" style={{ height: 180 }}>
+            <AnalyticsDonutChart
+              data={segments.map((s, idx) => ({ label: `${idx}`, value: s.value, color: s.color }))}
+              radius={56}
+              strokeWidth={28}
+              startAngle={-90}
+            />
+            <View className="absolute items-center justify-center">
+              <Text className="text-brand-primary" style={{ fontSize: 22, fontWeight: '800' }}>
+                {totalHours % 1 === 0 ? `${totalHours}` : totalHours.toFixed(1)}h
+              </Text>
+              <Text className="uppercase text-[#6B7280]" style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
+                Planned
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View className="rounded-2xl border border-[#DFE7F2] bg-white px-3 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
           <View className="flex-row items-center justify-between px-1 pb-2">
             <Text className="text-base font-semibold text-brand-primary">Free time:</Text>
             <Text className="text-base font-semibold text-text-primary">{freeTime.toFixed(1)}h</Text>
           </View>
-          <View className="h-4 rounded-full bg-[#EFF2F7]">
-            <View
-              className="h-full rounded-full bg-brand-primary/30"
-              style={{ width: `${(freeTime / 24) * 100}%` }}
-            />
+          <View className="h-4 rounded-full bg-[#E9EEF5] overflow-hidden">
+            <View className="h-full rounded-r-full" style={{ width: `${(freeTime / 24) * 100}%`, backgroundColor: '#AFC8FF' }} />
           </View>
         </View>
 

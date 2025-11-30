@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, TextInput, View } from 'react-native';
-import { ArrowRight, Minus, Plus } from 'lucide-react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
+import { ArrowRight, Plus } from 'lucide-react-native';
 import { GradientButton } from '@/components/atoms';
 import { RoutineItemCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
+import { DraggableRoutineList, SetupStepLayout } from '@/components/organisms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 export interface RoutineItem {
@@ -82,18 +82,6 @@ export const RoutineBuilderTemplate = ({
     return { start: format(start), end: format(end) };
   };
 
-  const renderItem = ({ item }: { item: RoutineItem }) => (
-    <RoutineItemCard
-      title={item.title}
-      minutes={item.minutes}
-      icon={item.icon}
-      onPress={() => setExpandedId((prev) => (prev === item.id ? null : item.id))}
-      onDelete={() => onDelete(item.id)}
-      onChangeMinutes={(value) => onChangeMinutes(item.id, value)}
-      minutesLabel={`${item.minutes}m`}
-    />
-  );
-
   return (
     <SetupStepLayout
       step={step}
@@ -118,57 +106,16 @@ export const RoutineBuilderTemplate = ({
       }
     >
       <View className="mt-4 gap-3">
-        <View className="rounded-2xl border border-[#E4E8F0] bg-white px-2 py-2" style={cardShadowStyle}>
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View className="gap-2">
-                {renderItem({ item })}
-                {expandedId === item.id ? (
-                  <View className="rounded-2xl border border-[#E4E8F0] bg-white px-4 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
-                    <View className="flex-row justify-between">
-                      <Text className="text-sm font-semibold text-text-secondary">Start</Text>
-                      <Text className="text-sm font-semibold text-text-secondary">End</Text>
-                    </View>
-                    <View className="flex-row justify-between">
-                      <Text className="text-xl font-bold text-text-primary">{getStartEnd(item.id).start}</Text>
-                      <Text className="text-xl font-bold text-text-primary">{getStartEnd(item.id).end}</Text>
-                    </View>
-
-                    <View className="mt-3 gap-3">
-                      <Text className="text-base font-semibold text-text-primary">Time allotted</Text>
-                      <View className="flex-row items-center justify-center gap-3">
-                        <Pressable
-                          onPress={() => onChangeMinutes(item.id, Math.max(1, item.minutes - 5))}
-                          className="h-10 w-10 items-center justify-center rounded-full bg-[#EEF5FF]"
-                          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                        >
-                          <Minus size={18} color="#2563EB" />
-                        </Pressable>
-                        <Text className="text-2xl font-bold text-text-primary">{item.minutes}m</Text>
-                        <Pressable
-                          onPress={() => onChangeMinutes(item.id, item.minutes + 5)}
-                          className="h-10 w-10 items-center justify-center rounded-full bg-[#EEF5FF]"
-                          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                        >
-                          <Plus size={18} color="#2563EB" />
-                        </Pressable>
-                      </View>
-                      <Pressable
-                        onPress={() => setExpandedId(null)}
-                        className="items-center"
-                        style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-                      >
-                        <Text className="text-sm font-semibold text-text-secondary">Done</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            )}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View className="h-3" />}
+        <View className="relative">
+          <DraggableRoutineList
+            items={items}
+            expandedId={expandedId}
+            onToggleExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+            onChangeMinutes={onChangeMinutes}
+            onDelete={onDelete}
+            onReorder={onReorder}
+            onDragStart={() => setExpandedId(null)}
+            getStartEnd={getStartEnd}
           />
         </View>
 
