@@ -82,3 +82,4 @@ Research + implementation plan to make the Build your routine page’s habit car
 - Added `DraggableRoutineList` organism (Reanimated + Gesture Handler Pan with long-press gating) that animates translate/scale; drag handle removed for cleaner visuals (long-press anywhere on the card to drag).
 - Wired `RoutineBuilderTemplate` to use the draggable list; drag start collapses expanded cards to keep measurements stable and avoid jitter.
 - Expanded panel still shows start/end times and minute controls; drag remains long-press gated to prevent accidental drags on content controls.
+- Card tap behavior: tapping anywhere on a card toggles the time editor; delete/minus/plus/Done buttons stop propagation so they don’t toggle or interfere with drag.

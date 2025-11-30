@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ComponentType } from 'react';
 import { LayoutChangeEvent, PanResponder, Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowRight, Edit3, Plus, Trash2 } from 'lucide-react-native';
 import { GradientButton } from '@/components/atoms';
@@ -29,11 +29,12 @@ const DAY_TYPES: Array<{ key: IdealDayTemplateProps['dayType']; label: string }>
 const WEEKDAY_KEYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const palette = ['#4F8BFF', '#22A776', '#F59E0B', '#EC4899', '#F97316', '#7C3AED', '#10B981'];
+const freeColor = '#AFC8FF';
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 interface SliderBarProps {
-  id: string;
+  icon: ComponentType<{ size?: number; color?: string }>;
   label: string;
   color: string;
   hours: number;
@@ -42,7 +43,7 @@ interface SliderBarProps {
   onDelete?: () => void;
 }
 
-const SliderBar = ({ label, color, hours, maxHours, onChange, onDelete }: SliderBarProps) => {
+const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDelete }: SliderBarProps) => {
   const [width, setWidth] = useState(0);
   const trackRef = useRef<View>(null);
 
@@ -77,24 +78,26 @@ const SliderBar = ({ label, color, hours, maxHours, onChange, onDelete }: Slider
   const filledWidth = width ? clamp((hours / maxHours) * width, 0, width) : 0;
 
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-3">
-      <View className="h-full w-2 rounded-full" style={{ backgroundColor: color }} />
-      <View className="flex-1 gap-2">
-        <Text className="text-base font-semibold" style={{ color }}>{label}</Text>
+    <View className="flex-row items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2.5">
+      <View className="h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}12` }}>
+        <Icon size={18} color={color} />
+      </View>
+      <View className="flex-1 gap-1">
+        <Text className="text-base font-semibold" style={{ color }}>{label}:</Text>
         <View
-          className="h-4 rounded-full bg-[#EFF2F7]"
+          className="h-4 rounded-md bg-[#EFF2F7]"
           onLayout={handleLayout}
           ref={trackRef}
           {...panResponder.panHandlers}
         >
           <View
-            className="h-full rounded-full"
+            className="h-full rounded-md"
             style={{ width: filledWidth, backgroundColor: color }}
           />
         </View>
       </View>
-      <View className="min-w-[44px] rounded-lg border border-[#E5E7EB] bg-white px-2 py-1">
-        <Text className="text-right text-base font-semibold text-text-primary">{hours}</Text>
+      <View className="min-w-[46px] rounded-lg border border-[#E5E7EB] bg-white px-2 py-1">
+        <Text className="text-center text-base font-semibold text-text-primary">{hours}</Text>
       </View>
       {onDelete ? (
         <Pressable
@@ -128,13 +131,15 @@ export const IdealDayTemplate = ({
   const nextColor = palette[newColorIndex % palette.length];
   const [isEditing, setIsEditing] = useState(false);
 
-  const segments = useMemo(
-    () =>
-      categories
-        .filter((cat) => cat.hours > 0)
-        .map((cat) => ({ value: cat.hours, color: cat.color })),
-    [categories],
-  );
+  const segments = useMemo(() => {
+    const data = categories
+      .filter((cat) => cat.hours > 0)
+      .map((cat) => ({ label: cat.name, value: cat.hours, color: cat.color }));
+    if (freeTime > 0) {
+      data.unshift({ label: 'Free', value: freeTime, color: freeColor });
+    }
+    return data;
+  }, [categories, freeTime]);
 
   return (
     <SetupStepLayout
@@ -148,38 +153,37 @@ export const IdealDayTemplate = ({
       }
     >
       <View className="mt-4 gap-4">
-        <View className="rounded-2xl border border-[#E5E7EB] bg-white px-3 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
-          <View className="flex-row items-center justify-center gap-2 rounded-full bg-[#F2F6FF] px-2 py-1">
-          {DAY_TYPES.map((tab) => (
-            <Pressable
-              key={tab.key}
-              onPress={() => onDayTypeChange(tab.key)}
-              className={`rounded-full px-3 py-2 ${dayType === tab.key ? 'bg-white shadow-sm' : ''}`}
-            >
-              <Text className={`text-xs font-semibold uppercase tracking-[1px] ${dayType === tab.key ? 'text-brand-primary' : 'text-text-secondary'}`}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <View className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
+          <View className="flex-row items-center justify-center gap-2 rounded-xl bg-[#F2F6FF] px-2 py-1">
+            {DAY_TYPES.map((tab) => (
+              <Pressable
+                key={tab.key}
+                onPress={() => onDayTypeChange(tab.key)}
+                className={`rounded-lg px-3 py-2 ${dayType === tab.key ? 'bg-white shadow-sm' : ''}`}
+              >
+                <Text className={`text-xs font-semibold uppercase tracking-[1px] ${dayType === tab.key ? 'text-brand-primary' : 'text-text-secondary'}`}>
+                  {tab.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
-        <View className="flex-row items-center justify-between mt-3">
-          {WEEKDAY_KEYS.map((day, idx) => (
-            <View
-              key={`${day}-${idx}`}
-              className={`h-12 w-12 items-center justify-center rounded-lg ${idx < 5 ? 'bg-brand-primary' : 'bg-[#F4F7FB]'}`}
-            >
-              <Text className={`text-base font-semibold ${idx < 5 ? 'text-white' : 'text-text-secondary'}`}>{day}</Text>
-            </View>
-          ))}
-        </View>
-        <Text className="text-center text-xs font-semibold text-text-tertiary mt-2">NO DAYS SAVED</Text>
+          <View className="mt-3 flex-row items-center justify-between gap-2">
+            {WEEKDAY_KEYS.map((day, idx) => (
+              <View
+                key={`${day}-${idx}`}
+                className={`h-11 w-11 items-center justify-center rounded-md ${idx < 5 ? 'bg-brand-primary' : 'bg-[#F4F7FB]'}`}
+              >
+                <Text className={`text-base font-semibold ${idx < 5 ? 'text-white' : 'text-text-secondary'}`}>{day}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View className="items-center">
           <View className="relative items-center justify-center" style={{ height: 180 }}>
             <AnalyticsDonutChart
-              data={segments.map((s, idx) => ({ label: `${idx}`, value: s.value, color: s.color }))}
+              data={segments.map((s, idx) => ({ label: `${s.label}-${idx}`, value: s.value, color: s.color }))}
               radius={56}
               strokeWidth={28}
               startAngle={-90}
@@ -200,8 +204,9 @@ export const IdealDayTemplate = ({
             <Text className="text-base font-semibold text-brand-primary">Free time:</Text>
             <Text className="text-base font-semibold text-text-primary">{freeTime.toFixed(1)}h</Text>
           </View>
-          <View className="h-4 rounded-full bg-[#E9EEF5] overflow-hidden">
-            <View className="h-full rounded-r-full" style={{ width: `${(freeTime / 24) * 100}%`, backgroundColor: '#AFC8FF' }} />
+          <View className="h-4 rounded-xl bg-[#E9EEF5] overflow-hidden flex-row items-center">
+            <View className="h-4 w-8 bg-[#B4CBFF] opacity-70" />
+            <View className="h-full rounded-r-xl" style={{ width: `${(freeTime / 24) * 100}%`, backgroundColor: '#AFC8FF' }} />
           </View>
         </View>
 
@@ -210,6 +215,7 @@ export const IdealDayTemplate = ({
           {categories.map((cat) => (
             <SliderBar
               key={cat.id}
+              icon={cat.icon}
               label={cat.name}
               color={cat.color}
               hours={cat.hours}

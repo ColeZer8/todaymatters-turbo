@@ -27,6 +27,7 @@ Research how to add drag-and-drop reordering for panel cards in the Expo Router 
 - 2025-11-29: Added build-routine specific guide with UX goals and implementation checklist in docs/build-routine-drag.md.
 - 2025-11-29: Implemented drag-and-drop on the Build Routine page using a new DraggableRoutineList organism (Gesture Handler + Reanimated), wrapped app root in GestureHandlerRootView, and updated docs with implementation status.
 - 2025-11-29: Iteration—removed visible drag handle, relying on long-press anywhere on the card; removed outer list panel per UX feedback.
+- 2025-11-29: Updated card tap/controls behavior: card tap toggles the editor; delete/minus/plus/Done buttons stop propagation to avoid unintended toggles during interactions.
 
 ## Verification
 
