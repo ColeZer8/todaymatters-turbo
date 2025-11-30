@@ -15,3 +15,8 @@ export { ChoicePanel } from './ChoicePanel';
 export { TextChoiceCard } from './TextChoiceCard';
 export { PersonaCard } from './PersonaCard';
 export { IconListCard } from './IconListCard';
+export { RoutineItemCard } from './RoutineItemCard';
+export { AnalyticsRangeToggle } from './AnalyticsRangeToggle';
+export { AnalyticsBarChart } from './AnalyticsBarChart';
+export { AnalyticsCategoryCard } from './AnalyticsCategoryCard';
+export { AnalyticsDonutChart } from './AnalyticsDonutChart';

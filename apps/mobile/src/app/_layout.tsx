@@ -40,8 +40,11 @@ export default function Layout() {
         <Stack.Screen name="coach-persona" options={{ headerShown: false }} />
         <Stack.Screen name="morning-mindset" options={{ headerShown: false }} />
         <Stack.Screen name="goals" options={{ headerShown: false }} />
+        <Stack.Screen name="build-routine" options={{ headerShown: false }} />
+        <Stack.Screen name="ideal-day" options={{ headerShown: false }} />
         <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
+        <Stack.Screen name="analytics" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
     </SafeAreaProvider>

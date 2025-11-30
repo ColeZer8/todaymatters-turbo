@@ -59,7 +59,7 @@ export default function GoalsScreen() {
       onAddInitiative={addInitiative}
       onRemoveInitiative={removeInitiative}
       onChangeInitiative={changeInitiative}
-      onContinue={() => router.replace('/home')}
+      onContinue={() => router.replace('/build-routine')}
       onBack={() => router.back()}
     />
   );

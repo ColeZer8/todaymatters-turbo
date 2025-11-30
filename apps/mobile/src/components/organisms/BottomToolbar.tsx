@@ -9,25 +9,45 @@ export const BottomToolbar = () => {
     const pathname = usePathname();
     const insets = useSafeAreaInsets();
 
-    const isHome = pathname === '/home';
-    const isCalendar = pathname === '/calendar';
+    const isHome = pathname?.includes('/home');
+    const isCalendar = pathname?.includes('/calendar');
+    const isAnalytics = pathname?.includes('/analytics');
 
     return (
         <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
             <View style={styles.tabContent}>
-                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/home')}>
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    className="items-center justify-center p-2"
+                    onPress={() => router.replace('/home')}
+                >
                     <Icon icon={Home} size={24} color={isHome ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
-                <TouchableOpacity className="items-center justify-center p-2" onPress={() => router.replace('/calendar')}>
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    className="items-center justify-center p-2"
+                    onPress={() => router.replace('/calendar')}
+                >
                     <Icon icon={Calendar} size={24} color={isCalendar ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
-                <TouchableOpacity className="items-center justify-center p-2">
-                    <Icon icon={BarChart3} size={24} color="#9CA3AF" />
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    className="items-center justify-center p-2"
+                    onPress={() => router.replace('/analytics')}
+                >
+                    <Icon icon={BarChart3} size={24} color={isAnalytics ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
-                <TouchableOpacity className="items-center justify-center p-2">
+                <TouchableOpacity
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    className="items-center justify-center p-2"
+                >
                     <Icon icon={User} size={24} color="#9CA3AF" />
                 </TouchableOpacity>
             </View>

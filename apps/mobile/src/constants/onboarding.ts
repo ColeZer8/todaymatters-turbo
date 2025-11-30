@@ -1,4 +1,4 @@
-export const ONBOARDING_TOTAL_STEPS = 9;
+export const ONBOARDING_TOTAL_STEPS = 11;
 
 export const ONBOARDING_STEPS = {
   setupQuestions: 1,
@@ -10,6 +10,8 @@ export const ONBOARDING_STEPS = {
   coachPersona: 7,
   morningMindset: 8,
   goals: 9,
+  routine: 10,
+  idealDay: 11,
 } as const;
 
 export type OnboardingStepKey = keyof typeof ONBOARDING_STEPS;

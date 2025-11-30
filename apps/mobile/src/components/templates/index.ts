@@ -13,3 +13,6 @@ export { FocusStyleTemplate } from './FocusStyleTemplate';
 export { CoachPersonaTemplate } from './CoachPersonaTemplate';
 export { MorningMindsetTemplate } from './MorningMindsetTemplate';
 export { GoalsTemplate } from './GoalsTemplate';
+export { RoutineBuilderTemplate } from './RoutineBuilderTemplate';
+export { IdealDayTemplate } from './IdealDayTemplate';
+export { AnalyticsTemplate } from './AnalyticsTemplate';
