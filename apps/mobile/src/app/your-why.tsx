@@ -38,7 +38,7 @@ export default function YourWhyScreen() {
       selectedId={selected}
       onSelect={setSelected}
       onContinue={() => router.replace('/focus-style')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/drains')}
     />
   );
 }

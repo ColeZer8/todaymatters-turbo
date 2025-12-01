@@ -56,7 +56,7 @@ export default function JoyScreen() {
       onSearchChange={setSearchValue}
       onToggleOption={toggleSelection}
       onContinue={() => router.replace('/drains')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/daily-rhythm')}
       tone="primary"
     />
   );

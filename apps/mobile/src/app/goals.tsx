@@ -60,7 +60,7 @@ export default function GoalsScreen() {
       onRemoveInitiative={removeInitiative}
       onChangeInitiative={changeInitiative}
       onContinue={() => router.replace('/build-routine')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/morning-mindset')}
     />
   );
 }

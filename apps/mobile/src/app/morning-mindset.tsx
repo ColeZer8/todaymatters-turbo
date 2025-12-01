@@ -58,7 +58,7 @@ export default function MorningMindsetScreen() {
       selectedId={selected}
       onSelect={setSelected}
       onContinue={() => router.replace('/goals')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/coach-persona')}
     />
   );
 }

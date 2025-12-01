@@ -52,7 +52,7 @@ export default function CoachPersonaScreen() {
       selectedId={selected}
       onSelect={setSelected}
       onContinue={() => router.replace('/morning-mindset')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/focus-style')}
     />
   );
 }

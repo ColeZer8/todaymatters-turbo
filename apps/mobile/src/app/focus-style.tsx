@@ -36,7 +36,7 @@ export default function FocusStyleScreen() {
       selectedId={selected}
       onSelect={setSelected}
       onContinue={() => router.replace('/coach-persona')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/your-why')}
     />
   );
 }

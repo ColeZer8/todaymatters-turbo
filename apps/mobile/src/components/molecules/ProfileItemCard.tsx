@@ -1,5 +1,5 @@
-import { Text, View } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { Pressable, Text, View } from 'react-native';
+import { LucideIcon, Trash2 } from 'lucide-react-native';
 import { Icon } from '../atoms';
 
 type AccentTone = 'blue' | 'purple';
@@ -8,6 +8,7 @@ interface ProfileItemCardProps {
   label: string;
   icon: LucideIcon;
   accent?: AccentTone;
+  onRemove?: () => void;
 }
 
 const accentStyles: Record<AccentTone, { icon: string; background: string; ring: string }> = {
@@ -35,6 +36,7 @@ export const ProfileItemCard = ({
   label,
   icon,
   accent = 'blue',
+  onRemove,
 }: ProfileItemCardProps) => {
   const accentStyle = accentStyles[accent];
 
@@ -49,7 +51,19 @@ export const ProfileItemCard = ({
       >
         <Icon icon={icon} size={22} color={accentStyle.icon} />
       </View>
-      <Text className="flex-1 text-[#111827] text-[15px] font-semibold">{label}</Text>
+      <Text className="flex-1 text-[15px] font-semibold text-[#111827]">{label}</Text>
+
+      {onRemove && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${label}`}
+          onPress={onRemove}
+          className="items-center justify-center h-10 w-10 ml-3 rounded-xl border border-[#E6EBF5] bg-[#F8FAFF]"
+          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+        >
+          <Trash2 size={17} color="#A1A8B3" />
+        </Pressable>
+      )}
     </View>
   );
 };

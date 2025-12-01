@@ -24,3 +24,5 @@ export { ProfileSummaryCard } from './ProfileSummaryCard';
 export { ProfilePill } from './ProfilePill';
 export { ProfileItemCard } from './ProfileItemCard';
 export { ProfileMenuItem } from './ProfileMenuItem';
+export { EditableValuePill } from './EditableValuePill';
+export { ProfileAddInput } from './ProfileAddInput';

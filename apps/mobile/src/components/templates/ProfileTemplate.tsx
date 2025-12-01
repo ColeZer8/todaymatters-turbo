@@ -1,7 +1,15 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Target, LucideIcon } from 'lucide-react-native';
-import { ProfileItemCard, ProfileMenuItem, ProfilePill, ProfileSummaryCard } from '@/components/molecules';
+import { Target, LucideIcon, Plus } from 'lucide-react-native';
+import {
+  EditableValuePill,
+  ProfileAddInput,
+  ProfileItemCard,
+  ProfileMenuItem,
+  ProfilePill,
+  ProfileSummaryCard,
+} from '@/components/molecules';
+import { BottomToolbar } from '@/components/organisms';
 
 type AccentTone = 'blue' | 'purple';
 
@@ -27,8 +35,21 @@ interface ProfileTemplateProps {
   goals: ProfileItem[];
   initiatives: ProfileItem[];
   menuItems: ProfileMenuEntry[];
-  onBack: () => void;
   onEditPress?: () => void;
+  onDonePress?: () => void;
+  isEditing?: boolean;
+  newValueText?: string;
+  onChangeNewValue?: (text: string) => void;
+  onAddValue?: () => void;
+  onRemoveValue?: (value: string) => void;
+  newGoalText?: string;
+  onChangeNewGoal?: (text: string) => void;
+  onAddGoal?: () => void;
+  onRemoveGoal?: (id: string) => void;
+  newInitiativeText?: string;
+  onChangeNewInitiative?: (text: string) => void;
+  onAddInitiative?: () => void;
+  onRemoveInitiative?: (id: string) => void;
 }
 
 const sectionTitleClass =
@@ -42,57 +63,85 @@ export const ProfileTemplate = ({
   goals,
   initiatives,
   menuItems,
-  onBack,
   onEditPress,
+  onDonePress,
+  isEditing = false,
+  newValueText = '',
+  onChangeNewValue,
+  onAddValue,
+  onRemoveValue,
+  newGoalText = '',
+  onChangeNewGoal,
+  onAddGoal,
+  onRemoveGoal,
+  newInitiativeText = '',
+  onChangeNewInitiative,
+  onAddInitiative,
+  onRemoveInitiative,
 }: ProfileTemplateProps) => {
   const insets = useSafeAreaInsets();
+  const isEditingHeader = isEditing;
+  const headerActionEnabled = isEditingHeader ? !!onDonePress : !!onEditPress;
+  const handleHeaderAction = isEditingHeader ? onDonePress : onEditPress;
 
   return (
-    <View
-      className="flex-1 bg-[#F7FAFF]"
-      style={{ paddingTop: insets.top + 8 }}
-    >
-      <View className="px-6">
-        <View className="flex-row items-center">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={10}
-            onPress={onBack}
-            className="w-12"
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-          >
-            <ArrowLeft size={20} color="#94A3B8" />
-          </Pressable>
-
-          <View className="flex-1 items-center">
-            <Text className="text-[#0F172A] text-[17px] font-semibold">
-              Profile
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            hitSlop={10}
-            disabled={!onEditPress}
-            onPress={onEditPress}
-            className="items-end w-12"
-            style={({ pressed }) => [{ opacity: pressed ? 0.65 : 1 }]}
-          >
-            <Text className="text-[#2563EB] text-[15px] font-semibold">Edit</Text>
-          </Pressable>
-        </View>
-      </View>
-
+    <View className="flex-1 bg-[#F7FAFF]">
       <ScrollView
         className="flex-1"
+        stickyHeaderIndices={[0]}
         contentContainerStyle={{
           paddingHorizontal: 24,
-          paddingBottom: insets.bottom + 28,
+          paddingBottom: insets.bottom + 140,
         }}
         showsVerticalScrollIndicator={false}
       >
+        <View
+          className="bg-[#F7FAFF] px-0"
+          style={{
+            paddingTop: insets.top + 8,
+            paddingBottom: 12,
+            shadowColor: '#0f172a',
+            shadowOpacity: 0.03,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+          }}
+        >
+          <View className="flex-row items-center px-6">
+            <View className="w-12" />
+
+            <View className="flex-1 items-center">
+              <Text className="text-[#0F172A] text-[17px] font-semibold">
+                Profile
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isEditingHeader ? 'Save profile changes' : 'Edit profile'}
+              hitSlop={10}
+              disabled={!headerActionEnabled}
+              onPress={handleHeaderAction}
+              className="items-end min-w-[60px]"
+              style={({ pressed }) => [
+                {
+                  opacity: pressed ? 0.65 : 1,
+                },
+              ]}
+            >
+              <View
+                className={`${
+                  isEditingHeader ? 'rounded-lg bg-[#E9F2FF] px-2.5 py-1.5' : ''
+                }`}
+              >
+                <Text className="text-[15px] font-semibold text-[#2563EB]">
+                  {isEditingHeader ? 'Done' : 'Edit'}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
         <View className="mt-6">
           <ProfileSummaryCard name={name} role={role} badgeLabel={badgeLabel} />
         </View>
@@ -100,9 +149,39 @@ export const ProfileTemplate = ({
         <View className="mt-8">
           <Text className={sectionTitleClass}>Core Values</Text>
           <View className="flex-row flex-wrap mt-3 gap-3">
-            {coreValues.map((value) => (
-              <ProfilePill key={value} label={value} />
-            ))}
+            {coreValues.map((value) =>
+              isEditing && onRemoveValue ? (
+                <EditableValuePill key={value} label={value} onRemove={() => onRemoveValue(value)} />
+              ) : (
+                <ProfilePill key={value} label={value} />
+              ),
+            )}
+
+            {isEditing && (
+              <View className="flex-row items-center gap-2">
+                <TextInput
+                  value={newValueText}
+                  onChangeText={onChangeNewValue || (() => {})}
+                  placeholder="New Value"
+                  placeholderTextColor="#9CA3AF"
+                  className="h-11 min-w-[140px] px-4 rounded-full border border-[#E5E7EB] bg-[#F7F9FC] text-sm font-semibold text-[#111827]"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add value"
+                  disabled={!newValueText.trim() || !onAddValue}
+                  onPress={onAddValue}
+                  className="items-center justify-center h-11 w-11 rounded-full bg-[#111827]"
+                  style={({ pressed }) => [
+                    {
+                      opacity: !newValueText.trim() || !onAddValue ? 0.4 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Plus size={18} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            )}
           </View>
         </View>
 
@@ -115,8 +194,20 @@ export const ProfileTemplate = ({
                 label={goal.label}
                 icon={goal.icon || Target}
                 accent={goal.accent || 'blue'}
+                onRemove={
+                  isEditing && onRemoveGoal ? () => onRemoveGoal(goal.id) : undefined
+                }
               />
             ))}
+            {isEditing && (
+              <ProfileAddInput
+                placeholder="Add a goal..."
+                value={newGoalText}
+                onChangeText={onChangeNewGoal || (() => {})}
+                onAdd={onAddGoal}
+                accent="blue"
+              />
+            )}
           </View>
         </View>
 
@@ -129,8 +220,22 @@ export const ProfileTemplate = ({
                 label={initiative.label}
                 icon={initiative.icon || Target}
                 accent={initiative.accent || 'purple'}
+                onRemove={
+                  isEditing && onRemoveInitiative
+                    ? () => onRemoveInitiative(initiative.id)
+                    : undefined
+                }
               />
             ))}
+            {isEditing && (
+              <ProfileAddInput
+                placeholder="Add initiative..."
+                value={newInitiativeText}
+                onChangeText={onChangeNewInitiative || (() => {})}
+                onAdd={onAddInitiative}
+                accent="purple"
+              />
+            )}
           </View>
         </View>
 
@@ -145,6 +250,8 @@ export const ProfileTemplate = ({
           ))}
         </View>
       </ScrollView>
+
+      <BottomToolbar />
     </View>
   );
 };

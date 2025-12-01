@@ -47,7 +47,7 @@ export default function IdealDayScreen() {
       onAddCategory={addCategory}
       onDeleteCategory={deleteCategory}
       onContinue={() => router.replace('/home')}
-      onSkip={() => router.back()}
+      onSkip={() => router.replace('/build-routine')}
     />
   );
 }

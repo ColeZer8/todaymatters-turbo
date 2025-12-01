@@ -42,7 +42,7 @@ export default function BuildRoutineScreen() {
       quickAddItems={QUICK_ADD}
       wakeTime={wakeTime}
       onContinue={() => router.replace('/ideal-day')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/goals')}
     />
   );
 }

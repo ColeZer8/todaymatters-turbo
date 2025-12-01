@@ -55,7 +55,7 @@ export default function DrainsScreen() {
       onSearchChange={setSearchValue}
       onToggleOption={toggleSelection}
       onContinue={() => router.replace('/your-why')}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/joy')}
       tone="danger"
     />
   );

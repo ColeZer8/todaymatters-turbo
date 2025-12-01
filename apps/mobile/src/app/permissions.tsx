@@ -25,7 +25,7 @@ export default function PermissionsScreen() {
       onToggleAllowAll={handleAllowAllToggle}
       onContinue={handleContinue}
       onCustomizeLater={handleCustomizeLater}
-      onBack={() => router.back()}
+      onBack={() => router.replace('/signup')}
       step={ONBOARDING_STEPS.permissions}
       totalSteps={ONBOARDING_TOTAL_STEPS}
     />
