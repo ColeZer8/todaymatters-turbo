@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Dumbbell, Gift, Heart, Info, LucideIcon, Pencil, Sparkles, SunMedium } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ChevronDown, ChevronRight, Dumbbell, Gift, Heart, LucideIcon, Sparkles, SunMedium } from 'lucide-react-native';
 import { Card, Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
 import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
@@ -61,7 +62,7 @@ const RANGE_OPTIONS: { label: string; value: RangeKey }[] = [
 const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
   today: {
     insight: {
-      headline: 'You’re excelling in Health and Faith goals this week. Great consistency.',
+      headline: "You're excelling in Health and Faith goals this week. Great consistency.",
       detail:
         'However, Work hours are trending 15% over target. Consider scheduling a hard stop at 5 PM tomorrow to rebalance family time.',
       emphasis: 'Performance Insight',
@@ -80,18 +81,19 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
     ],
     distribution: {
       ideal: [
-        { label: 'Free time', value: 10, color: '#A0AEC0' },
+        { label: 'Free time', value: 10, color: '#14B8A6' },
         { label: 'Faith', value: 10, color: '#F79A3B' },
         { label: 'Family', value: 30, color: '#5F63F5' },
         { label: 'Work', value: 40, color: '#2F7BFF' },
         { label: 'Health', value: 10, color: '#1F9C66' },
       ],
       reality: [
-        { label: 'Free time', value: 8, color: '#A0AEC0' },
-        { label: 'Faith', value: 9, color: '#F79A3B' },
-        { label: 'Family', value: 24, color: '#5F63F5' },
-        { label: 'Work', value: 49, color: '#2F7BFF' },
-        { label: 'Health', value: 10, color: '#1F9C66' },
+        { label: 'Free time', value: 5, color: '#14B8A6' },
+        { label: 'Faith', value: 5, color: '#F79A3B' },
+        { label: 'Family', value: 20, color: '#5F63F5' },
+        { label: 'Work', value: 50, color: '#2F7BFF' },
+        { label: 'Health', value: 5, color: '#1F9C66' },
+        { label: 'Other', value: 15, color: '#9CA3AF' },
       ],
     },
   },
@@ -116,16 +118,19 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
     ],
     distribution: {
       ideal: [
+        { label: 'Free time', value: 5, color: '#14B8A6' },
         { label: 'Faith', value: 12, color: '#F79A3B' },
-        { label: 'Family', value: 33, color: '#6A74F7' },
-        { label: 'Work', value: 45, color: '#2F9BFF' },
-        { label: 'Health', value: 10, color: '#3BB273' },
+        { label: 'Family', value: 33, color: '#5F63F5' },
+        { label: 'Work', value: 40, color: '#2F7BFF' },
+        { label: 'Health', value: 10, color: '#1F9C66' },
       ],
       reality: [
+        { label: 'Free time', value: 3, color: '#14B8A6' },
         { label: 'Faith', value: 8, color: '#F79A3B' },
-        { label: 'Family', value: 30, color: '#6A74F7' },
-        { label: 'Work', value: 50, color: '#2F9BFF' },
-        { label: 'Health', value: 12, color: '#3BB273' },
+        { label: 'Family', value: 25, color: '#5F63F5' },
+        { label: 'Work', value: 50, color: '#2F7BFF' },
+        { label: 'Health', value: 9, color: '#1F9C66' },
+        { label: 'Other', value: 5, color: '#9CA3AF' },
       ],
     },
   },
@@ -150,16 +155,19 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
     ],
     distribution: {
       ideal: [
+        { label: 'Free time', value: 5, color: '#14B8A6' },
         { label: 'Faith', value: 12, color: '#F79A3B' },
-        { label: 'Family', value: 33, color: '#6A74F7' },
-        { label: 'Work', value: 45, color: '#2F9BFF' },
-        { label: 'Health', value: 10, color: '#3BB273' },
+        { label: 'Family', value: 33, color: '#5F63F5' },
+        { label: 'Work', value: 40, color: '#2F7BFF' },
+        { label: 'Health', value: 10, color: '#1F9C66' },
       ],
       reality: [
+        { label: 'Free time', value: 5, color: '#14B8A6' },
         { label: 'Faith', value: 10, color: '#F79A3B' },
-        { label: 'Family', value: 32, color: '#6A74F7' },
-        { label: 'Work', value: 48, color: '#2F9BFF' },
-        { label: 'Health', value: 10, color: '#3BB273' },
+        { label: 'Family', value: 28, color: '#5F63F5' },
+        { label: 'Work', value: 48, color: '#2F7BFF' },
+        { label: 'Health', value: 5, color: '#1F9C66' },
+        { label: 'Other', value: 4, color: '#9CA3AF' },
       ],
     },
   },
@@ -183,16 +191,19 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
     ],
     distribution: {
       ideal: [
+        { label: 'Free time', value: 5, color: '#14B8A6' },
         { label: 'Faith', value: 12, color: '#F79A3B' },
-        { label: 'Family', value: 33, color: '#6A74F7' },
-        { label: 'Work', value: 45, color: '#2F9BFF' },
-        { label: 'Health', value: 10, color: '#3BB273' },
+        { label: 'Family', value: 33, color: '#5F63F5' },
+        { label: 'Work', value: 40, color: '#2F7BFF' },
+        { label: 'Health', value: 10, color: '#1F9C66' },
       ],
       reality: [
+        { label: 'Free time', value: 5, color: '#14B8A6' },
         { label: 'Faith', value: 11, color: '#F79A3B' },
-        { label: 'Family', value: 30, color: '#6A74F7' },
-        { label: 'Work', value: 47, color: '#2F9BFF' },
-        { label: 'Health', value: 12, color: '#3BB273' },
+        { label: 'Family', value: 30, color: '#5F63F5' },
+        { label: 'Work', value: 47, color: '#2F7BFF' },
+        { label: 'Health', value: 5, color: '#1F9C66' },
+        { label: 'Other', value: 2, color: '#9CA3AF' },
       ],
     },
   },
@@ -211,6 +222,7 @@ export const AnalyticsTemplate = () => {
   const [range, setRange] = useState<RangeKey>('today');
   const [distributionView, setDistributionView] = useState<DistributionView>('ideal');
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const currentRange = ANALYTICS_SNAPSHOT[range];
   const distribution = useMemo(
@@ -218,34 +230,48 @@ export const AnalyticsTemplate = () => {
     [currentRange.distribution, distributionView],
   );
 
+  const idealDistribution = currentRange.distribution.ideal;
+
+  const getDiff = (label: string, realityValue: number): number | null => {
+    if (distributionView !== 'reality') return null;
+    const idealSlice = idealDistribution.find((s) => s.label === label);
+    if (!idealSlice) return null;
+    return realityValue - idealSlice.value;
+  };
+
   return (
     <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
       <SafeAreaView className="flex-1">
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
-            paddingHorizontal: 22,
-            paddingTop: 14,
+            paddingHorizontal: 18,
+            paddingTop: 12,
             paddingBottom: 140 + insets.bottom,
           }}
         >
-          <View className="gap-5 pb-6">
-            <Card className="gap-4 border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
-              <View className="flex-row items-start gap-3">
-                <View className="h-10 w-10 items-center justify-center rounded-2xl bg-[#EAF3FF]">
-                  <Icon icon={Info} size={20} color="#2563EB" />
-                </View>
-                <View className="flex-1 gap-1">
-                  <Text className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
-                    {currentRange.insight.emphasis}
-                  </Text>
-                  <Text className="text-base font-semibold text-text-primary leading-6">
-                    {currentRange.insight.headline}
-                  </Text>
-                  <Text className="text-sm leading-6 text-text-secondary">
-                    {currentRange.insight.detail}
+          <View className="gap-4 pb-6">
+            <Card className="gap-3 border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2">
+                  <View className="h-8 w-8 items-center justify-center rounded-lg bg-[#2563EB]">
+                    <Icon icon={Sparkles} size={16} color="#FFFFFF" />
+                  </View>
+                  <Text className="text-[15px] font-bold text-text-primary">
+                    Performance Insight
                   </Text>
                 </View>
+                <Pressable hitSlop={8}>
+                  <Icon icon={ChevronDown} size={20} color="#9CA3AF" />
+                </Pressable>
+              </View>
+              <View className="gap-2">
+                <Text className="text-[15px] leading-[22px] text-text-secondary">
+                  You're excelling in <Text style={{ color: '#1F9C66', fontWeight: '600' }}>Health</Text> and <Text style={{ color: '#F79A3B', fontWeight: '600' }}>Faith</Text> goals this week. Great consistency!
+                </Text>
+                <Text className="text-[15px] leading-[22px] text-text-secondary">
+                  However, <Text style={{ color: '#2F9BFF', fontWeight: '600' }}>Work</Text> hours are trending 15% over target. Consider scheduling a hard stop at 5 PM tomorrow to rebalance family time.
+                </Text>
               </View>
             </Card>
 
@@ -258,10 +284,10 @@ export const AnalyticsTemplate = () => {
               />
             </View>
 
-            <View className="gap-4">
+            <View className="gap-3">
               <View className="h-px bg-[#E5E7EB]" />
               <View className="flex-row items-center justify-between px-1">
-                <Text className="text-sm font-extrabold text-text-primary uppercase tracking-[0.08em]">
+                <Text className="text-[13px] font-bold text-text-primary uppercase tracking-[0.04em]">
                   Time Spent vs. Goal
                 </Text>
                 <Pressable
@@ -270,49 +296,45 @@ export const AnalyticsTemplate = () => {
                   hitSlop={8}
                   style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                 >
-                  <Text className="text-base font-semibold text-brand-primary">Edit Goals</Text>
+                  <Text className="text-[14px] font-semibold text-brand-primary">Edit Goals</Text>
                 </Pressable>
               </View>
               <TimeSpentChart data={currentRange.timeSpent} />
               <View className="h-px bg-[#E5E7EB]" />
             </View>
 
-            <View className="gap-4">
-              <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-text-tertiary px-1">
-                Category health
+            <View className="gap-3">
+              <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] px-1">
+                Category Health
               </Text>
               <View className="flex-row flex-wrap justify-between gap-3">
-                {currentRange.categories.map((category, index) => (
+                {currentRange.categories.map((category) => (
                   <Pressable
                     key={category.id}
                     accessibilityRole="button"
                     className="w-[48%]"
+                    onPress={() => router.push(`/category/${category.id}` as const)}
                     style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
                   >
                     <View
-                      className="rounded-[18px] border px-4 py-5"
+                      className="rounded-2xl px-4 py-4"
                       style={{
                         backgroundColor: category.background,
-                        borderColor: category.background,
-                        minHeight: 156,
-                        shadowColor: '#0f172a',
-                        shadowOpacity: 0.04,
-                        shadowRadius: 12,
-                        shadowOffset: { width: 0, height: 6 },
+                        minHeight: 140,
                       }}
                     >
-                      <View className="items-center gap-2">
-                        <Icon icon={category.icon} size={22} color={category.accent} />
-                        <Text className="text-[13px] font-extrabold uppercase tracking-[0.12em] text-text-tertiary">
+                      <View className="items-center gap-1.5">
+                        <Icon icon={category.icon} size={20} color={category.accent} strokeWidth={1.8} />
+                        <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6B7280] mt-1">
                           {category.title}
                         </Text>
                         <Text
-                          className="text-[20px] font-extrabold"
+                          className="text-xl font-bold"
                           style={{ color: category.accent }}
                         >
                           {category.status}
                         </Text>
-                        <Text className="text-sm text-text-secondary mt-0.5">{category.helper}</Text>
+                        <Text className="text-[13px] text-[#9CA3AF]">{category.helper}</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -320,12 +342,12 @@ export const AnalyticsTemplate = () => {
               </View>
             </View>
 
-            <View className="gap-4">
+            <View className="gap-3">
               <View className="flex-row items-center justify-between px-1">
-                <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-text-tertiary">
-                  Life distribution
+                <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">
+                  Life Distribution
                 </Text>
-                <View className="flex-row items-center gap-2">
+                <View className="flex-row items-center border border-[#E5E7EB] rounded-full overflow-hidden">
                   {(['ideal', 'reality'] as DistributionView[]).map((viewKey) => {
                     const isActive = distributionView === viewKey;
                     return (
@@ -334,14 +356,12 @@ export const AnalyticsTemplate = () => {
                         accessibilityRole="button"
                         accessibilityState={{ selected: isActive }}
                         onPress={() => setDistributionView(viewKey)}
-                        className={`rounded-full px-4 py-2 border ${
-                          isActive ? 'border-[#D1D9E6] bg-white' : 'border-[#E5E7EB] bg-[#F5F7FB]'
-                        }`}
+                        className={`px-4 py-1.5 ${isActive ? 'bg-white' : 'bg-[#F9FAFB]'}`}
                         style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
                       >
                         <Text
-                          className={`text-sm font-extrabold ${
-                            isActive ? 'text-text-primary' : 'text-text-secondary'
+                          className={`text-[13px] font-semibold ${
+                            isActive ? 'text-text-primary' : 'text-[#9CA3AF]'
                           }`}
                         >
                           {viewKey === 'ideal' ? 'Ideal' : 'Reality'}
@@ -352,31 +372,66 @@ export const AnalyticsTemplate = () => {
                 </View>
               </View>
 
-              <View className="flex-row items-center justify-between px-1 gap-4">
-                <View className="w-[40%] items-center">
+              <View className="flex-row items-center gap-4 px-1">
+                <View style={{ width: 150 }}>
                   <AnalyticsDonutChart
                     data={distribution}
-                    label={distributionView === 'ideal' ? 'Ideal' : 'Reality'}
+                    label={distributionView === 'ideal' ? 'IDEAL' : 'REALITY'}
                   />
                 </View>
-                <View className="flex-1 gap-1.5 pl-3 min-w-[54%]">
-                  {distribution.map((slice) => (
-                    <View key={slice.label} className="flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-2">
-                        <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: slice.color }} />
-                        <Text className="text-[12px] font-extrabold text-text-primary">
-                          {slice.label}
-                        </Text>
+                <View className="flex-1 gap-2.5 pl-2">
+                  {distribution.map((slice) => {
+                    const diff = getDiff(slice.label, slice.value);
+                    const isOther = slice.label === 'Other';
+                    const RowContent = (
+                      <View className="flex-row items-center justify-between py-0.5">
+                        <View className="flex-row items-center gap-2">
+                          <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: slice.color }} />
+                          <Text className="text-[14px] font-medium text-text-primary">
+                            {slice.label}
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          {diff !== null && (
+                            <Text
+                              className="text-[13px] font-semibold"
+                              style={{ 
+                                color: diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444' 
+                              }}
+                            >
+                              {diff > 0 ? '+' : ''}{diff}%
+                            </Text>
+                          )}
+                          <Text className="text-[14px] font-semibold text-text-primary w-10 text-right">
+                            {slice.value}%
+                          </Text>
+                          {isOther && (
+                            <Icon icon={ChevronRight} size={16} color="#9CA3AF" />
+                          )}
+                        </View>
                       </View>
-                      <Text className="text-[12px] font-extrabold text-text-primary">{slice.value}%</Text>
-                    </View>
-                  ))}
+                    );
+
+                    if (isOther) {
+                      return (
+                        <Pressable
+                          key={slice.label}
+                          onPress={() => router.push('/review-time')}
+                          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                        >
+                          {RowContent}
+                        </Pressable>
+                      );
+                    }
+
+                    return <View key={slice.label}>{RowContent}</View>;
+                  })}
                 </View>
               </View>
 
               <View className="flex-row items-center gap-2 px-1">
-                <Icon icon={Sparkles} size={16} color="#2563EB" />
-                <Text className="text-sm text-text-secondary">
+                <Icon icon={Sparkles} size={14} color="#2563EB" />
+                <Text className="text-[13px] text-[#6B7280]">
                   These splits update automatically as you log time across pillars.
                 </Text>
               </View>
@@ -394,42 +449,55 @@ interface TimeSpentChartProps {
 }
 
 const TimeSpentChart = ({ data }: TimeSpentChartProps) => {
-  const goalLineHeight = 140;
-  const maxBarHeight = 170;
+  const goalLineHeight = 130;
+  const maxBarHeight = 160;
+  const goalTextOffset = 10; // Height above goal line where text sits
 
   return (
-    <View className="p-2">
-      <View className="relative h-[240px]">
+    <View className="py-2">
+      <View className="relative h-[220px]">
         <View
-          className="absolute left-0 right-0 flex-row items-center px-2"
-          style={{ bottom: goalLineHeight + 46, zIndex: 2 }}
+          className="absolute left-0 right-0 flex-row items-center"
+          style={{ bottom: goalLineHeight + 42, zIndex: 2 }}
           pointerEvents="none"
         >
-          {data.map((item) => (
-            <View key={`${item.label}-goal-text`} className="flex-1 items-center">
-              <Text className="text-xs font-semibold text-[#8F97A6]">
-                Goal: {formatMinutes(item.goal)}
-              </Text>
-            </View>
-          ))}
-        </View>
-        <View className="absolute left-0 right-0" style={{ bottom: goalLineHeight + 36 }}>
-          <View className="border-t border-dashed border-[#C3CAD5]" />
-        </View>
-        <View className="flex-1 flex-row items-end justify-between px-2">
           {data.map((item) => {
-            const barHeight = Math.max(40, Math.min(maxBarHeight, (item.value / item.goal) * goalLineHeight));
+            const barHeight = Math.max(44, Math.min(maxBarHeight, (item.value / item.goal) * goalLineHeight));
+            const barExtendsAboveGoal = barHeight > goalLineHeight + goalTextOffset;
+            
             return (
-              <View key={item.label} className="flex-1 items-center">
-                <View
-                  className="w-11 rounded-[6px] items-center justify-end pb-2"
-                  style={{ height: barHeight, backgroundColor: item.color }}
+              <View key={`${item.label}-goal-text`} className="flex-1 items-center">
+                <Text
+                  className="text-[11px] font-medium"
+                  style={{ color: barExtendsAboveGoal ? '#FFFFFF' : '#9CA3AF' }}
                 >
-                  <Text className="text-sm font-extrabold text-white">
+                  Goal: {formatMinutes(item.goal)}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+        <View className="absolute left-0 right-0" style={{ bottom: goalLineHeight + 32 }}>
+          <View className="border-t border-dashed border-[#D1D5DB]" />
+        </View>
+        <View className="flex-1 flex-row items-end justify-around">
+          {data.map((item) => {
+            const barHeight = Math.max(44, Math.min(maxBarHeight, (item.value / item.goal) * goalLineHeight));
+            return (
+              <View key={item.label} className="items-center" style={{ width: 52 }}>
+                <View
+                  className="w-[46px] items-center justify-end pb-2.5"
+                  style={{ 
+                    height: barHeight, 
+                    backgroundColor: item.color,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text className="text-[13px] font-bold text-white">
                     {formatMinutes(item.value)}
                   </Text>
                 </View>
-                <Text className="mt-3 text-xs font-extrabold uppercase tracking-[0.08em] text-text-primary">
+                <Text className="mt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-text-primary">
                   {item.label}
                 </Text>
               </View>
@@ -437,7 +505,7 @@ const TimeSpentChart = ({ data }: TimeSpentChartProps) => {
           })}
         </View>
       </View>
-      <Text className="mt-3 text-xs font-semibold text-text-tertiary text-center">
+      <Text className="mt-2 text-[11px] font-medium text-[#9CA3AF] text-center">
         Dashed line indicates your daily goal.
       </Text>
     </View>

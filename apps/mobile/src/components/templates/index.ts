@@ -17,3 +17,5 @@ export { RoutineBuilderTemplate } from './RoutineBuilderTemplate';
 export { IdealDayTemplate } from './IdealDayTemplate';
 export { AnalyticsTemplate } from './AnalyticsTemplate';
 export { ProfileTemplate } from './ProfileTemplate';
+export { ReviewTimeTemplate } from './ReviewTimeTemplate';
+export { CategoryHealthTemplate } from './CategoryHealthTemplate';

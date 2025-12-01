@@ -1,0 +1,254 @@
+import { useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import {
+  ArrowLeft,
+  CircleHelp,
+  Dumbbell,
+  Gift,
+  Heart,
+  MapPin,
+  Smartphone,
+  Sparkles,
+  SunMedium,
+} from 'lucide-react-native';
+import { Icon } from '@/components/atoms';
+
+interface TimeBlock {
+  id: string;
+  duration: number; // minutes
+  startTime: string;
+  endTime: string;
+  activityDetected?: string;
+  location?: string;
+  aiSuggestion?: string;
+}
+
+const MOCK_TIME_BLOCKS: TimeBlock[] = [
+  {
+    id: '1',
+    duration: 45,
+    startTime: '10:30 PM',
+    endTime: '11:15 PM',
+    activityDetected: 'Instagram detected',
+  },
+  {
+    id: '2',
+    duration: 60,
+    startTime: '5:30 PM',
+    endTime: '6:30 PM',
+    location: "Gold's Gym",
+    aiSuggestion: 'health',
+  },
+  {
+    id: '3',
+    duration: 45,
+    startTime: '12:15 PM',
+    endTime: '1:00 PM',
+  },
+];
+
+const CATEGORIES = [
+  { id: 'faith', label: 'Faith', icon: SunMedium, color: '#F79A3B', bgColor: '#FFF5E8', selectedBg: '#FEF3E2' },
+  { id: 'family', label: 'Family', icon: Heart, color: '#5F63F5', bgColor: '#EFF0FF', selectedBg: '#E8E9FF' },
+  { id: 'work', label: 'Work', icon: Gift, color: '#2F7BFF', bgColor: '#E9F2FF', selectedBg: '#DBEAFE' },
+  { id: 'health', label: 'Health', icon: Dumbbell, color: '#1F9C66', bgColor: '#E8F7EF', selectedBg: '#D1FAE5' },
+  { id: 'other', label: 'Other', icon: CircleHelp, color: '#6B7280', bgColor: '#F3F4F6', selectedBg: '#E5E7EB' },
+];
+
+const formatDuration = (minutes: number): string => {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
+  }
+  return `${minutes}m`;
+};
+
+export const ReviewTimeTemplate = () => {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+
+  const totalUnassigned = MOCK_TIME_BLOCKS.reduce((sum, block) => {
+    if (!assignments[block.id]) return sum + block.duration;
+    return sum;
+  }, 0);
+
+  const handleCategorySelect = (blockId: string, categoryId: string) => {
+    setAssignments((prev) => ({
+      ...prev,
+      [blockId]: prev[blockId] === categoryId ? '' : categoryId,
+    }));
+  };
+
+  return (
+    <View className="flex-1 bg-[#F8FAFC]">
+      <SafeAreaView className="flex-1">
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-5 py-4 bg-white border-b border-[#E5E7EB]">
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            className="h-10 w-10 items-center justify-center rounded-full bg-[#F3F4F6]"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Icon icon={ArrowLeft} size={20} color="#374151" />
+          </Pressable>
+          <Text className="text-[18px] font-bold text-text-primary">
+            Review Time
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingTop: 24,
+            paddingBottom: 40 + insets.bottom,
+          }}
+        >
+          {/* Summary */}
+          <View className="mb-6 bg-white rounded-2xl p-5 border border-[#E5E7EB]">
+            <View className="flex-row items-baseline">
+              <Text className="text-[40px] font-bold text-[#1F2937] tracking-tight">
+                {formatDuration(totalUnassigned)}
+              </Text>
+              <Text className="text-[16px] text-[#6B7280] ml-2">
+                to assign
+              </Text>
+            </View>
+            <Text className="text-[14px] text-[#9CA3AF] mt-1">
+              Tap a category below to assign each time block
+            </Text>
+          </View>
+
+          {/* Time Blocks */}
+          <View className="gap-4">
+            {MOCK_TIME_BLOCKS.map((block) => {
+              const selectedCategory = assignments[block.id];
+              const selectedCat = CATEGORIES.find(c => c.id === selectedCategory);
+              
+              return (
+                <View
+                  key={block.id}
+                  className="bg-white rounded-2xl overflow-hidden"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: selectedCat ? selectedCat.color + '30' : '#E5E7EB',
+                    shadowColor: '#0f172a',
+                    shadowOpacity: 0.05,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 4 },
+                  }}
+                >
+                  {/* Colored top accent when assigned */}
+                  {selectedCat && (
+                    <View 
+                      className="h-1" 
+                      style={{ backgroundColor: selectedCat.color }} 
+                    />
+                  )}
+                  
+                  <View className="p-5">
+                    {/* Header row */}
+                    <View className="flex-row items-center justify-between mb-3">
+                      <View className="flex-row items-baseline gap-2">
+                        <Text className="text-[28px] font-bold text-[#1F2937]">
+                          {formatDuration(block.duration)}
+                        </Text>
+                        <Text className="text-[14px] text-[#9CA3AF]">
+                          {block.startTime} - {block.endTime}
+                        </Text>
+                      </View>
+                      {block.aiSuggestion && (
+                        <View 
+                          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
+                          style={{ backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }}
+                        >
+                          <Icon icon={Sparkles} size={12} color="#6366F1" />
+                          <Text className="text-[10px] font-bold text-[#6366F1] uppercase tracking-wider">
+                            AI Suggestion
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Activity or Location */}
+                    <View className="mb-5">
+                      {block.activityDetected ? (
+                        <View className="flex-row items-center gap-2 bg-[#FEF3C7] px-3 py-2 rounded-lg self-start">
+                          <Icon icon={Smartphone} size={16} color="#D97706" strokeWidth={1.5} />
+                          <Text className="text-[14px] font-medium text-[#92400E]">{block.activityDetected}</Text>
+                        </View>
+                      ) : block.location ? (
+                        <View className="flex-row items-center gap-2 bg-[#DBEAFE] px-3 py-2 rounded-lg self-start">
+                          <Icon icon={MapPin} size={16} color="#2563EB" strokeWidth={1.5} />
+                          <Text className="text-[14px] font-medium text-[#1E40AF]">Location: {block.location}</Text>
+                        </View>
+                      ) : (
+                        <View className="flex-row items-center gap-2 bg-[#F3F4F6] px-3 py-2 rounded-lg self-start">
+                          <Icon icon={CircleHelp} size={16} color="#9CA3AF" strokeWidth={1.5} />
+                          <Text className="text-[14px] text-[#9CA3AF]">No activity detected</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Category Selection */}
+                    <View className="flex-row justify-between">
+                      {CATEGORIES.map((cat) => {
+                        const isSelected = selectedCategory === cat.id;
+                        const isAiSuggested = block.aiSuggestion === cat.id;
+                        
+                        return (
+                          <Pressable
+                            key={cat.id}
+                            onPress={() => handleCategorySelect(block.id, cat.id)}
+                            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                          >
+                            <View className="items-center gap-2">
+                              <View
+                                className="h-[52px] w-[52px] items-center justify-center rounded-full"
+                                style={{
+                                  backgroundColor: isSelected ? cat.selectedBg : isAiSuggested ? cat.bgColor : '#F9FAFB',
+                                  borderWidth: 2,
+                                  borderColor: isSelected
+                                    ? cat.color
+                                    : isAiSuggested
+                                    ? cat.color + '60'
+                                    : '#E5E7EB',
+                                }}
+                              >
+                                <Icon
+                                  icon={cat.icon}
+                                  size={22}
+                                  color={isSelected ? cat.color : isAiSuggested ? cat.color : '#C4C9D0'}
+                                  strokeWidth={isSelected ? 2 : 1.6}
+                                />
+                              </View>
+                              <Text
+                                className="text-[11px]"
+                                style={{ 
+                                  color: isSelected ? cat.color : '#9CA3AF',
+                                  fontWeight: isSelected ? '700' : '500',
+                                }}
+                              >
+                                {cat.label}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
+};

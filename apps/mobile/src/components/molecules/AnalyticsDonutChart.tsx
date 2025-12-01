@@ -17,8 +17,8 @@ interface AnalyticsDonutChartProps {
 
 export const AnalyticsDonutChart = ({
   data,
-  radius = 64,
-  strokeWidth = 48,
+  radius = 56,
+  strokeWidth = 36,
   label,
   startAngle = -90,
 }: AnalyticsDonutChartProps) => {
@@ -53,23 +53,6 @@ export const AnalyticsDonutChart = ({
                 opacity={1}
               />
             );
-            if (index === 0) {
-              acc.elements.push(
-                <Circle
-                  key={`shadow-${slice.label}-${index}`}
-                  cx={radius + strokeWidth}
-                  cy={radius + strokeWidth}
-                  r={radius}
-                  stroke="#0f172a"
-                  strokeWidth={strokeWidth + 2}
-                  strokeDasharray={`${dashLength} ${gapLength}`}
-                  strokeDashoffset={dashOffset + 1}
-                  strokeLinecap="butt"
-                  fill="transparent"
-                  opacity={0.08}
-                />
-              );
-            }
             acc.start += slicePercent;
             return acc;
           }, { start: 0, elements: [] }).elements}
@@ -77,23 +60,18 @@ export const AnalyticsDonutChart = ({
       </Svg>
       <View className="absolute items-center justify-center">
         <View
-          className="items-center justify-center rounded-full bg-white shadow-sm shadow-[#0f172a1a]"
-          style={{ height: 102, width: 102 }}
+          className="items-center justify-center rounded-full bg-white"
+          style={{ height: 80, width: 80 }}
         >
-          <View
-            className="items-center justify-center rounded-full bg-white"
-            style={{ height: 66, width: 66 }}
-          >
-            {label ? (
-              <Text
-                allowFontScaling={false}
-                className="uppercase text-[#8F97A6]"
-                style={{ fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}
-              >
-                {label}
-              </Text>
-            ) : null}
-          </View>
+          {label ? (
+            <Text
+              allowFontScaling={false}
+              className="uppercase text-[#9CA3AF]"
+              style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1 }}
+            >
+              {label}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>

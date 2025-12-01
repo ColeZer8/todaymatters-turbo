@@ -19,7 +19,7 @@ export const AnalyticsRangeToggle = ({
 }: AnalyticsRangeToggleProps) => {
   return (
     <View
-      className="flex-row items-center p-1 border border-[#D1D9E6] rounded-full bg-white"
+      className="flex-row items-center gap-1 px-1.5 py-1 border border-[#E5E7EB] rounded-full bg-white"
       accessibilityLabel={accessibilityLabel}
     >
       {options.map((option) => {
@@ -31,12 +31,12 @@ export const AnalyticsRangeToggle = ({
             accessibilityRole="button"
             accessibilityState={{ selected: isActive }}
             onPress={() => onChange(option.value)}
-            className={`flex-1 items-center justify-center py-2 rounded-full ${isActive ? 'bg-brand-primary' : 'bg-transparent'}`}
+            className={`items-center justify-center px-4 py-1.5 rounded-full ${isActive ? 'bg-[#1F2937]' : 'bg-transparent'}`}
             style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
           >
             <Text
               className={`text-sm font-semibold ${
-                isActive ? 'text-white' : 'text-text-secondary'
+                isActive ? 'text-white' : 'text-[#6B7280]'
               }`}
             >
               {option.label}
