@@ -372,60 +372,79 @@ export const AnalyticsTemplate = () => {
                 </View>
               </View>
 
-              <View className="flex-row items-center gap-4 px-1">
+              <View className="flex-row items-start gap-4 px-1">
                 <View style={{ width: 150 }}>
                   <AnalyticsDonutChart
                     data={distribution}
                     label={distributionView === 'ideal' ? 'IDEAL' : 'REALITY'}
                   />
                 </View>
-                <View className="flex-1 gap-2.5 pl-2">
-                  {distribution.map((slice) => {
-                    const diff = getDiff(slice.label, slice.value);
-                    const isOther = slice.label === 'Other';
-                    const RowContent = (
-                      <View className="flex-row items-center justify-between py-0.5">
-                        <View className="flex-row items-center gap-2">
-                          <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: slice.color }} />
-                          <Text className="text-[14px] font-medium text-text-primary">
-                            {slice.label}
-                          </Text>
-                        </View>
-                        <View className="flex-row items-center gap-2">
-                          {diff !== null && (
-                            <Text
-                              className="text-[13px] font-semibold"
-                              style={{ 
-                                color: diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444' 
-                              }}
-                            >
-                              {diff > 0 ? '+' : ''}{diff}%
+                <View className="flex-1 pl-2 pt-2">
+                  {/* Fixed order categories - always same position */}
+                  <View className="gap-2.5">
+                    {(['Free time', 'Faith', 'Family', 'Work', 'Health', 'Other'] as const).map((label) => {
+                      const slice = distribution.find((s) => s.label === label);
+                      const isOther = label === 'Other';
+                      
+                      // Only show "Other" in reality view
+                      if (isOther && distributionView === 'ideal') {
+                        return null;
+                      }
+                      
+                      // If slice doesn't exist in current view, don't show
+                      if (!slice) {
+                        return null;
+                      }
+                      
+                      const diff = getDiff(slice.label, slice.value);
+                      const sliceColor = slice.color;
+                      
+                      const RowContent = (
+                        <View className="flex-row items-center justify-between py-0.5">
+                          <View className="flex-row items-center gap-2">
+                            <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sliceColor }} />
+                            <Text className="text-[14px] font-medium text-text-primary">
+                              {label}
                             </Text>
-                          )}
-                          <Text className="text-[14px] font-semibold text-text-primary w-10 text-right">
-                            {slice.value}%
-                          </Text>
-                          {isOther && (
-                            <Icon icon={ChevronRight} size={16} color="#9CA3AF" />
-                          )}
+                          </View>
+                          <View className="flex-row items-center gap-2">
+                            {distributionView === 'reality' && (
+                              <Text
+                                className="text-[13px] font-semibold w-10 text-right"
+                                style={{ 
+                                  color: diff === null || diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444' 
+                                }}
+                              >
+                                {diff !== null ? `${diff > 0 ? '+' : ''}${diff}%` : ''}
+                              </Text>
+                            )}
+                            <Text className="text-[14px] font-semibold text-text-primary w-10 text-right">
+                              {slice.value}%
+                            </Text>
+                            {isOther ? (
+                              <Icon icon={ChevronRight} size={16} color="#9CA3AF" />
+                            ) : (
+                              <View style={{ width: 16 }} />
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    );
-
-                    if (isOther) {
-                      return (
-                        <Pressable
-                          key={slice.label}
-                          onPress={() => router.push('/review-time')}
-                          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                        >
-                          {RowContent}
-                        </Pressable>
                       );
-                    }
 
-                    return <View key={slice.label}>{RowContent}</View>;
-                  })}
+                      if (isOther) {
+                        return (
+                          <Pressable
+                            key={label}
+                            onPress={() => router.push('/review-time')}
+                            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                          >
+                            {RowContent}
+                          </Pressable>
+                        );
+                      }
+
+                      return <View key={label}>{RowContent}</View>;
+                    })}
+                  </View>
                 </View>
               </View>
 
@@ -449,63 +468,107 @@ interface TimeSpentChartProps {
 }
 
 const TimeSpentChart = ({ data }: TimeSpentChartProps) => {
-  const goalLineHeight = 130;
-  const maxBarHeight = 160;
-  const goalTextOffset = 10; // Height above goal line where text sits
+  const CHART_HEIGHT = 240;
+  const GOAL_LINE_FROM_BOTTOM = 170;
+  const LABEL_AREA_HEIGHT = 32;
+  const BAR_WIDTH = 48;
+  const COLUMN_WIDTH = 72;
+  const GOAL_TEXT_OFFSET = 8; // Distance above goal line for text
+
+  // Calculate the height from bar bottom to goal line
+  const goalBarHeight = GOAL_LINE_FROM_BOTTOM - LABEL_AREA_HEIGHT;
 
   return (
     <View className="py-2">
-      <View className="relative h-[220px]">
-        <View
-          className="absolute left-0 right-0 flex-row items-center"
-          style={{ bottom: goalLineHeight + 42, zIndex: 2 }}
+      <View style={{ height: CHART_HEIGHT, position: 'relative' }}>
+        
+        {/* Layer 1: Gray goal text (behind bars - always visible as base) */}
+        <View 
+          className="absolute left-0 right-0 flex-row justify-around"
+          style={{ bottom: GOAL_LINE_FROM_BOTTOM + GOAL_TEXT_OFFSET, zIndex: 1 }}
           pointerEvents="none"
         >
-          {data.map((item) => {
-            const barHeight = Math.max(44, Math.min(maxBarHeight, (item.value / item.goal) * goalLineHeight));
-            const barExtendsAboveGoal = barHeight > goalLineHeight + goalTextOffset;
-            
-            return (
-              <View key={`${item.label}-goal-text`} className="flex-1 items-center">
-                <Text
-                  className="text-[11px] font-medium"
-                  style={{ color: barExtendsAboveGoal ? '#FFFFFF' : '#9CA3AF' }}
-                >
-                  Goal: {formatMinutes(item.goal)}
-                </Text>
-              </View>
-            );
-          })}
+          {data.map((item) => (
+            <View key={`${item.label}-gray`} className="items-center" style={{ width: COLUMN_WIDTH }}>
+              <Text className="text-[11px] font-medium text-[#9CA3AF]">
+                Goal: {formatMinutes(item.goal)}
+              </Text>
+            </View>
+          ))}
         </View>
-        <View className="absolute left-0 right-0" style={{ bottom: goalLineHeight + 32 }}>
+        
+        {/* Layer 2: Dashed goal line */}
+        <View 
+          className="absolute left-0 right-0"
+          style={{ bottom: GOAL_LINE_FROM_BOTTOM, zIndex: 2 }}
+          pointerEvents="none"
+        >
           <View className="border-t border-dashed border-[#D1D5DB]" />
         </View>
-        <View className="flex-1 flex-row items-end justify-around">
+        
+        {/* Layer 3: Bars with white text clipped inside */}
+        <View 
+          className="absolute left-0 right-0 flex-row justify-around items-end"
+          style={{ bottom: LABEL_AREA_HEIGHT, zIndex: 3, height: CHART_HEIGHT - LABEL_AREA_HEIGHT }}
+        >
           {data.map((item) => {
-            const barHeight = Math.max(44, Math.min(maxBarHeight, (item.value / item.goal) * goalLineHeight));
+            const barHeight = Math.max(44, (item.value / item.goal) * goalBarHeight);
+            // White text position: distance from bottom of bar to where text should appear
+            const whiteTextFromBarBottom = goalBarHeight + GOAL_TEXT_OFFSET;
+            
             return (
-              <View key={item.label} className="items-center" style={{ width: 52 }}>
-                <View
-                  className="w-[46px] items-center justify-end pb-2.5"
+              <View key={item.label} className="items-center" style={{ width: COLUMN_WIDTH }}>
+                <View 
                   style={{ 
+                    width: BAR_WIDTH,
                     height: barHeight, 
                     backgroundColor: item.color,
                     borderRadius: 8,
+                    overflow: 'hidden',
                   }}
                 >
-                  <Text className="text-[13px] font-bold text-white">
-                    {formatMinutes(item.value)}
-                  </Text>
+                  {/* Value text at bottom of bar */}
+                  <View className="absolute bottom-0 left-0 right-0 items-center pb-2.5">
+                    <Text className="text-[13px] font-bold text-white text-center">
+                      {formatMinutes(item.value)}
+                    </Text>
+                  </View>
+                  
+                  {/* White goal text - clipped by bar's overflow:hidden */}
+                  <View 
+                    className="absolute items-center"
+                    style={{ 
+                      bottom: whiteTextFromBarBottom,
+                      left: -(COLUMN_WIDTH - BAR_WIDTH) / 2,
+                      width: COLUMN_WIDTH,
+                    }}
+                  >
+                    <Text className="text-[11px] font-medium text-white">
+                      Goal: {formatMinutes(item.goal)}
+                    </Text>
+                  </View>
                 </View>
-                <Text className="mt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-text-primary">
-                  {item.label}
-                </Text>
               </View>
             );
           })}
         </View>
+        
+        {/* Layer 4: Category labels */}
+        <View 
+          className="absolute left-0 right-0 bottom-0 flex-row justify-around"
+          style={{ height: LABEL_AREA_HEIGHT, zIndex: 4 }}
+        >
+          {data.map((item) => (
+            <View key={`${item.label}-label`} className="items-center justify-center" style={{ width: COLUMN_WIDTH }}>
+              <Text className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-primary">
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
-      <Text className="mt-2 text-[11px] font-medium text-[#9CA3AF] text-center">
+      
+      <Text className="text-[11px] font-medium text-[#9CA3AF] text-center mt-2">
         Dashed line indicates your daily goal.
       </Text>
     </View>
