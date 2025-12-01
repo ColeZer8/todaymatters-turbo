@@ -169,26 +169,28 @@ export const IdealDayTemplate = ({
       }
     >
       <View className="mt-1 gap-4">
-        {/* Day Selection Card */}
-        <View className="rounded-2xl bg-white p-4" style={{ shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
-          {/* Day Type Toggle */}
-          <View className="flex-row items-center justify-center rounded-xl bg-[#F1F5F9] p-1">
-            {DAY_TYPES.map((tab) => (
-              <Pressable
-                key={tab.key}
-                onPress={() => onDayTypeChange(tab.key)}
-                className={`flex-1 items-center rounded-lg py-2 ${dayType === tab.key ? 'bg-white' : ''}`}
-                style={dayType === tab.key ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 } : undefined}
-              >
-                <Text className={`text-[13px] font-semibold ${dayType === tab.key ? 'text-brand-primary' : 'text-[#64748B]'}`}>
-                  {tab.label}
-                </Text>
-              </Pressable>
-            ))}
+        {/* Day Selection - Clean inline style */}
+        <View className="gap-4">
+          {/* Day Type Toggle - Minimal pill style */}
+          <View className="flex-row items-center justify-center">
+            <View className="flex-row items-center rounded-full bg-[#F1F5F9] p-1">
+              {DAY_TYPES.map((tab) => (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => onDayTypeChange(tab.key)}
+                  className={`rounded-full px-5 py-2 ${dayType === tab.key ? 'bg-white' : ''}`}
+                  style={dayType === tab.key ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 } : undefined}
+                >
+                  <Text className={`text-[13px] font-semibold ${dayType === tab.key ? 'text-brand-primary' : 'text-[#9CA3AF]'}`}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          {/* Weekday Buttons */}
-          <View className="mt-4 flex-row items-center justify-between">
+          {/* Weekday Buttons - Spaced evenly */}
+          <View className="flex-row items-center justify-between px-1">
             {WEEKDAY_LABELS.map((day, idx) => {
               const isSelected = selectedDays.includes(idx);
               const active = dayType === 'custom' ? isSelected : idx < 5 ? dayType === 'weekdays' : dayType === 'weekends';
@@ -197,10 +199,10 @@ export const IdealDayTemplate = ({
                   key={`${day.short}-${idx}`}
                   disabled={dayType !== 'custom'}
                   onPress={() => onToggleDay(idx)}
-                  className={`h-10 w-10 items-center justify-center rounded-xl ${active ? 'bg-brand-primary' : 'bg-[#F1F5F9]'}`}
+                  className={`h-11 w-11 items-center justify-center rounded-lg ${active ? 'bg-brand-primary' : 'bg-[#F3F4F6]'}`}
                   style={({ pressed }) => [{ opacity: pressed && dayType === 'custom' ? 0.8 : 1 }]}
                 >
-                  <Text className={`text-[15px] font-semibold ${active ? 'text-white' : 'text-[#94A3B8]'}`}>
+                  <Text className={`text-[15px] font-bold ${active ? 'text-white' : 'text-[#9CA3AF]'}`}>
                     {day.short}
                   </Text>
                 </Pressable>
@@ -209,48 +211,52 @@ export const IdealDayTemplate = ({
           </View>
         </View>
 
-        {/* Donut Chart with Free Time */}
-        <View className="rounded-2xl bg-white p-4" style={{ shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
-          <View className="flex-row items-center">
-            {/* Chart */}
-            <View className="relative items-center justify-center" style={{ width: 140, height: 140 }}>
-              <AnalyticsDonutChart
-                data={segments.map((s, idx) => ({ label: `${s.label}-${idx}`, value: s.value, color: s.color }))}
-                radius={44}
-                strokeWidth={22}
-                startAngle={-90}
-              />
-              <View className="absolute items-center justify-center">
-                <Text className="text-brand-primary" style={{ fontSize: 22, fontWeight: '800' }}>
-                  {formatHours(totalHours)}
-                </Text>
-                <Text className="uppercase text-[#94A3B8]" style={{ fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>
-                  Planned
-                </Text>
-              </View>
-            </View>
+        {/* Divider */}
+        <View className="h-px bg-[#E5E7EB]" />
 
-            {/* Free Time Info */}
-            <View className="flex-1 ml-4">
-              <View className="flex-row items-center gap-2 mb-2">
-                <Clock size={16} color="#64748B" />
-                <Text className="text-[13px] font-medium text-[#64748B]">Remaining</Text>
-              </View>
-              <Text className="text-[28px] font-bold text-text-primary mb-1">
-                {formatHours(freeTime)}
+        {/* Donut Chart with Free Time - No card, clean layout */}
+        <View className="flex-row items-center py-2">
+          {/* Chart */}
+          <View className="relative items-center justify-center" style={{ width: 130, height: 130 }}>
+            <AnalyticsDonutChart
+              data={segments.map((s, idx) => ({ label: `${s.label}-${idx}`, value: s.value, color: s.color }))}
+              radius={40}
+              strokeWidth={20}
+              startAngle={-90}
+            />
+            <View className="absolute items-center justify-center">
+              <Text className="text-brand-primary" style={{ fontSize: 20, fontWeight: '800' }}>
+                {formatHours(totalHours)}
               </Text>
-              <Text className="text-[13px] text-[#94A3B8]">Free time available</Text>
-              
-              {/* Mini progress bar */}
-              <View className="mt-3 h-2 rounded-full bg-[#F1F5F9] overflow-hidden">
-                <View
-                  className="h-full rounded-full"
-                  style={{ width: `${(freeTime / 24) * 100}%`, backgroundColor: freeColor }}
-                />
-              </View>
+              <Text className="uppercase text-[#94A3B8]" style={{ fontSize: 8, fontWeight: '700', letterSpacing: 0.5 }}>
+                Planned
+              </Text>
+            </View>
+          </View>
+
+          {/* Free Time Info */}
+          <View className="flex-1 ml-3">
+            <View className="flex-row items-center gap-1.5 mb-1">
+              <Clock size={14} color="#94A3B8" />
+              <Text className="text-[12px] font-medium text-[#94A3B8]">Remaining</Text>
+            </View>
+            <Text className="text-[26px] font-bold text-text-primary">
+              {formatHours(freeTime)}
+            </Text>
+            <Text className="text-[12px] text-[#94A3B8] mt-0.5">Free time available</Text>
+            
+            {/* Mini progress bar */}
+            <View className="mt-2 h-1.5 rounded-full bg-[#F1F5F9] overflow-hidden">
+              <View
+                className="h-full rounded-full"
+                style={{ width: `${(freeTime / 24) * 100}%`, backgroundColor: freeColor }}
+              />
             </View>
           </View>
         </View>
+
+        {/* Divider */}
+        <View className="h-px bg-[#E5E7EB]" />
 
         {/* Activities Section */}
         <View className="gap-3">
@@ -271,7 +277,7 @@ export const IdealDayTemplate = ({
           ))}
         </View>
 
-        {/* Edit Mode */}
+        {/* Edit Mode / Edit Button */}
         {isEditing ? (
           <View className="gap-3 rounded-2xl bg-white p-4" style={{ shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
             <Text className="text-[15px] font-semibold text-text-primary">Add Category</Text>
@@ -310,16 +316,18 @@ export const IdealDayTemplate = ({
             </Pressable>
           </View>
         ) : (
-          <Pressable
-            onPress={() => setIsEditing(true)}
-            className="absolute bottom-4 right-4 h-14 w-14 items-center justify-center rounded-2xl bg-brand-primary"
-            style={({ pressed }) => [
-              { opacity: pressed ? 0.9 : 1 },
-              { shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }
-            ]}
-          >
-            <Edit3 size={22} color="#FFFFFF" />
-          </Pressable>
+          <View className="items-end -mb-2">
+            <Pressable
+              onPress={() => setIsEditing(true)}
+              className="h-12 w-12 items-center justify-center rounded-xl bg-brand-primary"
+              style={({ pressed }) => [
+                { opacity: pressed ? 0.9 : 1 },
+                { shadowColor: '#2563EB', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 4 }
+              ]}
+            >
+              <Edit3 size={18} color="#FFFFFF" />
+            </Pressable>
+          </View>
         )}
       </View>
     </SetupStepLayout>
