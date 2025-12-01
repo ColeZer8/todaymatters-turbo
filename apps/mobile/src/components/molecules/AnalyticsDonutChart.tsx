@@ -1,15 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  withTiming,
-  Easing,
-  useDerivedValue,
-} from 'react-native-reanimated';
 import Svg, { Circle, G } from 'react-native-svg';
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface DonutSlice {
   label: string;
@@ -25,60 +16,11 @@ interface AnalyticsDonutChartProps {
   startAngle?: number;
 }
 
-// All possible slice labels in order (for consistent rendering)
-const ALL_LABELS = ['Free time', 'Faith', 'Family', 'Work', 'Health', 'Other'];
+// Known analytics labels for stable ordering when animating
+const ANALYTICS_LABELS = ['Free time', 'Faith', 'Family', 'Work', 'Health', 'Other'];
 
-const ANIMATION_CONFIG = {
-  duration: 500,
-  easing: Easing.inOut(Easing.cubic),
-};
-
-interface AnimatedSliceProps {
-  cx: number;
-  cy: number;
-  radius: number;
-  strokeWidth: number;
-  circumference: number;
-  color: string;
-  percentage: Animated.SharedValue<number>;
-  startPercentage: Animated.SharedValue<number>;
-}
-
-const AnimatedSlice = ({
-  cx,
-  cy,
-  radius,
-  strokeWidth,
-  circumference,
-  color,
-  percentage,
-  startPercentage,
-}: AnimatedSliceProps) => {
-  const animatedProps = useAnimatedProps(() => {
-    const dashLength = circumference * percentage.value;
-    const gapLength = circumference - dashLength;
-    const dashOffset = circumference * (1 - startPercentage.value);
-
-    return {
-      strokeDasharray: `${dashLength} ${gapLength}`,
-      strokeDashoffset: dashOffset,
-      opacity: percentage.value > 0.001 ? 1 : 0,
-    };
-  });
-
-  return (
-    <AnimatedCircle
-      cx={cx}
-      cy={cy}
-      r={radius}
-      stroke={color}
-      strokeWidth={strokeWidth}
-      strokeLinecap="butt"
-      fill="transparent"
-      animatedProps={animatedProps}
-    />
-  );
-};
+const ANIMATION_DURATION = 500;
+const ANIMATION_FPS = 60;
 
 export const AnalyticsDonutChart = ({
   data,
@@ -90,72 +32,113 @@ export const AnalyticsDonutChart = ({
   const circumference = 2 * Math.PI * radius;
   const center = radius + strokeWidth;
 
-  // Create a map of current data values
-  const dataMap = useMemo(() => {
-    const map: Record<string, { value: number; color: string }> = {};
-    data.forEach((slice) => {
-      map[slice.label] = { value: slice.value, color: slice.color };
-    });
-    return map;
-  }, [data]);
-
   // Calculate total
   const total = useMemo(() => {
     return data.reduce((sum, slice) => sum + slice.value, 0) || 1;
   }, [data]);
 
-  // Animated values for each possible slice
-  const freeTimeValue = useSharedValue(0);
-  const faithValue = useSharedValue(0);
-  const familyValue = useSharedValue(0);
-  const workValue = useSharedValue(0);
-  const healthValue = useSharedValue(0);
-  const otherValue = useSharedValue(0);
+  // Check if this is analytics mode (uses known labels) or generic mode
+  const isAnalyticsMode = useMemo(() => {
+    return data.some((d) => ANALYTICS_LABELS.includes(d.label));
+  }, [data]);
 
-  // Update animated values when data changes
+  // For analytics mode: animate between states
+  // For generic mode: just render slices directly (no animation needed for IdealDay)
+  const [animatedSlices, setAnimatedSlices] = useState<Array<{ label: string; percentage: number; color: string }>>([]);
+  const prevSlicesRef = useRef<Array<{ label: string; percentage: number; color: string }>>([]);
+  const animationRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Calculate target slices
+  const targetSlices = useMemo(() => {
+    if (isAnalyticsMode) {
+      // For analytics: use fixed order
+      return ANALYTICS_LABELS.map((lbl) => {
+        const slice = data.find((d) => d.label === lbl);
+        return {
+          label: lbl,
+          percentage: slice ? slice.value / total : 0,
+          color: slice?.color || getDefaultColor(lbl),
+        };
+      }).filter((s) => s.percentage > 0 || data.some((d) => d.label === s.label));
+    } else {
+      // For generic: use data order directly
+      return data.map((slice) => ({
+        label: slice.label,
+        percentage: slice.value / total,
+        color: slice.color,
+      }));
+    }
+  }, [data, total, isAnalyticsMode]);
+
+  // Animate slices for analytics mode
   useEffect(() => {
-    const getPercent = (label: string) => {
-      const item = dataMap[label];
-      return item ? item.value / total : 0;
+    if (!isAnalyticsMode) {
+      // No animation for generic mode
+      setAnimatedSlices(targetSlices);
+      return;
+    }
+
+    // Clear existing animation
+    if (animationRef.current) {
+      clearInterval(animationRef.current);
+    }
+
+    const startSlices = prevSlicesRef.current.length > 0 ? prevSlicesRef.current : targetSlices;
+    const startTime = Date.now();
+    const frameInterval = 1000 / ANIMATION_FPS;
+
+    // Build a map of all labels we need to animate
+    const allLabels = new Set([...startSlices.map((s) => s.label), ...targetSlices.map((s) => s.label)]);
+
+    animationRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      // easeOutCubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      const interpolated = Array.from(allLabels).map((lbl) => {
+        const start = startSlices.find((s) => s.label === lbl);
+        const end = targetSlices.find((s) => s.label === lbl);
+        const startPct = start?.percentage ?? 0;
+        const endPct = end?.percentage ?? 0;
+        const currentPct = startPct + (endPct - startPct) * eased;
+
+        return {
+          label: lbl,
+          percentage: currentPct,
+          color: end?.color || start?.color || getDefaultColor(lbl),
+        };
+      });
+
+      setAnimatedSlices(interpolated.filter((s) => s.percentage > 0.001));
+
+      if (progress >= 1) {
+        if (animationRef.current) {
+          clearInterval(animationRef.current);
+          animationRef.current = null;
+        }
+        prevSlicesRef.current = targetSlices;
+      }
+    }, frameInterval);
+
+    return () => {
+      if (animationRef.current) {
+        clearInterval(animationRef.current);
+        animationRef.current = null;
+      }
     };
+  }, [targetSlices, isAnalyticsMode]);
 
-    freeTimeValue.value = withTiming(getPercent('Free time'), ANIMATION_CONFIG);
-    faithValue.value = withTiming(getPercent('Faith'), ANIMATION_CONFIG);
-    familyValue.value = withTiming(getPercent('Family'), ANIMATION_CONFIG);
-    workValue.value = withTiming(getPercent('Work'), ANIMATION_CONFIG);
-    healthValue.value = withTiming(getPercent('Health'), ANIMATION_CONFIG);
-    otherValue.value = withTiming(getPercent('Other'), ANIMATION_CONFIG);
-  }, [dataMap, total, freeTimeValue, faithValue, familyValue, workValue, healthValue, otherValue]);
-
-  // Derived cumulative start positions
-  const freeTimeStart = useDerivedValue(() => 0);
-  const faithStart = useDerivedValue(() => freeTimeValue.value);
-  const familyStart = useDerivedValue(() => freeTimeValue.value + faithValue.value);
-  const workStart = useDerivedValue(() => freeTimeValue.value + faithValue.value + familyValue.value);
-  const healthStart = useDerivedValue(() => freeTimeValue.value + faithValue.value + familyValue.value + workValue.value);
-  const otherStart = useDerivedValue(() => freeTimeValue.value + faithValue.value + familyValue.value + workValue.value + healthValue.value);
-
-  // Get color for each slice
-  const getColor = (label: string) => {
-    const colors: Record<string, string> = {
-      'Free time': '#14B8A6',
-      'Faith': '#F79A3B',
-      'Family': '#5F63F5',
-      'Work': '#2F7BFF',
-      'Health': '#1F9C66',
-      'Other': '#9CA3AF',
-    };
-    return dataMap[label]?.color || colors[label];
-  };
-
-  const sliceConfigs = [
-    { label: 'Free time', percentage: freeTimeValue, startPercentage: freeTimeStart },
-    { label: 'Faith', percentage: faithValue, startPercentage: faithStart },
-    { label: 'Family', percentage: familyValue, startPercentage: familyStart },
-    { label: 'Work', percentage: workValue, startPercentage: workStart },
-    { label: 'Health', percentage: healthValue, startPercentage: healthStart },
-    { label: 'Other', percentage: otherValue, startPercentage: otherStart },
-  ];
+  // For rendering: calculate cumulative offsets
+  const slicesWithOffsets = useMemo(() => {
+    const slices = isAnalyticsMode ? animatedSlices : targetSlices;
+    let cumulative = 0;
+    return slices.map((slice) => {
+      const offset = cumulative;
+      cumulative += slice.percentage;
+      return { ...slice, offset };
+    });
+  }, [animatedSlices, targetSlices, isAnalyticsMode]);
 
   return (
     <View className="items-center justify-center">
@@ -165,19 +148,26 @@ export const AnalyticsDonutChart = ({
         viewBox={`0 0 ${(radius + strokeWidth) * 2} ${(radius + strokeWidth) * 2}`}
       >
         <G rotation={startAngle} origin={`${center}, ${center}`}>
-          {sliceConfigs.map((config) => (
-            <AnimatedSlice
-              key={config.label}
-              cx={center}
-              cy={center}
-              radius={radius}
-              strokeWidth={strokeWidth}
-              circumference={circumference}
-              color={getColor(config.label)}
-              percentage={config.percentage}
-              startPercentage={config.startPercentage}
-            />
-          ))}
+          {slicesWithOffsets.map((slice) => {
+            const dashLength = circumference * slice.percentage;
+            const gapLength = circumference - dashLength;
+            const dashOffset = circumference * (1 - slice.offset);
+
+            return (
+              <Circle
+                key={slice.label}
+                cx={center}
+                cy={center}
+                r={radius}
+                stroke={slice.color}
+                strokeWidth={strokeWidth}
+                strokeLinecap="butt"
+                fill="transparent"
+                strokeDasharray={`${dashLength} ${gapLength}`}
+                strokeDashoffset={dashOffset}
+              />
+            );
+          })}
         </G>
       </Svg>
       <View className="absolute items-center justify-center">
@@ -199,3 +189,16 @@ export const AnalyticsDonutChart = ({
     </View>
   );
 };
+
+// Default colors for analytics labels
+function getDefaultColor(label: string): string {
+  const colors: Record<string, string> = {
+    'Free time': '#14B8A6',
+    'Faith': '#F79A3B',
+    'Family': '#5F63F5',
+    'Work': '#2F7BFF',
+    'Health': '#1F9C66',
+    'Other': '#9CA3AF',
+  };
+  return colors[label] || '#9CA3AF';
+}
