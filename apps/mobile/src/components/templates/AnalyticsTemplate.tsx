@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,101 @@ import { Card, Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
 import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
 import { BottomToolbar } from '@/components/organisms/BottomToolbar';
+
+// Animated number component with smooth ticking effect
+// All animations complete in the same duration for unified feel
+interface AnimatedNumberProps {
+  value: number;
+  suffix?: string;
+  prefix?: string;
+  style?: object;
+}
+
+const ANIMATION_DURATION = 1800; // Total duration in ms - slow and dramatic
+const FRAME_RATE = 60; // Updates per second for smoother animation
+
+// Global animation coordinator to sync all number animations
+let globalAnimationStart: number | null = null;
+let globalAnimationTimeout: NodeJS.Timeout | null = null;
+
+const AnimatedNumber = ({ value, suffix = '', prefix = '', style }: AnimatedNumberProps) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const animationRef = useRef<number | null>(null);
+  const startValueRef = useRef<number>(value);
+  const targetValueRef = useRef<number>(value);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    // Skip animation on first render
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      setDisplayValue(value);
+      return;
+    }
+
+    // Cancel any existing animation frame
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    const startVal = displayValue;
+    const endVal = value;
+    
+    if (startVal === endVal) return;
+    
+    startValueRef.current = startVal;
+    targetValueRef.current = endVal;
+    
+    // Reset global start time when a new batch of animations begins
+    // Use a small timeout to batch all value changes together
+    if (globalAnimationTimeout) {
+      clearTimeout(globalAnimationTimeout);
+    }
+    globalAnimationTimeout = setTimeout(() => {
+      globalAnimationStart = null;
+    }, 50);
+    
+    if (globalAnimationStart === null) {
+      globalAnimationStart = performance.now();
+    }
+    
+    const animationStartTime = globalAnimationStart;
+    
+    const animate = () => {
+      const now = performance.now();
+      const elapsed = now - animationStartTime;
+      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
+      
+      // Easing function: easeOutQuart for smooth, dramatic deceleration
+      const eased = 1 - Math.pow(1 - progress, 4);
+      
+      const currentValue = startValueRef.current + (targetValueRef.current - startValueRef.current) * eased;
+      setDisplayValue(Math.round(currentValue));
+      
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setDisplayValue(endVal);
+        animationRef.current = null;
+      }
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [value]);
+  
+  return (
+    <Text style={style}>
+      {prefix}{displayValue}{suffix}
+    </Text>
+  );
+};
 
 type RangeKey = 'today' | 'week' | 'month' | 'year';
 type DistributionView = 'ideal' | 'reality';
@@ -399,28 +494,44 @@ export const AnalyticsTemplate = () => {
                       const diff = getDiff(slice.label, slice.value);
                       const sliceColor = slice.color;
                       
+                      // Don't show delta for "Other" category
+                      const showDelta = distributionView === 'reality' && !isOther;
+                      
                       const RowContent = (
                         <View className="flex-row items-center justify-between py-0.5">
-                          <View className="flex-row items-center gap-2">
+                          <View className="flex-row items-center gap-2" style={{ minWidth: 90 }}>
                             <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sliceColor }} />
                             <Text className="text-[14px] font-medium text-text-primary">
                               {label}
                             </Text>
                           </View>
-                          <View className="flex-row items-center gap-2">
-                            {distributionView === 'reality' && (
-                              <Text
-                                className="text-[13px] font-semibold w-10 text-right"
+                          <View className="flex-row items-center">
+                            {/* Always reserve space for delta column to keep alignment consistent */}
+                            <View style={{ width: 48, alignItems: 'flex-end', marginRight: 8 }}>
+                              {showDelta && (
+                                <AnimatedNumber
+                                  value={diff ?? 0}
+                                  prefix={diff !== null && diff > 0 ? '+' : ''}
+                                  suffix="%"
+                                  style={{ 
+                                    color: diff === null || diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444',
+                                    fontSize: 13,
+                                    fontWeight: '600',
+                                  }}
+                                />
+                              )}
+                            </View>
+                            <View style={{ width: 40, alignItems: 'flex-end', marginRight: 8 }}>
+                              <AnimatedNumber
+                                value={slice.value}
+                                suffix="%"
                                 style={{ 
-                                  color: diff === null || diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444' 
+                                  color: '#1F2937',
+                                  fontSize: 14,
+                                  fontWeight: '600',
                                 }}
-                              >
-                                {diff !== null ? `${diff > 0 ? '+' : ''}${diff}%` : ''}
-                              </Text>
-                            )}
-                            <Text className="text-[14px] font-semibold text-text-primary w-10 text-right">
-                              {slice.value}%
-                            </Text>
+                              />
+                            </View>
                             {isOther ? (
                               <Icon icon={ChevronRight} size={16} color="#9CA3AF" />
                             ) : (
