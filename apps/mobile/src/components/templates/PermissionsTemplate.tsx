@@ -1,15 +1,17 @@
 import { GradientButton } from '@/components/atoms';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, CheckSquare, ChevronDown } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, CheckSquare, ChevronDown } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 interface PermissionsTemplateProps {
   allowAllEnabled: boolean;
   onToggleAllowAll: () => void;
   onContinue: () => void;
   onCustomizeLater: () => void;
+  onBack?: () => void;
   step?: number;
   totalSteps?: number;
 }
@@ -19,8 +21,9 @@ export const PermissionsTemplate = ({
   onToggleAllowAll,
   onContinue,
   onCustomizeLater,
-  step = 1,
-  totalSteps = 5,
+  onBack,
+  step = ONBOARDING_STEPS.permissions,
+  totalSteps = ONBOARDING_TOTAL_STEPS,
 }: PermissionsTemplateProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
 
@@ -39,7 +42,22 @@ export const PermissionsTemplate = ({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <Text className="text-sm font-semibold text-brand-primary">Step {step} of {totalSteps}</Text>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-sm font-semibold text-text-secondary">
+                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+              </Text>
+              {onBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onBack}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                >
+                  <ArrowLeft size={14} color="#111827" />
+                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                </Pressable>
+              ) : null}
+            </View>
             <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -48,7 +66,7 @@ export const PermissionsTemplate = ({
 
           <View style={styles.titleBlock}>
             <Text className="text-3xl font-extrabold text-text-primary">Sync your day in the background</Text>
-            <Text className="mt-3 text-base leading-6 text-text-secondary">
+            <Text className="text-base leading-6 text-text-secondary">
               To build your ideal schedule, we&apos;ll read your existing events and habits while you answer a few
               quick questions.
             </Text>
@@ -126,24 +144,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
   },
   progressTrack: {
-    height: 7,
+    height: 6,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E4E8F0',
     overflow: 'hidden',
-    marginBottom: 10,
   },
   progressFill: {
     height: '100%',
-    width: '20%',
     borderRadius: 999,
     backgroundColor: '#2563EB',
   },
   titleBlock: {
     marginTop: 12,
-    marginBottom: 12,
+    gap: 8,
   },
   permissionsHeader: {
     marginBottom: 8,

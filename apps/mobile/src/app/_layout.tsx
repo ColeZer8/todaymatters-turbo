@@ -48,6 +48,7 @@ export default function Layout() {
           <Stack.Screen name="home" options={{ headerShown: false }} />
           <Stack.Screen name="calendar" options={{ headerShown: false }} />
           <Stack.Screen name="analytics" options={{ headerShown: false }} />
+          <Stack.Screen name="profile" options={{ headerShown: false }} />
           <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
       </SafeAreaProvider>

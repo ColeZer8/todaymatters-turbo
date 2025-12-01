@@ -13,19 +13,21 @@ export interface IdealDayCategory {
 
 interface IdealDayState {
   dayType: 'weekdays' | 'weekends' | 'custom';
-  categories: IdealDayCategory[];
+  categoriesByType: Record<'weekdays' | 'weekends' | 'custom', IdealDayCategory[]>;
+  selectedDaysByType: Record<'weekdays' | 'weekends' | 'custom', number[]>;
   setDayType: (type: IdealDayState['dayType']) => void;
   setHours: (id: string, hours: number) => void;
   addCategory: (name: string, color: string) => void;
   deleteCategory: (id: string) => void;
+  toggleDay: (dayIndex: number) => void;
 }
 
 const DEFAULT_CATEGORIES: IdealDayCategory[] = [
   { id: 'sleep', name: 'Sleep', hours: 8, maxHours: 12, color: '#4F8BFF', icon: Moon },
-  { id: 'work', name: 'Work', hours: 6.5, maxHours: 12, color: '#22A776', icon: Briefcase },
+  { id: 'work', name: 'Work', hours: 6.5, maxHours: 12, color: '#1FA56E', icon: Briefcase },
   { id: 'family', name: 'Family', hours: 3, maxHours: 6, color: '#F59E0B', icon: Users },
-  { id: 'prayer', name: 'Prayer', hours: 1, maxHours: 3, color: '#EC4899', icon: HeartPulse },
-  { id: 'fitness', name: 'Fitness', hours: 1, maxHours: 3, color: '#F97316', icon: Dumbbell },
+  { id: 'prayer', name: 'Prayer', hours: 1, maxHours: 3, color: '#F33C83', icon: HeartPulse },
+  { id: 'fitness', name: 'Fitness', hours: 1, maxHours: 3, color: '#F95C2E', icon: Dumbbell },
 ];
 
 const clampHours = (
@@ -41,35 +43,73 @@ const clampHours = (
 
 export const useIdealDayStore = create<IdealDayState>((set, get) => ({
   dayType: 'weekdays',
-  categories: DEFAULT_CATEGORIES,
-  setDayType: (type) => set({ dayType: type }),
+  categoriesByType: {
+    weekdays: [...DEFAULT_CATEGORIES],
+    weekends: [...DEFAULT_CATEGORIES],
+    custom: [...DEFAULT_CATEGORIES],
+  },
+  selectedDaysByType: {
+    weekdays: [0, 1, 2, 3, 4],
+    weekends: [5, 6],
+    custom: [],
+  },
+  setDayType: (type) =>
+    set((state) => ({
+      dayType: type,
+      selectedDaysByType: {
+        ...state.selectedDaysByType,
+        [type]: type === 'weekdays' ? [0, 1, 2, 3, 4] : type === 'weekends' ? [5, 6] : [],
+      },
+    })),
   setHours: (id, hours) =>
     set((state) => {
-      const total = state.categories.reduce((sum, cat) => sum + cat.hours, 0);
+      const current = state.categoriesByType[state.dayType] || [];
+      const total = current.reduce((sum, cat) => sum + cat.hours, 0);
       return {
-        categories: state.categories.map((cat) =>
-          cat.id === id
-            ? { ...cat, hours: clampHours(hours, 24, total, cat.hours, cat.maxHours) }
-            : cat
-        ),
+        categoriesByType: {
+          ...state.categoriesByType,
+          [state.dayType]: current.map((cat) =>
+            cat.id === id
+              ? { ...cat, hours: clampHours(hours, 24, total, cat.hours, cat.maxHours) }
+              : cat
+          ),
+        },
       };
     }),
   addCategory: (name, color) =>
     set((state) => ({
-      categories: [
-        ...state.categories,
-        {
-          id: `${Date.now()}`,
-          name,
-          hours: 1,
-          maxHours: 6,
-          color,
-          icon: Sparkles,
-        },
-      ],
+      categoriesByType: {
+        ...state.categoriesByType,
+        [state.dayType]: [
+          ...state.categoriesByType[state.dayType],
+          {
+            id: `${Date.now()}`,
+            name,
+            hours: 1,
+            maxHours: 6,
+            color,
+            icon: Sparkles,
+          },
+        ],
+      },
     })),
   deleteCategory: (id) =>
     set((state) => ({
-      categories: state.categories.filter((cat) => cat.id !== id),
+      categoriesByType: {
+        ...state.categoriesByType,
+        [state.dayType]: state.categoriesByType[state.dayType].filter((cat) => cat.id !== id),
+      },
     })),
+  toggleDay: (dayIndex) =>
+    set((state) => {
+      const current = state.selectedDaysByType[state.dayType] || [];
+      const exists = current.includes(dayIndex);
+      const next = exists ? current.filter((d) => d !== dayIndex) : [...current, dayIndex];
+      return {
+        selectedDaysByType: {
+          ...state.selectedDaysByType,
+          [state.dayType]: next,
+        },
+      };
+    }),
 }));

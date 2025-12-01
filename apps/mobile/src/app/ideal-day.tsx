@@ -12,12 +12,18 @@ export default function IdealDayScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const categories = useIdealDayStore((state) => state.categories);
+  const categories = useIdealDayStore((state) => state.categoriesByType[state.dayType]);
   const dayType = useIdealDayStore((state) => state.dayType);
   const setDayType = useIdealDayStore((state) => state.setDayType);
   const setHours = useIdealDayStore((state) => state.setHours);
   const addCategory = useIdealDayStore((state) => state.addCategory);
   const deleteCategory = useIdealDayStore((state) => state.deleteCategory);
+  const selectedDays = useIdealDayStore((state) => state.selectedDaysByType[state.dayType]);
+  const toggleDay = useIdealDayStore((state) => state.toggleDay);
+
+  if (!isNavigationReady) {
+    return null;
+  }
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -34,6 +40,8 @@ export default function IdealDayScreen() {
       totalSteps={ONBOARDING_TOTAL_STEPS}
       categories={categories}
       dayType={dayType}
+      selectedDays={selectedDays}
+      onToggleDay={toggleDay}
       onDayTypeChange={setDayType}
       onCategoryHoursChange={setHours}
       onAddCategory={addCategory}

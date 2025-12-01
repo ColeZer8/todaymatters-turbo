@@ -18,6 +18,8 @@ interface IdealDayTemplateProps {
   onDeleteCategory: (id: string) => void;
   onContinue: () => void;
   onSkip?: () => void;
+  selectedDays: number[];
+  onToggleDay: (dayIndex: number) => void;
 }
 
 const DAY_TYPES: Array<{ key: IdealDayTemplateProps['dayType']; label: string }> = [
@@ -28,8 +30,8 @@ const DAY_TYPES: Array<{ key: IdealDayTemplateProps['dayType']; label: string }>
 
 const WEEKDAY_KEYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-const palette = ['#4F8BFF', '#22A776', '#F59E0B', '#EC4899', '#F97316', '#7C3AED', '#10B981'];
-const freeColor = '#AFC8FF';
+const palette = ['#4F8BFF', '#1FA56E', '#F59E0B', '#F33C83', '#F95C2E', '#7C3AED', '#10B981'];
+const freeColor = '#B7D2FF';
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -78,11 +80,13 @@ const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDele
   const filledWidth = width ? clamp((hours / maxHours) * width, 0, width) : 0;
 
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2.5">
-      <View className="h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}12` }}>
-        <Icon size={18} color={color} />
+    <View className="flex-row items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-2">
+      <View className="items-center justify-center gap-1">
+        <View className="h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: `${color}12` }}>
+          <Icon size={18} color={color} />
+        </View>
       </View>
-      <View className="flex-1 gap-1">
+      <View className="flex-1 gap-1.5">
         <Text className="text-base font-semibold" style={{ color }}>{label}:</Text>
         <View
           className="h-4 rounded-md bg-[#EFF2F7]"
@@ -123,6 +127,8 @@ export const IdealDayTemplate = ({
   onDeleteCategory,
   onContinue,
   onSkip,
+  selectedDays,
+  onToggleDay,
 }: IdealDayTemplateProps) => {
   const totalHours = useMemo(() => categories.reduce((sum, cat) => sum + cat.hours, 0), [categories]);
   const freeTime = Math.max(0, 24 - totalHours);
@@ -152,7 +158,7 @@ export const IdealDayTemplate = ({
         <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
       }
     >
-      <View className="mt-4 gap-4">
+      <View className="mt-2 gap-3">
         <View className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
           <View className="flex-row items-center justify-center gap-2 rounded-xl bg-[#F2F6FF] px-2 py-1">
             {DAY_TYPES.map((tab) => (
@@ -169,30 +175,39 @@ export const IdealDayTemplate = ({
           </View>
 
           <View className="mt-3 flex-row items-center justify-between gap-2">
-            {WEEKDAY_KEYS.map((day, idx) => (
-              <View
-                key={`${day}-${idx}`}
-                className={`h-11 w-11 items-center justify-center rounded-md ${idx < 5 ? 'bg-brand-primary' : 'bg-[#F4F7FB]'}`}
-              >
-                <Text className={`text-base font-semibold ${idx < 5 ? 'text-white' : 'text-text-secondary'}`}>{day}</Text>
-              </View>
-            ))}
+            {WEEKDAY_KEYS.map((day, idx) => {
+              const isSelected = selectedDays.includes(idx);
+              const active = dayType === 'custom' ? isSelected : idx < 5 ? dayType === 'weekdays' : dayType === 'weekends';
+              const bg = active ? 'bg-brand-primary' : 'bg-[#F4F7FB]';
+              const textColor = active ? 'text-white' : 'text-text-secondary';
+              return (
+                <Pressable
+                  key={`${day}-${idx}`}
+                  disabled={dayType !== 'custom'}
+                  onPress={() => onToggleDay(idx)}
+                  className={`h-11 w-11 items-center justify-center rounded-md ${bg}`}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+                >
+                  <Text className={`text-base font-semibold ${textColor}`}>{day}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
         <View className="items-center">
-          <View className="relative items-center justify-center" style={{ height: 180 }}>
+          <View className="relative items-center justify-center" style={{ height: 170 }}>
             <AnalyticsDonutChart
               data={segments.map((s, idx) => ({ label: `${s.label}-${idx}`, value: s.value, color: s.color }))}
-              radius={56}
-              strokeWidth={28}
+              radius={52}
+              strokeWidth={26}
               startAngle={-90}
             />
             <View className="absolute items-center justify-center">
-              <Text className="text-brand-primary" style={{ fontSize: 22, fontWeight: '800' }}>
+              <Text className="text-brand-primary" style={{ fontSize: 20, fontWeight: '800' }}>
                 {totalHours % 1 === 0 ? `${totalHours}` : totalHours.toFixed(1)}h
               </Text>
-              <Text className="uppercase text-[#6B7280]" style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
+              <Text className="uppercase text-[#6B7280]" style={{ fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>
                 Planned
               </Text>
             </View>

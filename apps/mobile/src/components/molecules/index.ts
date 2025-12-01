@@ -20,3 +20,7 @@ export { AnalyticsRangeToggle } from './AnalyticsRangeToggle';
 export { AnalyticsBarChart } from './AnalyticsBarChart';
 export { AnalyticsCategoryCard } from './AnalyticsCategoryCard';
 export { AnalyticsDonutChart } from './AnalyticsDonutChart';
+export { ProfileSummaryCard } from './ProfileSummaryCard';
+export { ProfilePill } from './ProfilePill';
+export { ProfileItemCard } from './ProfileItemCard';
+export { ProfileMenuItem } from './ProfileMenuItem';

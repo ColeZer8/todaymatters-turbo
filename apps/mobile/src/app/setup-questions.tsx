@@ -39,6 +39,7 @@ export default function SetupQuestionsScreen() {
       selectedOption={selection}
       onSelect={setSelection}
       onContinue={() => router.replace('/daily-rhythm')}
+      onBack={() => router.back()}
       onSkip={() => router.replace('/daily-rhythm')}
     />
   );

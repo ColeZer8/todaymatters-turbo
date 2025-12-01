@@ -12,6 +12,7 @@ export const BottomToolbar = () => {
     const isHome = pathname?.includes('/home');
     const isCalendar = pathname?.includes('/calendar');
     const isAnalytics = pathname?.includes('/analytics');
+    const isProfile = pathname?.includes('/profile');
 
     return (
         <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
@@ -47,8 +48,9 @@ export const BottomToolbar = () => {
                     accessibilityRole="button"
                     hitSlop={8}
                     className="items-center justify-center p-2"
+                    onPress={() => router.replace('/profile')}
                 >
-                    <Icon icon={User} size={24} color="#9CA3AF" />
+                    <Icon icon={User} size={24} color={isProfile ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
             </View>
         </View>

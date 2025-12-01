@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { PermissionsTemplate } from '@/components/templates';
+import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -24,8 +25,9 @@ export default function PermissionsScreen() {
       onToggleAllowAll={handleAllowAllToggle}
       onContinue={handleContinue}
       onCustomizeLater={handleCustomizeLater}
-      step={1}
-      totalSteps={5}
+      onBack={() => router.back()}
+      step={ONBOARDING_STEPS.permissions}
+      totalSteps={ONBOARDING_TOTAL_STEPS}
     />
   );
 }

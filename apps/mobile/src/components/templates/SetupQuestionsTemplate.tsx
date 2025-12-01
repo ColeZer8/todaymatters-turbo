@@ -2,8 +2,8 @@ import { GradientButton } from '@/components/atoms';
 import { TextChoiceCard } from '@/components/molecules';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ArrowLeft, ArrowRight } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
@@ -14,6 +14,7 @@ interface SetupQuestionsTemplateProps {
   selectedOption?: string | null;
   onSelect: (value: string) => void;
   onContinue: () => void;
+  onBack?: () => void;
   onSkip?: () => void;
 }
 
@@ -24,6 +25,7 @@ export const SetupQuestionsTemplate = ({
   selectedOption,
   onSelect,
   onContinue,
+  onBack,
   onSkip,
 }: SetupQuestionsTemplateProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
@@ -43,7 +45,22 @@ export const SetupQuestionsTemplate = ({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <Text className="text-sm font-semibold text-brand-primary">Step {step} of {totalSteps}</Text>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-sm font-semibold text-text-secondary">
+                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+              </Text>
+              {onBack ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onBack}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                >
+                  <ArrowLeft size={14} color="#111827" />
+                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                </Pressable>
+              ) : null}
+            </View>
             <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
           </View>
           <View style={styles.progressTrack}>
@@ -53,7 +70,7 @@ export const SetupQuestionsTemplate = ({
           <View style={styles.contentWidth}>
             <View style={styles.titleBlock}>
               <Text className="text-3xl font-extrabold text-text-primary">Who are you?</Text>
-              <Text className="mt-3 text-base leading-6 text-text-secondary">
+              <Text className="text-base leading-6 text-text-secondary">
                 Help us categorize your primary focus.
               </Text>
             </View>
@@ -125,14 +142,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   progressTrack: {
     height: 6,
     borderRadius: 999,
     backgroundColor: '#E4E8F0',
     overflow: 'hidden',
-    marginBottom: 18,
   },
   progressFill: {
     height: '100%',
@@ -140,8 +155,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
   },
   titleBlock: {
-    marginTop: 4,
-    gap: 4,
+    gap: 8,
+    marginTop: 12,
   },
   choiceList: {
     gap: 10,
