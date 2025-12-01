@@ -7,7 +7,7 @@ export { ConfirmEmailTemplate } from './ConfirmEmailTemplate';
 export { PermissionsTemplate } from './PermissionsTemplate';
 export { SetupQuestionsTemplate } from './SetupQuestionsTemplate';
 export { DailyRhythmTemplate } from './DailyRhythmTemplate';
-export { TagSelectionTemplate } from './TagSelectionTemplate';
+export { TagSelectionTemplate, type CategoryOption } from './TagSelectionTemplate';
 export { PurposeSelectionTemplate } from './PurposeSelectionTemplate';
 export { FocusStyleTemplate } from './FocusStyleTemplate';
 export { CoachPersonaTemplate } from './CoachPersonaTemplate';

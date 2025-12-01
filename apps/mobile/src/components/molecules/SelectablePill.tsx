@@ -34,25 +34,21 @@ export const SelectablePill = ({
   const activeContainer = isPrimary ? selectedPrimaryContainer : selectedDangerContainer;
   
   return (
-    <View 
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       className={`${baseContainer} ${
         selected ? activeContainer : unselectedContainer
-      }`}
+      } active:opacity-80`}
     >
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        className="active:opacity-80"
+      <Text 
+        className={`${baseText} ${
+          selected ? selectedText : unselectedText
+        }`}
       >
-        <Text 
-          className={`${baseText} ${
-            selected ? selectedText : unselectedText
-          }`}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </View>
+        {label}
+      </Text>
+    </Pressable>
   );
 };
