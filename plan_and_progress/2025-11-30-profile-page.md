@@ -29,6 +29,7 @@ Build the Profile page default view to match the provided reference, attached to
 - 2025-11-30: Tweaked header copy to use “Goals” per updated reference.
 - 2025-11-30: Implemented edit state (add/remove core values, goals, initiatives) with Done toggle, keeping default view unchanged.
 - 2025-11-30: Made edit “Done” control sticky/visible while adding items, removed back arrow, and added bottom toolbar with Profile highlighted.
+- 2025-11-30: Fixed BottomToolbar import barrel to resolve “displayName of undefined” render error on the Profile page.
 
 ## Verification
 

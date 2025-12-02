@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming,
@@ -12,9 +13,48 @@ import Animated, {
 import { RoutineItemCard } from '@/components/molecules';
 import type { RoutineItem } from '@/components/templates/RoutineBuilderTemplate';
 
+// Hook for press-and-hold repeat functionality
+const useRepeatPress = (
+  onPress: () => void,
+  initialDelay = 400,
+  repeatInterval = 80,
+) => {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clear = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const onPressIn = useCallback(() => {
+    onPress(); // Fire immediately on press
+    timeoutRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(onPress, repeatInterval);
+    }, initialDelay);
+  }, [onPress, initialDelay, repeatInterval]);
+
+  const onPressOut = useCallback(() => {
+    clear();
+  }, [clear]);
+
+  // Cleanup on unmount
+  useEffect(() => clear, [clear]);
+
+  return { onPressIn, onPressOut };
+};
+
 const DEFAULT_HEIGHT = 96;
 const ITEM_SPACING = 12;
-const SPRING_CONFIG = { damping: 20, stiffness: 220 };
+const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
+// Higher damping = less bounce, lower stiffness = smoother
+const LAYOUT_SPRING = { damping: 28, stiffness: 140, mass: 0.9 };
 
 type DraggableRoutineListProps = {
   items: RoutineItem[];
@@ -67,6 +107,37 @@ const findIndexForCenter = (positions: Positions, heights: Heights, centerY: num
   return sorted.length - 1;
 };
 
+// Find the index where the dragged item should go, excluding itself from calculations
+const findIndexForCenterExcluding = (
+  positions: Positions,
+  heights: Heights,
+  centerY: number,
+  excludeId: string,
+) => {
+  'worklet';
+  const sorted = getSortedEntries(positions);
+  // Filter out the dragged item to calculate slot positions
+  const others = sorted.filter(([id]) => id !== excludeId);
+  
+  if (others.length === 0) return 0;
+  
+  // Calculate the boundaries between each slot
+  let offset = 0;
+  for (let i = 0; i < others.length; i += 1) {
+    const [entryId] = others[i];
+    const height = heights[entryId] ?? DEFAULT_HEIGHT;
+    const slotEnd = offset + height + ITEM_SPACING / 2;
+    
+    // If center is before this slot's midpoint, insert before this item
+    if (centerY < offset + height / 2) {
+      return i;
+    }
+    offset += height + ITEM_SPACING;
+  }
+  // If we're past all items, go to the end
+  return others.length;
+};
+
 const clampIndex = (value: number, max: number) => {
   'worklet';
   return Math.max(0, Math.min(value, max));
@@ -96,11 +167,103 @@ const listHeight = (items: RoutineItem[], heightMap: Heights) =>
     return sum + height + spacing;
   }, 0);
 
+// Extracted time edit panel component for cleaner code
+type TimeEditPanelProps = {
+  item: RoutineItem;
+  getStartEnd: (id: string) => { start: string; end: string };
+  onChangeMinutes: (id: string, value: number) => void;
+  onToggleExpand: (id: string) => void;
+};
+
+const TimeEditPanel = ({
+  item,
+  getStartEnd,
+  onChangeMinutes,
+  onToggleExpand,
+}: TimeEditPanelProps) => {
+  // Get current minutes from item (needs to be accessed fresh for repeat)
+  const minutesRef = useRef(item.minutes);
+  minutesRef.current = item.minutes;
+
+  const decrementMinutes = useCallback(() => {
+    const newValue = Math.max(1, minutesRef.current - 1);
+    onChangeMinutes(item.id, newValue);
+  }, [item.id, onChangeMinutes]);
+
+  const incrementMinutes = useCallback(() => {
+    onChangeMinutes(item.id, minutesRef.current + 1);
+  }, [item.id, onChangeMinutes]);
+
+  const decrementPress = useRepeatPress(decrementMinutes);
+  const incrementPress = useRepeatPress(incrementMinutes);
+
+  const times = getStartEnd(item.id);
+
+  return (
+    <View
+      className="rounded-b-2xl border border-t-0 border-[#E4E8F0] bg-white px-4 pb-4 pt-3"
+      style={{
+        marginTop: -1, // Overlap the border perfectly
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 2,
+      }}
+    >
+      <View className="flex-row justify-between">
+        <Text className="text-sm font-semibold text-text-secondary">Start</Text>
+        <Text className="text-sm font-semibold text-text-secondary">End</Text>
+      </View>
+      <View className="flex-row justify-between">
+        <Text className="text-xl font-bold text-text-primary">{times.start}</Text>
+        <Text className="text-xl font-bold text-text-primary">{times.end}</Text>
+      </View>
+
+      <View className="mt-3 gap-3">
+        <Text className="text-base font-semibold text-text-primary">Time allotted</Text>
+        <View className="flex-row items-center justify-center gap-4">
+          <Pressable
+            onPressIn={decrementPress.onPressIn}
+            onPressOut={decrementPress.onPressOut}
+            className="h-11 w-11 items-center justify-center rounded-full bg-[#EEF5FF]"
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+          >
+            <Minus size={20} color="#2563EB" />
+          </Pressable>
+          <Text className="min-w-[64px] text-center text-2xl font-bold text-text-primary">
+            {item.minutes}m
+          </Text>
+          <Pressable
+            onPressIn={incrementPress.onPressIn}
+            onPressOut={incrementPress.onPressOut}
+            className="h-11 w-11 items-center justify-center rounded-full bg-[#EEF5FF]"
+            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+          >
+            <Plus size={20} color="#2563EB" />
+          </Pressable>
+        </View>
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation();
+            onToggleExpand(item.id);
+          }}
+          className="items-center py-1"
+          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+        >
+          <Text className="text-sm font-semibold text-brand-primary">Done</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+};
+
 type DraggableItemProps = {
   item: RoutineItem;
   positions: Animated.SharedValue<Positions>;
   heights: Animated.SharedValue<Heights>;
   activeId: Animated.SharedValue<string | null>;
+  isDragging: Animated.SharedValue<boolean>;
   itemCount: Animated.SharedValue<number>;
   onReorder: (positions: Positions) => void;
   onToggleExpand: (id: string) => void;
@@ -117,6 +280,7 @@ const DraggableItem = ({
   positions,
   heights,
   activeId,
+  isDragging,
   itemCount,
   onReorder,
   onToggleExpand,
@@ -127,7 +291,10 @@ const DraggableItem = ({
   onDragStart,
   onMeasure,
 }: DraggableItemProps) => {
-  const translateY = useSharedValue(0);
+  // absoluteY tracks the exact visual Y position during drag
+  const absoluteY = useSharedValue(0);
+  // startY captures where the item was when drag began
+  const startY = useSharedValue(0);
 
   const commitReorder = useCallback(
     (newPositions: Positions) => {
@@ -137,63 +304,108 @@ const DraggableItem = ({
   );
 
   const gesture = Gesture.Pan()
-    .activateAfterLongPress(120)
-    .onBegin(() => {
+    .activateAfterLongPress(150)
+    .onStart(() => {
+      // onStart fires AFTER the long press delay - this is when drag actually begins
+      isDragging.value = true;
       activeId.value = item.id;
-      translateY.value = 0;
+      // Capture starting position - this never changes during drag
+      const currentOffset = getOffsetForId(positions.value, heights.value, item.id);
+      startY.value = currentOffset;
+      absoluteY.value = currentOffset;
       if (onDragStart) {
         runOnJS(onDragStart)();
       }
     })
     .onUpdate((event) => {
-      translateY.value = event.translationY;
+      // Directly follow the finger - absoluteY = start position + how far finger moved
+      absoluteY.value = startY.value + event.translationY;
+      
+      // Calculate where the CENTER of the dragged item currently is
       const currentHeight = heights.value[item.id] ?? DEFAULT_HEIGHT;
-      const startOffset = getOffsetForId(positions.value, heights.value, item.id);
-      const centerY = startOffset + event.translationY + currentHeight / 2;
+      const itemCenterY = absoluteY.value + currentHeight / 2;
+      
+      // Find what index this center position corresponds to
       const maxIndex = (itemCount.value ?? 1) - 1;
-      const nextIndex = clampIndex(
-        findIndexForCenter(positions.value, heights.value, centerY),
+      const targetIndex = clampIndex(
+        findIndexForCenterExcluding(positions.value, heights.value, itemCenterY, item.id),
         maxIndex,
       );
-      if (nextIndex !== positions.value[item.id]) {
-        positions.value = adjustPositions(positions.value, item.id, nextIndex);
+      
+      // Update positions if needed (this moves OTHER items, not the dragged one)
+      if (targetIndex !== positions.value[item.id]) {
+        positions.value = adjustPositions(positions.value, item.id, targetIndex);
       }
     })
     .onEnd(() => {
-      translateY.value = withSpring(0, SPRING_CONFIG);
-      activeId.value = null;
+      // Animate from current position to final slot position
+      const finalY = getOffsetForId(positions.value, heights.value, item.id);
+      absoluteY.value = withSpring(finalY, SPRING_CONFIG, () => {
+        activeId.value = null;
+        isDragging.value = false;
+      });
       runOnJS(commitReorder)({ ...positions.value });
     })
     .onFinalize(() => {
-      translateY.value = withSpring(0, SPRING_CONFIG);
-      activeId.value = null;
+      if (activeId.value === item.id) {
+        const finalY = getOffsetForId(positions.value, heights.value, item.id);
+        absoluteY.value = withSpring(finalY, SPRING_CONFIG, () => {
+          activeId.value = null;
+          isDragging.value = false;
+        });
+      }
     });
 
   const animatedStyle = useAnimatedStyle(() => {
     const isActive = activeId.value === item.id;
-    const y = getOffsetForId(positions.value, heights.value, item.id);
+    
+    if (isActive) {
+      // Active item: follows finger exactly via absoluteY
+      return {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        shadowColor: '#0f172a',
+        transform: [
+          { translateY: absoluteY.value },
+          { scale: withTiming(1.03, { duration: 100 }) },
+        ],
+        zIndex: 100,
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 12,
+      };
+    }
+    
+    // Non-active items: spring to their calculated positions
+    const targetY = getOffsetForId(positions.value, heights.value, item.id);
     return {
       position: 'absolute',
       left: 0,
       right: 0,
       shadowColor: '#0f172a',
       transform: [
-        { translateY: isActive ? y + translateY.value : withSpring(y, SPRING_CONFIG) },
-        { scale: withTiming(isActive ? 1.02 : 1, { duration: 120 }) },
+        { translateY: withSpring(targetY, LAYOUT_SPRING) },
+        { scale: withTiming(1, { duration: 100 }) },
       ],
-      zIndex: isActive ? 10 : 0,
-      shadowOpacity: withTiming(isActive ? 0.12 : 0.05, { duration: 120 }),
-      elevation: isActive ? 8 : 3,
+      zIndex: 0,
+      shadowOpacity: 0.05,
+      shadowRadius: 12,
+      elevation: 3,
     };
-  }, [item.id, positions, heights, activeId, translateY]);
+  });
 
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
         onLayout={(event) => {
           const measuredHeight = event.nativeEvent.layout.height;
-          heights.value = { ...heights.value, [item.id]: measuredHeight };
-          onMeasure(item.id, measuredHeight);
+          // Only update if significantly different to avoid layout thrashing
+          const currentHeight = heights.value[item.id];
+          if (currentHeight === undefined || Math.abs(currentHeight - measuredHeight) > 1) {
+            heights.value = { ...heights.value, [item.id]: measuredHeight };
+            onMeasure(item.id, measuredHeight);
+          }
         }}
         style={animatedStyle}
       >
@@ -204,56 +416,16 @@ const DraggableItem = ({
           onPress={() => onToggleExpand(item.id)}
           onDelete={() => onDelete(item.id)}
           minutesLabel={`${item.minutes}m`}
+          expanded={expanded}
         />
 
         {expanded ? (
-          <View className="mt-3 rounded-2xl border border-[#E4E8F0] bg-white px-4 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.05)]">
-            <View className="flex-row justify-between">
-              <Text className="text-sm font-semibold text-text-secondary">Start</Text>
-              <Text className="text-sm font-semibold text-text-secondary">End</Text>
-            </View>
-            <View className="flex-row justify-between">
-              <Text className="text-xl font-bold text-text-primary">{getStartEnd(item.id).start}</Text>
-              <Text className="text-xl font-bold text-text-primary">{getStartEnd(item.id).end}</Text>
-            </View>
-
-            <View className="mt-3 gap-3">
-              <Text className="text-base font-semibold text-text-primary">Time allotted</Text>
-              <View className="flex-row items-center justify-center gap-3">
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    onChangeMinutes(item.id, Math.max(1, item.minutes - 5));
-                  }}
-                  className="h-10 w-10 items-center justify-center rounded-full bg-[#EEF5FF]"
-                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                >
-                  <Minus size={18} color="#2563EB" />
-                </Pressable>
-                <Text className="text-2xl font-bold text-text-primary">{item.minutes}m</Text>
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    onChangeMinutes(item.id, item.minutes + 5);
-                  }}
-                  className="h-10 w-10 items-center justify-center rounded-full bg-[#EEF5FF]"
-                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                >
-                  <Plus size={18} color="#2563EB" />
-                </Pressable>
-              </View>
-              <Pressable
-                onPress={(event) => {
-                  event.stopPropagation();
-                  onToggleExpand(item.id);
-                }}
-                className="items-center"
-                style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-              >
-                <Text className="text-sm font-semibold text-text-secondary">Done</Text>
-              </Pressable>
-            </View>
-          </View>
+          <TimeEditPanel
+            item={item}
+            getStartEnd={getStartEnd}
+            onChangeMinutes={onChangeMinutes}
+            onToggleExpand={onToggleExpand}
+          />
         ) : null}
       </Animated.View>
     </GestureDetector>
@@ -274,14 +446,34 @@ export const DraggableRoutineList = ({
   const positions = useSharedValue<Positions>(buildPositions(items));
   const heights = useSharedValue<Heights>({});
   const activeId = useSharedValue<string | null>(null);
+  const isDragging = useSharedValue(false);
   const itemCount = useSharedValue(items.length);
   const itemsRef = useRef(items);
+  const prevItemIds = useRef<string[]>(items.map((i) => i.id));
 
   useEffect(() => {
     itemsRef.current = items;
-    positions.value = buildPositions(items);
     itemCount.value = items.length;
-  }, [items, positions, itemCount]);
+
+    // Only reset positions if items were added/removed, not during reorder
+    const currentIds = items.map((i) => i.id);
+    const idsChanged =
+      currentIds.length !== prevItemIds.current.length ||
+      currentIds.some((id, idx) => !prevItemIds.current.includes(id));
+
+    if (idsChanged && !isDragging.value) {
+      positions.value = buildPositions(items);
+      // Clean up heights for removed items
+      const heightsCopy = { ...heights.value };
+      Object.keys(heightsCopy).forEach((id) => {
+        if (!currentIds.includes(id)) {
+          delete heightsCopy[id];
+        }
+      });
+      heights.value = heightsCopy;
+    }
+    prevItemIds.current = currentIds;
+  }, [items, positions, itemCount, isDragging, heights]);
 
   const commitOrder = useCallback(
     (positionsMap: Positions) => {
@@ -295,15 +487,24 @@ export const DraggableRoutineList = ({
 
   const handleMeasure = useCallback((id: string, height: number) => {
     setHeightsState((prev) => {
-      if (prev[id] === height) return prev;
+      if (Math.abs((prev[id] ?? 0) - height) < 2) return prev;
       return { ...prev, [id]: height };
     });
   }, []);
 
   const containerHeight = useMemo(() => listHeight(items, heightsState), [items, heightsState]);
 
+  // Animated container height for smooth transitions
+  const animatedContainerHeight = useDerivedValue(() => {
+    return withSpring(containerHeight, LAYOUT_SPRING);
+  }, [containerHeight]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    height: animatedContainerHeight.value,
+  }));
+
   return (
-    <View style={{ height: containerHeight }} className="relative">
+    <Animated.View style={containerStyle} className="relative">
       {items.map((item) => (
         <DraggableItem
           key={item.id}
@@ -311,6 +512,7 @@ export const DraggableRoutineList = ({
           positions={positions}
           heights={heights}
           activeId={activeId}
+          isDragging={isDragging}
           itemCount={itemCount}
           onReorder={commitOrder}
           onToggleExpand={onToggleExpand}
@@ -322,6 +524,6 @@ export const DraggableRoutineList = ({
           onMeasure={handleMeasure}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 };

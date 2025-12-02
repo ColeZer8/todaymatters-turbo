@@ -12,6 +12,8 @@ interface RoutineItemCardProps {
   minutesLabel?: string;
   dragHandle?: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** When true, removes bottom border radius to connect with panel below */
+  expanded?: boolean;
 }
 
 const cardShadowStyle = {
@@ -31,12 +33,15 @@ export const RoutineItemCard = ({
   minutesLabel,
   dragHandle,
   style,
+  expanded = false,
 }: RoutineItemCardProps) => {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="w-full flex-row items-center gap-3 rounded-2xl border border-[#E4E8F0] bg-white px-4 py-4"
+      className={`w-full flex-row items-center gap-3 border border-[#E4E8F0] bg-white px-4 py-4 ${
+        expanded ? 'rounded-t-2xl rounded-b-none border-b-0' : 'rounded-2xl'
+      }`}
       style={({ pressed }) => [
         cardShadowStyle,
         style,
