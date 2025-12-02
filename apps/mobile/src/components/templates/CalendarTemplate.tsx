@@ -1,5 +1,6 @@
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { DateNavigator } from '../molecules/DateNavigator';
 import { CalendarEventItem } from '../molecules/CalendarEventItem';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
@@ -75,6 +76,11 @@ const EVENTS = [
 
 export const CalendarTemplate = () => {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
+
+    const handleAddEvent = () => {
+        router.push('/add-event');
+    };
 
     return (
         <View style={[styles.screen, { paddingTop: Math.max(insets.top - 11, 0) }]}>
@@ -98,7 +104,7 @@ export const CalendarTemplate = () => {
                 ))}
             </ScrollView>
 
-            <FloatingActionButton bottomOffset={insets.bottom + 82} />
+            <FloatingActionButton bottomOffset={insets.bottom + 82} onPress={handleAddEvent} />
             <BottomToolbar />
         </View>
     );

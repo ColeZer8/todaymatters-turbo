@@ -26,3 +26,4 @@ export { ProfileItemCard } from './ProfileItemCard';
 export { ProfileMenuItem } from './ProfileMenuItem';
 export { EditableValuePill } from './EditableValuePill';
 export { ProfileAddInput } from './ProfileAddInput';
+export { DatePickerPopup } from './DatePickerPopup';

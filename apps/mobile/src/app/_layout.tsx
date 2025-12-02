@@ -50,6 +50,7 @@ export default function Layout() {
           <Stack.Screen name="analytics" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ headerShown: false }} />
           <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
+          <Stack.Screen name="add-event" options={{ presentation: 'modal', headerShown: false }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
