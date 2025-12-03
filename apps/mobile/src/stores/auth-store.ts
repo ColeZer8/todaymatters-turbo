@@ -109,6 +109,34 @@ export const useAuthStore = create<AuthState>()(
       initialize: async () => {
         set({ isLoading: true });
         try {
+          // Check for auth bypass environment variable (for testing)
+          const bypassAuth = process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
+          console.log('🔍 Auth bypass check:', { 
+            envValue: process.env.EXPO_PUBLIC_BYPASS_AUTH, 
+            bypassAuth 
+          });
+          
+          if (bypassAuth) {
+            console.log('⚠️ Auth bypass is enabled for testing');
+            // Create a mock session for bypass mode
+            get().setSession({
+              user: { 
+                id: 'test-user-bypass', 
+                email: 'test@bypass.local',
+                aud: 'authenticated',
+                role: 'authenticated',
+                created_at: new Date().toISOString(),
+              },
+              access_token: 'bypass-token',
+              token_type: 'bearer',
+              expires_in: 3600,
+              expires_at: Date.now() + 3600000,
+              refresh_token: 'bypass-refresh',
+            } as Session);
+            set({ isLoading: false });
+            return undefined;
+          }
+
           const {
             data: { session },
           } = await supabase.auth.getSession();

@@ -14,11 +14,17 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": false,
-        "withoutCredentials": true
+        "simulator": false
       },
       "android": {
         "buildType": "apk"
+      }
+    },
+    "testflight": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
       }
     },
     "preview": {

@@ -92,3 +92,4 @@ Files modified:
 - Could add visual indicator (slight highlight) when item is being dragged over a drop zone
 - Time panel could animate its height when expanding (currently just appears)
 
+
