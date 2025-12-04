@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowRight, Plus } from 'lucide-react-native';
 import { GradientButton } from '@/components/atoms';
@@ -52,6 +52,23 @@ export const RoutineBuilderTemplate = ({
   const [showAdd, setShowAdd] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Handle panel toggling with smooth transitions when switching between panels
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedId((prev) => {
+      if (prev === id) {
+        // Closing the same panel
+        return null;
+      }
+      if (prev !== null) {
+        // Switching panels: close current first, then open new after a short delay
+        setTimeout(() => setExpandedId(id), 50);
+        return null;
+      }
+      // Opening a panel when none is open
+      return id;
+    });
+  }, []);
 
   const totalMinutes = useMemo(
     () => items.reduce((sum, item) => sum + Math.max(0, item.minutes), 0),
@@ -110,7 +127,7 @@ export const RoutineBuilderTemplate = ({
           <DraggableRoutineList
             items={items}
             expandedId={expandedId}
-            onToggleExpand={(id) => setExpandedId((prev) => (prev === id ? null : id))}
+            onToggleExpand={handleToggleExpand}
             onChangeMinutes={onChangeMinutes}
             onDelete={onDelete}
             onReorder={onReorder}

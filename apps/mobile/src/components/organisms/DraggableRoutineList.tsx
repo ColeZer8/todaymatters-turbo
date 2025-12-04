@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { Minus, Plus } from 'lucide-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -185,6 +185,23 @@ const TimeEditPanel = ({
   const minutesRef = useRef(item.minutes);
   minutesRef.current = item.minutes;
 
+  // Simple controlled state for the input
+  const [localMinutes, setLocalMinutes] = useState(String(item.minutes));
+
+  // Sync when item.minutes changes externally (from +/- buttons)
+  useEffect(() => {
+    setLocalMinutes(String(item.minutes));
+  }, [item.minutes]);
+
+  // Auto-save on every valid change
+  const handleChangeText = useCallback((text: string) => {
+    setLocalMinutes(text);
+    const parsed = parseInt(text, 10);
+    if (!isNaN(parsed) && parsed >= 1) {
+      onChangeMinutes(item.id, parsed);
+    }
+  }, [item.id, onChangeMinutes]);
+
   const decrementMinutes = useCallback(() => {
     const newValue = Math.max(1, minutesRef.current - 1);
     onChangeMinutes(item.id, newValue);
@@ -231,9 +248,18 @@ const TimeEditPanel = ({
           >
             <Minus size={20} color="#2563EB" />
           </Pressable>
-          <Text className="min-w-[64px] text-center text-2xl font-bold text-text-primary">
-            {item.minutes}m
-          </Text>
+          <View className="min-w-[64px] flex-row items-center justify-center rounded-lg bg-[#F0F6FF] px-2 py-1">
+            <TextInput
+              value={localMinutes}
+              onChangeText={handleChangeText}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={3}
+              className="text-center text-2xl font-bold text-brand-primary"
+              style={{ minWidth: 28, padding: 0 }}
+            />
+            <Text className="text-2xl font-bold text-brand-primary">m</Text>
+          </View>
           <Pressable
             onPressIn={incrementPress.onPressIn}
             onPressOut={incrementPress.onPressOut}
@@ -305,6 +331,7 @@ const DraggableItem = ({
 
   const gesture = Gesture.Pan()
     .activateAfterLongPress(150)
+    .enabled(!expanded)
     .onStart(() => {
       // onStart fires AFTER the long press delay - this is when drag actually begins
       isDragging.value = true;

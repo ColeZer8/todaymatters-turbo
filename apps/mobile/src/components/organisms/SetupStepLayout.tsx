@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface SetupStepLayoutProps {
@@ -35,50 +35,58 @@ export const SetupStepLayout = ({
     >
       <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <View style={styles.headerRow}>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-sm font-semibold text-text-secondary">
-                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
-              </Text>
-              {onBack ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onBack}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
-                >
-                  <ArrowLeft size={14} color="#111827" />
-                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
-          </View>
-
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-          </View>
-
-          <View style={styles.contentWidth}>
-            <View style={styles.titleBlock}>
-              <Text className="text-3xl font-extrabold text-text-primary">{title}</Text>
-              {subtitle ? (
-                <Text className="text-base leading-6 text-text-secondary">{subtitle}</Text>
-              ) : null}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
+            <View style={styles.headerRow}>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-sm font-semibold text-text-secondary">
+                  <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+                </Text>
+                {onBack ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onBack}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                    className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                  >
+                    <ArrowLeft size={14} color="#111827" />
+                    <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
             </View>
 
-            {children}
-          </View>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            </View>
 
-          <View style={styles.flexSpacer} />
+            <View style={styles.contentWidth}>
+              <View style={styles.titleBlock}>
+                <Text className="text-3xl font-extrabold text-text-primary">{title}</Text>
+                {subtitle ? (
+                  <Text className="text-base leading-6 text-text-secondary">{subtitle}</Text>
+                ) : null}
+              </View>
 
-          {footer ? <View style={[styles.contentWidth, styles.footer]}>{footer}</View> : null}
-        </ScrollView>
+              {children}
+            </View>
+
+            <View style={styles.flexSpacer} />
+
+            {footer ? <View style={[styles.contentWidth, styles.footer]}>{footer}</View> : null}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -89,6 +97,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  keyboardAvoid: {
     flex: 1,
   },
   scroll: {

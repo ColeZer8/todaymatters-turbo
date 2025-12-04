@@ -4,7 +4,7 @@ export { HomeTemplate } from './HomeTemplate';
 export { SignInTemplate } from './SignInTemplate';
 export { SignUpTemplate } from './SignUpTemplate';
 export { ConfirmEmailTemplate } from './ConfirmEmailTemplate';
-export { PermissionsTemplate } from './PermissionsTemplate';
+export { PermissionsTemplate, type IndividualPermissions, type PermissionKey } from './PermissionsTemplate';
 export { SetupQuestionsTemplate } from './SetupQuestionsTemplate';
 export { DailyRhythmTemplate } from './DailyRhythmTemplate';
 export { TagSelectionTemplate, type CategoryOption } from './TagSelectionTemplate';

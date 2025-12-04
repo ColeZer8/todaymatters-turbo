@@ -1,16 +1,122 @@
 import { GradientButton } from '@/components/atoms';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ArrowRight, CheckSquare, ChevronDown } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Bell,
+  Mail,
+  Heart,
+  MapPin,
+  Users,
+  Globe,
+  Smartphone,
+  LucideIcon,
+} from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
+export type PermissionKey =
+  | 'calendar'
+  | 'notifications'
+  | 'email'
+  | 'health'
+  | 'location'
+  | 'contacts'
+  | 'browsing'
+  | 'appUsage';
+
+export interface IndividualPermissions {
+  calendar: boolean;
+  notifications: boolean;
+  email: boolean;
+  health: boolean;
+  location: boolean;
+  contacts: boolean;
+  browsing: boolean;
+  appUsage: boolean;
+}
+
+interface PermissionRowConfig {
+  key: PermissionKey;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  bgColor: string;
+}
+
+const PERMISSION_ROWS: PermissionRowConfig[] = [
+  {
+    key: 'calendar',
+    title: 'Calendar & Reminders',
+    description: 'See your events and open time.',
+    icon: Calendar,
+    bgColor: 'bg-blue-500',
+  },
+  {
+    key: 'notifications',
+    title: 'Notifications',
+    description: 'Send gentle nudges and reminders.',
+    icon: Bell,
+    bgColor: 'bg-amber-500',
+  },
+  {
+    key: 'email',
+    title: 'Email & Tasks',
+    description: 'Pull important follow-ups and deadlines.',
+    icon: Mail,
+    bgColor: 'bg-violet-500',
+  },
+  {
+    key: 'health',
+    title: 'Health / Activity',
+    description: 'Estimate sleep and movement patterns.',
+    icon: Heart,
+    bgColor: 'bg-rose-500',
+  },
+  {
+    key: 'location',
+    title: 'Location',
+    description: 'Access your location for better scheduling.',
+    icon: MapPin,
+    bgColor: 'bg-emerald-500',
+  },
+  {
+    key: 'contacts',
+    title: 'Contacts',
+    description: 'Access your contacts for better scheduling.',
+    icon: Users,
+    bgColor: 'bg-pink-500',
+  },
+  {
+    key: 'browsing',
+    title: 'Browsing History',
+    description: 'Access your browsing history for better scheduling.',
+    icon: Globe,
+    bgColor: 'bg-red-500',
+  },
+  {
+    key: 'appUsage',
+    title: 'App Usage',
+    description: 'Access your app usage for better scheduling.',
+    icon: Smartphone,
+    bgColor: 'bg-orange-500',
+  },
+];
+
 interface PermissionsTemplateProps {
   allowAllEnabled: boolean;
   onToggleAllowAll: () => void;
+  showIndividual: boolean;
+  onToggleShowIndividual: () => void;
+  permissions: IndividualPermissions;
+  onTogglePermission: (key: PermissionKey) => void;
   onContinue: () => void;
-  onCustomizeLater: () => void;
   onBack?: () => void;
   step?: number;
   totalSteps?: number;
@@ -19,17 +125,21 @@ interface PermissionsTemplateProps {
 export const PermissionsTemplate = ({
   allowAllEnabled,
   onToggleAllowAll,
+  showIndividual,
+  onToggleShowIndividual,
+  permissions,
+  onTogglePermission,
   onContinue,
-  onCustomizeLater,
   onBack,
   step = ONBOARDING_STEPS.permissions,
   totalSteps = ONBOARDING_TOTAL_STEPS,
 }: PermissionsTemplateProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
+  const ChevronIcon = showIndividual ? ChevronUp : ChevronDown;
 
   return (
     <LinearGradient
-      colors={['#f5f9ff', '#eef5ff']}
+      colors={['#f8fafc', '#eff6ff', '#f0f9ff']}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
@@ -41,85 +151,166 @@ export const PermissionsTemplate = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.headerRow}>
+          {/* Header */}
+          <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
-              <Text className="text-sm font-semibold text-text-secondary">
-                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+              <Text className="text-sm font-semibold text-slate-500">
+                <Text className="text-blue-600">Step {step}</Text> of {totalSteps}
               </Text>
-              {onBack ? (
+              {onBack && (
                 <Pressable
                   accessibilityRole="button"
                   onPress={onBack}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                  className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-white/80 active:opacity-70"
                 >
-                  <ArrowLeft size={14} color="#111827" />
-                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                  <ArrowLeft size={14} color="#334155" />
+                  <Text className="text-xs font-semibold text-slate-700">Back</Text>
                 </Pressable>
-              ) : null}
+              )}
             </View>
-            <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <Text className="text-sm font-semibold text-slate-500">Setup</Text>
           </View>
 
-          <View style={styles.titleBlock}>
-            <Text className="text-3xl font-extrabold text-text-primary">Sync your day in the background</Text>
-            <Text className="text-base leading-6 text-text-secondary">
-              To build your ideal schedule, we&apos;ll read your existing events and habits while you answer a few
-              quick questions.
+          {/* Progress bar */}
+          <View className="mt-4 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+            <View
+              className="h-full rounded-full bg-blue-600"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </View>
+
+          {/* Title */}
+          <View className="mt-8 gap-3">
+            <Text className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              Sync your day in the background
+            </Text>
+            <Text className="text-base leading-6 text-slate-600">
+              To build your ideal schedule, we&apos;ll read your existing events and habits while
+              you answer a few quick questions.
             </Text>
           </View>
 
-          <View style={styles.permissionsHeader}>
-            <Text className="text-xl font-extrabold text-text-primary">Permissions needed</Text>
-            <View style={styles.headerUnderline} />
-          </View>
+          {/* Permissions Section */}
+          <View className="mt-8">
+            <Text className="text-lg font-bold text-slate-900 mb-4">Permissions needed</Text>
 
+            {/* Allow All Pill */}
             <Pressable
               accessibilityRole="button"
               onPress={onToggleAllowAll}
-              style={({ pressed }) => [styles.allowPill, pressed && { opacity: 0.96 }]}
+              className="overflow-hidden rounded-2xl active:opacity-95"
             >
               <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
+                colors={['#3b82f6', '#2563eb']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.allowPillGradient}
               >
-                <View style={styles.allowPillContent}>
-                  <View style={styles.allowIconWrapper}>
+                <View className="flex-row items-center px-5 py-5">
+                  <View className="w-11 h-11 rounded-xl items-center justify-center bg-white/20 mr-4" style={styles.allowIconWrap}>
                     <CheckSquare size={22} color="#fff" />
                   </View>
-                  <View style={styles.allowTextBlock}>
+                  <View className="flex-1">
                     <Text className="text-base font-semibold text-white">Allow all permissions</Text>
-                    <Text className="text-sm text-white/90">Calendar, notifications, email, health &amp; more</Text>
+                    <Text className="text-sm text-white/80 mt-0.5">
+                      Calendar, notifications, email, health &amp; more
+                    </Text>
                   </View>
-                  <View style={styles.toggleShell}>
-                    <View style={[styles.toggleKnob, allowAllEnabled && styles.toggleKnobOn]} />
+                  <View className="w-14 h-8 rounded-full bg-white/25 justify-center px-1">
+                    <View
+                      className={`w-6 h-6 rounded-full bg-white ${
+                        allowAllEnabled ? 'self-end' : 'self-start'
+                      }`}
+                      style={styles.toggleKnob}
+                    />
                   </View>
                 </View>
               </LinearGradient>
             </Pressable>
 
-          <View style={styles.individualRow}>
-            <Text className="text-base font-semibold text-brand-primary">View individual permissions</Text>
-            <ChevronDown size={18} color="#2563EB" />
+            {/* Toggle Individual */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={onToggleShowIndividual}
+              className="flex-row items-center justify-center gap-1.5 py-4 active:opacity-70"
+            >
+              <Text className="text-sm font-semibold text-blue-600">
+                {showIndividual ? 'Hide individual permissions' : 'View individual permissions'}
+              </Text>
+              <ChevronIcon size={16} color="#2563eb" />
+            </Pressable>
+
+            {/* Individual Permissions */}
+            {showIndividual && (
+              <View className="mt-2">
+                {PERMISSION_ROWS.map((row, index) => (
+                  <PermissionRow
+                    key={row.key}
+                    config={row}
+                    enabled={permissions[row.key]}
+                    onToggle={() => onTogglePermission(row.key)}
+                    showDivider={index < PERMISSION_ROWS.length - 1}
+                  />
+                ))}
+              </View>
+            )}
           </View>
 
-          <View style={styles.flexSpacer} />
+          {/* Spacer */}
+          <View className="flex-grow min-h-6" />
 
-          <GradientButton
-            label="Allow & continue"
-            onPress={onContinue}
-            rightIcon={ArrowRight}
-          />
+          {/* Continue Button */}
+          <View className="mt-6">
+            <GradientButton label="Allow & continue" onPress={onContinue} rightIcon={ArrowRight} />
+          </View>
 
-          {/* Removed Customize later option as requested */}
+          {/* Footer text */}
+          <Text className="text-center text-xs text-slate-400 mt-4">
+            You can change permissions anytime in settings.
+          </Text>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
+  );
+};
+
+interface PermissionRowProps {
+  config: PermissionRowConfig;
+  enabled: boolean;
+  onToggle: () => void;
+  showDivider?: boolean;
+}
+
+const PermissionRow = ({ config, enabled, onToggle, showDivider = false }: PermissionRowProps) => {
+  const Icon = config.icon;
+
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: enabled }}
+        onPress={onToggle}
+        className="flex-row items-center py-4 active:opacity-70"
+      >
+        <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3.5 ${config.bgColor}`}>
+          <Icon size={18} color="#fff" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-semibold text-slate-800">{config.title}</Text>
+          <Text className="text-sm text-slate-500 mt-0.5">{config.description}</Text>
+        </View>
+        <View
+          className={`w-12 h-7 rounded-full justify-center px-0.5 ${
+            enabled ? 'bg-blue-500' : 'bg-slate-300'
+          }`}
+        >
+          <View
+            className={`w-6 h-6 rounded-full bg-white shadow ${enabled ? 'self-end' : 'self-start'}`}
+          />
+        </View>
+      </Pressable>
+      {showDivider && <View className="h-px bg-slate-200 ml-14" />}
+    </View>
   );
 };
 
@@ -135,99 +326,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 26,
+    paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 32,
-    gap: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#E4E8F0',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#2563EB',
-  },
-  titleBlock: {
-    marginTop: 12,
-    gap: 8,
-  },
-  permissionsHeader: {
-    marginBottom: 8,
-  },
-  headerUnderline: {
-    display: 'none', // Hidden to cleaner look
-    height: 1,
-    backgroundColor: '#D7E3FF',
-    width: '100%',
-  },
-  allowPill: {
-    borderRadius: 16,
-    overflow: 'hidden',
   },
   allowPillGradient: {
     borderRadius: 16,
   },
-  allowPillContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-  },
-  allowIconWrapper: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1.5,
+  allowIconWrap: {
+    borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    marginRight: 16,
-  },
-  allowTextBlock: {
-    flex: 1,
-  },
-  toggleShell: {
-    width: 52,
-    height: 32,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
   },
   toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    alignSelf: 'flex-start',
     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 1,
-  },
-  toggleKnobOn: {
-    backgroundColor: '#fff',
-    alignSelf: 'flex-end',
-  },
-  individualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 6,
-  },
-  flexSpacer: {
-    flexGrow: 1,
-    minHeight: 24,
+    elevation: 2,
   },
 });

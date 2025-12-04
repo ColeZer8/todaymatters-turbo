@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight, Plus, Search } from 'lucide-react-native';
+import { ArrowRight, Plus, Search, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GradientButton } from '@/components/atoms';
 import { SelectablePill } from '@/components/molecules';
@@ -65,7 +65,7 @@ export const TagSelectionTemplate = ({
     if (isCategorized) {
       // Filter categorized options
       return (options as CategoryOption[]).map((cat) => ({
-        category: cat.category,
+        ...cat,
         options: cat.options.filter((option) => option.toLowerCase().includes(query)),
       })).filter((cat) => cat.options.length > 0);
     }
@@ -91,6 +91,23 @@ export const TagSelectionTemplate = ({
       onSearchChange('');
     }
   };
+
+  const toneColors = {
+    primary: {
+      bg: '#EFF6FF',
+      border: '#DBEAFE',
+      text: '#2563EB',
+      selectedBg: '#3B82F6',
+    },
+    danger: {
+      bg: '#FEF2F2',
+      border: '#FEE2E2',
+      text: '#EF4444',
+      selectedBg: '#EF4444',
+    },
+  };
+
+  const colors = toneColors[tone];
 
   return (
     <SetupStepLayout
@@ -125,15 +142,8 @@ export const TagSelectionTemplate = ({
               accessibilityRole="button"
               accessibilityLabel={`Add ${searchValue.trim()}`}
             >
-              <Plus size={18} color={tone === 'primary' ? '#2563EB' : '#EF4444'} />
-              <Text
-                style={[
-                  styles.addButtonText,
-                  { color: tone === 'primary' ? '#2563EB' : '#EF4444' },
-                ]}
-              >
-                Add
-              </Text>
+              <Plus size={18} color={colors.text} />
+              <Text style={[styles.addButtonText, { color: colors.text }]}>Add</Text>
             </Pressable>
           )}
         </View>
@@ -144,31 +154,41 @@ export const TagSelectionTemplate = ({
               onPress={handleAddOption}
               style={[
                 styles.addOptionCard,
-                {
-                  borderColor: tone === 'primary' ? '#DBEAFE' : '#FEE2E2',
-                  backgroundColor: tone === 'primary' ? '#EFF6FF' : '#FEF2F2',
-                },
+                { borderColor: colors.border, backgroundColor: colors.bg },
               ]}
             >
-              <Plus
-                size={20}
-                color={tone === 'primary' ? '#2563EB' : '#EF4444'}
-                style={styles.addOptionIcon}
-              />
+              <Plus size={20} color={colors.text} style={styles.addOptionIcon} />
               <View style={styles.addOptionTextContainer}>
-                <Text
-                  style={[
-                    styles.addOptionTitle,
-                    { color: tone === 'primary' ? '#2563EB' : '#EF4444' },
-                  ]}
-                >
+                <Text style={[styles.addOptionTitle, { color: colors.text }]}>
                   Add "{searchValue.trim()}"
                 </Text>
-                <Text style={styles.addOptionSubtitle}>
-                  Create a custom option
-                </Text>
+                <Text style={styles.addOptionSubtitle}>Create a custom option</Text>
               </View>
             </Pressable>
+          </View>
+        )}
+
+        {/* Selected Items Section - shown at top when items are selected */}
+        {selectedOptions.length > 0 && (
+          <View style={styles.selectedSection}>
+            <View style={styles.selectedHeader}>
+              <Text style={styles.selectedTitle}>Your selections</Text>
+              <Text style={styles.selectedCount}>{selectedOptions.length}</Text>
+            </View>
+            <View style={styles.selectedPillWrap}>
+              {selectedOptions.map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => onToggleOption(option)}
+                  style={[styles.selectedPill, { backgroundColor: colors.selectedBg }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${option}`}
+                >
+                  <Text style={styles.selectedPillText}>{option}</Text>
+                  <X size={14} color="#fff" />
+                </Pressable>
+              ))}
+            </View>
           </View>
         )}
 
@@ -283,6 +303,51 @@ const styles = StyleSheet.create({
   addOptionSubtitle: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  selectedSection: {
+    gap: 12,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  selectedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  selectedCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  selectedPillWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  selectedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingLeft: 14,
+    paddingRight: 10,
+    borderRadius: 20,
+  },
+  selectedPillText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   categorizedWrap: {
     gap: 24,
