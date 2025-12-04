@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
-  NativeModules,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
   Pressable,
-  requireNativeComponent,
   StyleSheet,
   Text,
   View,
@@ -67,7 +65,7 @@ interface WheelColumnProps {
 }
 
 const WheelColumn = ({ type, data, selectedIndex, onSelect }: WheelColumnProps) => {
-  const label = type === 'hour' ? 'Hour' : type === 'minute' ? 'Minute' : 'Period';
+  const columnLabel = type === 'hour' ? 'Hour' : type === 'minute' ? 'Minute' : 'Period';
 
   const handleMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offset = event.nativeEvent.contentOffset.y;
@@ -80,7 +78,7 @@ const WheelColumn = ({ type, data, selectedIndex, onSelect }: WheelColumnProps) 
 
   return (
     <View style={styles.column}>
-      <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{label}</Text>
+      <Text className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{columnLabel}</Text>
       <View style={styles.wheelShell}>
         <View pointerEvents="none" style={styles.wheelHighlight} />
         <FlatList
@@ -123,38 +121,9 @@ export const TimePickerModal = ({
   onConfirm,
   onClose,
 }: TimePickerModalProps) => {
-  const hasNativePicker =
-    Platform.OS !== 'ios'
-      ? true
-      : (() => {
-          try {
-            const hasModule =
-              Boolean(NativeModules?.RNDateTimePicker) || Boolean(NativeModules?.RNDateTimePickerManager);
-            const component = requireNativeComponent?.('RNDateTimePicker');
-            const isComponentAvailable = Boolean(component);
-            console.log('RNDateTimePicker check', {
-              platform: Platform.OS,
-              hasModule,
-              hasManager: Boolean(NativeModules?.RNDateTimePickerManager),
-              isComponentAvailable,
-              keys: Object.keys(NativeModules || {}),
-            });
-            if (!hasModule || !isComponentAvailable) {
-              console.warn('RNDateTimePicker native module not detected; rendering fallback wheel.');
-            }
-            return hasModule && isComponentAvailable;
-          } catch {
-            console.warn('RNDateTimePicker requireNativeComponent failed; rendering fallback wheel.');
-            return false;
-          }
-        })();
-  useEffect(() => {
-    console.log('RNDateTimePicker module snapshot', {
-      platform: Platform.OS,
-      pickerModule: NativeModules?.RNDateTimePicker,
-      pickerManager: NativeModules?.RNDateTimePickerManager,
-    });
-  }, []);
+  const isAndroid = Platform.OS === 'android';
+  const isIOS = Platform.OS === 'ios';
+  
   const [selectedTime, setSelectedTime] = useState(initialTime);
   const [hourIndex, setHourIndex] = useState(() => getInitialIndex('hour', initialTime));
   const [minuteIndex, setMinuteIndex] = useState(() => getInitialIndex('minute', initialTime));
@@ -169,9 +138,23 @@ export const TimePickerModal = ({
     }
   }, [initialTime, visible]);
 
-  const handleChange = (_event: DateTimePickerEvent, date?: Date) => {
-    if (!date) return;
-    setSelectedTime(date);
+  // iOS: Update selected time as user scrolls
+  const handleIOSChange = (_event: DateTimePickerEvent, date?: Date) => {
+    if (date) {
+      setSelectedTime(date);
+    }
+  };
+
+  // Android: Handle the native dialog result (set or dismissed)
+  const handleAndroidChange = (event: DateTimePickerEvent, date?: Date) => {
+    // Android picker auto-closes, so we need to handle both cases
+    if (event.type === 'set' && date) {
+      // User pressed OK
+      onConfirm(date);
+    } else if (event.type === 'dismissed') {
+      // User pressed Cancel or tapped outside
+      onClose();
+    }
   };
 
   const fallbackSelectedTime = useMemo(
@@ -179,6 +162,22 @@ export const TimePickerModal = ({
     [hourIndex, minuteIndex, periodIndex],
   );
 
+  // Android: Show native time picker dialog directly (no custom modal wrapper)
+  if (isAndroid && visible) {
+    return (
+      <DateTimePicker
+        value={initialTime}
+        mode="time"
+        display="spinner"
+        onChange={handleAndroidChange}
+        minuteInterval={5}
+        positiveButton={{ label: 'Confirm', textColor: '#2563EB' }}
+        negativeButton={{ label: 'Cancel', textColor: '#64748b' }}
+      />
+    );
+  }
+
+  // iOS & Web: Show our custom modal with inline picker
   return (
     <Modal
       visible={visible}
@@ -196,38 +195,41 @@ export const TimePickerModal = ({
           onPress={(event) => event.stopPropagation()}
           style={styles.modalCard}
         >
+          {/* Close button - top right corner */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.closeButtonPressed,
+            ]}
+          >
+            <Icon icon={X} size={16} color="#64748b" />
+          </Pressable>
+
+          {/* Header */}
           <View style={styles.modalHeader}>
-            <View style={styles.modalTitleBlock}>
-              <Text className="text-lg font-bold text-text-primary">{label}</Text>
-              <Text className="text-sm leading-5 text-text-secondary">
-                Choose a time that matches your everyday rhythm.
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onClose}
-              style={({ pressed }) => [
-                styles.closeButton,
-                pressed && styles.closeButtonPressed,
-              ]}
-            >
-              <Icon icon={X} size={18} color="#0f172a" />
-            </Pressable>
+            <Text style={styles.title}>{label}</Text>
+            <Text style={styles.subtitle}>
+              Choose a time that matches your everyday rhythm.
+            </Text>
           </View>
 
-          <View style={styles.pickerShell}>
-            {hasNativePicker ? (
+          {/* Time Picker */}
+          <View style={styles.pickerContainer}>
+            {isIOS ? (
               <DateTimePicker
                 value={selectedTime}
                 mode="time"
-                display={Platform.OS === 'ios' ? 'spinner' : 'spinner'}
-                onChange={handleChange}
+                display="spinner"
+                onChange={handleIOSChange}
                 minuteInterval={5}
                 themeVariant="light"
                 style={styles.nativePicker}
-                {...(Platform.OS === 'ios' ? { preferredDatePickerStyle: 'wheels' } : {})}
               />
             ) : (
+              // Web fallback - custom wheel picker
               <View style={styles.wheelsRow}>
                 <WheelColumn
                   type="hour"
@@ -251,12 +253,11 @@ export const TimePickerModal = ({
             )}
           </View>
 
-          <View style={styles.actions}>
-            <GradientButton label="Save time" onPress={() => onConfirm(hasNativePicker ? selectedTime : fallbackSelectedTime)} />
-            <Pressable accessibilityRole="button" onPress={onClose} style={styles.cancelButton}>
-              <Text className="text-base font-semibold text-brand-primary">Cancel</Text>
-            </Pressable>
-          </View>
+          {/* Confirm Button */}
+          <GradientButton
+            label="Confirm"
+            onPress={() => onConfirm(isIOS ? selectedTime : fallbackSelectedTime)}
+          />
         </Pressable>
       </Pressable>
     </Modal>
@@ -266,55 +267,65 @@ export const TimePickerModal = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 24,
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    borderRadius: 32,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
     shadowColor: '#0f172a',
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
-    gap: 14,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  modalTitleBlock: {
-    flex: 1,
-    gap: 6,
-    paddingRight: 12,
+    shadowOpacity: 0.2,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 24,
   },
   closeButton: {
-    height: 38,
-    width: 38,
-    borderRadius: 12,
-    backgroundColor: '#F1F5FB',
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    height: 32,
+    width: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   closeButtonPressed: {
-    opacity: 0.8,
+    backgroundColor: '#e2e8f0',
   },
-  pickerShell: {
-    backgroundColor: '#F5F7FB',
-    borderRadius: 22,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+  modalHeader: {
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E4E8F0',
+    paddingTop: 8,
+    paddingBottom: 20,
+    paddingHorizontal: 32,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0f172a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  pickerContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 24,
+    marginBottom: 20,
+    overflow: 'hidden',
   },
   nativePicker: {
     width: '100%',
-    height: 220,
+    height: 200,
   },
   wheelsRow: {
     flexDirection: 'row',
@@ -363,13 +374,5 @@ const styles = StyleSheet.create({
   wheelTextActive: {
     color: '#2563EB',
     fontWeight: '700',
-  },
-  actions: {
-    gap: 10,
-  },
-  cancelButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
   },
 });

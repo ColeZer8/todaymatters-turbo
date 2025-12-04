@@ -24,6 +24,35 @@
       {
         "origin": false
       }
+    ],
+    [
+      "@react-native-community/datetimepicker",
+      {
+        "android": {
+          "timePicker": {
+            "background": {
+              "light": "#ffffff",
+              "dark": "#1e293b"
+            },
+            "headerBackground": {
+              "light": "#f8fafc",
+              "dark": "#0f172a"
+            },
+            "numbersBackgroundColor": {
+              "light": "#f1f5f9",
+              "dark": "#334155"
+            },
+            "numbersSelectorColor": {
+              "light": "#2563EB",
+              "dark": "#3b82f6"
+            },
+            "numbersTextColor": {
+              "light": "#0f172a",
+              "dark": "#f1f5f9"
+            }
+          }
+        }
+      }
     ]
   ],
   "name": "mobile",
