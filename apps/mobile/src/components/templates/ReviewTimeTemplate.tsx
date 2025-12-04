@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,40 +13,7 @@ import {
   SunMedium,
 } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
-
-interface TimeBlock {
-  id: string;
-  duration: number; // minutes
-  startTime: string;
-  endTime: string;
-  activityDetected?: string;
-  location?: string;
-  aiSuggestion?: string;
-}
-
-const MOCK_TIME_BLOCKS: TimeBlock[] = [
-  {
-    id: '1',
-    duration: 45,
-    startTime: '10:30 PM',
-    endTime: '11:15 PM',
-    activityDetected: 'Instagram detected',
-  },
-  {
-    id: '2',
-    duration: 60,
-    startTime: '5:30 PM',
-    endTime: '6:30 PM',
-    location: "Gold's Gym",
-    aiSuggestion: 'health',
-  },
-  {
-    id: '3',
-    duration: 45,
-    startTime: '12:15 PM',
-    endTime: '1:00 PM',
-  },
-];
+import { useReviewTimeStore } from '@/stores';
 
 const CATEGORIES = [
   { id: 'faith', label: 'Faith', icon: SunMedium, color: '#F79A3B', bgColor: '#FFF5E8', selectedBg: '#FEF3E2' },
@@ -69,18 +35,19 @@ const formatDuration = (minutes: number): string => {
 export const ReviewTimeTemplate = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const { timeBlocks, assignments, assignCategory, clearAssignment } = useReviewTimeStore();
 
-  const totalUnassigned = MOCK_TIME_BLOCKS.reduce((sum, block) => {
+  const totalUnassigned = timeBlocks.reduce((sum, block) => {
     if (!assignments[block.id]) return sum + block.duration;
     return sum;
   }, 0);
 
   const handleCategorySelect = (blockId: string, categoryId: string) => {
-    setAssignments((prev) => ({
-      ...prev,
-      [blockId]: prev[blockId] === categoryId ? '' : categoryId,
-    }));
+    if (assignments[blockId] === categoryId) {
+      clearAssignment(blockId);
+    } else {
+      assignCategory(blockId, categoryId);
+    }
   };
 
   return (
@@ -127,7 +94,7 @@ export const ReviewTimeTemplate = () => {
 
           {/* Time Blocks */}
           <View className="gap-4">
-            {MOCK_TIME_BLOCKS.map((block) => {
+            {timeBlocks.map((block) => {
               const selectedCategory = assignments[block.id];
               const selectedCat = CATEGORIES.find(c => c.id === selectedCategory);
               

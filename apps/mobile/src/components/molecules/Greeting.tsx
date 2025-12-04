@@ -1,32 +1,69 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Animated } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'expo-router';
 
 interface GreetingProps {
     name: string;
     date: string;
+    unassignedCount?: number;
 }
 
-export const Greeting = ({ name, date }: GreetingProps) => {
+export const Greeting = ({ name, date, unassignedCount = 0 }: GreetingProps) => {
+    const router = useRouter();
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        if (unassignedCount > 0) {
+            // Subtle pulse animation
+            const animation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1.08,
+                        duration: 1200,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 1200,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+            animation.start();
+            return () => animation.stop();
+        }
+    }, [unassignedCount, pulseAnim]);
+
+    const handleBadgePress = () => {
+        router.push('/review-time');
+    };
+
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Good morning,</Text>
-            <Text style={[styles.title, styles.name]}>{name}.</Text>
+        <View className="mt-1 mb-4">
+            <View className="flex-row items-center justify-between">
+                <Text className="text-[38px] leading-[42px] font-extrabold text-[#111827]">
+                    Good morning,
+                </Text>
+                {unassignedCount > 0 && (
+                    <Pressable
+                        onPress={handleBadgePress}
+                        hitSlop={12}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                    >
+                        <Animated.View
+                            className="h-7 w-7 items-center justify-center rounded-full bg-[#2563EB]/15"
+                            style={{ transform: [{ scale: pulseAnim }] }}
+                        >
+                            <Text className="text-[13px] font-bold text-[#2563EB]">
+                                {unassignedCount}
+                            </Text>
+                        </Animated.View>
+                    </Pressable>
+                )}
+            </View>
+            <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
+                {name}.
+            </Text>
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        marginTop: 4,
-        marginBottom: 16,
-    },
-    title: {
-        fontSize: 38,
-        lineHeight: 42,
-        fontWeight: '800',
-        color: '#111827',
-        // fontFamily: 'SF Pro Display', // Assuming system font handles this or it's set globally
-    },
-    name: {
-        color: '#2563EB',
-    },
-});
