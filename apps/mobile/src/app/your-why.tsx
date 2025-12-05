@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { Brain, HeartHandshake, ShieldCheck, Trophy } from 'lucide-react-native';
 import { PurposeSelectionTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
 const PURPOSE_OPTIONS = [
   { id: 'balance', title: 'Work-Life Balance', description: undefined, icon: HeartHandshake },
@@ -19,7 +20,9 @@ export default function YourWhyScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [selected, setSelected] = useState<string | null>('balance');
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const selected = useOnboardingStore((state) => state.purpose);
+  const setSelected = useOnboardingStore((state) => state.setPurpose);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -29,6 +32,14 @@ export default function YourWhyScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <PurposeSelectionTemplate

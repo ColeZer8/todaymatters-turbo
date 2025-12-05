@@ -3,15 +3,32 @@
  *
  * A floating action button that initiates voice conversations with the AI coach.
  * Shows connection status and provides visual feedback during conversations.
+ *
+ * NOTE: Requires development build - not available in Expo Go.
  */
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react-native';
+import Constants from 'expo-constants';
 
-import { useVoiceCoach } from '@/hooks/use-voice-coach';
 import { useAuthStore } from '@/stores';
 import type { VoiceCoachDynamicVariables } from '@/lib/elevenlabs';
+
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Only load the voice hook in dev builds
+// String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
+let useVoiceCoach: typeof import('@/hooks/use-voice-coach').useVoiceCoach | null = null;
+if (!isExpoGo) {
+  try {
+    const hookPath = '../../hooks' + '/use-voice-coach';
+    useVoiceCoach = require(hookPath).useVoiceCoach;
+  } catch {
+    console.log('[VoiceCoachButton] Voice hook not available');
+  }
+}
 
 interface VoiceCoachButtonProps {
   /** Additional dynamic variables to pass to the conversation */
@@ -32,6 +49,12 @@ export function VoiceCoachButton({
 }: VoiceCoachButtonProps) {
   const user = useAuthStore((state) => state.user);
 
+  // Don't render in Expo Go - voice features require native modules
+  if (!useVoiceCoach) {
+    return null;
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const {
     status,
     isSpeaking,

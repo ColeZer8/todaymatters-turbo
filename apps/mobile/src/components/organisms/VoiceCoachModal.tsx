@@ -3,6 +3,8 @@
  *
  * A full-screen modal for voice conversations with the AI coach.
  * Shows conversation transcript, visual feedback, and controls.
+ *
+ * NOTE: Requires development build - not available in Expo Go.
  */
 
 import React, { useCallback, useEffect, useRef } from 'react';
@@ -24,10 +26,25 @@ import {
   Volume2,
   MessageCircle,
 } from 'lucide-react-native';
+import Constants from 'expo-constants';
 
-import { useVoiceCoach } from '@/hooks/use-voice-coach';
 import { useAuthStore } from '@/stores';
 import type { VoiceCoachDynamicVariables } from '@/lib/elevenlabs';
+
+// Check if running in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Only load the voice hook in dev builds
+// String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
+let useVoiceCoach: typeof import('@/hooks/use-voice-coach').useVoiceCoach | null = null;
+if (!isExpoGo) {
+  try {
+    const hookPath = '../../hooks' + '/use-voice-coach';
+    useVoiceCoach = require(hookPath).useVoiceCoach;
+  } catch {
+    console.log('[VoiceCoachModal] Voice hook not available');
+  }
+}
 
 interface VoiceCoachModalProps {
   /** Whether the modal is visible */
@@ -49,6 +66,31 @@ export function VoiceCoachModal({
   const user = useAuthStore((state) => state.user);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // Don't render in Expo Go - voice features require native modules
+  if (!useVoiceCoach) {
+    // Return empty modal that just closes
+    return (
+      <Modal visible={visible} onRequestClose={onClose}>
+        <View className="flex-1 bg-slate-900 items-center justify-center p-6">
+          <Text className="text-white text-xl font-semibold mb-4">
+            Voice Features Unavailable
+          </Text>
+          <Text className="text-slate-400 text-center mb-6">
+            Voice features require a development build.{'\n'}
+            Run: npx expo run:ios
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            className="bg-blue-600 px-6 py-3 rounded-full"
+          >
+            <Text className="text-white font-semibold">Close</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    );
+  }
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const {
     status,
     isSpeaking,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { InteractionManager } from 'react-native';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { RoutineBuilderTemplate } from '@/components/templates/RoutineBuilderTemplate';
 import { useAuthStore } from '@/stores';
@@ -14,6 +14,7 @@ export default function BuildRoutineScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
+  const hasHydrated = useRoutineBuilderStore((state) => state._hasHydrated);
   const items = useRoutineBuilderStore((state) => state.items);
   const wakeTime = useRoutineBuilderStore((state) => state.wakeTime);
   const setItems = useRoutineBuilderStore((state) => state.setItems);
@@ -29,6 +30,14 @@ export default function BuildRoutineScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <RoutineBuilderTemplate

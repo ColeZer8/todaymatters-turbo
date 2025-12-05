@@ -7,24 +7,28 @@ import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding
 import type { IdealDayCategory } from '@/stores/ideal-day-store';
 import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
 
+type DayType = 'weekdays' | 'saturday' | 'sunday' | 'custom';
+
 interface IdealDayTemplateProps {
   step?: number;
   totalSteps?: number;
   categories: IdealDayCategory[];
-  dayType: 'weekdays' | 'weekends' | 'custom';
-  onDayTypeChange: (type: IdealDayTemplateProps['dayType']) => void;
+  dayType: DayType;
+  onDayTypeChange: (type: DayType) => void;
   onCategoryHoursChange: (id: string, hours: number) => void;
   onAddCategory: (name: string, color: string) => void;
   onDeleteCategory: (id: string) => void;
   onContinue: () => void;
   onSkip?: () => void;
+  onBack?: () => void;
   selectedDays: number[];
   onToggleDay: (dayIndex: number) => void;
 }
 
-const DAY_TYPES: Array<{ key: IdealDayTemplateProps['dayType']; label: string }> = [
+const DAY_TYPES: Array<{ key: DayType; label: string }> = [
   { key: 'weekdays', label: 'Weekdays' },
-  { key: 'weekends', label: 'Weekends' },
+  { key: 'saturday', label: 'Saturday' },
+  { key: 'sunday', label: 'Sunday' },
   { key: 'custom', label: 'Custom' },
 ];
 
@@ -56,17 +60,12 @@ interface SliderBarProps {
 const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDelete }: SliderBarProps) => {
   const [width, setWidth] = useState(0);
   const trackRef = useRef<View>(null);
+  // Use ref to avoid stale closure in PanResponder
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const handleLayout = (e: LayoutChangeEvent) => {
     setWidth(e.nativeEvent.layout.width);
-  };
-
-  const updateFromGesture = (gestureX: number, pageX: number) => {
-    if (!width || !trackRef.current) return;
-    const localX = gestureX - pageX;
-    const clampedPx = clamp(localX, 0, width);
-    const newHours = Math.round((clampedPx / width) * maxHours * 2) / 2;
-    onChange(newHours);
   };
 
   const panResponder = useMemo(
@@ -74,15 +73,21 @@ const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDele
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: (evt) => {
+          if (!width) return;
           const { locationX } = evt.nativeEvent;
-          updateFromGesture(locationX, 0);
+          const clampedPx = clamp(locationX, 0, width);
+          const newHours = Math.round((clampedPx / width) * maxHours * 2) / 2;
+          onChangeRef.current(newHours);
         },
         onPanResponderMove: (evt) => {
+          if (!width) return;
           const { locationX } = evt.nativeEvent;
-          updateFromGesture(locationX, 0);
+          const clampedPx = clamp(locationX, 0, width);
+          const newHours = Math.round((clampedPx / width) * maxHours * 2) / 2;
+          onChangeRef.current(newHours);
         },
       }),
-    [width],
+    [width, maxHours],
   );
 
   const filledWidth = width ? clamp((hours / maxHours) * width, 0, width) : 0;
@@ -132,6 +137,7 @@ export const IdealDayTemplate = ({
   onAddCategory,
   onDeleteCategory,
   onContinue,
+  onBack,
   selectedDays,
   onToggleDay,
 }: IdealDayTemplateProps) => {
@@ -164,6 +170,7 @@ export const IdealDayTemplate = ({
       totalSteps={totalSteps}
       title="Ideal day"
       subtitle="Plan your time so you can focus on what matters."
+      onBack={onBack}
       footer={
         <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
       }
@@ -177,7 +184,10 @@ export const IdealDayTemplate = ({
               {DAY_TYPES.map((tab) => (
                 <Pressable
                   key={tab.key}
-                  onPress={() => onDayTypeChange(tab.key)}
+                  onPress={() => {
+                    console.log(`📅 Day type changed: ${tab.key}`);
+                    onDayTypeChange(tab.key);
+                  }}
                   className={`rounded-full px-5 py-2 ${dayType === tab.key ? 'bg-white' : ''}`}
                   style={dayType === tab.key ? { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 } : undefined}
                 >
@@ -193,7 +203,16 @@ export const IdealDayTemplate = ({
           <View className="flex-row items-center justify-between px-1">
             {WEEKDAY_LABELS.map((day, idx) => {
               const isSelected = selectedDays.includes(idx);
-              const active = dayType === 'custom' ? isSelected : idx < 5 ? dayType === 'weekdays' : dayType === 'weekends';
+              const active =
+                dayType === 'custom'
+                  ? isSelected
+                  : dayType === 'weekdays'
+                    ? idx < 5
+                    : dayType === 'saturday'
+                      ? idx === 5
+                      : dayType === 'sunday'
+                        ? idx === 6
+                        : false;
               return (
                 <Pressable
                   key={`${day.short}-${idx}`}
@@ -271,7 +290,10 @@ export const IdealDayTemplate = ({
               color={cat.color}
               hours={cat.hours}
               maxHours={cat.maxHours}
-              onChange={(hours) => onCategoryHoursChange(cat.id, hours)}
+              onChange={(hours) => {
+                console.log(`🎚️ Slider changed: ${cat.name} -> ${hours}`);
+                onCategoryHoursChange(cat.id, hours);
+              }}
               onDelete={isEditing && categories.length > 3 ? () => onDeleteCategory(cat.id) : undefined}
             />
           ))}

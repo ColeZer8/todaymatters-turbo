@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { InteractionManager } from 'react-native';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { IdealDayTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
@@ -12,6 +12,8 @@ export default function IdealDayScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
+  // Wait for store to hydrate from AsyncStorage
+  const hasHydrated = useIdealDayStore((state) => state._hasHydrated);
   const categories = useIdealDayStore((state) => state.categoriesByType[state.dayType]);
   const dayType = useIdealDayStore((state) => state.dayType);
   const setDayType = useIdealDayStore((state) => state.setDayType);
@@ -21,8 +23,13 @@ export default function IdealDayScreen() {
   const selectedDays = useIdealDayStore((state) => state.selectedDaysByType[state.dayType]);
   const toggleDay = useIdealDayStore((state) => state.toggleDay);
 
-  if (!isNavigationReady) {
-    return null;
+  // Wait for navigation and hydration
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
   }
 
   useEffect(() => {
@@ -48,6 +55,7 @@ export default function IdealDayScreen() {
       onDeleteCategory={deleteCategory}
       onContinue={() => router.replace('/home')}
       onSkip={() => router.replace('/build-routine')}
+      onBack={() => router.replace('/build-routine')}
     />
   );
 }

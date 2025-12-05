@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight, Plus, Search, X } from 'lucide-react-native';
+import { ArrowRight, ChevronRight, Plus, Search, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GradientButton } from '@/components/atoms';
 import { SelectablePill } from '@/components/molecules';
@@ -172,8 +172,19 @@ export const TagSelectionTemplate = ({
         {selectedOptions.length > 0 && (
           <View style={styles.selectedSection}>
             <View style={styles.selectedHeader}>
-              <Text style={styles.selectedTitle}>Your selections</Text>
-              <Text style={styles.selectedCount}>{selectedOptions.length}</Text>
+              <View style={styles.selectedHeaderLeft}>
+                <Text style={styles.selectedTitle}>Your selections</Text>
+                <Text style={styles.selectedCount}>{selectedOptions.length}</Text>
+              </View>
+              <Pressable
+                onPress={onContinue}
+                style={styles.topContinueButton}
+                accessibilityRole="button"
+                accessibilityLabel="Continue"
+              >
+                <Text style={styles.topContinueText}>Continue</Text>
+                <ChevronRight size={16} color="#6B7280" />
+              </Pressable>
             </View>
             <View style={styles.selectedPillWrap}>
               {selectedOptions.map((option) => (
@@ -313,7 +324,27 @@ const styles = StyleSheet.create({
   selectedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectedHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  topContinueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+  },
+  topContinueText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
   },
   selectedTitle: {
     fontSize: 15,

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { FocusStyleTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
 const FOCUS_OPTIONS = [
   { id: 'sprint', badge: '25m', label: 'Sprint', description: 'Short bursts.' },
@@ -17,7 +18,9 @@ export default function FocusStyleScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [selected, setSelected] = useState<string | null>('flow');
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const selected = useOnboardingStore((state) => state.focusStyle);
+  const setSelected = useOnboardingStore((state) => state.setFocusStyle);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -27,6 +30,14 @@ export default function FocusStyleScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <FocusStyleTemplate

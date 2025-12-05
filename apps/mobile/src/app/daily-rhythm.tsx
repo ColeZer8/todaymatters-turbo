@@ -1,18 +1,10 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { DailyRhythmTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-
-const createTime = (hours: number, minutes: number) => {
-  const time = new Date();
-  time.setHours(hours);
-  time.setMinutes(minutes);
-  time.setSeconds(0);
-  time.setMilliseconds(0);
-  return time;
-};
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
 export default function DailyRhythmScreen() {
   const router = useRouter();
@@ -20,8 +12,14 @@ export default function DailyRhythmScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [wakeTime, setWakeTime] = useState(() => createTime(6, 30));
-  const [sleepTime, setSleepTime] = useState(() => createTime(22, 30));
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const wakeTimeStr = useOnboardingStore((state) => state.wakeTime);
+  const sleepTimeStr = useOnboardingStore((state) => state.sleepTime);
+  const setWakeTime = useOnboardingStore((state) => state.setWakeTime);
+  const setSleepTime = useOnboardingStore((state) => state.setSleepTime);
+
+  const wakeTime = useMemo(() => new Date(wakeTimeStr), [wakeTimeStr]);
+  const sleepTime = useMemo(() => new Date(sleepTimeStr), [sleepTimeStr]);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -31,6 +29,14 @@ export default function DailyRhythmScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <DailyRhythmTemplate

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { BookOpenCheck, Coffee, Smile, Zap } from 'lucide-react-native';
 import { MorningMindsetTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
 const MORNING_MINDSET_OPTIONS = [
   {
@@ -39,7 +40,9 @@ export default function MorningMindsetScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [selected, setSelected] = useState<string | null>('slow');
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const selected = useOnboardingStore((state) => state.morningMindset);
+  const setSelected = useOnboardingStore((state) => state.setMorningMindset);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -49,6 +52,14 @@ export default function MorningMindsetScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <MorningMindsetTemplate

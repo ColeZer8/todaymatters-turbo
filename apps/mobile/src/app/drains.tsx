@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+import { useEffect, useState, useMemo } from 'react';
+import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { TagSelectionTemplate, CategoryOption } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
 const DRAIN_OPTIONS: CategoryOption[] = [
   {
@@ -158,10 +159,23 @@ export default function DrainsScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [selected, setSelected] = useState<string[]>([]);
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const selected = useOnboardingStore((state) => state.drainSelections);
+  const customOptions = useOnboardingStore((state) => state.drainCustomOptions);
+  const toggleSelection = useOnboardingStore((state) => state.toggleDrainSelection);
+  const addCustomOption = useOnboardingStore((state) => state.addDrainCustomOption);
+
   const [searchValue, setSearchValue] = useState('');
-  const [customOptions, setCustomOptions] = useState<string[]>([]);
-  const [options, setOptions] = useState<CategoryOption[]>(DRAIN_OPTIONS);
+
+  const options = useMemo(() => {
+    if (customOptions.length > 0) {
+      return [
+        ...DRAIN_OPTIONS,
+        { category: 'Custom', emoji: '✨', options: customOptions },
+      ];
+    }
+    return DRAIN_OPTIONS;
+  }, [customOptions]);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -172,30 +186,7 @@ export default function DrainsScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
-  useEffect(() => {
-    // Update options to include custom category if there are custom options
-    if (customOptions.length > 0) {
-      setOptions([
-        ...DRAIN_OPTIONS,
-        {
-          category: 'Custom',
-          emoji: '✨',
-          options: customOptions,
-        },
-      ]);
-    } else {
-      setOptions(DRAIN_OPTIONS);
-    }
-  }, [customOptions]);
-
-  const toggleSelection = (value: string) => {
-    setSelected((prev) =>
-      prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value],
-    );
-  };
-
   const handleAddOption = (value: string) => {
-    // Check if it already exists (case-insensitive) across all categories
     const allExistingOptions = [
       ...DRAIN_OPTIONS.flatMap((cat) => cat.options),
       ...customOptions,
@@ -203,14 +194,19 @@ export default function DrainsScreen() {
     const exists = allExistingOptions.some(
       (opt) => opt.toLowerCase() === value.toLowerCase(),
     );
-    
     if (!exists) {
-      setCustomOptions((prev) => [...prev, value]);
-      // Automatically select the newly added option
-      setSelected((prev) => [...prev, value]);
+      addCustomOption(value);
       setSearchValue('');
     }
   };
+
+  if (!isNavigationReady || !hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <TagSelectionTemplate

@@ -1,47 +1,35 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { PermissionsTemplate, IndividualPermissions, PermissionKey } from '@/components/templates';
+import { PermissionsTemplate } from '@/components/templates';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-
-const DEFAULT_PERMISSIONS: IndividualPermissions = {
-  calendar: true,
-  notifications: true,
-  email: true,
-  health: true,
-  location: true,
-  contacts: true,
-  browsing: true,
-  appUsage: true,
-};
+import { useOnboardingStore, type PermissionKey } from '@/stores/onboarding-store';
 
 export default function PermissionsScreen() {
   const router = useRouter();
   const [showIndividual, setShowIndividual] = useState(false);
-  const [permissions, setPermissions] = useState<IndividualPermissions>(DEFAULT_PERMISSIONS);
+
+  const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
+  const permissions = useOnboardingStore((state) => state.permissions);
+  const togglePermission = useOnboardingStore((state) => state.togglePermission);
+  const setAllPermissions = useOnboardingStore((state) => state.setAllPermissions);
 
   // Derived: all permissions enabled = allowAll is on
-  const allEnabled = Object.values(permissions).every(Boolean);
+  const allEnabled = useMemo(
+    () => Object.values(permissions).every(Boolean),
+    [permissions]
+  );
 
   const handleAllowAllToggle = useCallback(() => {
-    const newValue = !allEnabled;
-    setPermissions({
-      calendar: newValue,
-      notifications: newValue,
-      email: newValue,
-      health: newValue,
-      location: newValue,
-      contacts: newValue,
-      browsing: newValue,
-      appUsage: newValue,
-    });
-  }, [allEnabled]);
+    setAllPermissions(!allEnabled);
+  }, [allEnabled, setAllPermissions]);
 
-  const handleTogglePermission = useCallback((key: PermissionKey) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  }, []);
+  const handleTogglePermission = useCallback(
+    (key: PermissionKey) => {
+      togglePermission(key);
+    },
+    [togglePermission]
+  );
 
   const handleToggleShowIndividual = useCallback(() => {
     setShowIndividual((prev) => !prev);
@@ -50,6 +38,14 @@ export default function PermissionsScreen() {
   const handleContinue = () => {
     router.replace('/setup-questions');
   };
+
+  if (!hasHydrated) {
+    return (
+      <View className="flex-1 items-center justify-center bg-[#f5f9ff]">
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   return (
     <PermissionsTemplate

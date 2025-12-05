@@ -4,9 +4,24 @@ import { Stack } from "expo-router";
 import { useEffect, type ReactNode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { ElevenLabsProvider } from "@elevenlabs/react-native";
+import Constants from "expo-constants";
 import { handleAuthCallback } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
+
+// Voice features require native modules - only available in dev builds, not Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Dynamically load ElevenLabsProvider only in dev builds
+// String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
+let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = null;
+if (!isExpoGo) {
+  try {
+    const pkg = '@elevenlabs' + '/react-native';
+    ElevenLabsProvider = require(pkg).ElevenLabsProvider;
+  } catch {
+    console.log("[Layout] ElevenLabs not available - voice features disabled");
+  }
+}
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -57,9 +72,11 @@ export default function Layout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ElevenLabsProvider>
-        {appContent}
-      </ElevenLabsProvider>
+      {ElevenLabsProvider ? (
+        <ElevenLabsProvider>{appContent}</ElevenLabsProvider>
+      ) : (
+        appContent
+      )}
     </GestureHandlerRootView>
   );
 }
