@@ -11,6 +11,11 @@
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy"
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "^13.0.0",
+    "@elevenlabs/react-native": "^0.5.5",
+    "@livekit/react-native": "^2.9.5",
+    "@livekit/react-native-expo-plugin": "^1.0.1",
+    "@livekit/react-native-webrtc": "^137.0.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "^8.5.1",
     "@supabase/supabase-js": "^2.81.1",
@@ -24,6 +29,7 @@
     "expo-splash-screen": "~31.0.8",
     "expo-status-bar": "~3.0.7",
     "expo-web-browser": "^15.0.9",
+    "livekit-client": "^2.16.0",
     "lucide-react-native": "^0.554.0",
     "nativewind": "^4.0.1",
     "react": "19.1.0",

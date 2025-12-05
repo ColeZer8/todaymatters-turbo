@@ -3,3 +3,5 @@ export { TimePickerModal } from './TimePickerModal';
 export { SetupStepLayout } from './SetupStepLayout';
 export { DraggableRoutineList } from './DraggableRoutineList';
 export { BottomToolbar } from './BottomToolbar';
+export { VoiceCoachButton } from './VoiceCoachButton';
+export { VoiceCoachModal } from './VoiceCoachModal';

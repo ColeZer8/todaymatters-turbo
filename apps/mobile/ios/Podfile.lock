@@ -252,6 +252,35 @@ PODS:
   - hermes-engine (0.81.4):
     - hermes-engine/Pre-built (= 0.81.4)
   - hermes-engine/Pre-built (0.81.4)
+  - livekit-react-native (2.9.5):
+    - hermes-engine
+    - livekit-react-native-webrtc
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - livekit-react-native-webrtc (137.0.2):
+    - React-Core
+    - WebRTC-SDK (= 137.7151.04)
+  - LiveKitExpoPlugin (1.0.1):
+    - ExpoModulesCore
+    - livekit-react-native
   - RCTDeprecation (0.81.4)
   - RCTRequired (0.81.4)
   - RCTTypeSafety (0.81.4):
@@ -2253,6 +2282,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - WebRTC-SDK (137.7151.04)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2279,6 +2309,9 @@ DEPENDENCIES:
   - "EXUpdatesInterface (from `../../../node_modules/.pnpm/expo-updates-interface@2.0.0_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-r_m52glk5jfrik34tatuaerwtnjm/node_modules/expo-updates-interface/ios`)"
   - "FBLazyVector (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/Libraries/FBLazyVector`)"
   - "hermes-engine (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)"
+  - "livekit-react-native (from `../../../node_modules/.pnpm/@livekit+react-native@2.9.5_@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+c_xeuue2q5n3fca6vi3rqdlagmwa/node_modules/@livekit/react-native`)"
+  - "livekit-react-native-webrtc (from `../../../node_modules/.pnpm/@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0_/node_modules/@livekit/react-native-webrtc`)"
+  - "LiveKitExpoPlugin (from `../../../node_modules/.pnpm/@livekit+react-native-expo-plugin@1.0.1_@livekit+react-native@2.9.5_@livekit+react-native-web_ruthczyqgfqcdlwz5zmdamt544/node_modules/@livekit/react-native-expo-plugin/ios`)"
   - "RCTDeprecation (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)"
   - "RCTRequired (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/Libraries/Required`)"
   - "RCTTypeSafety (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/Libraries/TypeSafety`)"
@@ -2354,6 +2387,10 @@ DEPENDENCIES:
   - "RNWorklets (from `../../../node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.28.5_react-native@0.81.4_@babel+core@7.28.5_@types+_2xdcbs4joky7pptpthjzmuix2a/node_modules/react-native-worklets`)"
   - "Yoga (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactCommon/yoga`)"
 
+SPEC REPOS:
+  trunk:
+    - WebRTC-SDK
+
 EXTERNAL SOURCES:
   EXApplication:
     :path: "../../../node_modules/.pnpm/expo-application@7.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@_5ehfmm6pipvc26bmpj63r2wpeq/node_modules/expo-application/ios"
@@ -2402,6 +2439,12 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
+  livekit-react-native:
+    :path: "../../../node_modules/.pnpm/@livekit+react-native@2.9.5_@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+c_xeuue2q5n3fca6vi3rqdlagmwa/node_modules/@livekit/react-native"
+  livekit-react-native-webrtc:
+    :path: "../../../node_modules/.pnpm/@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0_/node_modules/@livekit/react-native-webrtc"
+  LiveKitExpoPlugin:
+    :path: "../../../node_modules/.pnpm/@livekit+react-native-expo-plugin@1.0.1_@livekit+react-native@2.9.5_@livekit+react-native-web_ruthczyqgfqcdlwz5zmdamt544/node_modules/@livekit/react-native-expo-plugin/ios"
   RCTDeprecation:
     :path: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -2573,6 +2616,9 @@ SPEC CHECKSUMS:
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: 9e0cd874afd81d9a4d36679daca991b58b260d42
   hermes-engine: 35c763d57c9832d0eef764316ca1c4d043581394
+  livekit-react-native: 4c2a613b3c389c7c94122ad77d5e4e21b76bc8e9
+  livekit-react-native-webrtc: c03e72c608fbb8284a99e095dd7835a85bdb0279
+  LiveKitExpoPlugin: 8e0f4bdffa921c27c13e1504ea0e668b6f859278
   RCTDeprecation: 7487d6dda857ccd4cb3dd6ecfccdc3170e85dcbc
   RCTRequired: 54128b7df8be566881d48c7234724a78cb9b6157
   RCTTypeSafety: d2b07797a79e45d7b19e1cd2f53c79ab419fe217
@@ -2645,6 +2691,7 @@ SPEC CHECKSUMS:
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
   RNSVG: 99ab6158011aece12019b236f168faa7a1e41af6
   RNWorklets: 53b98d69c79705a0fdef0daa5b7282f37908b33f
+  WebRTC-SDK: 40d4f5ba05cadff14e4db5614aec402a633f007e
   Yoga: 051f086b5ccf465ff2ed38a2cf5a558ae01aaaa1
 
 PODFILE CHECKSUM: 8240fa09b2ad7dcddb757701bdcc9e9705240ef0
