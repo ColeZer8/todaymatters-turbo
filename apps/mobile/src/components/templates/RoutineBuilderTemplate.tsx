@@ -107,7 +107,7 @@ export const RoutineBuilderTemplate = ({
       subtitle="Stack your habits. What comes first?"
       onBack={onBack}
       footer={
-        <View className="gap-3">
+        <View style={{ gap: 12 }}>
           <View className="flex-row justify-between px-1">
             <View>
               <Text className="text-sm font-semibold text-text-secondary">Total Duration</Text>
@@ -122,24 +122,25 @@ export const RoutineBuilderTemplate = ({
         </View>
       }
     >
-      <View className="mt-4 gap-3">
-        <View className="relative">
-          <DraggableRoutineList
-            items={items}
-            expandedId={expandedId}
-            onToggleExpand={handleToggleExpand}
-            onChangeMinutes={onChangeMinutes}
-            onDelete={onDelete}
-            onReorder={onReorder}
-            onDragStart={() => setExpandedId(null)}
-            getStartEnd={getStartEnd}
-          />
-        </View>
+      <View style={{ marginTop: 16 }}>
+        <DraggableRoutineList
+          items={items}
+          expandedId={expandedId}
+          onToggleExpand={handleToggleExpand}
+          onChangeMinutes={onChangeMinutes}
+          onDelete={onDelete}
+          onReorder={onReorder}
+          onDragStart={() => setExpandedId(null)}
+          getStartEnd={getStartEnd}
+        />
 
         {showAdd ? (
-          <View className="rounded-3xl border border-[#E4E8F0] bg-white px-4 py-4" style={cardShadowStyle}>
+          <View
+            className="rounded-3xl border border-[#E4E8F0] bg-white px-4 py-4"
+            style={[cardShadowStyle, { marginTop: 12 }]}
+          >
             <Text className="text-base font-semibold text-text-primary">Add to routine</Text>
-            <View className="mt-3 flex-row items-center gap-3 rounded-2xl border border-brand-primary/60 bg-white px-3 py-2">
+            <View className="mt-3 flex-row items-center rounded-2xl border border-brand-primary/60 bg-white px-3 py-2" style={{ gap: 12 }}>
               <TextInput
                 value={newItem}
                 onChangeText={setNewItem}
@@ -162,7 +163,7 @@ export const RoutineBuilderTemplate = ({
             </View>
 
             {quickAddItems.length ? (
-              <View className="mt-3 flex-row flex-wrap gap-2">
+              <View className="mt-3 flex-row flex-wrap" style={{ gap: 8 }}>
                 {quickAddItems.map((quick) => (
                   <Pressable
                     key={quick}
@@ -194,8 +195,8 @@ export const RoutineBuilderTemplate = ({
           <Pressable
             accessibilityRole="button"
             onPress={() => setShowAdd(true)}
-            className="flex-row items-center justify-center gap-2 rounded-3xl border border-dashed border-[#C7D2FE] bg-[#F8FAFF] px-4 py-5"
-            style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
+            className="flex-row items-center justify-center rounded-3xl border border-dashed border-[#C7D2FE] bg-[#F8FAFF] px-4 py-5"
+            style={({ pressed }) => [{ marginTop: 12, gap: 8, opacity: pressed ? 0.9 : 1 }]}
           >
             <Plus size={18} color="#2563EB" />
             <Text className="text-base font-semibold text-brand-primary">Add habit</Text>
