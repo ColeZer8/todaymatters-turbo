@@ -8,20 +8,23 @@ import Constants from "expo-constants";
 import { handleAuthCallback } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
 
+// TODO: Re-enable ElevenLabs voice coach integration
 // Voice features require native modules - only available in dev builds, not Expo Go
 const isExpoGo = Constants.appOwnership === 'expo';
 
 // Dynamically load ElevenLabsProvider only in dev builds
 // String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
+// TODO: Re-enable when voice coach is ready for production
 let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = null;
-if (!isExpoGo) {
-  try {
-    const pkg = '@elevenlabs' + '/react-native';
-    ElevenLabsProvider = require(pkg).ElevenLabsProvider;
-  } catch {
-    console.log("[Layout] ElevenLabs not available - voice features disabled");
-  }
-}
+// DISABLED: ElevenLabs integration temporarily disabled
+// if (!isExpoGo) {
+//   try {
+//     const pkg = '@elevenlabs' + '/react-native';
+//     ElevenLabsProvider = require(pkg).ElevenLabsProvider;
+//   } catch {
+//     console.log("[Layout] ElevenLabs not available - voice features disabled");
+//   }
+// }
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);

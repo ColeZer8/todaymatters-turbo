@@ -10,6 +10,9 @@
  * - mark_task_complete: Mark a specific task as complete
  * - get_user_goals: Get the user's goals and progress
  * - log_conversation_insight: Log an insight from the conversation
+ * 
+ * TODO: Re-enable ElevenLabs voice coach integration
+ * STATUS: DISABLED - Voice coach feature temporarily disabled
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -19,6 +22,9 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// TODO: Re-enable ElevenLabs voice coach integration
+const ELEVENLABS_DISABLED = true;
 
 interface ToolRequest {
   tool_name: string;
@@ -37,6 +43,14 @@ serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // TODO: Remove this block when re-enabling ElevenLabs
+  if (ELEVENLABS_DISABLED) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Voice coach feature is temporarily disabled' }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   if (req.method !== 'POST') {

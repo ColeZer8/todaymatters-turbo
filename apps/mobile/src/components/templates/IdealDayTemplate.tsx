@@ -13,6 +13,7 @@ interface IdealDayTemplateProps {
   step?: number;
   totalSteps?: number;
   categories: IdealDayCategory[];
+  categoriesByType: Record<DayType, IdealDayCategory[]>;
   dayType: DayType;
   onDayTypeChange: (type: DayType) => void;
   onCategoryHoursChange: (id: string, hours: number) => void;
@@ -22,6 +23,8 @@ interface IdealDayTemplateProps {
   onSkip?: () => void;
   onBack?: () => void;
   selectedDays: number[];
+  selectedDaysByType: Record<DayType, number[]>;
+  customDayConfigs: Record<number, IdealDayCategory[]>;
   onToggleDay: (dayIndex: number) => void;
 }
 
@@ -44,6 +47,34 @@ const WEEKDAY_LABELS = [
 
 const palette = ['#4F8BFF', '#1FA56E', '#F59E0B', '#F33C83', '#F95C2E', '#7C3AED', '#10B981'];
 const freeColor = '#93C5FD';
+
+// Default hours for comparison (determines if a day type has been configured)
+const DEFAULT_HOURS: Record<string, number> = {
+  sleep: 8,
+  work: 6.5,
+  family: 3,
+  prayer: 1,
+  fitness: 1,
+};
+
+// Check if a day type's categories differ from defaults
+const isDayTypeConfigured = (categories: IdealDayCategory[]): boolean => {
+  // Different number of categories = configured
+  if (categories.length !== 5) return true;
+  
+  // Check if any default category has different hours
+  for (const cat of categories) {
+    const defaultHours = DEFAULT_HOURS[cat.id];
+    if (defaultHours !== undefined && cat.hours !== defaultHours) {
+      return true;
+    }
+    // Custom category (not in defaults) = configured
+    if (defaultHours === undefined) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -131,6 +162,7 @@ export const IdealDayTemplate = ({
   step = ONBOARDING_STEPS.idealDay,
   totalSteps = ONBOARDING_TOTAL_STEPS,
   categories,
+  categoriesByType,
   dayType,
   onDayTypeChange,
   onCategoryHoursChange,
@@ -139,9 +171,50 @@ export const IdealDayTemplate = ({
   onContinue,
   onBack,
   selectedDays,
+  selectedDaysByType,
+  customDayConfigs,
   onToggleDay,
 }: IdealDayTemplateProps) => {
   const totalHours = useMemo(() => categories.reduce((sum, cat) => sum + cat.hours, 0), [categories]);
+  
+  // Days with BASE template configured (weekdays/saturday/sunday)
+  // Blue dot = base schedule has been customized
+  const baseConfiguredDays = useMemo(() => {
+    const configured = new Set<number>();
+    
+    // Check weekdays template (Mon-Fri: indices 0-4)
+    if (isDayTypeConfigured(categoriesByType.weekdays)) {
+      for (let i = 0; i < 5; i++) configured.add(i);
+    }
+    
+    // Check saturday template (index 5)
+    if (isDayTypeConfigured(categoriesByType.saturday)) {
+      configured.add(5);
+    }
+    
+    // Check sunday template (index 6)
+    if (isDayTypeConfigured(categoriesByType.sunday)) {
+      configured.add(6);
+    }
+    
+    return configured;
+  }, [categoriesByType]);
+  
+  // Days with CUSTOM override (saved in customDayConfigs)
+  // Orange dot = this day has a saved custom schedule
+  // Also include currently editing day (selectedDaysByType.custom)
+  const customDays = useMemo(() => {
+    const days = new Set<number>();
+    // Add all days with saved custom configs
+    for (const dayIdx of Object.keys(customDayConfigs)) {
+      days.add(Number(dayIdx));
+    }
+    // Also add currently editing day (in case it hasn't been saved yet)
+    for (const dayIdx of selectedDaysByType.custom) {
+      days.add(dayIdx);
+    }
+    return days;
+  }, [customDayConfigs, selectedDaysByType]);
   const freeTime = Math.max(0, 24 - totalHours);
   const [newName, setNewName] = useState('');
   const [newColorIndex, setNewColorIndex] = useState(0);
@@ -199,10 +272,21 @@ export const IdealDayTemplate = ({
             </View>
           </View>
 
+          {/* Helper text for Custom mode */}
+          {dayType === 'custom' && (
+            <Text className="text-center text-[11px] text-[#94A3B8] -mt-1">
+              {selectedDays.length === 0 
+                ? 'Tap a day to customize its schedule'
+                : 'Tap again to remove override, or tap another day'}
+            </Text>
+          )}
+
           {/* Weekday Buttons - Spaced evenly */}
           <View className="flex-row items-center justify-between px-1">
             {WEEKDAY_LABELS.map((day, idx) => {
               const isSelected = selectedDays.includes(idx);
+              const hasBaseConfig = baseConfiguredDays.has(idx);
+              const hasCustomOverride = customDays.has(idx);
               const active =
                 dayType === 'custom'
                   ? isSelected
@@ -218,12 +302,32 @@ export const IdealDayTemplate = ({
                   key={`${day.short}-${idx}`}
                   disabled={dayType !== 'custom'}
                   onPress={() => onToggleDay(idx)}
-                  className={`h-11 w-11 items-center justify-center rounded-lg ${active ? 'bg-brand-primary' : 'bg-[#F3F4F6]'}`}
+                  className={`relative h-11 w-11 items-center justify-center rounded-lg ${active ? 'bg-brand-primary' : 'bg-[#F3F4F6]'}`}
                   style={({ pressed }) => [{ opacity: pressed && dayType === 'custom' ? 0.8 : 1 }]}
                 >
                   <Text className={`text-[15px] font-bold ${active ? 'text-white' : 'text-[#9CA3AF]'}`}>
                     {day.short}
                   </Text>
+                  {/* Base config indicator - blue dot top-right */}
+                  {hasBaseConfig && !hasCustomOverride && (
+                    <View
+                      className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                      style={{ 
+                        backgroundColor: active ? 'rgba(255,255,255,0.9)' : '#2563EB',
+                      }}
+                    />
+                  )}
+                  {/* Custom override indicator - orange dot top-left (always on top, always orange) */}
+                  {hasCustomOverride && (
+                    <View
+                      className="absolute left-1 top-1 h-2.5 w-2.5 rounded-full"
+                      style={{ 
+                        backgroundColor: '#F59E0B',
+                        borderWidth: 1.5,
+                        borderColor: 'rgba(255,255,255,0.9)',
+                      }}
+                    />
+                  )}
                 </Pressable>
               );
             })}

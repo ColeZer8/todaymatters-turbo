@@ -15,12 +15,15 @@ export default function IdealDayScreen() {
   // Wait for store to hydrate from AsyncStorage
   const hasHydrated = useIdealDayStore((state) => state._hasHydrated);
   const categories = useIdealDayStore((state) => state.categoriesByType[state.dayType]);
+  const categoriesByType = useIdealDayStore((state) => state.categoriesByType);
   const dayType = useIdealDayStore((state) => state.dayType);
   const setDayType = useIdealDayStore((state) => state.setDayType);
   const setHours = useIdealDayStore((state) => state.setHours);
   const addCategory = useIdealDayStore((state) => state.addCategory);
   const deleteCategory = useIdealDayStore((state) => state.deleteCategory);
   const selectedDays = useIdealDayStore((state) => state.selectedDaysByType[state.dayType]);
+  const selectedDaysByType = useIdealDayStore((state) => state.selectedDaysByType);
+  const customDayConfigs = useIdealDayStore((state) => state.customDayConfigs);
   const toggleDay = useIdealDayStore((state) => state.toggleDay);
 
   // Wait for navigation and hydration
@@ -46,8 +49,11 @@ export default function IdealDayScreen() {
       step={ONBOARDING_STEPS.idealDay}
       totalSteps={ONBOARDING_TOTAL_STEPS}
       categories={categories}
+      categoriesByType={categoriesByType}
       dayType={dayType}
       selectedDays={selectedDays}
+      selectedDaysByType={selectedDaysByType}
+      customDayConfigs={customDayConfigs}
       onToggleDay={toggleDay}
       onDayTypeChange={setDayType}
       onCategoryHoursChange={setHours}

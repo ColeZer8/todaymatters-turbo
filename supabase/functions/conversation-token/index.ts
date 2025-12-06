@@ -5,6 +5,9 @@
  * This keeps the ElevenLabs API key secure on the server side.
  *
  * The token is short-lived (10 minutes) and tied to a specific agent.
+ * 
+ * TODO: Re-enable ElevenLabs voice coach integration
+ * STATUS: DISABLED - Voice coach feature temporarily disabled
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -15,10 +18,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// TODO: Re-enable ElevenLabs voice coach integration
+const ELEVENLABS_DISABLED = true;
+
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // TODO: Remove this block when re-enabling ElevenLabs
+  if (ELEVENLABS_DISABLED) {
+    return new Response(
+      JSON.stringify({ error: 'Voice coach feature is temporarily disabled' }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {

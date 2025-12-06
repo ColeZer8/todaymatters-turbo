@@ -1,8 +1,21 @@
 # ElevenLabs Voice Coach Integration
 
-**Status:** Completed  
+**Status:** Disabled (TODO)  
 **Date Started:** 2025-12-04  
-**Date Completed:** 2025-12-05
+**Date Completed:** 2025-12-05  
+**Date Disabled:** 2025-12-05
+
+---
+
+> ⚠️ **TEMPORARILY DISABLED**
+> 
+> Voice coach feature is temporarily disabled pending further development. All code structure has been preserved - search for `TODO: Re-enable ElevenLabs` to find all disabled sections.
+>
+> **To re-enable:**
+> 1. `apps/mobile/src/app/_layout.tsx` - Uncomment `ElevenLabsProvider` loading
+> 2. `apps/mobile/src/components/templates/HomeTemplate.tsx` - Uncomment `VoiceCoachButton`
+> 3. `apps/mobile/src/components/organisms/index.ts` - Uncomment exports
+> 4. `supabase/functions/*/index.ts` - Set `ELEVENLABS_DISABLED = false`
 
 ---
 

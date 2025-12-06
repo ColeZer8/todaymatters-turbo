@@ -4,7 +4,8 @@ import { DailyBrief } from '../organisms/DailyBrief';
 import { ScheduleList } from '../organisms/ScheduleList';
 import { PendingActions } from '../organisms/PendingActions';
 import { BottomToolbar } from '../organisms/BottomToolbar';
-import { VoiceCoachButton } from '../organisms/VoiceCoachButton';
+// TODO: Re-enable ElevenLabs voice coach integration
+// import { VoiceCoachButton } from '../organisms/VoiceCoachButton';
 
 export const HomeTemplate = () => {
     const insets = useSafeAreaInsets();
@@ -20,10 +21,11 @@ export const HomeTemplate = () => {
                 <PendingActions />
             </View>
             <BottomToolbar />
-            <VoiceCoachButton 
+            {/* TODO: Re-enable ElevenLabs voice coach integration */}
+            {/* <VoiceCoachButton 
                 currentScreen="home"
                 position="bottom-right"
-            />
+            /> */}
         </View>
     );
 };
