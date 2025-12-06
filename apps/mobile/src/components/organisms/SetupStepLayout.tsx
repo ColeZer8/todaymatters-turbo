@@ -38,6 +38,7 @@ export const SetupStepLayout = ({
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          enabled={Platform.OS === 'ios'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           <ScrollView
@@ -45,7 +46,6 @@ export const SetupStepLayout = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
           >
             <View style={styles.headerRow}>
               <View className="flex-row items-center gap-2">

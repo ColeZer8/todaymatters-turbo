@@ -158,7 +158,7 @@ export const useIdealDayStore = create<IdealDayState>()(
               {
                 id: `${Date.now()}`,
                 name,
-                hours: 1,
+                hours: 0,
                 maxHours: 6,
                 color,
                 icon: Sparkles,
