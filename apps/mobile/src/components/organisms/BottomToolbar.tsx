@@ -1,7 +1,7 @@
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, Calendar, BarChart3, User } from 'lucide-react-native';
+import { Home, CalendarDays, BarChart3, User } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
 
 export const BottomToolbar = () => {
@@ -10,7 +10,8 @@ export const BottomToolbar = () => {
     const insets = useSafeAreaInsets();
 
     const isHome = pathname?.includes('/home');
-    const isCalendar = pathname?.includes('/calendar');
+    // Active ONLY if comprehensive calendar
+    const isCalendar = pathname?.includes('/comprehensive-calendar');
     const isAnalytics = pathname?.includes('/analytics');
     const isProfile = pathname?.includes('/profile');
 
@@ -30,9 +31,9 @@ export const BottomToolbar = () => {
                     accessibilityRole="button"
                     hitSlop={8}
                     className="items-center justify-center p-2"
-                    onPress={() => router.replace('/calendar')}
+                    onPress={() => router.replace('/comprehensive-calendar')}
                 >
-                    <Icon icon={Calendar} size={24} color={isCalendar ? '#2563EB' : '#9CA3AF'} />
+                    <Icon icon={CalendarDays} size={24} color={isCalendar ? '#2563EB' : '#9CA3AF'} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
