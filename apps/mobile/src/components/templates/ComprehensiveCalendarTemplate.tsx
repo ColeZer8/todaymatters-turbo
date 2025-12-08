@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -5,12 +6,19 @@ import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react-native';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
+import { useReviewTimeStore } from '@/stores';
 
 // Configuration
 const START_HOUR = 0; // 12 AM
-const END_HOUR = 23; // 11 PM
+const END_HOUR = 23; // Last start hour of the day (11 PM), grid spans to midnight
 const HOUR_HEIGHT = 72; // Slightly reduced for better proportions
 const TIME_COLUMN_WIDTH = 56;
+const GRID_TOP_PADDING = 0;
+const GRID_BOTTOM_PADDING = 12; // base bottom padding; we add insets inside component
+const TOTAL_HOURS = END_HOUR - START_HOUR + 1;
+const GRID_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
+const GRID_LINE_COLOR = 'rgba(148,163,184,0.28)';
+const DAY_END_MINUTES = 24 * 60;
 
 // Theme Colors - Matching Home Page
 const COLORS = {
@@ -46,10 +54,15 @@ const CATEGORY_STYLES: Record<string, { bg: string; accent: string; text: string
 
 // Helper to calculate position
 const getPosition = (startMinutes: number, duration: number) => {
-    const startOffset = startMinutes - (START_HOUR * 60);
-    const top = (startOffset / 60) * HOUR_HEIGHT;
-    const height = (duration / 60) * HOUR_HEIGHT;
-    return { top, height };
+    const startOffset = startMinutes - START_HOUR * 60;
+    const rawTop = (startOffset / 60) * HOUR_HEIGHT;
+    const rawHeight = (duration / 60) * HOUR_HEIGHT;
+
+    const clampedTop = Math.max(rawTop, 0);
+    const clampedBottom = Math.min(rawTop + rawHeight, GRID_HEIGHT);
+    const height = Math.max(clampedBottom - clampedTop, 12);
+
+    return { top: clampedTop, height };
 };
 
 // =============================================================================
@@ -274,15 +287,22 @@ const ACTUAL_EVENTS = [
 
 const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
     const router = useRouter();
+    const setHighlightedBlockId = useReviewTimeStore((state) => state.setHighlightedBlockId);
     const { top, height } = getPosition(event.startMinutes, event.duration);
     const catStyles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.work;
     const isUnknown = event.category === 'unknown';
+    const eventStart = event.startMinutes;
+    const eventEnd = event.startMinutes + event.duration;
+    const extendsAbove = eventStart <= START_HOUR * 60;
+    const extendsBelow = eventEnd >= DAY_END_MINUTES;
     
     const isSmall = event.duration < 30;
     const isTiny = event.duration < 20;
 
     const handlePress = () => {
         if (isUnknown) {
+            // Set which block to highlight before navigating
+            setHighlightedBlockId(event.id);
             router.push('/review-time');
         }
     };
@@ -304,6 +324,10 @@ const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
                     borderLeftWidth: 3,
                     paddingVertical: isTiny ? 1 : 4,
                     justifyContent: isTiny ? 'center' : 'flex-start',
+                    borderTopLeftRadius: extendsAbove ? 0 : 6,
+                    borderTopRightRadius: extendsAbove ? 0 : 6,
+                    borderBottomLeftRadius: extendsBelow ? 0 : 6,
+                    borderBottomRightRadius: extendsBelow ? 0 : 6,
                     // Subtle shadow for depth
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
@@ -349,6 +373,11 @@ const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
 export const ComprehensiveCalendarTemplate = () => {
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const scrollViewRef = useRef<ScrollView | null>(null);
+    const [scrollViewHeight, setScrollViewHeight] = useState(0);
+    const [hasAutoCentered, setHasAutoCentered] = useState(false);
+    const bottomPadding = GRID_BOTTOM_PADDING + insets.bottom + 16; // small cushion while keeping end tight
+    const contentHeight = GRID_HEIGHT + GRID_TOP_PADDING + bottomPadding;
 
     const handleAddEvent = () => {
         router.push('/add-event');
@@ -364,6 +393,21 @@ export const ComprehensiveCalendarTemplate = () => {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const currentIndicatorTop = getPosition(currentMinutes, 0).top;
     const shouldShowCurrentIndicator = currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
+    const clampedIndicatorTop = Math.min(Math.max(currentIndicatorTop, 0), GRID_HEIGHT);
+    const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
+
+    useEffect(() => {
+        if (!shouldShowCurrentIndicator || !scrollViewHeight || hasAutoCentered) {
+            return;
+        }
+
+        const maxScroll = Math.max(contentHeight - scrollViewHeight, 0);
+        const desiredOffset = currentIndicatorOffset - scrollViewHeight / 2;
+        const clampedOffset = Math.min(Math.max(desiredOffset, 0), maxScroll);
+
+        scrollViewRef.current?.scrollTo({ y: clampedOffset, animated: false });
+        setHasAutoCentered(true);
+    }, [contentHeight, currentIndicatorOffset, hasAutoCentered, scrollViewHeight, shouldShowCurrentIndicator]);
 
     // Format date like Home page
     const dayName = 'Friday,';
@@ -404,26 +448,40 @@ export const ComprehensiveCalendarTemplate = () => {
                 </View>
 
                 <ScrollView
+                    ref={scrollViewRef}
                     style={styles.scrollView}
-                    contentContainerStyle={{ 
-                        height: (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT + 40 
+                    contentContainerStyle={{
+                        height: contentHeight,
+                        paddingTop: GRID_TOP_PADDING,
+                        paddingBottom: bottomPadding,
                     }}
+                    bounces={false}
+                    alwaysBounceVertical={false}
+                    overScrollMode="never"
+                    onLayout={(event) => setScrollViewHeight(event.nativeEvent.layout.height)}
                     showsVerticalScrollIndicator={false}
                 >
-                    <View style={styles.gridRow}>
+                    <View style={[styles.gridRow, { height: GRID_HEIGHT }]}>
                         {/* Time Column */}
                         <View style={styles.timeColumn}>
-                            {hours.map((hour) => (
-                                <View key={hour} style={styles.timeSlot}>
-                                    <Text style={styles.timeLabel}>
-                                        {hour === 0 ? '12a' : hour === 12 ? '12p' : hour > 12 ? `${hour - 12}p` : `${hour}a`}
-                                    </Text>
-                                </View>
-                            ))}
+                {hours.map((hour) => (
+                    <View key={hour} style={styles.timeSlot}>
+                        <Text style={styles.timeLabel}>
+                            {hour === 0
+                                ? '12a'
+                                : hour === 12
+                                    ? '12p'
+                                    : hour > 12
+                                        ? `${hour - 12}p`
+                                        : `${hour}a`}
+                        </Text>
+                    </View>
+                ))}
                         </View>
 
                         {/* Grid Container */}
                         <View style={styles.gridContainer}>
+                            {/* Base grid for spacing */}
                             {hours.map((hour) => (
                                 <View key={`grid-${hour}`} style={styles.gridLine} />
                             ))}
@@ -442,11 +500,18 @@ export const ComprehensiveCalendarTemplate = () => {
                                     ))}
                                 </View>
                             </View>
+
+                            {/* Overlay grid lines so they sit above events */}
+                            <View pointerEvents="none" style={styles.gridLinesOverlay}>
+                                {hours.map((hour) => (
+                                    <View key={`grid-overlay-${hour}`} style={styles.gridLineOverlay} />
+                                ))}
+                            </View>
                         </View>
 
                         {/* Current Time Indicator */}
                         {shouldShowCurrentIndicator && (
-                            <View style={[styles.currentTimeIndicator, { top: currentIndicatorTop }]}>
+                            <View style={[styles.currentTimeIndicator, { top: clampedIndicatorTop }]}>
                                 <View style={styles.currentTimeDot} />
                                 <View style={styles.currentTimeLine} />
                             </View>
@@ -554,11 +619,15 @@ const styles = StyleSheet.create({
         width: TIME_COLUMN_WIDTH,
         borderRightWidth: StyleSheet.hairlineWidth,
         borderRightColor: COLORS.borderLight,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: GRID_LINE_COLOR,
     },
     timeSlot: {
         height: HOUR_HEIGHT,
         justifyContent: 'flex-start',
-        paddingTop: 0,
+        paddingTop: 6,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: GRID_LINE_COLOR,
     },
     timeLabel: {
         fontSize: 11,
@@ -566,16 +635,31 @@ const styles = StyleSheet.create({
         color: COLORS.textSubtle,
         textAlign: 'right',
         paddingRight: 10,
-        marginTop: -6,
+        marginTop: -2,
     },
     gridContainer: {
         flex: 1,
         position: 'relative',
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: GRID_LINE_COLOR,
     },
     gridLine: {
         height: HOUR_HEIGHT,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: COLORS.borderLight,
+        borderBottomColor: GRID_LINE_COLOR,
+    },
+    gridLinesOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'flex-start',
+    },
+    gridLineOverlay: {
+        height: HOUR_HEIGHT,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: GRID_LINE_COLOR,
     },
     eventsContainer: {
         position: 'absolute',

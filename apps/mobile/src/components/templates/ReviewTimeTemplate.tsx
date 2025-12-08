@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useRef, useEffect, useCallback } from 'react';
 import {
   ArrowLeft,
   CircleHelp,
@@ -35,12 +36,43 @@ const formatDuration = (minutes: number): string => {
 export const ReviewTimeTemplate = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { timeBlocks, assignments, assignCategory, clearAssignment } = useReviewTimeStore();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const blockPositions = useRef<Record<string, number>>({});
+  
+  const { 
+    timeBlocks, 
+    assignments, 
+    assignCategory, 
+    clearAssignment,
+    highlightedBlockId,
+    setHighlightedBlockId,
+  } = useReviewTimeStore();
 
   const totalUnassigned = timeBlocks.reduce((sum, block) => {
     if (!assignments[block.id]) return sum + block.duration;
     return sum;
   }, 0);
+
+  // Scroll to highlighted block on mount
+  useEffect(() => {
+    if (highlightedBlockId && blockPositions.current[highlightedBlockId] !== undefined) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          y: blockPositions.current[highlightedBlockId] - 100,
+          animated: true,
+        });
+      }, 100);
+    }
+    
+    // Clear highlight when leaving
+    return () => {
+      setHighlightedBlockId(null);
+    };
+  }, [highlightedBlockId, setHighlightedBlockId]);
+
+  const handleBlockLayout = useCallback((blockId: string, event: LayoutChangeEvent) => {
+    blockPositions.current[blockId] = event.nativeEvent.layout.y;
+  }, []);
 
   const handleCategorySelect = (blockId: string, categoryId: string) => {
     if (assignments[blockId] === categoryId) {
@@ -70,6 +102,7 @@ export const ReviewTimeTemplate = () => {
         </View>
 
         <ScrollView
+          ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
@@ -97,25 +130,31 @@ export const ReviewTimeTemplate = () => {
             {timeBlocks.map((block) => {
               const selectedCategory = assignments[block.id];
               const selectedCat = CATEGORIES.find(c => c.id === selectedCategory);
+              const isHighlighted = highlightedBlockId === block.id;
               
               return (
                 <View
                   key={block.id}
+                  onLayout={(e) => handleBlockLayout(block.id, e)}
                   className="bg-white rounded-2xl overflow-hidden"
                   style={{
-                    borderWidth: 1,
-                    borderColor: selectedCat ? selectedCat.color + '30' : '#E5E7EB',
-                    shadowColor: '#0f172a',
-                    shadowOpacity: 0.05,
-                    shadowRadius: 12,
-                    shadowOffset: { width: 0, height: 4 },
+                    borderWidth: isHighlighted ? 2 : 1,
+                    borderColor: isHighlighted 
+                      ? '#2563EB' 
+                      : selectedCat 
+                        ? selectedCat.color + '30' 
+                        : '#E5E7EB',
+                    shadowColor: isHighlighted ? '#2563EB' : '#0f172a',
+                    shadowOpacity: isHighlighted ? 0.15 : 0.05,
+                    shadowRadius: isHighlighted ? 16 : 12,
+                    shadowOffset: { width: 0, height: isHighlighted ? 6 : 4 },
                   }}
                 >
-                  {/* Colored top accent when assigned */}
-                  {selectedCat && (
+                  {/* Colored top accent when assigned or highlighted */}
+                  {(selectedCat || isHighlighted) && (
                     <View 
                       className="h-1" 
-                      style={{ backgroundColor: selectedCat.color }} 
+                      style={{ backgroundColor: isHighlighted ? '#2563EB' : selectedCat?.color }} 
                     />
                   )}
                   

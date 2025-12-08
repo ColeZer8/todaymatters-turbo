@@ -86,67 +86,66 @@ export const ProfileTemplate = ({
 
   return (
     <View className="flex-1 bg-[#F7FAFF]">
+      <View
+        className="bg-[#F7FAFF] px-0"
+        style={{
+          paddingTop: Math.max(insets.top - 11, 0),
+          paddingBottom: 12,
+          shadowColor: '#0f172a',
+          shadowOpacity: 0.03,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 2,
+          zIndex: 10,
+        }}
+      >
+        <View className="flex-row items-center px-6 my-4">
+          <View className="w-12" />
+
+          <View className="flex-1 items-center">
+            <Text className="text-[#0F172A] text-[17px] font-semibold">
+              Profile
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isEditingHeader ? 'Save profile changes' : 'Edit profile'}
+            hitSlop={10}
+            disabled={!headerActionEnabled}
+            onPress={handleHeaderAction}
+            className="items-end min-w-[60px]"
+            style={({ pressed }) => [
+              {
+                opacity: pressed ? 0.65 : 1,
+              },
+            ]}
+          >
+            <View
+              className={`${
+                isEditingHeader ? 'rounded-lg bg-[#E9F2FF] px-2.5 py-1.5' : ''
+              }`}
+            >
+              <Text className="text-[15px] font-semibold text-[#2563EB]">
+                {isEditingHeader ? 'Done' : 'Edit'}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+
       <ScrollView
         className="flex-1"
-        stickyHeaderIndices={[0]}
         contentContainerStyle={{
-          paddingHorizontal: 24,
           paddingBottom: insets.bottom + 140,
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          className="bg-[#F7FAFF] px-0"
-          style={{
-            paddingTop: insets.top + 8,
-            paddingBottom: 12,
-            shadowColor: '#0f172a',
-            shadowOpacity: 0.03,
-            shadowRadius: 6,
-            shadowOffset: { width: 0, height: 2 },
-            elevation: 2,
-          }}
-        >
-          <View className="flex-row items-center px-6">
-            <View className="w-12" />
-
-            <View className="flex-1 items-center">
-              <Text className="text-[#0F172A] text-[17px] font-semibold">
-                Profile
-              </Text>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isEditingHeader ? 'Save profile changes' : 'Edit profile'}
-              hitSlop={10}
-              disabled={!headerActionEnabled}
-              onPress={handleHeaderAction}
-              className="items-end min-w-[60px]"
-              style={({ pressed }) => [
-                {
-                  opacity: pressed ? 0.65 : 1,
-                },
-              ]}
-            >
-              <View
-                className={`${
-                  isEditingHeader ? 'rounded-lg bg-[#E9F2FF] px-2.5 py-1.5' : ''
-                }`}
-              >
-                <Text className="text-[15px] font-semibold text-[#2563EB]">
-                  {isEditingHeader ? 'Done' : 'Edit'}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-        </View>
-
-        <View className="mt-6">
+        <View className="mt-6 px-6">
           <ProfileSummaryCard name={name} role={role} badgeLabel={badgeLabel} />
         </View>
 
-        <View className="mt-8">
+        <View className="mt-8 px-6">
           <Text className={sectionTitleClass}>Core Values</Text>
           <View className="flex-row flex-wrap mt-3 gap-3">
             {coreValues.map((value) =>
@@ -185,7 +184,7 @@ export const ProfileTemplate = ({
           </View>
         </View>
 
-        <View className="mt-8">
+        <View className="mt-8 px-6">
           <Text className={sectionTitleClass}>Goals</Text>
           <View className="mt-3 gap-3">
             {goals.map((goal) => (
@@ -211,7 +210,7 @@ export const ProfileTemplate = ({
           </View>
         </View>
 
-        <View className="mt-8">
+        <View className="mt-8 px-6">
           <Text className={sectionTitleClass}>Work Initiatives</Text>
           <View className="mt-3 gap-3">
             {initiatives.map((initiative) => (
@@ -239,7 +238,7 @@ export const ProfileTemplate = ({
           </View>
         </View>
 
-        <View className="mt-8 pt-1 border-t border-[#E5E9F2]">
+        <View className="mt-8 pt-1 border-t border-[#E5E9F2] px-6">
           {menuItems.map((item) => (
             <ProfileMenuItem
               key={item.id}

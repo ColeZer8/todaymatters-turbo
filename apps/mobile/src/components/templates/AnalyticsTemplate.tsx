@@ -1,111 +1,16 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronDown, ChevronRight, Dumbbell, Gift, Heart, LucideIcon, Sparkles, SunMedium } from 'lucide-react-native';
+import Svg, { Line } from 'react-native-svg';
 import { Card, Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
 import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
 import { BottomToolbar } from '@/components/organisms/BottomToolbar';
 
-// Animated number component with smooth ticking effect
-// All animations complete in the same duration for unified feel
-interface AnimatedNumberProps {
-  value: number;
-  suffix?: string;
-  prefix?: string;
-  style?: object;
-}
-
-const ANIMATION_DURATION = 1800; // Total duration in ms - slow and dramatic
-const FRAME_RATE = 60; // Updates per second for smoother animation
-
-// Global animation coordinator to sync all number animations
-let globalAnimationStart: number | null = null;
-let globalAnimationTimeout: NodeJS.Timeout | null = null;
-
-const AnimatedNumber = ({ value, suffix = '', prefix = '', style }: AnimatedNumberProps) => {
-  const [displayValue, setDisplayValue] = useState(value);
-  const animationRef = useRef<number | null>(null);
-  const startValueRef = useRef<number>(value);
-  const targetValueRef = useRef<number>(value);
-  const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    // Skip animation on first render
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      setDisplayValue(value);
-      return;
-    }
-
-    // Cancel any existing animation frame
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-
-    const startVal = displayValue;
-    const endVal = value;
-    
-    if (startVal === endVal) return;
-    
-    startValueRef.current = startVal;
-    targetValueRef.current = endVal;
-    
-    // Reset global start time when a new batch of animations begins
-    // Use a small timeout to batch all value changes together
-    if (globalAnimationTimeout) {
-      clearTimeout(globalAnimationTimeout);
-    }
-    globalAnimationTimeout = setTimeout(() => {
-      globalAnimationStart = null;
-    }, 50);
-    
-    if (globalAnimationStart === null) {
-      globalAnimationStart = performance.now();
-    }
-    
-    const animationStartTime = globalAnimationStart;
-    
-    const animate = () => {
-      const now = performance.now();
-      const elapsed = now - animationStartTime;
-      const progress = Math.min(elapsed / ANIMATION_DURATION, 1);
-      
-      // Easing function: easeOutQuart for smooth, dramatic deceleration
-      const eased = 1 - Math.pow(1 - progress, 4);
-      
-      const currentValue = startValueRef.current + (targetValueRef.current - startValueRef.current) * eased;
-      setDisplayValue(Math.round(currentValue));
-      
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        setDisplayValue(endVal);
-        animationRef.current = null;
-      }
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
-      }
-    };
-  }, [value]);
-  
-  return (
-    <Text style={style}>
-      {prefix}{displayValue}{suffix}
-    </Text>
-  );
-};
-
 type RangeKey = 'today' | 'week' | 'month' | 'year';
-type DistributionView = 'ideal' | 'reality';
 
 interface PerformanceInsight {
   headline: string;
@@ -167,6 +72,7 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
       { label: 'Family', value: 120, goal: 240, color: '#6A74F7', accent: '#EEF0FF' },
       { label: 'Work', value: 360, goal: 300, color: '#2F9BFF', accent: '#E8F3FF' },
       { label: 'Health', value: 60, goal: 60, color: '#3BB273', accent: '#E5F7EF' },
+      { label: 'Other', value: 90, goal: 120, color: '#9CA3AF', accent: '#F3F4F6' },
     ],
     categories: [
       { id: 'faith', title: 'Faith', status: 'Strong', helper: 'Consistent habits', accent: '#C1630A', background: '#FFF5E8', icon: SunMedium },
@@ -204,6 +110,7 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
       { label: 'Family', value: 520, goal: 840, color: '#6A74F7', accent: '#EEF0FF' },
       { label: 'Work', value: 2580, goal: 2520, color: '#2F9BFF', accent: '#E8F3FF' },
       { label: 'Health', value: 540, goal: 420, color: '#3BB273', accent: '#E5F7EF' },
+      { label: 'Other', value: 300, goal: 420, color: '#9CA3AF', accent: '#F3F4F6' },
     ],
     categories: [
       { id: 'faith', title: 'Faith', status: 'Strong', helper: 'More consistent', accent: '#C1630A', background: '#FFF5E8', icon: SunMedium },
@@ -241,6 +148,7 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
       { label: 'Family', value: 2200, goal: 3720, color: '#6A74F7', accent: '#EEF0FF' },
       { label: 'Work', value: 10200, goal: 10080, color: '#2F9BFF', accent: '#E8F3FF' },
       { label: 'Health', value: 1860, goal: 1860, color: '#3BB273', accent: '#E5F7EF' },
+      { label: 'Other', value: 1200, goal: 1860, color: '#9CA3AF', accent: '#F3F4F6' },
     ],
     categories: [
       { id: 'faith', title: 'Faith', status: 'Strong', helper: 'Small daily reps', accent: '#C1630A', background: '#FFF5E8', icon: SunMedium },
@@ -277,6 +185,7 @@ const ANALYTICS_SNAPSHOT: Record<RangeKey, RangeData> = {
       { label: 'Family', value: 26000, goal: 37200, color: '#6A74F7', accent: '#EEF0FF' },
       { label: 'Work', value: 110000, goal: 111600, color: '#2F9BFF', accent: '#E8F3FF' },
       { label: 'Health', value: 20500, goal: 18600, color: '#3BB273', accent: '#E5F7EF' },
+      { label: 'Other', value: 15000, goal: 18600, color: '#9CA3AF', accent: '#F3F4F6' },
     ],
     categories: [
       { id: 'faith', title: 'Faith', status: 'Strong', helper: 'Habits hold', accent: '#C1630A', background: '#FFF5E8', icon: SunMedium },
@@ -315,24 +224,11 @@ const formatMinutes = (minutes: number) => {
 
 export const AnalyticsTemplate = () => {
   const [range, setRange] = useState<RangeKey>('today');
-  const [distributionView, setDistributionView] = useState<DistributionView>('ideal');
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const currentRange = ANALYTICS_SNAPSHOT[range];
-  const distribution = useMemo(
-    () => currentRange.distribution[distributionView],
-    [currentRange.distribution, distributionView],
-  );
-
   const idealDistribution = currentRange.distribution.ideal;
-
-  const getDiff = (label: string, realityValue: number): number | null => {
-    if (distributionView !== 'reality') return null;
-    const idealSlice = idealDistribution.find((s) => s.label === label);
-    if (!idealSlice) return null;
-    return realityValue - idealSlice.value;
-  };
 
   return (
     <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
@@ -379,8 +275,44 @@ export const AnalyticsTemplate = () => {
               />
             </View>
 
+            {/* Life Distribution - Donuts side by side */}
             <View className="gap-3">
               <View className="h-px bg-[#E5E7EB]" />
+              <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] px-1">
+                Life Distribution
+              </Text>
+              
+              <View className="flex-row justify-around items-start">
+                <View className="items-center flex-1">
+                  <AnalyticsDonutChart
+                    data={idealDistribution}
+                    label="IDEAL"
+                    radius={48}
+                    strokeWidth={28}
+                  />
+                </View>
+                
+                <View className="items-center flex-1">
+                  <AnalyticsDonutChart
+                    data={currentRange.distribution.reality}
+                    label="REALITY"
+                    radius={48}
+                    strokeWidth={28}
+                  />
+                </View>
+              </View>
+              
+              <View className="flex-row items-center gap-2 px-1">
+                <Icon icon={Sparkles} size={14} color="#2563EB" />
+                <Text className="text-[13px] text-[#6B7280]">
+                  These splits update automatically as you log time across pillars.
+                </Text>
+              </View>
+              <View className="h-px bg-[#E5E7EB]" />
+            </View>
+
+            {/* Time Spent vs Goal - Horizontal Bars */}
+            <View className="gap-3">
               <View className="flex-row items-center justify-between px-1">
                 <Text className="text-[13px] font-bold text-text-primary uppercase tracking-[0.04em]">
                   Time Spent vs. Goal
@@ -394,10 +326,14 @@ export const AnalyticsTemplate = () => {
                   <Text className="text-[14px] font-semibold text-brand-primary">Edit Goals</Text>
                 </Pressable>
               </View>
-              <TimeSpentChart data={currentRange.timeSpent} />
+              <TimeSpentChart 
+                data={currentRange.timeSpent} 
+                onOtherPress={() => router.push('/review-time' as const)} 
+              />
               <View className="h-px bg-[#E5E7EB]" />
             </View>
 
+            {/* Category Health */}
             <View className="gap-3">
               <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] px-1">
                 Category Health
@@ -436,136 +372,6 @@ export const AnalyticsTemplate = () => {
                 ))}
               </View>
             </View>
-
-            <View className="gap-3">
-              <View className="flex-row items-center justify-between px-1">
-                <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">
-                  Life Distribution
-                </Text>
-                <View className="flex-row items-center border border-[#E5E7EB] rounded-full overflow-hidden">
-                  {(['ideal', 'reality'] as DistributionView[]).map((viewKey) => {
-                    const isActive = distributionView === viewKey;
-                    return (
-                      <Pressable
-                        key={viewKey}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isActive }}
-                        onPress={() => setDistributionView(viewKey)}
-                        className={`px-4 py-1.5 ${isActive ? 'bg-white' : 'bg-[#F9FAFB]'}`}
-                        style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
-                      >
-                        <Text
-                          className={`text-[13px] font-semibold ${
-                            isActive ? 'text-text-primary' : 'text-[#9CA3AF]'
-                          }`}
-                        >
-                          {viewKey === 'ideal' ? 'Ideal' : 'Reality'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View className="flex-row items-start gap-4 px-1">
-                <View style={{ width: 150 }}>
-                  <AnalyticsDonutChart
-                    data={distribution}
-                    label={distributionView === 'ideal' ? 'IDEAL' : 'REALITY'}
-                  />
-                </View>
-                <View className="flex-1 pl-2 pt-2">
-                  {/* Fixed order categories - always same position */}
-                  <View className="gap-2.5">
-                    {(['Free time', 'Faith', 'Family', 'Work', 'Health', 'Other'] as const).map((label) => {
-                      const slice = distribution.find((s) => s.label === label);
-                      const isOther = label === 'Other';
-                      
-                      // Only show "Other" in reality view
-                      if (isOther && distributionView === 'ideal') {
-                        return null;
-                      }
-                      
-                      // If slice doesn't exist in current view, don't show
-                      if (!slice) {
-                        return null;
-                      }
-                      
-                      const diff = getDiff(slice.label, slice.value);
-                      const sliceColor = slice.color;
-                      
-                      // Don't show delta for "Other" category
-                      const showDelta = distributionView === 'reality' && !isOther;
-                      
-                      const RowContent = (
-                        <View className="flex-row items-center justify-between py-0.5">
-                          <View className="flex-row items-center gap-2" style={{ minWidth: 90 }}>
-                            <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sliceColor }} />
-                            <Text className="text-[14px] font-medium text-text-primary">
-                              {label}
-                            </Text>
-                          </View>
-                          <View className="flex-row items-center">
-                            {/* Always reserve space for delta column to keep alignment consistent */}
-                            <View style={{ width: 48, alignItems: 'flex-end', marginRight: 8 }}>
-                              {showDelta && (
-                                <AnimatedNumber
-                                  value={diff ?? 0}
-                                  prefix={diff !== null && diff > 0 ? '+' : ''}
-                                  suffix="%"
-                                  style={{ 
-                                    color: diff === null || diff === 0 ? '#1F9C66' : diff > 0 ? '#F79A3B' : '#EF4444',
-                                    fontSize: 13,
-                                    fontWeight: '600',
-                                  }}
-                                />
-                              )}
-                            </View>
-                            <View style={{ width: 40, alignItems: 'flex-end', marginRight: 8 }}>
-                              <AnimatedNumber
-                                value={slice.value}
-                                suffix="%"
-                                style={{ 
-                                  color: '#1F2937',
-                                  fontSize: 14,
-                                  fontWeight: '600',
-                                }}
-                              />
-                            </View>
-                            {isOther ? (
-                              <Icon icon={ChevronRight} size={16} color="#9CA3AF" />
-                            ) : (
-                              <View style={{ width: 16 }} />
-                            )}
-                          </View>
-                        </View>
-                      );
-
-                      if (isOther) {
-                        return (
-                          <Pressable
-                            key={label}
-                            onPress={() => router.push('/review-time')}
-                            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-                          >
-                            {RowContent}
-                          </Pressable>
-                        );
-                      }
-
-                      return <View key={label}>{RowContent}</View>;
-                    })}
-                  </View>
-                </View>
-              </View>
-
-              <View className="flex-row items-center gap-2 px-1">
-                <Icon icon={Sparkles} size={14} color="#2563EB" />
-                <Text className="text-[13px] text-[#6B7280]">
-                  These splits update automatically as you log time across pillars.
-                </Text>
-              </View>
-            </View>
           </View>
         </ScrollView>
         <BottomToolbar />
@@ -576,111 +382,197 @@ export const AnalyticsTemplate = () => {
 
 interface TimeSpentChartProps {
   data: TimeSpentBar[];
+  onOtherPress?: () => void;
 }
 
-const TimeSpentChart = ({ data }: TimeSpentChartProps) => {
-  const CHART_HEIGHT = 240;
-  const GOAL_LINE_FROM_BOTTOM = 170;
-  const LABEL_AREA_HEIGHT = 32;
-  const BAR_WIDTH = 48;
-  const COLUMN_WIDTH = 72;
-  const GOAL_TEXT_OFFSET = 8; // Distance above goal line for text
+// Simple diagonal stripes - just draw lines across the bar
+const StripedBar = ({ color, height }: { color: string; height: number }) => {
+  const spacing = 14;
+  const lineCount = 25;
+  
+  return (
+    <View className="flex-1" style={{ height, backgroundColor: '#F3F4F6' }}>
+      <Svg width="100%" height={height} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+        {Array.from({ length: lineCount }).map((_, i) => {
+          const offset = i * spacing;
+          return (
+            <Line
+              key={i}
+              x1={offset}
+              y1={0}
+              x2={offset - height}
+              y2={height}
+              stroke={color}
+              strokeWidth={6}
+              strokeOpacity={0.3}
+            />
+          );
+        })}
+      </Svg>
+    </View>
+  );
+};
 
-  // Calculate the height from bar bottom to goal line
-  const goalBarHeight = GOAL_LINE_FROM_BOTTOM - LABEL_AREA_HEIGHT;
+const TimeSpentChart = ({ data, onOtherPress }: TimeSpentChartProps) => {
+  const LABEL_AREA_WIDTH = 56;
+  const BAR_HEIGHT = 36;
+  const ROW_HEIGHT = 52;
+  const GOAL_LINE_PERCENT = 70;
+  const GOAL_TEXT_OFFSET = 8;
+  const MIN_GAP_FOR_TEXT = 12;
+
+  // Separate "Other" from regular categories
+  const regularData = data.filter((item) => item.label !== 'Other');
+  const otherItem = data.find((item) => item.label === 'Other');
 
   return (
     <View className="py-2">
-      <View style={{ height: CHART_HEIGHT, position: 'relative' }}>
-        
-        {/* Layer 1: Gray goal text (behind bars - always visible as base) */}
-        <View 
-          className="absolute left-0 right-0 flex-row justify-around"
-          style={{ bottom: GOAL_LINE_FROM_BOTTOM + GOAL_TEXT_OFFSET, zIndex: 1 }}
-          pointerEvents="none"
-        >
-          {data.map((item) => (
-            <View key={`${item.label}-gray`} className="items-center" style={{ width: COLUMN_WIDTH }}>
-              <Text className="text-[11px] font-medium text-[#9CA3AF]">
-                Goal: {formatMinutes(item.goal)}
-              </Text>
-            </View>
-          ))}
-        </View>
-        
-        {/* Layer 2: Dashed goal line */}
-        <View 
-          className="absolute left-0 right-0"
-          style={{ bottom: GOAL_LINE_FROM_BOTTOM, zIndex: 2 }}
-          pointerEvents="none"
-        >
-          <View className="border-t border-dashed border-[#D1D5DB]" />
-        </View>
-        
-        {/* Layer 3: Bars with white text clipped inside */}
-        <View 
-          className="absolute left-0 right-0 flex-row justify-around items-end"
-          style={{ bottom: LABEL_AREA_HEIGHT, zIndex: 3, height: CHART_HEIGHT - LABEL_AREA_HEIGHT }}
-        >
-          {data.map((item) => {
-            const barHeight = Math.max(44, (item.value / item.goal) * goalBarHeight);
-            // White text position: distance from bottom of bar to where text should appear
-            const whiteTextFromBarBottom = goalBarHeight + GOAL_TEXT_OFFSET;
-            
-            return (
-              <View key={item.label} className="items-center" style={{ width: COLUMN_WIDTH }}>
+      <View style={{ position: 'relative' }}>
+        {regularData.map((item) => {
+          const barPercent = Math.max(15, (item.value / item.goal) * GOAL_LINE_PERCENT);
+          const isUnderGoal = item.value < item.goal;
+          const gapPercent = isUnderGoal ? GOAL_LINE_PERCENT - barPercent : 0;
+          const difference = item.goal - item.value;
+          const hasRoomForText = gapPercent > MIN_GAP_FOR_TEXT;
+          
+          return (
+            <View key={item.label} style={{ height: ROW_HEIGHT }} className="flex-row items-center">
+              {/* Category label on the left */}
+              <View style={{ width: LABEL_AREA_WIDTH }} className="justify-center">
+                <Text className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-primary">
+                  {item.label}
+                </Text>
+              </View>
+              
+              {/* Bar area */}
+              <View className="flex-1" style={{ height: ROW_HEIGHT, position: 'relative' }}>
+                {/* Layer 1: Gray goal text */}
                 <View 
+                  className="absolute justify-center"
                   style={{ 
-                    width: BAR_WIDTH,
-                    height: barHeight, 
-                    backgroundColor: item.color,
-                    borderRadius: 8,
-                    overflow: 'hidden',
+                    left: `${GOAL_LINE_PERCENT}%`,
+                    marginLeft: GOAL_TEXT_OFFSET,
+                    top: 0,
+                    bottom: 0,
+                    zIndex: 1,
                   }}
+                  pointerEvents="none"
                 >
-                  {/* Value text at bottom of bar */}
-                  <View className="absolute bottom-0 left-0 right-0 items-center pb-2.5">
-                    <Text className="text-[13px] font-bold text-white text-center">
-                      {formatMinutes(item.value)}
-                    </Text>
-                  </View>
-                  
-                  {/* White goal text - clipped by bar's overflow:hidden */}
+                  <Text className="text-[11px] font-medium text-[#9CA3AF]">
+                    Goal: {formatMinutes(item.goal)}
+                  </Text>
+                </View>
+                
+                {/* Layer 2: Dashed goal line */}
+                <View 
+                  className="absolute top-0 bottom-0"
+                  style={{ left: `${GOAL_LINE_PERCENT}%`, zIndex: 4, width: 1 }}
+                  pointerEvents="none"
+                >
+                  <View className="flex-1 border-l border-dashed border-[#D1D5DB]" />
+                </View>
+                
+                {/* Layer 2.5: Striped gap bar - extends LEFT under solid bar for smooth blend */}
+                {isUnderGoal && gapPercent > 0 && (
                   <View 
-                    className="absolute items-center"
+                    className="absolute"
                     style={{ 
-                      bottom: whiteTextFromBarBottom,
-                      left: -(COLUMN_WIDTH - BAR_WIDTH) / 2,
-                      width: COLUMN_WIDTH,
+                      left: `${barPercent - 3}%`, // Extend left to blend with solid bar
+                      top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                      height: BAR_HEIGHT,
+                      width: `${gapPercent + 3}%`, // Add overlap width
+                      zIndex: 2,
+                      borderTopRightRadius: 8,
+                      borderBottomRightRadius: 8,
+                      overflow: 'hidden',
                     }}
                   >
-                    <Text className="text-[11px] font-medium text-white">
-                      Goal: {formatMinutes(item.goal)}
-                    </Text>
+                    <StripedBar color={item.color} height={BAR_HEIGHT} />
+                    {/* Red difference text (no minus sign) */}
+                    {hasRoomForText && (
+                      <View className="absolute inset-0 items-center justify-center" style={{ paddingLeft: 8 }}>
+                        <Text className="text-[12px] font-bold text-[#DC2626]">
+                          {formatMinutes(difference)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+                
+                {/* Layer 3: Solid bar */}
+                <View 
+                  className="absolute"
+                  style={{ 
+                    left: 0, 
+                    top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                    height: BAR_HEIGHT,
+                    width: `${barPercent}%`,
+                    zIndex: 3,
+                  }}
+                >
+                  <View 
+                    style={{ 
+                      height: BAR_HEIGHT,
+                      backgroundColor: item.color,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      width: '100%',
+                    }}
+                  >
+                    {/* Value text at LEFT */}
+                    <View className="absolute left-0 top-0 bottom-0 justify-center pl-2.5">
+                      <Text className="text-[13px] font-bold text-white">
+                        {formatMinutes(item.value)}
+                      </Text>
+                    </View>
+                    
+                    {/* White goal text - clips when bar covers */}
+                    <View 
+                      className="absolute justify-center"
+                      style={{ 
+                        left: `${(GOAL_LINE_PERCENT / barPercent) * 100}%`,
+                        marginLeft: GOAL_TEXT_OFFSET,
+                        top: 0,
+                        bottom: 0,
+                      }}
+                    >
+                      <Text className="text-[11px] font-medium text-white">
+                        Goal: {formatMinutes(item.goal)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </View>
-            );
-          })}
-        </View>
-        
-        {/* Layer 4: Category labels */}
-        <View 
-          className="absolute left-0 right-0 bottom-0 flex-row justify-around"
-          style={{ height: LABEL_AREA_HEIGHT, zIndex: 4 }}
-        >
-          {data.map((item) => (
-            <View key={`${item.label}-label`} className="items-center justify-center" style={{ width: COLUMN_WIDTH }}>
-              <Text className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-primary">
-                {item.label}
-              </Text>
             </View>
-          ))}
-        </View>
+          );
+        })}
       </View>
       
+      {/* Other row - label left, time centered, arrow right */}
+      {otherItem && (
+        <Pressable 
+          onPress={onOtherPress}
+          className="flex-row items-center py-3 mt-2 bg-[#F9FAFB] rounded-xl active:opacity-70 px-2"
+        >
+          <View style={{ width: LABEL_AREA_WIDTH }} className="justify-center">
+            <Text className="text-[11px] font-bold uppercase tracking-[0.06em] text-text-secondary">
+              Other
+            </Text>
+          </View>
+          <View className="flex-1 flex-row items-center justify-center">
+            <Text className="text-[13px] font-semibold text-text-secondary">
+              {formatMinutes(otherItem.value)}
+            </Text>
+            <Text className="text-[11px] text-[#9CA3AF] ml-1.5">
+              unassigned
+            </Text>
+          </View>
+          <ChevronRight size={18} color="#9CA3AF" />
+        </Pressable>
+      )}
+      
       <Text className="text-[11px] font-medium text-[#9CA3AF] text-center mt-2">
-        Dashed line indicates your daily goal.
+        Dashed line indicates your goal for each category.
       </Text>
     </View>
   );

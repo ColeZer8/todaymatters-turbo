@@ -15,37 +15,34 @@ export interface TimeBlock {
 interface ReviewTimeState {
   timeBlocks: TimeBlock[];
   assignments: Record<string, string>; // blockId -> categoryId
+  highlightedBlockId: string | null; // Block to highlight/scroll to
   // Computed
   unassignedCount: number;
   // Actions
   setTimeBlocks: (blocks: TimeBlock[]) => void;
   assignCategory: (blockId: string, categoryId: string) => void;
   clearAssignment: (blockId: string) => void;
+  setHighlightedBlockId: (id: string | null) => void;
   getUnassignedCount: () => number;
 }
 
-// Initial mock data - in production this would come from an API
+// Mock data - matches the Unknown blocks from the calendar view
+// These represent gaps in the day where we don't know what happened
 const INITIAL_TIME_BLOCKS: TimeBlock[] = [
   {
-    id: '1',
-    duration: 45,
-    startTime: '10:30 PM',
-    endTime: '11:15 PM',
-    activityDetected: 'Instagram detected',
+    id: 'a_unknown_1',
+    duration: 30,
+    startTime: '11:30 AM',
+    endTime: '12:00 PM',
+    activityDetected: 'Phone unlocked 12 times',
   },
   {
-    id: '2',
-    duration: 60,
-    startTime: '5:30 PM',
-    endTime: '6:30 PM',
-    location: "Gold's Gym",
-    aiSuggestion: 'health',
-  },
-  {
-    id: '3',
+    id: 'a_unknown_2',
     duration: 45,
-    startTime: '12:15 PM',
-    endTime: '1:00 PM',
+    startTime: '2:15 PM',
+    endTime: '3:00 PM',
+    location: 'Office - Break Room',
+    aiSuggestion: 'other',
   },
 ];
 
@@ -61,6 +58,7 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
     (set, get) => ({
       timeBlocks: INITIAL_TIME_BLOCKS,
       assignments: {},
+      highlightedBlockId: null,
       unassignedCount: INITIAL_TIME_BLOCKS.length,
 
       setTimeBlocks: (blocks) => {
@@ -88,6 +86,10 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
           assignments: newAssignments,
           unassignedCount: computeUnassignedCount(get().timeBlocks, newAssignments),
         });
+      },
+
+      setHighlightedBlockId: (id) => {
+        set({ highlightedBlockId: id });
       },
 
       getUnassignedCount: () => {

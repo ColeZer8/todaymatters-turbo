@@ -1,5 +1,8 @@
 export const ONBOARDING_TOTAL_STEPS = 12;
 
+// Temporary dev flag for skipping onboarding
+export const DEV_SKIP_ONBOARDING = true; 
+
 export const ONBOARDING_STEPS = {
   permissions: 1,
   setupQuestions: 2,
