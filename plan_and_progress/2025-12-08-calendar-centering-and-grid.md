@@ -25,6 +25,7 @@ Align the comprehensive calendar view with the current-time marker by default, a
 
 - 2025-12-08: Scoped changes and began implementing auto-centering, hourly grid lines, and scroll bounds polish for the comprehensive calendar.
 - 2025-12-08: Adjusted grid height handling to show the full day through 11:59 PM and darkened hourly lines for better readability.
+- 2025-12-08: Added tap-to-edit for calendar events with category/goal/value chips and notes, plus actual-side clipping tied to the live time indicator.
 
 ## Verification
 

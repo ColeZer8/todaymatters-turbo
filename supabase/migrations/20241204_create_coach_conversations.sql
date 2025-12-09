@@ -90,3 +90,4 @@ CREATE TRIGGER update_coach_conversations_updated_at
 GRANT SELECT ON public.coach_conversations TO authenticated;
 GRANT SELECT ON public.conversation_insights TO authenticated;
 
+

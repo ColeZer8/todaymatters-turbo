@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity, Modal, Pressable, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react-native';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
-import { useReviewTimeStore } from '@/stores';
+import { useReviewTimeStore, useOnboardingStore } from '@/stores';
 
 // Configuration
 const START_HOUR = 0; // 12 AM
@@ -19,6 +19,7 @@ const TOTAL_HOURS = END_HOUR - START_HOUR + 1;
 const GRID_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;
 const GRID_LINE_COLOR = 'rgba(148,163,184,0.28)';
 const DAY_END_MINUTES = 24 * 60;
+const VISIBILITY_DELAY_MINUTES = 10; // buffer before showing Actual events after the line passes
 
 // Theme Colors - Matching Home Page
 const COLORS = {
@@ -52,7 +53,45 @@ const CATEGORY_STYLES: Record<string, { bg: string; accent: string; text: string
     free: { bg: '#F0FDFA', accent: '#2DD4BF', text: '#0D9488' },
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+    routine: 'Routine',
+    work: 'Work',
+    meal: 'Meal',
+    meeting: 'Meeting',
+    health: 'Health',
+    family: 'Family',
+    social: 'Social',
+    travel: 'Travel',
+    finance: 'Finance',
+    comm: 'Communication',
+    digital: 'Digital',
+    sleep: 'Sleep',
+    free: 'Free Time',
+    unknown: 'Unknown',
+};
+
+const DEFAULT_CORE_VALUES = ['Family', 'Integrity', 'Creativity'];
+const EDITOR_CATEGORY_KEYS = ['work', 'routine', 'meeting', 'meal', 'health', 'family', 'travel', 'digital', 'sleep', 'comm', 'finance', 'free', 'unknown'];
+
 // Helper to calculate position
+const getCurrentMinutes = () => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+};
+
+const formatMinutesLabel = (minutes: number) => {
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const suffix = hrs >= 12 ? 'p' : 'a';
+    const hourDisplay = hrs % 12 === 0 ? 12 : hrs % 12;
+    return `${hourDisplay}${mins === 0 ? '' : `:${mins.toString().padStart(2, '0')}`}${suffix}`;
+};
+
+const formatRange = (startMinutes: number, duration: number) => {
+    const endMinutes = startMinutes + duration;
+    return `${formatMinutesLabel(startMinutes)} - ${formatMinutesLabel(endMinutes)}`;
+};
+
 const getPosition = (startMinutes: number, duration: number) => {
     const startOffset = startMinutes - START_HOUR * 60;
     const rawTop = (startOffset / 60) * HOUR_HEIGHT;
@@ -285,16 +324,30 @@ const ACTUAL_EVENTS = [
     },
 ];
 
-const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
+interface TimeEventBlockProps {
+    event: typeof SCHEDULED_EVENTS[0];
+    visibleUntilMinutes?: number;
+    onPress?: (event: typeof SCHEDULED_EVENTS[0]) => void;
+}
+
+const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockProps) => {
     const router = useRouter();
     const setHighlightedBlockId = useReviewTimeStore((state) => state.setHighlightedBlockId);
-    const { top, height } = getPosition(event.startMinutes, event.duration);
-    const catStyles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.work;
-    const isUnknown = event.category === 'unknown';
     const eventStart = event.startMinutes;
     const eventEnd = event.startMinutes + event.duration;
+    const effectiveVisibleEnd = visibleUntilMinutes ? Math.min(eventEnd, visibleUntilMinutes) : eventEnd;
+    const visibleDuration = Math.max(effectiveVisibleEnd - eventStart, 0);
+    const shouldRender = visibleDuration > 0;
+    const { top, height } = getPosition(eventStart, visibleDuration || 1);
+    const catStyles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.work;
+    const isUnknown = event.category === 'unknown';
     const extendsAbove = eventStart <= START_HOUR * 60;
     const extendsBelow = eventEnd >= DAY_END_MINUTES;
+    const hasHiddenTail = !!visibleUntilMinutes && visibleUntilMinutes < eventEnd;
+    
+    if (!shouldRender) {
+        return null;
+    }
     
     const isSmall = event.duration < 30;
     const isTiny = event.duration < 20;
@@ -304,13 +357,16 @@ const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
             // Set which block to highlight before navigating
             setHighlightedBlockId(event.id);
             router.push('/review-time');
+            return;
         }
+
+        onPress?.(event);
     };
 
     return (
         <TouchableOpacity
             onPress={handlePress}
-            activeOpacity={isUnknown ? 0.7 : 1}
+            activeOpacity={0.75}
             style={[
                 styles.eventBlock,
                 {
@@ -326,8 +382,8 @@ const TimeEventBlock = ({ event }: { event: typeof SCHEDULED_EVENTS[0] }) => {
                     justifyContent: isTiny ? 'center' : 'flex-start',
                     borderTopLeftRadius: extendsAbove ? 0 : 6,
                     borderTopRightRadius: extendsAbove ? 0 : 6,
-                    borderBottomLeftRadius: extendsBelow ? 0 : 6,
-                    borderBottomRightRadius: extendsBelow ? 0 : 6,
+                    borderBottomLeftRadius: extendsBelow || hasHiddenTail ? 0 : 6,
+                    borderBottomRightRadius: extendsBelow || hasHiddenTail ? 0 : 6,
                     // Subtle shadow for depth
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
@@ -378,6 +434,15 @@ export const ComprehensiveCalendarTemplate = () => {
     const [hasAutoCentered, setHasAutoCentered] = useState(false);
     const bottomPadding = GRID_BOTTOM_PADDING + insets.bottom + 16; // small cushion while keeping end tight
     const contentHeight = GRID_HEIGHT + GRID_TOP_PADDING + bottomPadding;
+    const [currentMinutes, setCurrentMinutes] = useState(getCurrentMinutes());
+    const [eventDrafts, setEventDrafts] = useState<Record<string, { category: string; goal?: string | null; coreValue?: string | null; notes?: string }>>({});
+    const [editorEvent, setEditorEvent] = useState<typeof SCHEDULED_EVENTS[0] | null>(null);
+    const [editorDraft, setEditorDraft] = useState<{ category: string; goal?: string | null; coreValue?: string | null; notes?: string } | null>(null);
+    const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('actual');
+    const [isEditorVisible, setIsEditorVisible] = useState(false);
+    const { goals, initiatives, joySelections } = useOnboardingStore();
+    const coreValues = joySelections.filter(Boolean).length ? joySelections.filter(Boolean) : DEFAULT_CORE_VALUES;
+    const goalOptions = Array.from(new Set([...goals, ...initiatives].filter(Boolean)));
 
     const handleAddEvent = () => {
         router.push('/add-event');
@@ -388,13 +453,46 @@ export const ComprehensiveCalendarTemplate = () => {
         hours.push(i);
     }
 
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentMinutes(getCurrentMinutes());
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     // Calculate current time indicator position
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const currentIndicatorTop = getPosition(currentMinutes, 0).top;
     const shouldShowCurrentIndicator = currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
     const clampedIndicatorTop = Math.min(Math.max(currentIndicatorTop, 0), GRID_HEIGHT);
     const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
+    const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;
+
+    const handleOpenEditor = (event: typeof SCHEDULED_EVENTS[0], column: 'planned' | 'actual') => {
+        const draft = eventDrafts[event.id] || {
+            category: event.category,
+            goal: goalOptions[0] ?? null,
+            coreValue: coreValues[0] ?? null,
+            notes: '',
+        };
+        setEditorEvent(event);
+        setEditorDraft(draft);
+        setEditorColumn(column);
+        setIsEditorVisible(true);
+    };
+
+    const handleSaveEditor = () => {
+        if (!editorEvent || !editorDraft) return;
+        setEventDrafts((prev) => ({
+            ...prev,
+            [editorEvent.id]: editorDraft,
+        }));
+        setIsEditorVisible(false);
+    };
+
+    const handleCloseEditor = () => {
+        setIsEditorVisible(false);
+    };
 
     useEffect(() => {
         if (!shouldShowCurrentIndicator || !scrollViewHeight || hasAutoCentered) {
@@ -490,14 +588,39 @@ export const ComprehensiveCalendarTemplate = () => {
                             <View style={styles.eventsContainer}>
                                 <View style={styles.column}>
                                     {SCHEDULED_EVENTS.map(event => (
-                                        <TimeEventBlock key={event.id} event={event} />
+                                        <TimeEventBlock
+                                            key={event.id}
+                                            event={event}
+                                            onPress={(evt) => handleOpenEditor(evt, 'planned')}
+                                        />
                                     ))}
                                 </View>
                                 <View style={styles.columnDivider} />
                                 <View style={styles.column}>
-                                    {ACTUAL_EVENTS.map(event => (
-                                        <TimeEventBlock key={event.id} event={event} />
-                                    ))}
+                                    {ACTUAL_EVENTS.map(event => {
+                                        if (!shouldShowCurrentIndicator) {
+                                            return <TimeEventBlock key={event.id} event={event} />;
+                                        }
+
+                                        const hasStarted = currentMinutes >= event.startMinutes;
+                                        const pastDelay = currentMinutes >= event.startMinutes + VISIBILITY_DELAY_MINUTES;
+                                        if (!pastDelay) {
+                                            return null;
+                                        }
+
+                                        const visibleUntil = hasStarted
+                                            ? Math.min(event.startMinutes + event.duration, currentMinutes)
+                                            : undefined;
+
+                                        return (
+                                            <TimeEventBlock
+                                                key={event.id}
+                                                event={event}
+                                                visibleUntilMinutes={visibleUntil}
+                                                onPress={(evt) => handleOpenEditor(evt, 'actual')}
+                                            />
+                                        );
+                                    })}
                                 </View>
                             </View>
 
@@ -519,6 +642,116 @@ export const ComprehensiveCalendarTemplate = () => {
                     </View>
                 </ScrollView>
             </View>
+
+            {editorEvent && editorDraft && (
+                <Modal
+                    visible={isEditorVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={handleCloseEditor}
+                >
+                    <Pressable style={styles.modalBackdrop} onPress={handleCloseEditor} />
+                    <View style={[styles.modalCard, { paddingBottom: insets.bottom + 18 }]}>
+                        <View style={styles.modalHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.modalTitle}>{editorEvent.title}</Text>
+                                <Text style={styles.modalSubtitle}>{formatRange(editorEvent.startMinutes, editorEvent.duration)}</Text>
+                            </View>
+                            <View style={[styles.pill, editorColumn === 'actual' ? styles.pillActual : styles.pillPlanned]}>
+                                <Text style={[styles.pillText, editorColumn === 'actual' ? styles.pillTextActual : styles.pillTextPlanned]}>
+                                    {editorColumn === 'actual' ? 'Actual' : 'Planned'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalLabel}>Category</Text>
+                            <View style={styles.chipWrap}>
+                                {EDITOR_CATEGORY_KEYS.map((key) => {
+                                    const label = CATEGORY_LABELS[key] || key;
+                                    const accent = CATEGORY_STYLES[key]?.accent || COLORS.primary;
+                                    const bg = CATEGORY_STYLES[key]?.bg || '#F8FAFC';
+                                    const isSelected = editorDraft.category === key;
+                                    return (
+                                        <Pressable
+                                            key={key}
+                                            style={[
+                                                styles.chip,
+                                                { borderColor: isSelected ? accent : COLORS.borderLight, backgroundColor: isSelected ? bg : '#FFFFFF' },
+                                            ]}
+                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, category: key } : prev)}
+                                        >
+                                            <View style={[styles.colorDot, { backgroundColor: accent }]} />
+                                            <Text style={[styles.chipText, { color: isSelected ? accent : COLORS.textDark }]}>{label}</Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalLabel}>Goals & Initiatives</Text>
+                            <View style={styles.chipWrap}>
+                                {goalOptions.map((goal) => {
+                                    const isSelected = editorDraft.goal === goal;
+                                    return (
+                                        <Pressable
+                                            key={goal}
+                                            style={[
+                                                styles.chip,
+                                                { borderColor: isSelected ? COLORS.primary : COLORS.borderLight, backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF' },
+                                            ]}
+                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, goal } : prev)}
+                                        >
+                                            <Text style={[styles.chipText, { color: isSelected ? COLORS.primary : COLORS.textDark }]}>{goal}</Text>
+                                        </Pressable>
+                                    );
+                                })}
+                                {!goalOptions.length && (
+                                    <Text style={styles.mutedText}>Add goals or initiatives in onboarding to see them here.</Text>
+                                )}
+                            </View>
+                        </View>
+
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalLabel}>Core Values</Text>
+                            <View style={styles.chipWrap}>
+                                {coreValues.map((value) => {
+                                    const isSelected = editorDraft.coreValue === value;
+                                    return (
+                                        <Pressable
+                                            key={value}
+                                            style={[
+                                                styles.chip,
+                                                { borderColor: isSelected ? '#8B5CF6' : COLORS.borderLight, backgroundColor: isSelected ? '#F5F3FF' : '#FFFFFF' },
+                                            ]}
+                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, coreValue: value } : prev)}
+                                        >
+                                            <Text style={[styles.chipText, { color: isSelected ? '#7C3AED' : COLORS.textDark }]}>{value}</Text>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+                        </View>
+
+                        <View style={styles.modalSection}>
+                            <Text style={styles.modalLabel}>Notes</Text>
+                            <TextInput
+                                value={editorDraft.notes ?? ''}
+                                onChangeText={(text) => setEditorDraft((prev) => prev ? { ...prev, notes: text } : prev)}
+                                placeholder="Add quick notes or corrections..."
+                                placeholderTextColor={COLORS.textSubtle}
+                                multiline
+                                style={styles.notesInput}
+                            />
+                        </View>
+
+                        <Pressable style={styles.saveButton} onPress={handleSaveEditor}>
+                            <Text style={styles.saveButtonText}>Save</Text>
+                        </Pressable>
+                    </View>
+                </Modal>
+            )}
 
             <FloatingActionButton bottomOffset={insets.bottom + 82} onPress={handleAddEvent} />
             <BottomToolbar />
@@ -730,5 +963,130 @@ const styles = StyleSheet.create({
         height: 2,
         backgroundColor: COLORS.red,
         borderRadius: 1,
+    },
+    modalBackdrop: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(15,23,42,0.35)',
+    },
+    modalCard: {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        bottom: 0,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        backgroundColor: '#FFFFFF',
+        padding: 20,
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: -6 },
+        elevation: 8,
+        gap: 12,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: COLORS.textDark,
+    },
+    modalSubtitle: {
+        fontSize: 13,
+        color: COLORS.textMuted,
+        marginTop: 2,
+    },
+    modalSection: {
+        gap: 8,
+    },
+    modalLabel: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: COLORS.textMuted,
+        letterSpacing: 0.3,
+    },
+    chipWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    chip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        gap: 6,
+    },
+    chipText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    colorDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    notesInput: {
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        minHeight: 72,
+        fontSize: 14,
+        textAlignVertical: 'top',
+        color: COLORS.textDark,
+        backgroundColor: '#F8FAFC',
+    },
+    saveButton: {
+        backgroundColor: COLORS.primary,
+        borderRadius: 14,
+        paddingVertical: 14,
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    saveButtonText: {
+        color: '#FFFFFF',
+        fontWeight: '800',
+        fontSize: 15,
+        letterSpacing: 0.3,
+    },
+    mutedText: {
+        fontSize: 12,
+        color: COLORS.textSubtle,
+    },
+    pill: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    pillActual: {
+        borderColor: COLORS.primary,
+        backgroundColor: '#EFF6FF',
+    },
+    pillPlanned: {
+        borderColor: COLORS.textSubtle,
+        backgroundColor: '#F8FAFC',
+    },
+    pillText: {
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 0.6,
+    },
+    pillTextActual: {
+        color: COLORS.primary,
+    },
+    pillTextPlanned: {
+        color: COLORS.textMuted,
     },
 });

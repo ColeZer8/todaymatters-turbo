@@ -44,3 +44,4 @@ enable_confirmations = false
 # Enable edge function verification
 verify_jwt = true
 
+

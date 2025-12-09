@@ -60,3 +60,4 @@ Add a notification indicator on the home page that appears when there are unassi
 - Persist assignments to Supabase
 - Add time-based logic (show yesterday's unassigned blocks in the morning)
 
+

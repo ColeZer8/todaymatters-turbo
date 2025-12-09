@@ -1,0 +1,149 @@
+# Today Matters - Cursor Rules
+
+This is a pnpm + Turborepo workspace with a React Native (Expo) mobile app. Follow these guidelines strictly.
+
+---
+
+## Project Structure & Module Organization
+
+Runtime code lives under `apps/mobile`, an Expo Router app with screens in `src/app`, shared styles in `src/global.css`, and Tailwind/NativeWind tokens from `tailwind.config.js`. Tooling lives in `packages/eslint-config` (shared ESLint presets) and `packages/typescript-config` (tsconfig variants). `turbo.json` and `pnpm-workspace.yaml` expect every package to expose `build`, `dev`, `lint`, and `check-types` for dependency-aware pipelines.
+
+---
+
+## Build, Test, and Development Commands
+
+- `pnpm dev` → `turbo run dev` launches every package's dev server; scope to the Expo app with `pnpm dev -- --filter=mobile` or run `pnpm --filter mobile start` for raw Expo CLI.
+- `pnpm build` → `turbo run build` compiles packages in topological order and caches artifacts; append `-- --filter=mobile` for app-only builds.
+- `pnpm lint`, `pnpm check-types`, `pnpm format` enforce ESLint, TypeScript, and Prettier 3.
+- Device targets: `pnpm --filter mobile ios|android|web` tunnels Expo to the requested simulator; `pnpm --filter mobile deploy` runs `expo export` plus `eas-cli`.
+- Mobile dev server: prefer `pnpm dev -- --filter=mobile` so Turbo launches the Expo CLI. The `apps/mobile/scripts/expo-dev.mjs` wrapper strips Turbo's `--filter` flag and forces `--host localhost` so the Expo UI and any local backend stay on the same origin. Run `pnpm --filter mobile start` only when you explicitly need standalone Expo.
+
+---
+
+## Atomic Design System
+
+We organize all UI work using Brad Frost's Atomic Design system so the Expo Router app stays composable, testable, and ready for additional clients.
+
+### Layer Overview
+
+| Layer | Definition | Typical Examples | Source of Truth |
+| --- | --- | --- | --- |
+| **Atoms** | Single-purpose, styling-focused primitives with zero domain logic or state. | `Button`, `Text`, `Icon`, `Spacer` | `apps/mobile/src/components/atoms/*` |
+| **Molecules** | Small clusters of atoms that work together to express a simple idea. | `SearchBar`, `LabeledInput`, `AvatarWithText` | `apps/mobile/src/components/molecules/*` |
+| **Organisms** | Feature-level sections composed of molecules/atoms plus lightweight hooks. | `Header`, `TaskList`, `Hero`, `SettingsCard` | `apps/mobile/src/components/organisms/*` |
+| **Templates** | Layout scaffolding that arranges organisms, leaving slot props for real data. | `DashboardLayout`, `OnboardingShell`, `AuthFlow` | `apps/mobile/src/components/templates/*` |
+| **Pages (Expo Router screens)** | Routed experiences that own behavior: data fetching, global state, business logic, navigation, and URL params. | `src/app/index.tsx`, `src/app/(auth)/login.tsx` | `apps/mobile/src/app/**/*` |
+
+Pages may import templates/organisms/molecules/atoms, but lower layers can never import upward. Templates can rely on organisms/molecules/atoms but never pages. Do **not** create alternate page directories (e.g., `src/pages` or `components/pages`); Expo Router's `apps/mobile/src/app/**` tree is the authoritative place for screens even though they are part of the atomic hierarchy.
+
+### Data & Side-Effect Boundaries
+
+| Layer | Allowed Data Behaviors |
+| --- | --- |
+| **Atoms** | Receive props only; no hooks besides styling helpers; never touch context, storage, or network. |
+| **Molecules** | Still purely presentational; can hold local UI state (`useState`) that doesn't talk to services. |
+| **Organisms** | Accept data via props; may use hooks for UI-only behavior (e.g., `useSafeAreaInsets`) but never fetch, mutate global stores, or depend on navigation. |
+| **Templates** | Compose organisms and may wire global selectors or navigation helpers, but cannot fetch, mutate, or own business logic. |
+| **Pages** | The only layer allowed to fetch data, make API calls, use global state, talk to services, dictate navigation, read URL params, and own screen-level events. Use colocated hooks/services as needed but keep side effects here. |
+
+If a component needs data access that violates its layer, promote it instead of adding "just this once" fetch logic.
+
+### Atomic Design Implementation Rules
+
+1. **Create from the bottom up.** Extract atoms first, then compose them into molecules, organisms, templates, and finally pages.
+2. **Colocate tests and stories.** Add `ComponentName.test.tsx` / `.stories.tsx` beside each shared component.
+3. **Exports.** Each layer exposes an `index.ts` barrel so imports look like `import { PrimaryButton } from "@/components/atoms"`.
+4. **Review check.** Every UI-related PR must fill out the snippet below so reviewers can confirm the layer boundaries:
+
+```md
+### Atomic Layer
+- Layer: <Atom | Molecule | Organism | Template | Page>
+- Reason: <Why this abstraction fits the chosen layer>
+```
+
+Remember: **Pages own behavior. Templates own structure. Organisms own sections. Molecules own clusters. Atoms own primitives.**
+
+---
+
+## Coding Style & Naming Conventions
+
+Write everything in TypeScript with React function components. Import shared configs via `@repo/eslint-config/base` and `@repo/typescript-config/base`. Keep screens pascal-cased (`src/app/Home.tsx`), hooks prefixed with `use`, and shared utilities under `apps/mobile/src/lib`. Never disable lint without a linked issue.
+
+### General Code Style & Formatting
+
+- Use functional, declarative patterns (no React class components); favor composition and iteration over duplication.
+- Name variables descriptively with auxiliaries (`isLoading`, `hasError`) and structure files as: exported component → subcomponents → helpers → static content → types.
+- Prefer named exports and lowercase-dashed directories (e.g., `components/auth-wizard`).
+- Always follow Expo documentation for setup/config and rely on project tooling (`pnpm format`) for Prettier enforcement.
+
+### TypeScript Best Practices
+
+- Write everything in TypeScript, enable/retain strict mode, and prefer `interface` declarations to `type` aliases when describing object shapes.
+- Avoid `any` and `enum`; use specific literals, discriminated unions, or maps.
+- Type functional components with explicit props interfaces, and keep data contracts tight instead of casting.
+
+---
+
+## React Native & Styling Rules
+
+### NativeWind/Tailwind (CRITICAL)
+
+- **STYLING CRITICAL:** Favor `NativeWind` (`className`) over `StyleSheet.create` whenever possible. It is more robust in this specific build environment.
+- Keep shared styles in `apps/mobile/src/global.css`; avoid inline styles except for dynamic values that Tailwind cannot cover.
+
+### Tailwind Utility Ordering
+
+Apply utilities in the following order to keep diffs readable:
+
+1. Layout & display (`flex`, `grid`, `absolute`, `inset-*`)
+2. Box model & sizing (`w-*`, `h-*`, `min-w-*`, overflow)
+3. Spacing (`m-*`, `p-*`, `gap-*`)
+4. Borders & radius (`border-*`, `rounded-*`)
+5. Background & color (`bg-*`, `text-*`, `shadow-*`)
+6. Typography (`font-*`, `text-*`, `leading-*`, `tracking-*`)
+7. Effects & transforms (`shadow-*`, `opacity-*`, `transform`, `transition-*`)
+8. State/variant prefixes (`hover:`, `focus:`, `active:`, `dark:`)
+
+If a utility falls outside that list, default to the closest bucket and avoid reordering-only diffs.
+
+### Component Update Troubleshooting
+
+If a component style isn't updating:
+1. Check for duplicate files/directories (e.g., `todaymatters-turbo/apps` vs `apps/`).
+2. Try completely deleting and recreating the component file to bust cache.
+3. Switch to direct `className` (NativeWind) implementation to bypass `StyleSheet` logic.
+4. **Restart the Bundler** (`npx expo start -c`) if changes persist in not showing.
+
+### Additional React Native Guidelines
+
+- Implement responsive design with Flexbox + `useWindowDimensions`, support dark mode via `useColorScheme`, and ensure accessibility by adding roles/ARIA/native accessibility props.
+- Use `react-native-reanimated` and `react-native-gesture-handler` for animations/gestures requiring high performance.
+
+---
+
+## Security & Configuration Tips
+
+`.env*` files are part of the Turbo cache inputs—store them locally and never commit secrets. When deploying, log into the shared Expo/EAS account before running `pnpm --filter mobile deploy`, and prefer secure storage (Expo config, remote secrets) over hard-coded API keys.
+
+---
+
+## Planning & Progress Logs
+
+Before writing code, duplicate `plan_and_progress/_template.md` and capture the objective, scope, done criteria, and current status (`Planned`, `In Progress`, `Blocked`, `Completed`, or `Archived`). Update the same file as work advances: list verification commands you ran (`pnpm lint`, `pnpm --filter mobile ios`, etc.), summarize outcomes, attach logs/screenshots if useful, and note follow-ups. Once criteria pass, change the status to `Completed`, add the completion date, then move the file into `plan_and_progress/archive/` with a `YYYY-MM-DD-your-topic.md` name so open initiatives remain visible at the root.
+
+---
+
+## Docs First Mindset
+
+Before installing and using new 3rd party packages like supabase or anything, ensure you look up the documentation first - like a senior engineer would - find the relevant documentation for our application and save it (with links) to the /docs folder. This is especially important with the newest Expo packages which you may not be familiar with.
+
+---
+
+## Agent-Specific Instructions
+
+- Resolve uncertainty by inspecting the code, running the obvious command, or reading logs—never guess API shapes or data contracts.
+- Debug in the simplest order: apply the likely fix, rerun, inspect logs, then expand the search.
+- Do not add defensive fallbacks that obscure errors, and never cast values to `any`; instead, correct the data at the source or tighten the type definitions.
+- When cross-app issues arise, reproduce them via the relevant Turbo filter so both the failing app and the shared package builds together.
+- Avoid feature gates/flags and any backwards compatibility changes - since our app is still unreleased.
+

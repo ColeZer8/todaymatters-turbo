@@ -88,3 +88,4 @@ Enhance the Ideal Day page with visual indicators showing which days have been c
 - Consider adding visual feedback when auto-saving (subtle toast or animation)
 - May want to show which base template a custom day inherited from
 - Could add "reset to base" button in custom mode UI
+

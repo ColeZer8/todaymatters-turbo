@@ -140,3 +140,4 @@ pnpm --filter mobile android
 5. Implement conversation history screen
 6. Add push notifications for scheduled coaching sessions
 
+
