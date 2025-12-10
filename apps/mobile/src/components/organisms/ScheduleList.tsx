@@ -1,48 +1,93 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScheduleItem } from '../molecules/ScheduleItem';
-import { Sun, CheckCircle2, Video } from 'lucide-react-native';
+import { useEventsStore, getCurrentMinutes, formatMinutesToDisplay } from '@/stores';
+import { Sun, Target, Coffee, Users, Video, Smile, Heart, Moon, Briefcase, Car } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import type { EventCategory } from '@/stores';
+
+// Map categories to icons
+const CATEGORY_ICONS: Record<EventCategory, LucideIcon> = {
+    routine: Sun,
+    work: Briefcase,
+    meal: Coffee,
+    meeting: Users,
+    health: Heart,
+    family: Heart,
+    social: Users,
+    travel: Car,
+    finance: Briefcase,
+    comm: Video,
+    digital: Video,
+    sleep: Moon,
+    unknown: Target,
+    free: Smile,
+};
 
 export const ScheduleList = () => {
     const router = useRouter();
+    const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
 
-    const items = [
-        {
-            id: 1,
-            icon: Sun,
-            title: "Prayer & Reflection",
-            subtitle: "Proverbs 3:5-6",
-            meta: "Now",
-            isPrimary: true
-        },
-        {
-            id: 2,
-            icon: CheckCircle2,
-            title: "Q4 Strategy Deck",
-            subtitle: "Priority #1",
-            meta: "Big 3",
-            isPrimary: false
-        },
-        {
-            id: 3,
-            icon: Video,
-            title: "Meeting with Cole",
-            subtitle: "Strategy Sync",
-            meta: "3:00 PM",
-            isPrimary: false
+    // Get current time in minutes from midnight
+    const nowMinutes = getCurrentMinutes();
+    
+    // Get events that are current or upcoming (not yet ended), sorted chronologically
+    const relevantEvents = scheduledEvents
+        .filter((e) => e.startMinutes + e.duration > nowMinutes)
+        .sort((a, b) => a.startMinutes - b.startMinutes)
+        .slice(0, 3); // Show top 3
+    
+    // Check if any Big 3 items exist (for header label)
+    const hasBig3 = scheduledEvents.some((e) => e.isBig3 && e.startMinutes + e.duration > nowMinutes);
+    
+    // Build display items in chronological order
+    const displayItems: Array<{
+        id: string;
+        icon: LucideIcon;
+        title: string;
+        subtitle: string;
+        meta: string;
+        isPrimary: boolean;
+    }> = relevantEvents.map((event, index) => {
+        const isHappening = event.startMinutes <= nowMinutes && event.startMinutes + event.duration > nowMinutes;
+        
+        // Determine the meta label:
+        // - If event is happening AND is Big 3 → "Big 3"
+        // - If event is happening AND is normal → "Now"
+        // - If event hasn't started yet → show time
+        let meta: string;
+        if (isHappening) {
+            meta = event.isBig3 ? 'Big 3' : 'Now';
+        } else {
+            meta = formatMinutesToDisplay(event.startMinutes);
         }
-    ];
+        
+        // First item is primary (blue) styling
+        const isPrimary = index === 0;
+        
+        return {
+            id: event.id,
+            icon: CATEGORY_ICONS[event.category] || Sun,
+            title: event.title,
+            subtitle: event.description,
+            meta,
+            isPrimary,
+        };
+    });
+
+    // Determine header label based on what we have
+    const headerLabel = hasBig3 ? 'YOUR BIG 3 & SCHEDULE' : 'YOUR SCHEDULE';
 
     return (
         <View style={styles.container}>
             <View style={styles.big3HeaderRow}>
-                <Text style={styles.big3Label}>YOUR BIG 3 & SCHEDULE</Text>
+                <Text style={styles.big3Label}>{headerLabel}</Text>
                 <TouchableOpacity onPress={() => router.replace('/calendar')}>
                     <Text style={styles.big3ViewAll}>View All</Text>
                 </TouchableOpacity>
             </View>
 
-            {items.map((item, index) => (
+            {displayItems.map((item, index) => (
                 <View key={item.id}>
                     <ScheduleItem
                         icon={item.icon}
@@ -51,7 +96,7 @@ export const ScheduleList = () => {
                         timeOrStatus={item.meta}
                         isPrimary={item.isPrimary}
                     />
-                    {index < items.length - 1 && (
+                    {index < displayItems.length - 1 && (
                         <View style={styles.rowDivider} />
                     )}
                 </View>

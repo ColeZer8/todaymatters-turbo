@@ -4,11 +4,22 @@ import { DailyBrief } from '../organisms/DailyBrief';
 import { ScheduleList } from '../organisms/ScheduleList';
 import { PendingActions } from '../organisms/PendingActions';
 import { BottomToolbar } from '../organisms/BottomToolbar';
+import { DemoMorningRoutine } from '../organisms/DemoMorningRoutine';
+import { useDemoStore } from '@/stores';
 // TODO: Re-enable ElevenLabs voice coach integration
 // import { VoiceCoachButton } from '../organisms/VoiceCoachButton';
 
 export const HomeTemplate = () => {
     const insets = useSafeAreaInsets();
+    
+    // Demo mode - show morning routine when "Wake Up" time is selected
+    const isDemoActive = useDemoStore((state) => state.isActive);
+    const timeOfDay = useDemoStore((state) => state.timeOfDay);
+    
+    // Show devotional morning routine in demo mode
+    if (isDemoActive && timeOfDay === 'devotional') {
+        return <DemoMorningRoutine />;
+    }
 
     return (
         <View

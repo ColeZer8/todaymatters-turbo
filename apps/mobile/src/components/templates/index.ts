@@ -20,3 +20,4 @@ export { ProfileTemplate } from './ProfileTemplate';
 export { ReviewTimeTemplate } from './ReviewTimeTemplate';
 export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
+export { DemoCarouselTemplate } from './DemoCarouselTemplate';

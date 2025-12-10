@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Constants from "expo-constants";
 import { handleAuthCallback } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
+import { DemoOverlay } from "@/components/organisms";
 
 // TODO: Re-enable ElevenLabs voice coach integration
 // Voice features require native modules - only available in dev builds, not Expo Go
@@ -70,7 +71,11 @@ export default function Layout() {
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="add-event" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="demo-meeting" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-traffic" options={{ headerShown: false }} />
       </Stack>
+      {/* Demo Mode Overlay - only renders when demo is active */}
+      <DemoOverlay />
     </SafeAreaProvider>
   );
 

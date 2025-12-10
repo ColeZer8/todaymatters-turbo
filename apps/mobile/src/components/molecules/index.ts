@@ -27,3 +27,5 @@ export { ProfileMenuItem } from './ProfileMenuItem';
 export { EditableValuePill } from './EditableValuePill';
 export { ProfileAddInput } from './ProfileAddInput';
 export { DatePickerPopup } from './DatePickerPopup';
+export { TimeSplitControl } from './TimeSplitControl';
+export { EventEditorModal } from './EventEditorModal';

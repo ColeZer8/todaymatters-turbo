@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Text, TouchableOpacity, Modal, Pressable, TextInput } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react-native';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
-import { useReviewTimeStore, useOnboardingStore } from '@/stores';
+import { useReviewTimeStore, useEventsStore, useDemoStore } from '@/stores';
+import type { ScheduledEvent } from '@/stores';
+import { EventEditorModal } from '../molecules/EventEditorModal';
 
 // Configuration
 const START_HOUR = 0; // 12 AM
@@ -53,26 +55,6 @@ const CATEGORY_STYLES: Record<string, { bg: string; accent: string; text: string
     free: { bg: '#F0FDFA', accent: '#2DD4BF', text: '#0D9488' },
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-    routine: 'Routine',
-    work: 'Work',
-    meal: 'Meal',
-    meeting: 'Meeting',
-    health: 'Health',
-    family: 'Family',
-    social: 'Social',
-    travel: 'Travel',
-    finance: 'Finance',
-    comm: 'Communication',
-    digital: 'Digital',
-    sleep: 'Sleep',
-    free: 'Free Time',
-    unknown: 'Unknown',
-};
-
-const DEFAULT_CORE_VALUES = ['Family', 'Integrity', 'Creativity'];
-const EDITOR_CATEGORY_KEYS = ['work', 'routine', 'meeting', 'meal', 'health', 'family', 'travel', 'digital', 'sleep', 'comm', 'finance', 'free', 'unknown'];
-
 // Helper to calculate position
 const getCurrentMinutes = () => {
     const now = new Date();
@@ -87,11 +69,6 @@ const formatMinutesLabel = (minutes: number) => {
     return `${hourDisplay}${mins === 0 ? '' : `:${mins.toString().padStart(2, '0')}`}${suffix}`;
 };
 
-const formatRange = (startMinutes: number, duration: number) => {
-    const endMinutes = startMinutes + duration;
-    return `${formatMinutesLabel(startMinutes)} - ${formatMinutesLabel(endMinutes)}`;
-};
-
 const getPosition = (startMinutes: number, duration: number) => {
     const startOffset = startMinutes - START_HOUR * 60;
     const rawTop = (startOffset / 60) * HOUR_HEIGHT;
@@ -104,230 +81,21 @@ const getPosition = (startMinutes: number, duration: number) => {
     return { top: clampedTop, height };
 };
 
-// =============================================================================
-// MOCK DATA - Tells a coherent "Plan vs Reality" story
-// =============================================================================
-
-// THE PLAN: Key intentional blocks (not every minute - just commitments)
-const SCHEDULED_EVENTS = [
-    {
-        id: 'p_sleep_start',
-        title: 'Sleep',
-        description: 'Target: 7 hours',
-        startMinutes: 0, // 12 AM
-        duration: 7 * 60, // Until 7 AM
-        category: 'sleep',
-    },
-    {
-        id: 'p_morning',
-        title: 'Morning Routine',
-        description: 'Prayer & Exercise',
-        startMinutes: 7 * 60, // 7 AM
-        duration: 60,
-        category: 'routine',
-    },
-    {
-        id: 'p_deep_work',
-        title: 'Deep Work',
-        description: 'Q4 Strategy Deck',
-        startMinutes: 9 * 60, // 9 AM
-        duration: 180, // 3 hours
-        category: 'work',
-    },
-    {
-        id: 'p_lunch',
-        title: 'Lunch',
-        description: 'Take a real break',
-        startMinutes: 12 * 60, // 12 PM
-        duration: 60,
-        category: 'meal',
-    },
-    {
-        id: 'p_team_sync',
-        title: 'Team Sync',
-        description: 'Weekly Standup',
-        startMinutes: 13 * 60, // 1 PM
-        duration: 60,
-        category: 'meeting',
-    },
-    {
-        id: 'p_cole_meeting',
-        title: 'Meeting w/ Cole',
-        description: 'Strategy Sync',
-        startMinutes: 15 * 60, // 3 PM
-        duration: 45,
-        category: 'meeting',
-    },
-    {
-        id: 'p_shutdown',
-        title: 'Shutdown Ritual',
-        description: 'Clear inbox',
-        startMinutes: 17 * 60, // 5 PM
-        duration: 30,
-        category: 'routine',
-    },
-    {
-        id: 'p_family',
-        title: 'Family Dinner',
-        description: 'No phones',
-        startMinutes: 18 * 60 + 30, // 6:30 PM
-        duration: 90,
-        category: 'family',
-    },
-    {
-        id: 'p_sleep',
-        title: 'Sleep',
-        description: 'Target: 10 PM',
-        startMinutes: 22 * 60, // 10 PM
-        duration: 2 * 60,
-        category: 'sleep',
-    },
-];
-
-// THE REALITY: What actually happened (with realistic deviations)
-const ACTUAL_EVENTS = [
-    {
-        id: 'a_sleep',
-        title: 'Sleep',
-        description: 'Overslept 30 min',
-        startMinutes: 0,
-        duration: 7 * 60 + 30, // Slept until 7:30 AM
-        category: 'sleep',
-    },
-    {
-        id: 'a_morning',
-        title: 'Rushed Morning',
-        description: 'Quick routine',
-        startMinutes: 7 * 60 + 30, // 7:30 AM
-        duration: 30, // Only 30 min instead of 60
-        category: 'routine',
-    },
-    {
-        id: 'a_commute_in',
-        title: 'Commute',
-        description: 'Left late, traffic',
-        startMinutes: 8 * 60, // 8 AM
-        duration: 45, // Took 45 min instead of 30
-        category: 'travel',
-    },
-    {
-        id: 'a_coffee',
-        title: 'Coffee Stop',
-        description: 'Quick Starbucks',
-        startMinutes: 8 * 60 + 45, // 8:45 AM
-        duration: 15,
-        category: 'meal',
-    },
-    {
-        id: 'a_deep_work_1',
-        title: 'Deep Work',
-        description: 'Q4 Strategy Deck',
-        startMinutes: 9 * 60, // 9 AM (started late)
-        duration: 150, // 2.5 hours until 11:30
-        category: 'work',
-    },
-    {
-        id: 'a_unknown_1',
-        title: 'Unknown',
-        description: 'Tap to assign',
-        startMinutes: 11 * 60 + 30, // 11:30 AM
-        duration: 30, // Lost 30 min somewhere
-        category: 'unknown',
-    },
-    {
-        id: 'a_lunch',
-        title: 'Lunch',
-        description: 'With coworkers',
-        startMinutes: 12 * 60, // 12 PM
-        duration: 50,
-        category: 'meal',
-    },
-    {
-        id: 'a_team_sync',
-        title: 'Team Sync',
-        description: 'Ran 15 min over',
-        startMinutes: 13 * 60, // 1 PM
-        duration: 75, // Ran over!
-        category: 'meeting',
-    },
-    {
-        id: 'a_unknown_2',
-        title: 'Unknown',
-        description: 'Tap to assign',
-        startMinutes: 14 * 60 + 15, // 2:15 PM
-        duration: 45, // Gap before next meeting
-        category: 'unknown',
-    },
-    {
-        id: 'a_cole_meeting',
-        title: 'Meeting w/ Cole',
-        description: 'Ran 30 min over!',
-        startMinutes: 15 * 60, // 3 PM
-        duration: 75, // Way over
-        category: 'meeting',
-    },
-    {
-        id: 'a_wrap_up',
-        title: 'Wrap Up',
-        description: 'Emails only',
-        startMinutes: 16 * 60 + 15, // 4:15 PM
-        duration: 45, // Less time than planned
-        category: 'work',
-    },
-    {
-        id: 'a_commute_home',
-        title: 'Commute Home',
-        description: 'Rush hour traffic',
-        startMinutes: 17 * 60, // 5 PM
-        duration: 50, // Longer than planned
-        category: 'travel',
-    },
-    {
-        id: 'a_errands',
-        title: 'Quick Errands',
-        description: 'Grocery stop',
-        startMinutes: 17 * 60 + 50, // 5:50 PM
-        duration: 25,
-        category: 'routine',
-    },
-    {
-        id: 'a_family',
-        title: 'Family Dinner',
-        description: 'Made it!',
-        startMinutes: 18 * 60 + 15, // 6:15 PM
-        duration: 105, // 1.75 hours
-        category: 'family',
-    },
-    {
-        id: 'a_screen_time',
-        title: 'Screen Time',
-        description: 'YouTube rabbit hole',
-        startMinutes: 20 * 60, // 8 PM
-        duration: 90, // Instead of reading
-        category: 'digital',
-    },
-    {
-        id: 'a_wind_down',
-        title: 'Wind Down',
-        description: 'Finally relaxed',
-        startMinutes: 21 * 60 + 30, // 9:30 PM
-        duration: 60,
-        category: 'routine',
-    },
-    {
-        id: 'a_sleep_end',
-        title: 'Sleep',
-        description: '30 min late',
-        startMinutes: 22 * 60 + 30, // 10:30 PM (30 min late)
-        duration: 90,
-        category: 'sleep',
-    },
-];
+// Event type for the calendar (matches store structure)
+type CalendarEvent = {
+    id: string;
+    title: string;
+    description: string;
+    startMinutes: number;
+    duration: number;
+    category: string;
+    isBig3?: boolean;
+};
 
 interface TimeEventBlockProps {
-    event: typeof SCHEDULED_EVENTS[0];
+    event: CalendarEvent;
     visibleUntilMinutes?: number;
-    onPress?: (event: typeof SCHEDULED_EVENTS[0]) => void;
+    onPress?: (event: CalendarEvent) => void;
 }
 
 const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockProps) => {
@@ -434,15 +202,22 @@ export const ComprehensiveCalendarTemplate = () => {
     const [hasAutoCentered, setHasAutoCentered] = useState(false);
     const bottomPadding = GRID_BOTTOM_PADDING + insets.bottom + 16; // small cushion while keeping end tight
     const contentHeight = GRID_HEIGHT + GRID_TOP_PADDING + bottomPadding;
-    const [currentMinutes, setCurrentMinutes] = useState(getCurrentMinutes());
-    const [eventDrafts, setEventDrafts] = useState<Record<string, { category: string; goal?: string | null; coreValue?: string | null; notes?: string }>>({});
-    const [editorEvent, setEditorEvent] = useState<typeof SCHEDULED_EVENTS[0] | null>(null);
-    const [editorDraft, setEditorDraft] = useState<{ category: string; goal?: string | null; coreValue?: string | null; notes?: string } | null>(null);
-    const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('actual');
+    const [realMinutes, setRealMinutes] = useState(getCurrentMinutes());
+    const [editorEvent, setEditorEvent] = useState<ScheduledEvent | null>(null);
+    const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('planned');
     const [isEditorVisible, setIsEditorVisible] = useState(false);
-    const { goals, initiatives, joySelections } = useOnboardingStore();
-    const coreValues = joySelections.filter(Boolean).length ? joySelections.filter(Boolean) : DEFAULT_CORE_VALUES;
-    const goalOptions = Array.from(new Set([...goals, ...initiatives].filter(Boolean)));
+    const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
+    const actualEvents = useEventsStore((state) => state.actualEvents);
+
+    // Demo mode support - use simulated time when active
+    const isDemoActive = useDemoStore((state) => state.isActive);
+    const simulatedHour = useDemoStore((state) => state.simulatedHour);
+    const simulatedMinute = useDemoStore((state) => state.simulatedMinute);
+    
+    // Use simulated time in demo mode, real time otherwise
+    const currentMinutes = isDemoActive 
+        ? (simulatedHour * 60 + simulatedMinute) 
+        : realMinutes;
 
     const handleAddEvent = () => {
         router.push('/add-event');
@@ -454,12 +229,15 @@ export const ComprehensiveCalendarTemplate = () => {
     }
 
     useEffect(() => {
+        // Only update real time when not in demo mode
+        if (isDemoActive) return;
+        
         const interval = setInterval(() => {
-            setCurrentMinutes(getCurrentMinutes());
+            setRealMinutes(getCurrentMinutes());
         }, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [isDemoActive]);
 
     // Calculate current time indicator position
     const currentIndicatorTop = getPosition(currentMinutes, 0).top;
@@ -468,30 +246,22 @@ export const ComprehensiveCalendarTemplate = () => {
     const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
     const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;
 
-    const handleOpenEditor = (event: typeof SCHEDULED_EVENTS[0], column: 'planned' | 'actual') => {
-        const draft = eventDrafts[event.id] || {
-            category: event.category,
-            goal: goalOptions[0] ?? null,
-            coreValue: coreValues[0] ?? null,
-            notes: '',
-        };
-        setEditorEvent(event);
-        setEditorDraft(draft);
-        setEditorColumn(column);
-        setIsEditorVisible(true);
-    };
-
-    const handleSaveEditor = () => {
-        if (!editorEvent || !editorDraft) return;
-        setEventDrafts((prev) => ({
-            ...prev,
-            [editorEvent.id]: editorDraft,
-        }));
-        setIsEditorVisible(false);
+    const handleOpenEditor = (event: CalendarEvent, column: 'planned' | 'actual') => {
+        // Find the full event from the store to get isBig3 status
+        const fullEvent = column === 'planned' 
+            ? scheduledEvents.find(e => e.id === event.id)
+            : actualEvents.find(e => e.id === event.id);
+        
+        if (fullEvent) {
+            setEditorEvent(fullEvent);
+            setEditorColumn(column);
+            setIsEditorVisible(true);
+        }
     };
 
     const handleCloseEditor = () => {
         setIsEditorVisible(false);
+        setEditorEvent(null);
     };
 
     useEffect(() => {
@@ -587,7 +357,7 @@ export const ComprehensiveCalendarTemplate = () => {
                             {/* Events Layer */}
                             <View style={styles.eventsContainer}>
                                 <View style={styles.column}>
-                                    {SCHEDULED_EVENTS.map(event => (
+                                    {scheduledEvents.map(event => (
                                         <TimeEventBlock
                                             key={event.id}
                                             event={event}
@@ -597,7 +367,7 @@ export const ComprehensiveCalendarTemplate = () => {
                                 </View>
                                 <View style={styles.columnDivider} />
                                 <View style={styles.column}>
-                                    {ACTUAL_EVENTS.map(event => {
+                                    {actualEvents.map(event => {
                                         if (!shouldShowCurrentIndicator) {
                                             return <TimeEventBlock key={event.id} event={event} />;
                                         }
@@ -643,115 +413,12 @@ export const ComprehensiveCalendarTemplate = () => {
                 </ScrollView>
             </View>
 
-            {editorEvent && editorDraft && (
-                <Modal
-                    visible={isEditorVisible}
-                    transparent
-                    animationType="fade"
-                    onRequestClose={handleCloseEditor}
-                >
-                    <Pressable style={styles.modalBackdrop} onPress={handleCloseEditor} />
-                    <View style={[styles.modalCard, { paddingBottom: insets.bottom + 18 }]}>
-                        <View style={styles.modalHeader}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.modalTitle}>{editorEvent.title}</Text>
-                                <Text style={styles.modalSubtitle}>{formatRange(editorEvent.startMinutes, editorEvent.duration)}</Text>
-                            </View>
-                            <View style={[styles.pill, editorColumn === 'actual' ? styles.pillActual : styles.pillPlanned]}>
-                                <Text style={[styles.pillText, editorColumn === 'actual' ? styles.pillTextActual : styles.pillTextPlanned]}>
-                                    {editorColumn === 'actual' ? 'Actual' : 'Planned'}
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.modalSection}>
-                            <Text style={styles.modalLabel}>Category</Text>
-                            <View style={styles.chipWrap}>
-                                {EDITOR_CATEGORY_KEYS.map((key) => {
-                                    const label = CATEGORY_LABELS[key] || key;
-                                    const accent = CATEGORY_STYLES[key]?.accent || COLORS.primary;
-                                    const bg = CATEGORY_STYLES[key]?.bg || '#F8FAFC';
-                                    const isSelected = editorDraft.category === key;
-                                    return (
-                                        <Pressable
-                                            key={key}
-                                            style={[
-                                                styles.chip,
-                                                { borderColor: isSelected ? accent : COLORS.borderLight, backgroundColor: isSelected ? bg : '#FFFFFF' },
-                                            ]}
-                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, category: key } : prev)}
-                                        >
-                                            <View style={[styles.colorDot, { backgroundColor: accent }]} />
-                                            <Text style={[styles.chipText, { color: isSelected ? accent : COLORS.textDark }]}>{label}</Text>
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
-                        </View>
-
-                        <View style={styles.modalSection}>
-                            <Text style={styles.modalLabel}>Goals & Initiatives</Text>
-                            <View style={styles.chipWrap}>
-                                {goalOptions.map((goal) => {
-                                    const isSelected = editorDraft.goal === goal;
-                                    return (
-                                        <Pressable
-                                            key={goal}
-                                            style={[
-                                                styles.chip,
-                                                { borderColor: isSelected ? COLORS.primary : COLORS.borderLight, backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF' },
-                                            ]}
-                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, goal } : prev)}
-                                        >
-                                            <Text style={[styles.chipText, { color: isSelected ? COLORS.primary : COLORS.textDark }]}>{goal}</Text>
-                                        </Pressable>
-                                    );
-                                })}
-                                {!goalOptions.length && (
-                                    <Text style={styles.mutedText}>Add goals or initiatives in onboarding to see them here.</Text>
-                                )}
-                            </View>
-                        </View>
-
-                        <View style={styles.modalSection}>
-                            <Text style={styles.modalLabel}>Core Values</Text>
-                            <View style={styles.chipWrap}>
-                                {coreValues.map((value) => {
-                                    const isSelected = editorDraft.coreValue === value;
-                                    return (
-                                        <Pressable
-                                            key={value}
-                                            style={[
-                                                styles.chip,
-                                                { borderColor: isSelected ? '#8B5CF6' : COLORS.borderLight, backgroundColor: isSelected ? '#F5F3FF' : '#FFFFFF' },
-                                            ]}
-                                            onPress={() => setEditorDraft((prev) => prev ? { ...prev, coreValue: value } : prev)}
-                                        >
-                                            <Text style={[styles.chipText, { color: isSelected ? '#7C3AED' : COLORS.textDark }]}>{value}</Text>
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
-                        </View>
-
-                        <View style={styles.modalSection}>
-                            <Text style={styles.modalLabel}>Notes</Text>
-                            <TextInput
-                                value={editorDraft.notes ?? ''}
-                                onChangeText={(text) => setEditorDraft((prev) => prev ? { ...prev, notes: text } : prev)}
-                                placeholder="Add quick notes or corrections..."
-                                placeholderTextColor={COLORS.textSubtle}
-                                multiline
-                                style={styles.notesInput}
-                            />
-                        </View>
-
-                        <Pressable style={styles.saveButton} onPress={handleSaveEditor}>
-                            <Text style={styles.saveButtonText}>Save</Text>
-                        </Pressable>
-                    </View>
-                </Modal>
-            )}
+            <EventEditorModal
+                event={editorEvent}
+                visible={isEditorVisible}
+                onClose={handleCloseEditor}
+                column={editorColumn}
+            />
 
             <FloatingActionButton bottomOffset={insets.bottom + 82} onPress={handleAddEvent} />
             <BottomToolbar />
@@ -963,130 +630,5 @@ const styles = StyleSheet.create({
         height: 2,
         backgroundColor: COLORS.red,
         borderRadius: 1,
-    },
-    modalBackdrop: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(15,23,42,0.35)',
-    },
-    modalCard: {
-        position: 'absolute',
-        left: 16,
-        right: 16,
-        bottom: 0,
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        backgroundColor: '#FFFFFF',
-        padding: 20,
-        shadowColor: '#0f172a',
-        shadowOpacity: 0.18,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: -6 },
-        elevation: 8,
-        gap: 12,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: COLORS.textDark,
-    },
-    modalSubtitle: {
-        fontSize: 13,
-        color: COLORS.textMuted,
-        marginTop: 2,
-    },
-    modalSection: {
-        gap: 8,
-    },
-    modalLabel: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: COLORS.textMuted,
-        letterSpacing: 0.3,
-    },
-    chipWrap: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderRadius: 14,
-        borderWidth: 1,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        gap: 6,
-    },
-    chipText: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    colorDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-    },
-    notesInput: {
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        minHeight: 72,
-        fontSize: 14,
-        textAlignVertical: 'top',
-        color: COLORS.textDark,
-        backgroundColor: '#F8FAFC',
-    },
-    saveButton: {
-        backgroundColor: COLORS.primary,
-        borderRadius: 14,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    saveButtonText: {
-        color: '#FFFFFF',
-        fontWeight: '800',
-        fontSize: 15,
-        letterSpacing: 0.3,
-    },
-    mutedText: {
-        fontSize: 12,
-        color: COLORS.textSubtle,
-    },
-    pill: {
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 999,
-        borderWidth: 1,
-    },
-    pillActual: {
-        borderColor: COLORS.primary,
-        backgroundColor: '#EFF6FF',
-    },
-    pillPlanned: {
-        borderColor: COLORS.textSubtle,
-        backgroundColor: '#F8FAFC',
-    },
-    pillText: {
-        fontSize: 11,
-        fontWeight: '800',
-        letterSpacing: 0.6,
-    },
-    pillTextActual: {
-        color: COLORS.primary,
-    },
-    pillTextPlanned: {
-        color: COLORS.textMuted,
     },
 });

@@ -24,6 +24,7 @@ interface ReviewTimeState {
   clearAssignment: (blockId: string) => void;
   setHighlightedBlockId: (id: string | null) => void;
   getUnassignedCount: () => number;
+  splitTimeBlock: (blockId: string, splitMinutes: number) => void;
 }
 
 // Mock data - matches the Unknown blocks from the calendar view
@@ -51,6 +52,27 @@ const computeUnassignedCount = (
   assignments: Record<string, string>
 ): number => {
   return timeBlocks.filter((block) => !assignments[block.id]).length;
+};
+
+// Helper to parse time string "11:30 AM" -> minutes from midnight
+const parseTimeToMinutes = (timeStr: string): number => {
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return 0;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+// Helper to format minutes from midnight -> "11:30 AM"
+const formatMinutesToTime = (totalMinutes: number): string => {
+  const hours24 = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
 export const useReviewTimeStore = create<ReviewTimeState>()(
@@ -94,6 +116,55 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
 
       getUnassignedCount: () => {
         return computeUnassignedCount(get().timeBlocks, get().assignments);
+      },
+
+      splitTimeBlock: (blockId, splitMinutes) => {
+        const { timeBlocks, assignments } = get();
+        const blockIndex = timeBlocks.findIndex((b) => b.id === blockId);
+        if (blockIndex === -1) return;
+
+        const block = timeBlocks[blockIndex];
+        if (splitMinutes <= 0 || splitMinutes >= block.duration) return;
+
+        const startMinutes = parseTimeToMinutes(block.startTime);
+        const splitPoint = startMinutes + splitMinutes;
+
+        // Create two new blocks
+        const firstBlock: TimeBlock = {
+          id: `${block.id}_split_a`,
+          duration: splitMinutes,
+          startTime: block.startTime,
+          endTime: formatMinutesToTime(splitPoint),
+          activityDetected: block.activityDetected,
+          location: block.location,
+        };
+
+        const secondBlock: TimeBlock = {
+          id: `${block.id}_split_b`,
+          duration: block.duration - splitMinutes,
+          startTime: formatMinutesToTime(splitPoint),
+          endTime: block.endTime,
+          activityDetected: block.activityDetected,
+          location: block.location,
+        };
+
+        // Replace original block with two new blocks
+        const newTimeBlocks = [
+          ...timeBlocks.slice(0, blockIndex),
+          firstBlock,
+          secondBlock,
+          ...timeBlocks.slice(blockIndex + 1),
+        ];
+
+        // Remove assignment for old block
+        const newAssignments = { ...assignments };
+        delete newAssignments[blockId];
+
+        set({
+          timeBlocks: newTimeBlocks,
+          assignments: newAssignments,
+          unassignedCount: computeUnassignedCount(newTimeBlocks, newAssignments),
+        });
       },
     }),
     {

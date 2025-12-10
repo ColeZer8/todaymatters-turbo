@@ -5,78 +5,49 @@ import { DateNavigator } from '../molecules/DateNavigator';
 import { CalendarEventItem } from '../molecules/CalendarEventItem';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
-import { Sun, Target, Coffee, Users, Video, Smile, Heart } from 'lucide-react-native';
+import { Sun, Target, Coffee, Users, Video, Smile, Heart, Moon, Briefcase, Car } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { useEventsStore, formatMinutesToDisplay } from '@/stores';
+import type { EventCategory } from '@/stores';
 
-// Mock event data
-const EVENTS = [
-    {
-        id: '1',
-        icon: Sun,
-        title: 'Intentional Start',
-        subtitle: 'Morning Routine',
-        time: '8:00 AM',
-        iconBgColor: 'bg-blue-100',
-        iconColor: '#3B82F6'
-    },
-    {
-        id: '2',
-        icon: Target,
-        title: 'Deep Work: Strategy',
-        subtitle: 'Q4 Planning',
-        time: '9:30 AM',
-        iconBgColor: 'bg-gray-100',
-        iconColor: '#6B7280'
-    },
-    {
-        id: '3',
-        icon: Coffee,
-        title: 'Lunch Break',
-        subtitle: 'Disconnect',
-        time: '12:00 PM',
-        iconBgColor: 'bg-orange-100',
-        iconColor: '#F97316'
-    },
-    {
-        id: '4',
-        icon: Users,
-        title: 'Team Sync',
-        subtitle: 'Weekly Standup',
-        time: '1:00 PM',
-        iconBgColor: 'bg-purple-100',
-        iconColor: '#A855F7'
-    },
-    {
-        id: '5',
-        icon: Video,
-        title: 'Meeting with Cole',
-        subtitle: 'Strategy Sync',
-        time: '3:00 PM',
-        iconBgColor: 'bg-gray-100',
-        iconColor: '#6B7280'
-    },
-    {
-        id: '6',
-        icon: Smile,
-        title: 'Shutdown Ritual',
-        subtitle: 'Clear inbox & plan tomorrow',
-        time: '5:00 PM',
-        iconBgColor: 'bg-green-100',
-        iconColor: '#10B981'
-    },
-    {
-        id: '7',
-        icon: Heart,
-        title: 'Family Dinner',
-        subtitle: 'Quality time',
-        time: '6:30 PM',
-        iconBgColor: 'bg-pink-100',
-        iconColor: '#EC4899'
-    }
-];
+// Map categories to icons and colors
+const CATEGORY_CONFIG: Record<EventCategory, { icon: LucideIcon; bgColor: string; iconColor: string }> = {
+    routine: { icon: Sun, bgColor: 'bg-blue-100', iconColor: '#3B82F6' },
+    work: { icon: Target, bgColor: 'bg-gray-100', iconColor: '#6B7280' },
+    meal: { icon: Coffee, bgColor: 'bg-orange-100', iconColor: '#F97316' },
+    meeting: { icon: Users, bgColor: 'bg-purple-100', iconColor: '#A855F7' },
+    health: { icon: Heart, bgColor: 'bg-green-100', iconColor: '#10B981' },
+    family: { icon: Heart, bgColor: 'bg-pink-100', iconColor: '#EC4899' },
+    social: { icon: Users, bgColor: 'bg-purple-100', iconColor: '#A855F7' },
+    travel: { icon: Car, bgColor: 'bg-yellow-100', iconColor: '#F59E0B' },
+    finance: { icon: Briefcase, bgColor: 'bg-green-100', iconColor: '#10B981' },
+    comm: { icon: Video, bgColor: 'bg-gray-100', iconColor: '#6B7280' },
+    digital: { icon: Video, bgColor: 'bg-blue-100', iconColor: '#3B82F6' },
+    sleep: { icon: Moon, bgColor: 'bg-indigo-100', iconColor: '#6366F1' },
+    unknown: { icon: Target, bgColor: 'bg-gray-100', iconColor: '#9CA3AF' },
+    free: { icon: Smile, bgColor: 'bg-green-100', iconColor: '#10B981' },
+};
 
 export const CalendarTemplate = () => {
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
+
+    // Filter out sleep events and map to display format
+    const displayEvents = scheduledEvents
+        .filter((e) => e.category !== 'sleep')
+        .map((event) => {
+            const config = CATEGORY_CONFIG[event.category] || CATEGORY_CONFIG.routine;
+            return {
+                id: event.id,
+                icon: config.icon,
+                title: event.title,
+                subtitle: event.description,
+                time: formatMinutesToDisplay(event.startMinutes),
+                iconBgColor: config.bgColor,
+                iconColor: config.iconColor,
+            };
+        });
 
     const handleAddEvent = () => {
         router.push('/add-event');
@@ -91,7 +62,7 @@ export const CalendarTemplate = () => {
                 contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}
                 showsVerticalScrollIndicator={false}
             >
-                {EVENTS.map((event) => (
+                {displayEvents.map((event) => (
                     <CalendarEventItem
                         key={event.id}
                         icon={event.icon}

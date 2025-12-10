@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Bell, Briefcase, CreditCard, LogOut, LucideIcon, Settings, Target } from 'lucide-react-native';
+import { Bell, Briefcase, CreditCard, LogOut, LucideIcon, Play, Settings, Target } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
+import { useDemoStore } from '@/stores';
 
 const CORE_VALUES = ['Family', 'Integrity', 'Creativity'];
 
@@ -18,14 +20,33 @@ const INITIATIVES: ProfileItem[] = [
   { id: 'initiative-2', label: 'Team Hiring', icon: Briefcase, accent: 'purple' },
 ];
 
-const MENU_ITEMS = [
-  { id: 'account-settings', label: 'Account Settings', icon: Settings },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'subscription', label: 'Subscription', icon: CreditCard },
-  { id: 'logout', label: 'Log Out', icon: LogOut },
-];
-
 export default function ProfileScreen() {
+  const router = useRouter();
+  const setDemoActive = useDemoStore((state) => state.setActive);
+
+  const handleStartDemo = () => {
+    setDemoActive(true);
+    router.push('/home');
+  };
+
+  // Build menu items - include Demo Mode in development builds
+  const menuItems = [
+    { id: 'account-settings', label: 'Account Settings', icon: Settings },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'subscription', label: 'Subscription', icon: CreditCard },
+    // Demo Mode - only visible in development
+    ...(__DEV__
+      ? [
+          {
+            id: 'demo-mode',
+            label: '🎬 Demo Mode',
+            icon: Play,
+            onPress: handleStartDemo,
+          },
+        ]
+      : []),
+    { id: 'logout', label: 'Log Out', icon: LogOut },
+  ];
   const [isEditing, setIsEditing] = useState(false);
   const [coreValues, setCoreValues] = useState<string[]>(CORE_VALUES);
   const [newValueText, setNewValueText] = useState('');
@@ -81,7 +102,7 @@ export default function ProfileScreen() {
       coreValues={coreValues}
       goals={goals}
       initiatives={initiatives}
-      menuItems={MENU_ITEMS}
+      menuItems={menuItems}
       isEditing={isEditing}
       onEditPress={() => setIsEditing(true)}
       onDonePress={() => setIsEditing(false)}

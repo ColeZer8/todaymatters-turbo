@@ -3,6 +3,10 @@ export { TimePickerModal } from './TimePickerModal';
 export { SetupStepLayout } from './SetupStepLayout';
 export { DraggableRoutineList } from './DraggableRoutineList';
 export { BottomToolbar } from './BottomToolbar';
+export { DemoOverlay } from './DemoOverlay';
+export { DemoMorningRoutine } from './DemoMorningRoutine';
+export { DemoMeetingReminder } from './DemoMeetingReminder';
+export { DemoTrafficAlert } from './DemoTrafficAlert';
 // TODO: Re-enable ElevenLabs voice coach integration
 // export { VoiceCoachButton } from './VoiceCoachButton';
 // export { VoiceCoachModal } from './VoiceCoachModal';
