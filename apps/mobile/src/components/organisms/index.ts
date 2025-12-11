@@ -7,6 +7,7 @@ export { DemoOverlay } from './DemoOverlay';
 export { DemoMorningRoutine } from './DemoMorningRoutine';
 export { DemoMeetingReminder } from './DemoMeetingReminder';
 export { DemoTrafficAlert } from './DemoTrafficAlert';
+export { DemoPrayerAction } from './DemoPrayerAction';
 // TODO: Re-enable ElevenLabs voice coach integration
 // export { VoiceCoachButton } from './VoiceCoachButton';
 // export { VoiceCoachModal } from './VoiceCoachModal';

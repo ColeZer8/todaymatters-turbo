@@ -24,8 +24,10 @@ interface RoutineBuilderTemplateProps {
   onAddItem: (title: string) => void;
   quickAddItems?: string[];
   wakeTime?: string;
-  onContinue: () => void;
+  onContinue?: () => void;
   onBack?: () => void;
+  /** When 'settings', hides progress bar and continue button */
+  mode?: 'onboarding' | 'settings';
 }
 
 const cardShadowStyle = {
@@ -48,7 +50,9 @@ export const RoutineBuilderTemplate = ({
   wakeTime = '06:30',
   onContinue,
   onBack,
+  mode = 'onboarding',
 }: RoutineBuilderTemplateProps) => {
+  const isSettings = mode === 'settings';
   const [showAdd, setShowAdd] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export const RoutineBuilderTemplate = ({
       title="Build your routine"
       subtitle="Stack your habits. What comes first?"
       onBack={onBack}
+      mode={mode}
       footer={
         <View style={{ gap: 12 }}>
           <View className="flex-row justify-between px-1">
@@ -118,7 +123,9 @@ export const RoutineBuilderTemplate = ({
               <Text className="text-xl font-bold text-text-primary">{wakeTime}</Text>
             </View>
           </View>
-          <GradientButton label="Looks Good" onPress={onContinue} rightIcon={ArrowRight} />
+          {!isSettings && onContinue && (
+            <GradientButton label="Looks Good" onPress={onContinue} rightIcon={ArrowRight} />
+          )}
         </View>
       }
     >

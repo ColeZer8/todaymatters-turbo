@@ -18,8 +18,10 @@ interface DailyRhythmTemplateProps {
   sleepTime: Date;
   onSelectWakeTime: (time: Date) => void;
   onSelectSleepTime: (time: Date) => void;
-  onContinue: () => void;
+  onContinue?: () => void;
   onBack?: () => void;
+  /** When 'settings', hides progress bar and continue button */
+  mode?: 'onboarding' | 'settings';
 }
 
 const formatTime = (time: Date) => {
@@ -41,12 +43,14 @@ export const DailyRhythmTemplate = ({
   onSelectSleepTime,
   onContinue,
   onBack,
+  mode = 'onboarding',
 }: DailyRhythmTemplateProps) => {
   const [activePicker, setActivePicker] = useState<PickerType>(null);
 
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
   const formattedWakeTime = useMemo(() => formatTime(wakeTime), [wakeTime]);
   const formattedSleepTime = useMemo(() => formatTime(sleepTime), [sleepTime]);
+  const isSettings = mode === 'settings';
 
   const closePicker = () => setActivePicker(null);
 
@@ -64,34 +68,59 @@ export const DailyRhythmTemplate = ({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.headerRow}>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-sm font-semibold text-text-secondary">
-                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
-              </Text>
+          {/* Settings mode header */}
+          {isSettings ? (
+            <View style={styles.settingsHeader}>
               {onBack ? (
                 <Pressable
                   accessibilityRole="button"
                   onPress={onBack}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
-                  className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                  hitSlop={12}
+                  style={({ pressed }) => [
+                    styles.settingsBackButton,
+                    { opacity: pressed ? 0.8 : 1 },
+                  ]}
                 >
-                  <ArrowLeft size={14} color="#111827" />
-                  <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                  <ArrowLeft size={18} color="#2563EB" strokeWidth={2.5} />
+                  <Text className="text-[15px] font-semibold text-brand-primary">Back</Text>
                 </Pressable>
-              ) : null}
+              ) : (
+                <View />
+              )}
             </View>
-            <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
-          </View>
+          ) : (
+            <>
+              {/* Onboarding mode header */}
+              <View style={styles.headerRow}>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-sm font-semibold text-text-secondary">
+                    <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+                  </Text>
+                  {onBack ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={onBack}
+                      style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                      className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                    >
+                      <ArrowLeft size={14} color="#111827" />
+                      <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
+              </View>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-          </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+              </View>
+            </>
+          )}
 
-          <View style={styles.titleBlock}>
+          <View style={[styles.titleBlock, isSettings && styles.settingsTitleBlock]}>
             <Text className="text-3xl font-extrabold text-text-primary">Your daily rhythm</Text>
             <Text className="text-base leading-6 text-text-secondary">
-              Let&apos;s establish your baseline hours.
+              {isSettings ? 'Adjust your wake and sleep times.' : "Let's establish your baseline hours."}
             </Text>
           </View>
 
@@ -116,13 +145,16 @@ export const DailyRhythmTemplate = ({
 
           <View style={styles.spacer} />
 
-          <View style={styles.actions}>
-            <GradientButton
-              label="Continue"
-              onPress={onContinue}
-              rightIcon={ArrowRight}
-            />
-          </View>
+          {/* Only show continue button in onboarding mode */}
+          {!isSettings && onContinue && (
+            <View style={styles.actions}>
+              <GradientButton
+                label="Continue"
+                onPress={onContinue}
+                rightIcon={ArrowRight}
+              />
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 
@@ -172,6 +204,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  settingsBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingRight: 12,
+  },
+  settingsTitleBlock: {
+    marginTop: 4,
   },
   progressTrack: {
     height: 6,

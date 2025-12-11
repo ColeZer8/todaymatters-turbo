@@ -19,8 +19,10 @@ interface CoachPersonaTemplateProps {
   options: CoachPersonaOption[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onContinue: () => void;
+  onContinue?: () => void;
   onBack?: () => void;
+  /** When 'settings', hides progress bar and continue button */
+  mode?: 'onboarding' | 'settings';
 }
 
 export const CoachPersonaTemplate = ({
@@ -31,7 +33,10 @@ export const CoachPersonaTemplate = ({
   onSelect,
   onContinue,
   onBack,
+  mode = 'onboarding',
 }: CoachPersonaTemplateProps) => {
+  const isSettings = mode === 'settings';
+
   return (
     <SetupStepLayout
       step={step}
@@ -39,7 +44,8 @@ export const CoachPersonaTemplate = ({
       title="Coach Persona"
       subtitle="Choose the voice of your AI agent."
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      mode={mode}
+      footer={!isSettings && onContinue ? <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} /> : undefined}
     >
       <View className="mt-5 gap-3.5">
         {options.map((option) => (

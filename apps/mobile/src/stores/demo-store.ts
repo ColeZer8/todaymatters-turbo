@@ -139,3 +139,20 @@ export const useCurrentHour = (): number => {
 
   return new Date().getHours();
 };
+
+/**
+ * Hook to get current minutes from midnight (simulated in demo mode, real otherwise)
+ * This is used by ScheduleList to show time-appropriate events
+ */
+export const useCurrentMinutes = (): number => {
+  const isActive = useDemoStore((state) => state.isActive);
+  const simulatedHour = useDemoStore((state) => state.simulatedHour);
+  const simulatedMinute = useDemoStore((state) => state.simulatedMinute);
+
+  if (isActive) {
+    return simulatedHour * 60 + simulatedMinute;
+  }
+
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+};

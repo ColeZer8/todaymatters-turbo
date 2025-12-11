@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, Modal, Pressable, ScrollView } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
@@ -35,10 +35,43 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
     const { joySelections, goals, initiatives } = useOnboardingStore();
     const toggleBig3 = useEventsStore((state) => state.toggleBig3);
     
+    // Animated values for backdrop fade and panel slide
+    const backdropOpacity = useRef(new Animated.Value(0)).current;
+    const panelTranslateY = useRef(new Animated.Value(500)).current;
+    
+    useEffect(() => {
+        if (visible) {
+            // Run both animations in parallel: fade backdrop + slide panel
+            Animated.parallel([
+                Animated.timing(backdropOpacity, {
+                    toValue: 1,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(panelTranslateY, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            backdropOpacity.setValue(0);
+            panelTranslateY.setValue(500);
+        }
+    }, [visible, backdropOpacity, panelTranslateY]);
+    
     // Local draft state
     const [selectedCategory, setSelectedCategory] = useState<EventCategory>(event?.category || 'work');
     const [isBig3, setIsBig3] = useState(event?.isBig3 || false);
     const [selectedValue, setSelectedValue] = useState<string | null>(null);
+    const [title, setTitle] = useState(event?.title || '');
+    
+    // Sync title when event changes
+    useEffect(() => {
+        if (event?.title) {
+            setTitle(event.title);
+        }
+    }, [event?.title]);
     
     // Combine joy selections as "values" - use defaults if empty
     const values = joySelections.length > 0 
@@ -68,24 +101,25 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
         <Modal
             visible={visible}
             transparent
-            animationType="slide"
+            animationType="none"
             onRequestClose={onClose}
         >
-            <View className="flex-1 justify-end bg-black/40">
-                <View 
+            <View className="flex-1 justify-end">
+                {/* Animated backdrop - fades in */}
+                <Animated.View 
+                    className="absolute inset-0 bg-black/40"
+                    style={{ opacity: backdropOpacity }}
+                />
+                {/* Panel - slides up */}
+                <Animated.View 
                     className="bg-white rounded-t-3xl"
-                    style={{ paddingBottom: insets.bottom + 16 }}
+                    style={{ 
+                        paddingBottom: insets.bottom + 16,
+                        transform: [{ translateY: panelTranslateY }],
+                    }}
                 >
                     {/* Header */}
-                    <View className="flex-row items-center justify-between px-6 pt-5 pb-2">
-                        <View className="flex-row items-center gap-3">
-                            <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#2563EB]">
-                                <Text className="text-sm font-bold text-white">TM</Text>
-                            </View>
-                            <Text className="text-sm font-semibold tracking-wide text-[#94A3B8]">
-                                TODAY MATTERS
-                            </Text>
-                        </View>
+                    <View className="flex-row items-center justify-end px-6 pt-5 pb-2">
                         <Pressable 
                             onPress={onClose}
                             className="h-9 w-9 items-center justify-center rounded-full bg-[#F1F5F9]"
@@ -100,13 +134,15 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
                         contentContainerStyle={{ paddingBottom: 20 }}
                     >
                         {/* Title Section */}
-                        <View className="mt-4">
-                            <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
-                                WHAT NEEDS TO BE DONE?
-                            </Text>
-                            <Text className="mt-2 text-3xl font-extrabold text-[#111827]">
-                                {event.title}
-                            </Text>
+                        <View className="mt-2">
+                            <TextInput
+                                value={title}
+                                onChangeText={setTitle}
+                                placeholder="Enter title..."
+                                placeholderTextColor="#94A3B8"
+                                className="text-3xl font-extrabold text-[#111827]"
+                                multiline
+                            />
                         </View>
                         
                         {/* Date & Time Pills */}
@@ -240,7 +276,7 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
                             <Text className="text-sm font-semibold text-[#CBD5E1]">Delete Event</Text>
                         </Pressable>
                     </View>
-                </View>
+                </Animated.View>
             </View>
         </Modal>
     );

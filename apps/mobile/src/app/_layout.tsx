@@ -73,6 +73,8 @@ export default function Layout() {
         <Stack.Screen name="add-event" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="demo-meeting" options={{ headerShown: false }} />
         <Stack.Screen name="demo-traffic" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-prayer" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
       {/* Demo Mode Overlay - only renders when demo is active */}
       <DemoOverlay />

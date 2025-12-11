@@ -1,5 +1,18 @@
 import { useState } from 'react';
-import { Bell, Briefcase, CreditCard, LogOut, LucideIcon, Play, Settings, Target } from 'lucide-react-native';
+import {
+  Bell,
+  Briefcase,
+  Calendar,
+  CreditCard,
+  ListChecks,
+  LogOut,
+  LucideIcon,
+  MessageCircle,
+  MoonStar,
+  Play,
+  Settings,
+  Target,
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
 import { useDemoStore } from '@/stores';
@@ -28,6 +41,34 @@ export default function ProfileScreen() {
     setDemoActive(true);
     router.push('/home');
   };
+
+  // Personalization settings - edit onboarding preferences
+  const personalizationItems = [
+    {
+      id: 'daily-rhythm',
+      label: 'Daily Rhythm',
+      icon: MoonStar,
+      onPress: () => router.push('/settings/daily-rhythm'),
+    },
+    {
+      id: 'coach-persona',
+      label: 'Coach Persona',
+      icon: MessageCircle,
+      onPress: () => router.push('/settings/coach-persona'),
+    },
+    {
+      id: 'build-routine',
+      label: 'Morning Routine',
+      icon: ListChecks,
+      onPress: () => router.push('/settings/build-routine'),
+    },
+    {
+      id: 'ideal-day',
+      label: 'Ideal Day',
+      icon: Calendar,
+      onPress: () => router.push('/settings/ideal-day'),
+    },
+  ];
 
   // Build menu items - include Demo Mode in development builds
   const menuItems = [
@@ -103,6 +144,7 @@ export default function ProfileScreen() {
       goals={goals}
       initiatives={initiatives}
       menuItems={menuItems}
+      personalizationItems={personalizationItems}
       isEditing={isEditing}
       onEditPress={() => setIsEditing(true)}
       onDonePress={() => setIsEditing(false)}

@@ -6,25 +6,29 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface SetupStepLayoutProps {
-  step: number;
-  totalSteps: number;
+  step?: number;
+  totalSteps?: number;
   title: string;
   subtitle?: string;
   children: ReactNode;
   footer?: ReactNode;
   onBack?: () => void;
+  /** When 'settings', hides progress bar and step indicators, shows settings-style header */
+  mode?: 'onboarding' | 'settings';
 }
 
 export const SetupStepLayout = ({
-  step,
-  totalSteps,
+  step = 1,
+  totalSteps = 1,
   title,
   subtitle,
   children,
   footer,
   onBack,
+  mode = 'onboarding',
 }: SetupStepLayoutProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
+  const isSettings = mode === 'settings';
 
   return (
     <LinearGradient
@@ -47,32 +51,57 @@ export const SetupStepLayout = ({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.headerRow}>
-              <View className="flex-row items-center gap-2">
-                <Text className="text-sm font-semibold text-text-secondary">
-                  <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
-                </Text>
+            {/* Settings mode header */}
+            {isSettings ? (
+              <View style={styles.settingsHeader}>
                 {onBack ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={onBack}
-                    style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                    className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                    hitSlop={12}
+                    style={({ pressed }) => [
+                      styles.settingsBackButton,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
                   >
-                    <ArrowLeft size={14} color="#111827" />
-                    <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                    <ArrowLeft size={18} color="#2563EB" strokeWidth={2.5} />
+                    <Text className="text-[15px] font-semibold text-brand-primary">Back</Text>
                   </Pressable>
-                ) : null}
+                ) : (
+                  <View />
+                )}
               </View>
-              <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
-            </View>
+            ) : (
+              <>
+                {/* Onboarding mode header */}
+                <View style={styles.headerRow}>
+                  <View className="flex-row items-center gap-2">
+                    <Text className="text-sm font-semibold text-text-secondary">
+                      <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+                    </Text>
+                    {onBack ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={onBack}
+                        style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                        className="flex-row items-center gap-1 px-3 py-1 rounded-full bg-white"
+                      >
+                        <ArrowLeft size={14} color="#111827" />
+                        <Text className="text-xs font-semibold text-text-primary">Back</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <Text className="text-sm font-semibold text-text-secondary">Setup</Text>
+                </View>
 
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-            </View>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+                </View>
+              </>
+            )}
 
             <View style={styles.contentWidth}>
-              <View style={styles.titleBlock}>
+              <View style={[styles.titleBlock, isSettings && styles.settingsTitleBlock]}>
                 <Text className="text-3xl font-extrabold text-text-primary">{title}</Text>
                 {subtitle ? (
                   <Text className="text-base leading-6 text-text-secondary">{subtitle}</Text>
@@ -116,6 +145,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  settingsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  settingsBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingRight: 12,
+  },
+  settingsTitleBlock: {
+    marginTop: 4,
   },
   progressTrack: {
     height: 6,

@@ -41,6 +41,7 @@ const DEMO_TOUR = [
   { path: '/home', label: 'Home' },
   { path: '/demo-meeting', label: 'Meeting' },
   { path: '/demo-traffic', label: 'Traffic' },
+  { path: '/demo-prayer', label: 'Prayer' },
 ];
 
 /**

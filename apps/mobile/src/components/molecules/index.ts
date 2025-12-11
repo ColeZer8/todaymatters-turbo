@@ -1,6 +1,7 @@
 export { ActionItem } from './ActionItem';
 export { CalendarEventItem } from './CalendarEventItem';
 export { CommunicationItem } from './CommunicationItem';
+export type { CommunicationSource } from './CommunicationItem';
 export { DateNavigator } from './DateNavigator';
 export { Greeting } from './Greeting';
 export { SectionHeader } from './SectionHeader';

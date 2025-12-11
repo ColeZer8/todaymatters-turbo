@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ScheduleItem } from '../molecules/ScheduleItem';
-import { useEventsStore, getCurrentMinutes, formatMinutesToDisplay } from '@/stores';
+import { useEventsStore, formatMinutesToDisplay, useCurrentMinutes } from '@/stores';
 import { Sun, Target, Coffee, Users, Video, Smile, Heart, Moon, Briefcase, Car } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import type { EventCategory } from '@/stores';
@@ -28,8 +28,8 @@ export const ScheduleList = () => {
     const router = useRouter();
     const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
 
-    // Get current time in minutes from midnight
-    const nowMinutes = getCurrentMinutes();
+    // Get current time in minutes from midnight (uses simulated time in demo mode)
+    const nowMinutes = useCurrentMinutes();
     
     // Get events that are current or upcoming (not yet ended), sorted chronologically
     const relevantEvents = scheduledEvents

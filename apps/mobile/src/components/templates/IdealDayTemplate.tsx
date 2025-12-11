@@ -19,13 +19,15 @@ interface IdealDayTemplateProps {
   onCategoryHoursChange: (id: string, hours: number) => void;
   onAddCategory: (name: string, color: string) => void;
   onDeleteCategory: (id: string) => void;
-  onContinue: () => void;
+  onContinue?: () => void;
   onSkip?: () => void;
   onBack?: () => void;
   selectedDays: number[];
   selectedDaysByType: Record<DayType, number[]>;
   customDayConfigs: Record<number, IdealDayCategory[]>;
   onToggleDay: (dayIndex: number) => void;
+  /** When 'settings', hides progress bar and continue button */
+  mode?: 'onboarding' | 'settings';
 }
 
 const DAY_TYPES: Array<{ key: DayType; label: string }> = [
@@ -174,7 +176,9 @@ export const IdealDayTemplate = ({
   selectedDaysByType,
   customDayConfigs,
   onToggleDay,
+  mode = 'onboarding',
 }: IdealDayTemplateProps) => {
+  const isSettings = mode === 'settings';
   const totalHours = useMemo(() => categories.reduce((sum, cat) => sum + cat.hours, 0), [categories]);
   
   // Days with BASE template configured (weekdays/saturday/sunday)
@@ -244,9 +248,8 @@ export const IdealDayTemplate = ({
       title="Ideal day"
       subtitle="Plan your time so you can focus on what matters."
       onBack={onBack}
-      footer={
-        <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
-      }
+      mode={mode}
+      footer={!isSettings && onContinue ? <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} /> : undefined}
     >
       <View className="mt-1 gap-4">
         {/* Day Selection - Clean inline style */}

@@ -35,6 +35,8 @@ interface ProfileTemplateProps {
   goals: ProfileItem[];
   initiatives: ProfileItem[];
   menuItems: ProfileMenuEntry[];
+  /** Personalization settings (Daily Rhythm, Coach Persona, etc.) */
+  personalizationItems?: ProfileMenuEntry[];
   onEditPress?: () => void;
   onDonePress?: () => void;
   isEditing?: boolean;
@@ -63,6 +65,7 @@ export const ProfileTemplate = ({
   goals,
   initiatives,
   menuItems,
+  personalizationItems = [],
   onEditPress,
   onDonePress,
   isEditing = false,
@@ -237,6 +240,23 @@ export const ProfileTemplate = ({
             )}
           </View>
         </View>
+
+        {/* Personalization Settings */}
+        {personalizationItems.length > 0 && (
+          <View className="mt-8 px-6">
+            <Text className={sectionTitleClass}>Personalization</Text>
+            <View className="mt-3">
+              {personalizationItems.map((item) => (
+                <ProfileMenuItem
+                  key={item.id}
+                  label={item.label}
+                  icon={item.icon}
+                  onPress={item.onPress}
+                />
+              ))}
+            </View>
+          </View>
+        )}
 
         <View className="mt-8 pt-1 border-t border-[#E5E9F2] px-6">
           {menuItems.map((item) => (

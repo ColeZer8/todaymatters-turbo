@@ -43,6 +43,8 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 - 2025-12-10: Created `DemoMeetingReminder` for meeting notification demo
 - 2025-12-10: Created `DemoTrafficAlert` with SVG map and departure timer
 - 2025-12-10: Refined timer font to use `Menlo-Bold` for slashed zeros
+- 2025-12-10: Integrated time simulation into `ScheduleList` - "Your Schedule" now updates based on simulated time
+- 2025-12-10: Added `DemoPrayerAction` - Prayer/devotional action screen with verse of the day
 
 ## Files Changed
 
@@ -54,6 +56,8 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 - `apps/mobile/src/components/organisms/DemoTrafficAlert.tsx` - Traffic alert with map
 - `apps/mobile/src/app/demo-meeting.tsx` - Route for meeting demo page
 - `apps/mobile/src/app/demo-traffic.tsx` - Route for traffic demo page
+- `apps/mobile/src/components/organisms/DemoPrayerAction.tsx` - Prayer action screen
+- `apps/mobile/src/app/demo-prayer.tsx` - Route for prayer demo page
 
 ### Modified Files
 - `apps/mobile/src/app/_layout.tsx` - Added `DemoOverlay` to app root, new routes
@@ -61,7 +65,8 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 - `apps/mobile/src/components/molecules/Greeting.tsx` - Integrated demo time simulation
 - `apps/mobile/src/components/templates/HomeTemplate.tsx` - Conditional render for `DemoMorningRoutine`
 - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` - Uses simulated time when demo active
-- `apps/mobile/src/stores/index.ts` - Export demo store
+- `apps/mobile/src/components/organisms/ScheduleList.tsx` - Uses `useCurrentMinutes` hook for time-aware schedule display
+- `apps/mobile/src/stores/index.ts` - Export demo store and `useCurrentMinutes` hook
 - `apps/mobile/src/components/organisms/index.ts` - Export new demo components
 
 ## Technical Details
@@ -91,6 +96,7 @@ interface DemoState {
 1. Home (with time-responsive greeting)
 2. Meeting Reminder (`/demo-meeting`)
 3. Traffic Alert (`/demo-traffic`)
+4. Prayer Action (`/demo-prayer`)
 
 ### Traffic Alert Map
 - SVG-based map with curved route paths
@@ -101,6 +107,11 @@ interface DemoState {
 
 ### Timer Font
 - Uses `Menlo-Bold` (iOS) / `monospace` (Android) for slashed zeros
+
+### Time-Aware Hooks
+- `useCurrentMinutes()` - Returns simulated minutes from midnight in demo mode, real time otherwise
+- `useCurrentHour()` - Returns simulated hour in demo mode, real hour otherwise  
+- `useGreeting()` - Returns appropriate greeting for simulated or real time
 
 ## Verification
 
