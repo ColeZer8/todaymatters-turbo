@@ -1,7 +1,7 @@
 import { View, Text, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, Navigation } from 'lucide-react-native';
-import Svg, { Path, Circle, G, Rect, Polygon } from 'react-native-svg';
+import Svg, { Path, Circle, G, Rect } from 'react-native-svg';
 import { Icon } from '@/components/atoms';
 import { BottomToolbar } from './BottomToolbar';
 
@@ -73,129 +73,129 @@ export const DemoTrafficAlert = () => {
           <View className="h-52">
             <Svg width="100%" height="100%" viewBox="0 0 350 210">
               {/* Map background elements */}
-              {/* Light blue water area in bottom left */}
-              <Rect x="0" y="170" width="60" height="40" fill="#D4E8F2" opacity={0.6} />
+              {/* Light blue water/river area */}
+              <Path 
+                d="M 0 180 Q 40 160 80 185 Q 120 210 160 190 L 160 210 L 0 210 Z" 
+                fill="#C5DCE8" 
+                opacity={0.5} 
+              />
               
               {/* Green park areas */}
-              <Rect x="200" y="20" width="50" height="35" fill="#D8E8D8" rx="4" />
-              <Rect x="120" y="155" width="45" height="35" fill="#D8E8D8" rx="4" />
+              <Rect x="260" y="130" width="55" height="40" fill="#C8E6C9" rx="3" />
+              <Rect x="45" y="30" width="40" height="45" fill="#C8E6C9" rx="3" />
+              <Circle cx="295" cy="85" r="18" fill="#C8E6C9" />
 
-              {/* Street grid */}
-              <G opacity={0.4}>
-                {/* Horizontal streets */}
-                <Path d="M 0 55 L 350 55" stroke="#C0CCC0" strokeWidth="8" />
-                <Path d="M 0 110 L 350 110" stroke="#C0CCC0" strokeWidth="8" />
-                <Path d="M 0 160 L 350 160" stroke="#C0CCC0" strokeWidth="8" />
+              {/* Street grid - main roads */}
+              <G>
+                {/* Major horizontal roads */}
+                <Path d="M 0 60 L 350 60" stroke="#FFFFFF" strokeWidth="12" />
+                <Path d="M 0 115 L 350 115" stroke="#FFFFFF" strokeWidth="14" />
+                <Path d="M 0 165 L 200 165" stroke="#FFFFFF" strokeWidth="10" />
                 
-                {/* Vertical streets */}
-                <Path d="M 70 0 L 70 210" stroke="#C0CCC0" strokeWidth="8" />
-                <Path d="M 140 0 L 140 210" stroke="#C0CCC0" strokeWidth="8" />
-                <Path d="M 210 0 L 210 210" stroke="#C0CCC0" strokeWidth="8" />
-                <Path d="M 280 0 L 280 210" stroke="#C0CCC0" strokeWidth="8" />
+                {/* Major vertical roads */}
+                <Path d="M 55 0 L 55 210" stroke="#FFFFFF" strokeWidth="10" />
+                <Path d="M 125 0 L 125 210" stroke="#FFFFFF" strokeWidth="10" />
+                <Path d="M 200 60 L 200 210" stroke="#FFFFFF" strokeWidth="12" />
+                <Path d="M 280 0 L 280 180" stroke="#FFFFFF" strokeWidth="10" />
               </G>
               
-              {/* Thinner street lines on top */}
-              <G opacity={0.25}>
-                <Path d="M 0 55 L 350 55" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 0 110 L 350 110" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 0 160 L 350 160" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 70 0 L 70 210" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 140 0 L 140 210" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 210 0 L 210 210" stroke="#A0ACA0" strokeWidth="1" />
-                <Path d="M 280 0 L 280 210" stroke="#A0ACA0" strokeWidth="1" />
+              {/* Road outlines for depth */}
+              <G opacity={0.15}>
+                <Path d="M 0 60 L 350 60" stroke="#666" strokeWidth="12" />
+                <Path d="M 0 115 L 350 115" stroke="#666" strokeWidth="14" />
+                <Path d="M 0 165 L 200 165" stroke="#666" strokeWidth="10" />
+                <Path d="M 55 0 L 55 210" stroke="#666" strokeWidth="10" />
+                <Path d="M 125 0 L 125 210" stroke="#666" strokeWidth="10" />
+                <Path d="M 200 60 L 200 210" stroke="#666" strokeWidth="12" />
+                <Path d="M 280 0 L 280 180" stroke="#666" strokeWidth="10" />
               </G>
 
-              {/* === TOLL ROUTE (yellow) - follows streets === */}
-              {/* Down from junction, right along bottom street, then up */}
+              {/* === MAIN ROUTE with traffic === */}
+              {/* Route shadow for depth */}
               <Path
-                d="M 210 110 L 210 160 L 280 160 L 280 55 L 295 55"
-                stroke="#F5B740"
-                strokeWidth="5"
+                d="M 55 185 L 55 165 L 125 165 L 125 115 L 200 115 L 200 60 L 310 60"
+                stroke="#1E40AF"
+                strokeWidth="8"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
+                opacity={0.3}
               />
-
-              {/* === MAIN BLUE ROUTE === */}
-              {/* Start point to first turn */}
+              
+              {/* Blue route - start to before accident */}
               <Path
-                d="M 55 175 L 55 160 L 70 160"
-                stroke="#2563EB"
+                d="M 55 185 L 55 165 L 125 165 L 125 115 L 155 115"
+                stroke="#4285F4"
                 strokeWidth="6"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               
-              {/* Continue along street, then turn up */}
+              {/* RED - Traffic/accident section on I-40 */}
               <Path
-                d="M 70 160 L 140 160 L 140 110"
-                stroke="#2563EB"
+                d="M 155 115 L 200 115"
+                stroke="#EA4335"
                 strokeWidth="6"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               
-              {/* Turn right on horizontal street */}
+              {/* Blue route - after accident to destination */}
               <Path
-                d="M 140 110 L 165 110"
-                stroke="#2563EB"
-                strokeWidth="6"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              
-              {/* RED ACCIDENT SECTION */}
-              <Path
-                d="M 165 110 L 210 110"
-                stroke="#DC2626"
-                strokeWidth="6"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              
-              {/* Continue blue after accident, go up */}
-              <Path
-                d="M 210 110 L 210 55"
-                stroke="#2563EB"
-                strokeWidth="6"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              
-              {/* Turn right to destination */}
-              <Path
-                d="M 210 55 L 295 55"
-                stroke="#2563EB"
+                d="M 200 115 L 200 60 L 310 60"
+                stroke="#4285F4"
                 strokeWidth="6"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
 
-              {/* Start marker with arrow pointing up (direction of travel) */}
-              <Circle cx="55" cy="175" r="8" fill="white" stroke="#374151" strokeWidth="2.5" />
-              {/* Arrow pointing up inside the circle */}
-              <Polygon 
-                points="55,169 51,174 53,174 53,179 57,179 57,174 59,174"
-                fill="#374151"
-              />
+              {/* Start marker - Google Maps style blue dot */}
+              <Circle cx="55" cy="185" r="10" fill="#4285F4" />
+              <Circle cx="55" cy="185" r="6" fill="#FFFFFF" />
+              <Circle cx="55" cy="185" r="4" fill="#4285F4" />
               
-              {/* Destination marker */}
-              <Circle cx="295" cy="55" r="9" fill="#EF4444" stroke="white" strokeWidth="2.5" />
-              <Circle cx="295" cy="55" r="3.5" fill="white" />
+              {/* Destination marker - Google Maps style red pin */}
+              {/* Pin body */}
+              <Path
+                d="M 310 45 C 310 35 320 28 320 28 C 320 28 330 35 330 45 C 330 52 320 62 320 62 C 320 62 310 52 310 45 Z"
+                fill="#EA4335"
+              />
+              {/* Pin inner circle */}
+              <Circle cx="320" cy="44" r="5" fill="#B31412" opacity={0.3} />
+              <Circle cx="320" cy="44" r="4" fill="#FFFFFF" />
             </Svg>
 
-            {/* Accident Marker - on the red section */}
+            {/* Accident warning icon - positioned on the red section */}
             <View 
-              className="absolute h-9 w-9 items-center justify-center rounded-full bg-white border-2 border-[#DC2626]"
+              className="absolute items-center justify-center"
               style={{ 
-                top: 100,
-                left: 175,
+                top: 94,
+                left: 160,
+              }}
+            >
+              <View 
+                className="h-8 w-8 items-center justify-center rounded-full bg-[#EA4335]"
+                style={{
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 4,
+                }}
+              >
+                <Text className="text-white font-bold text-[14px]">!</Text>
+              </View>
+            </View>
+
+            {/* Route time badge - positioned along route near destination */}
+            <View 
+              className="absolute flex-row items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-md"
+              style={{ 
+                top: 68,
+                left: 215,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
@@ -203,35 +203,9 @@ export const DemoTrafficAlert = () => {
                 elevation: 3,
               }}
             >
-              <View 
-                style={{
-                  width: 0,
-                  height: 0,
-                  borderLeftWidth: 6,
-                  borderRightWidth: 6,
-                  borderBottomWidth: 11,
-                  borderLeftColor: 'transparent',
-                  borderRightColor: 'transparent',
-                  borderBottomColor: '#DC2626',
-                }}
-              />
-            </View>
-
-            {/* Time/Tolls badge */}
-            <View 
-              className="absolute bg-[#2563EB] px-3 py-1.5 rounded-lg items-center"
-              style={{ 
-                top: 120,
-                right: 30,
-                shadowColor: '#1D4ED8',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-                elevation: 3,
-              }}
-            >
-              <Text className="text-white font-bold text-[13px]">32 min</Text>
-              <Text className="text-white/80 text-[10px]">Tolls</Text>
+              <Text className="text-[#1F2937] font-bold text-[13px]">32 min</Text>
+              <View className="h-3 w-px bg-[#D1D5DB]" />
+              <Text className="text-[#6B7280] text-[11px]">fastest</Text>
             </View>
           </View>
         </View>

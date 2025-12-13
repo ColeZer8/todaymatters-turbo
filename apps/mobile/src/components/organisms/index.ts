@@ -8,6 +8,12 @@ export { DemoMorningRoutine } from './DemoMorningRoutine';
 export { DemoMeetingReminder } from './DemoMeetingReminder';
 export { DemoTrafficAlert } from './DemoTrafficAlert';
 export { DemoPrayerAction } from './DemoPrayerAction';
+export { DemoWorkoutInterruption } from './DemoWorkoutInterruption';
+export { DemoWorkoutSummary } from './DemoWorkoutSummary';
+export { DemoTrafficAccident } from './DemoTrafficAccident';
+export { DemoOverviewGoals } from './DemoOverviewGoals';
+export { DemoOverviewInitiatives } from './DemoOverviewInitiatives';
+export { DemoOverviewValues } from './DemoOverviewValues';
 // TODO: Re-enable ElevenLabs voice coach integration
 // export { VoiceCoachButton } from './VoiceCoachButton';
 // export { VoiceCoachModal } from './VoiceCoachModal';

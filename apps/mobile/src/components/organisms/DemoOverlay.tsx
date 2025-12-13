@@ -39,9 +39,15 @@ const TIME_COLORS: Record<TimeOfDay, string> = {
 // Demo tour - screens to navigate through
 const DEMO_TOUR = [
   { path: '/home', label: 'Home' },
+  { path: '/demo-workout-interruption', label: 'Focus Alert' },
+  { path: '/demo-workout-summary', label: 'Workout' },
   { path: '/demo-meeting', label: 'Meeting' },
-  { path: '/demo-traffic', label: 'Traffic' },
+  { path: '/demo-traffic-accident', label: 'Traffic' },
+  { path: '/demo-traffic', label: 'Departure' },
   { path: '/demo-prayer', label: 'Prayer' },
+  { path: '/demo-overview-goals', label: 'Goals' },
+  { path: '/demo-overview-initiatives', label: 'Initiatives' },
+  { path: '/demo-overview-values', label: 'Values' },
 ];
 
 /**

@@ -74,6 +74,12 @@ export default function Layout() {
         <Stack.Screen name="demo-meeting" options={{ headerShown: false }} />
         <Stack.Screen name="demo-traffic" options={{ headerShown: false }} />
         <Stack.Screen name="demo-prayer" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-workout-interruption" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-workout-summary" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-traffic-accident" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-overview-goals" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-overview-initiatives" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-overview-values" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
       {/* Demo Mode Overlay - only renders when demo is active */}

@@ -3,14 +3,17 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronDown, ChevronRight, Dumbbell, Gift, Heart, LucideIcon, Sparkles, SunMedium } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Dumbbell, Gift, Heart, LucideIcon, Sparkles, SunMedium, Target, Briefcase, BarChart3 } from 'lucide-react-native';
 import Svg, { Line } from 'react-native-svg';
 import { Card, Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
 import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
 import { BottomToolbar } from '@/components/organisms/BottomToolbar';
+import { DemoOverviewGoals } from '@/components/organisms/DemoOverviewGoals';
+import { DemoOverviewInitiatives } from '@/components/organisms/DemoOverviewInitiatives';
 
 type RangeKey = 'today' | 'week' | 'month' | 'year';
+type TabKey = 'overview' | 'goals' | 'initiatives';
 
 interface PerformanceInsight {
   headline: string;
@@ -51,6 +54,12 @@ interface RangeData {
     reality: DistributionSlice[];
   };
 }
+
+const TAB_OPTIONS: { label: string; value: TabKey; icon: LucideIcon }[] = [
+  { label: 'Overview', value: 'overview', icon: BarChart3 },
+  { label: 'Goals', value: 'goals', icon: Target },
+  { label: 'Initiatives', value: 'initiatives', icon: Briefcase },
+];
 
 const RANGE_OPTIONS: { label: string; value: RangeKey }[] = [
   { label: 'Today', value: 'today' },
@@ -222,14 +231,114 @@ const formatMinutes = (minutes: number) => {
   return `${minutes}m`;
 };
 
+// Tab Selector Component - Pill style for inline placement
+const TabSelector = ({ 
+  tabs, 
+  activeTab, 
+  onTabChange 
+}: { 
+  tabs: typeof TAB_OPTIONS; 
+  activeTab: TabKey; 
+  onTabChange: (tab: TabKey) => void;
+}) => (
+  <View className="flex-row items-center justify-center gap-1.5 p-1 bg-[#F3F4F6] rounded-full">
+    {tabs.map((tab) => {
+      const isActive = tab.value === activeTab;
+      return (
+        <Pressable
+          key={tab.value}
+          onPress={() => onTabChange(tab.value)}
+          className={`flex-row items-center justify-center gap-1.5 px-4 py-2 rounded-full ${
+            isActive ? 'bg-white' : 'bg-transparent'
+          }`}
+          style={({ pressed }) => ({ 
+            opacity: pressed ? 0.8 : 1,
+            ...(isActive && {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+              elevation: 2,
+            }),
+          })}
+        >
+          <Icon icon={tab.icon} size={14} color={isActive ? '#2563EB' : '#9CA3AF'} />
+          <Text
+            className={`text-[13px] font-semibold ${
+              isActive ? 'text-[#2563EB]' : 'text-[#9CA3AF]'
+            }`}
+          >
+            {tab.label}
+          </Text>
+        </Pressable>
+      );
+    })}
+  </View>
+);
+
 export const AnalyticsTemplate = () => {
   const [range, setRange] = useState<RangeKey>('today');
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const currentRange = ANALYTICS_SNAPSHOT[range];
   const idealDistribution = currentRange.distribution.ideal;
 
+  // Render Goals or Initiatives views (embedded mode - no toolbar, adjusted padding)
+  if (activeTab === 'goals') {
+    return (
+      <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
+        <SafeAreaView className="flex-1">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: 140 + insets.bottom,
+            }}
+          >
+            {/* Tab Selector */}
+            <View className="mb-4">
+              <TabSelector tabs={TAB_OPTIONS} activeTab={activeTab} onTabChange={setActiveTab} />
+            </View>
+            
+            {/* Goals Content (without wrapper) */}
+            <DemoOverviewGoals embedded />
+          </ScrollView>
+          <BottomToolbar />
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  if (activeTab === 'initiatives') {
+    return (
+      <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
+        <SafeAreaView className="flex-1">
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: 18,
+              paddingTop: 12,
+              paddingBottom: 140 + insets.bottom,
+            }}
+          >
+            {/* Tab Selector */}
+            <View className="mb-4">
+              <TabSelector tabs={TAB_OPTIONS} activeTab={activeTab} onTabChange={setActiveTab} />
+            </View>
+            
+            {/* Initiatives Content (without wrapper) */}
+            <DemoOverviewInitiatives embedded />
+          </ScrollView>
+          <BottomToolbar />
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // Overview tab (original content)
   return (
     <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
       <SafeAreaView className="flex-1">
@@ -241,6 +350,11 @@ export const AnalyticsTemplate = () => {
             paddingBottom: 140 + insets.bottom,
           }}
         >
+          {/* Tab Selector - at top of content */}
+          <View className="mb-4">
+            <TabSelector tabs={TAB_OPTIONS} activeTab={activeTab} onTabChange={setActiveTab} />
+          </View>
+
           <View className="gap-4 pb-6">
             <Card className="gap-3 border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
               <View className="flex-row items-center justify-between">
