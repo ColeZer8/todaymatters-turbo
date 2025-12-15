@@ -9,3 +9,4 @@ import { DemoTrafficAlert } from '@/components/organisms';
 export default function DemoTrafficScreen() {
   return <DemoTrafficAlert />;
 }
+

@@ -151,3 +151,4 @@ Analytics Page
 - Future: Connect workout summary to Apple HealthKit
 - Future: Add date picker for initiative milestone due dates
 - Consider adding swipe gestures to navigate between analytics tabs
+

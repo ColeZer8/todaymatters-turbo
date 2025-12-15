@@ -50,6 +50,8 @@ export const SetupStepLayout = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
           >
             {/* Settings mode header */}
             {isSettings ? (

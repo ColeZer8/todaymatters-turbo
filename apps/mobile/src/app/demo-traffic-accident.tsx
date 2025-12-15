@@ -9,3 +9,4 @@ import { DemoTrafficAccident } from '@/components/organisms';
 export default function DemoTrafficAccidentScreen() {
   return <DemoTrafficAccident />;
 }
+

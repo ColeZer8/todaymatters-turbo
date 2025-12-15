@@ -639,3 +639,4 @@ export const DemoWorkoutSummary = () => {
     </View>
   );
 };
+

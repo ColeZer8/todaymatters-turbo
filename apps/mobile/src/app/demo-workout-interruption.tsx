@@ -9,3 +9,4 @@ import { DemoWorkoutInterruption } from '@/components/organisms';
 export default function DemoWorkoutInterruptionScreen() {
   return <DemoWorkoutInterruption />;
 }
+

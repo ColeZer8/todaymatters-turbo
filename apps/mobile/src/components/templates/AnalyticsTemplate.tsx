@@ -389,7 +389,12 @@ export const AnalyticsTemplate = () => {
               />
             </View>
 
-            {/* Life Distribution - Donuts side by side */}
+            {/* 
+              HIDDEN: Life Distribution - Ideal vs Reality Donut Charts
+              Hidden on 2024-12-13 - See /docs/hidden-features/life-distribution-donuts.md for details
+              To re-enable: uncomment this entire section
+            */}
+            {/* START: Life Distribution Section (Hidden)
             <View className="gap-3">
               <View className="h-px bg-[#E5E7EB]" />
               <Text className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7280] px-1">
@@ -424,6 +429,7 @@ export const AnalyticsTemplate = () => {
               </View>
               <View className="h-px bg-[#E5E7EB]" />
             </View>
+            END: Life Distribution Section (Hidden) */}
 
             {/* Time Spent vs Goal - Horizontal Bars */}
             <View className="gap-3">

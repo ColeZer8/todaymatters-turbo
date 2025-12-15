@@ -512,36 +512,15 @@ export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) 
   // Content to render (shared between embedded and standalone modes)
   const content = (
     <>
-      {/* Header with Edit Button */}
-      <View className="flex-row items-start justify-between mb-4">
-            <View>
-              <Text className="text-[38px] leading-[42px] font-extrabold text-[#111827]">
-                Goals
-              </Text>
-              <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-                Overview
-              </Text>
-            </View>
-            
-            {/* Edit Button */}
-            <Pressable
-              onPress={() => setIsEditing(!isEditing)}
-              className={`flex-row items-center gap-2 px-4 py-2.5 rounded-xl ${isEditing ? 'bg-[#2563EB]' : 'bg-white border border-[#E5E7EB]'}`}
-              style={({ pressed }) => ({ 
-                opacity: pressed ? 0.8 : 1,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 4,
-                elevation: 2,
-              })}
-            >
-              <Icon icon={Pencil} size={16} color={isEditing ? '#FFFFFF' : '#2563EB'} />
-              <Text className={`text-[14px] font-semibold ${isEditing ? 'text-white' : 'text-[#2563EB]'}`}>
-                {isEditing ? 'Done' : 'Edit'}
-              </Text>
-            </Pressable>
-          </View>
+      {/* Header */}
+      <View className="mb-4">
+        <Text className="text-[38px] leading-[42px] font-extrabold text-[#111827]">
+          Goals
+        </Text>
+        <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
+          Overview
+        </Text>
+      </View>
 
           {/* Summary Message */}
           <View className="mb-5">
@@ -641,9 +620,28 @@ export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) 
           )}
 
           {/* Section Header */}
-          <Text className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#374151] mb-3">
-            Your Goals ({goals.length})
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#374151]">
+              Your Goals ({goals.length})
+            </Text>
+            <Pressable
+              onPress={() => setIsEditing(!isEditing)}
+              className={`flex-row items-center gap-2 px-4 py-2.5 rounded-xl ${isEditing ? 'bg-[#2563EB]' : 'bg-white border border-[#E5E7EB]'}`}
+              style={({ pressed }) => ({ 
+                opacity: pressed ? 0.8 : 1,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              })}
+            >
+              <Icon icon={Pencil} size={16} color={isEditing ? '#FFFFFF' : '#2563EB'} />
+              <Text className={`text-[14px] font-semibold ${isEditing ? 'text-white' : 'text-[#2563EB]'}`}>
+                {isEditing ? 'Done' : 'Edit'}
+              </Text>
+            </Pressable>
+          </View>
 
           {/* Goal Cards */}
           {goals.map((goal) => (
@@ -696,3 +694,4 @@ export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) 
     </KeyboardAvoidingView>
   );
 };
+

@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 import { Icon } from './Icon';
 
 interface GradientButtonProps {
@@ -13,12 +13,20 @@ interface GradientButtonProps {
 
 export const GradientButton = ({ label, onPress, disabled = false, loading = false, rightIcon }: GradientButtonProps) => {
   const isDisabled = disabled || loading;
+  const handlePress = () => {
+    if (isDisabled) return;
+    // Hide the keyboard before navigating to avoid iOS layout flicker on physical devices
+    Keyboard.dismiss();
+    requestAnimationFrame(() => {
+      onPress();
+    });
+  };
 
   return (
     <Pressable
       accessibilityRole="button"
       disabled={isDisabled}
-      onPress={onPress}
+      onPress={handlePress}
       className="w-full"
       style={({ pressed }) => [{ opacity: pressed && !isDisabled ? 0.96 : 1 }]}
     >

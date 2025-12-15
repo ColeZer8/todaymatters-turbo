@@ -80,6 +80,8 @@ export default function Layout() {
         <Stack.Screen name="demo-overview-goals" options={{ headerShown: false }} />
         <Stack.Screen name="demo-overview-initiatives" options={{ headerShown: false }} />
         <Stack.Screen name="demo-overview-values" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-prayer-rate" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-meeting-rate" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
       {/* Demo Mode Overlay - only renders when demo is active */}

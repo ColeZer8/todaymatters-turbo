@@ -9,3 +9,4 @@ import { DemoOverviewInitiatives } from '@/components/organisms';
 export default function DemoOverviewInitiativesScreen() {
   return <DemoOverviewInitiatives />;
 }
+

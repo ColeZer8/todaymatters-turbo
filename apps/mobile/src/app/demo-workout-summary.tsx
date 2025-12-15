@@ -9,3 +9,4 @@ import { DemoWorkoutSummary } from '@/components/organisms';
 export default function DemoWorkoutSummaryScreen() {
   return <DemoWorkoutSummary />;
 }
+

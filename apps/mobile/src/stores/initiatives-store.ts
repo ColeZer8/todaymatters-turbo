@@ -332,3 +332,4 @@ export const selectInitiatives = (state: InitiativesState) => state.initiatives;
 export const selectInitiativeById = (id: string) => (state: InitiativesState) =>
   state.initiatives.find((i) => i.id === id);
 export const selectHasHydrated = (state: InitiativesState) => state._hasHydrated;
+

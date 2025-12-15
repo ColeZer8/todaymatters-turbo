@@ -89,3 +89,4 @@ npx expo start -c
 - Onboarding screens were NOT modified - they continue to work exactly as before
 - The `mode` prop is optional and defaults to `'onboarding'` for backward compatibility
 - Settings screens don't show continue/submit buttons - changes auto-save via stores
+

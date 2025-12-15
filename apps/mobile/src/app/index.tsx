@@ -14,6 +14,7 @@ export default function SignInScreen() {
   const signIn = useAuthStore((state) => state.signIn);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const isAuthBypassed = process.env.EXPO_PUBLIC_BYPASS_AUTH === 'true';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,40 +26,16 @@ export default function SignInScreen() {
     if (!isNavigationReady) {
       return;
     }
-    if (isAuthenticated) {
+    if (isAuthenticated && !isAuthBypassed) {
       InteractionManager.runAfterInteractions(() => {
         router.replace('/permissions');
       });
     }
-  }, [isAuthenticated, isNavigationReady, router]);
+  }, [isAuthenticated, isNavigationReady, isAuthBypassed, router]);
 
   const handleEmailPasswordSignIn = async () => {
-    if (!email || !password) {
-      setAuthError('Please enter your email and password.');
-      return;
-    }
-
-    setAuthError(null);
-    setIsSubmitting(true);
-    try {
-      const { session, user } = await signIn(email.trim(), password);
-
-      // If Supabase requires email confirmation, session may be null
-      if (!session?.user) {
-        const targetEmail = user?.email || email.trim();
-        router.replace({ pathname: '/confirm-email', params: { email: targetEmail } });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to sign in right now.';
-      const lower = message.toLowerCase();
-      if (lower.includes('confirm') || lower.includes('verification')) {
-        router.replace({ pathname: '/confirm-email', params: { email: email.trim() } });
-      } else {
-        setAuthError(message);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Bypass all auth - just navigate to permissions
+    router.replace('/permissions');
   };
 
   const handleOAuthSignIn = async (provider: OAuthProvider) => {

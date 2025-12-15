@@ -130,3 +130,4 @@ interface DemoState {
 - [ ] Add more demo screens as new features are built (notifications, voice coach, etc.)
 - [ ] Consider adding "scenario" presets (e.g., "Morning Routine Demo", "Commute Demo")
 - [ ] Add ability to customize demo user name (currently hardcoded as "Paul")
+

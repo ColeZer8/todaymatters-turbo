@@ -385,3 +385,4 @@ export const DemoCarouselTemplate = () => {
     </View>
   );
 };
+
