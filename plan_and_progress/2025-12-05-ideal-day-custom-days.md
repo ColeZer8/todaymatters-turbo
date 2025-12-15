@@ -90,3 +90,4 @@ Enhance the Ideal Day page with visual indicators showing which days have been c
 - Could add "reset to base" button in custom mode UI
 
 
+

@@ -337,3 +337,4 @@ export const formatMinutesToDisplay = (minutes: number): string => {
   return mins === 0 ? `${hours12}:00 ${period}` : `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
 };
 
+

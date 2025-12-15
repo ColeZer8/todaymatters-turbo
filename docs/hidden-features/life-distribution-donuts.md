@@ -83,3 +83,4 @@ Hidden per product decision to simplify the Analytics Overview screen. The featu
 | AnalyticsRangeToggle | `src/components/molecules/AnalyticsRangeToggle.tsx` | Active |
 | AnalyticsTemplate | `src/components/templates/AnalyticsTemplate.tsx` | Active (section hidden) |
 
+
