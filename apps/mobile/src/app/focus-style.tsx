@@ -5,6 +5,7 @@ import { FocusStyleTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const FOCUS_OPTIONS = [
   { id: 'sprint', badge: '25m', label: 'Sprint', description: 'Short bursts.' },
@@ -21,6 +22,16 @@ export default function FocusStyleScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.focusStyle);
   const setSelected = useOnboardingStore((state) => state.setFocusStyle);
+
+  // Supabase sync
+  const { saveFocusStyle } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Save to Supabase when focus style changes
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected) {
+      saveFocusStyle(selected);
+    }
+  }, [selected, hasHydrated, isAuthenticated, saveFocusStyle]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

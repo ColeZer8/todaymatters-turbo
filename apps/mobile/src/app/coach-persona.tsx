@@ -6,6 +6,7 @@ import { CoachPersonaTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const COACH_PERSONA_OPTIONS = [
   {
@@ -37,6 +38,16 @@ export default function CoachPersonaScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.coachPersona);
   const setSelected = useOnboardingStore((state) => state.setCoachPersona);
+
+  // Supabase sync
+  const { saveCoachPersona } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Save to Supabase when coach persona changes
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected) {
+      saveCoachPersona(selected);
+    }
+  }, [selected, hasHydrated, isAuthenticated, saveCoachPersona]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

@@ -34,8 +34,21 @@ export default function SignInScreen() {
   }, [isAuthenticated, isNavigationReady, isAuthBypassed, router]);
 
   const handleEmailPasswordSignIn = async () => {
-    // Bypass all auth - just navigate to permissions
-    router.replace('/permissions');
+    if (!email || !password) {
+      setAuthError('Please enter your email and password.');
+      return;
+    }
+
+    setAuthError(null);
+    setIsSubmitting(true);
+    try {
+      await signIn(email.trim(), password);
+      // Navigation will happen automatically via useEffect when isAuthenticated becomes true
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to sign in. Please check your credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOAuthSignIn = async (provider: OAuthProvider) => {

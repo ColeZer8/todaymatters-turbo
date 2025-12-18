@@ -6,6 +6,7 @@ import { MorningMindsetTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const MORNING_MINDSET_OPTIONS = [
   {
@@ -43,6 +44,16 @@ export default function MorningMindsetScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.morningMindset);
   const setSelected = useOnboardingStore((state) => state.setMorningMindset);
+
+  // Supabase sync
+  const { saveMorningMindset } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Save to Supabase when morning mindset changes
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected) {
+      saveMorningMindset(selected);
+    }
+  }, [selected, hasHydrated, isAuthenticated, saveMorningMindset]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

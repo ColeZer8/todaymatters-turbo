@@ -52,6 +52,17 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 
 **Note**: Expo requires the `EXPO_PUBLIC_` prefix for environment variables to be accessible in the app.
 
+## ⚠️ Important: Using TM Schema
+
+**This project uses the `tm` schema, NOT `public`.**
+
+- All tables are in the `tm` schema
+- Client is configured with `db: { schema: 'tm' }`
+- All queries explicitly use `.schema('tm')` for clarity
+- Types must be regenerated from `tm` schema (not `public`)
+
+See `docs/supabase-tm-schema-integration-plan.md` for detailed integration plan.
+
 ## Client Setup
 
 ### Basic Client Configuration
@@ -72,6 +83,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'tm', // Use tm schema instead of public
+  },
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
@@ -79,6 +93,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false, // Important for React Native
   },
 });
+```
+
+### Querying TM Schema
+
+All queries should explicitly specify the schema:
+
+```typescript
+// ✅ Correct - explicit schema
+const { data } = await supabase
+  .schema('tm')
+  .from('profiles')
+  .select('*');
+
+// ❌ Wrong - would query public schema
+const { data } = await supabase
+  .from('profiles')
+  .select('*');
 ```
 
 ## Authentication Flow

@@ -6,6 +6,7 @@ import { PurposeSelectionTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const PURPOSE_OPTIONS = [
   { id: 'balance', title: 'Work-Life Balance', description: undefined, icon: HeartHandshake },
@@ -23,6 +24,16 @@ export default function YourWhyScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.purpose);
   const setSelected = useOnboardingStore((state) => state.setPurpose);
+
+  // Supabase sync
+  const { savePurpose } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Save to Supabase when purpose changes
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected) {
+      savePurpose(selected);
+    }
+  }, [selected, hasHydrated, isAuthenticated, savePurpose]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

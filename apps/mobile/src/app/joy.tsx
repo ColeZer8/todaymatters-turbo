@@ -1,10 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { TagSelectionTemplate, CategoryOption } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const JOY_OPTIONS: CategoryOption[] = [
   {
@@ -199,7 +200,21 @@ export default function JoyScreen() {
   const toggleSelection = useOnboardingStore((state) => state.toggleJoySelection);
   const addCustomOption = useOnboardingStore((state) => state.addJoyCustomOption);
 
+  // Supabase sync
+  const { saveJoySelections } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
   const [searchValue, setSearchValue] = useState('');
+
+  // Save to Supabase when selections change
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected.length >= 0) {
+      // Debounce saves - only save after user stops selecting for 1 second
+      const timeoutId = setTimeout(() => {
+        saveJoySelections(selected);
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selected, hasHydrated, isAuthenticated, saveJoySelections]);
 
   const options = useMemo(() => {
     if (customOptions.length > 0) {

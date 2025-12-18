@@ -5,6 +5,7 @@ import { GoalsTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useEventsSync } from '@/lib/supabase/hooks';
 
 export default function GoalsScreen() {
   const router = useRouter();
@@ -21,6 +22,26 @@ export default function GoalsScreen() {
   const addInitiative = useOnboardingStore((state) => state.addInitiative);
   const removeInitiative = useOnboardingStore((state) => state.removeInitiative);
   const changeInitiative = useOnboardingStore((state) => state.changeInitiative);
+
+  // Supabase sync
+  const { bulkSaveGoals, bulkSaveInitiatives } = useEventsSync({ onError: (err) => console.error('Failed to save goals/initiatives:', err) });
+
+  // Save to Supabase when goals/initiatives change (debounced)
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated) {
+      const timeoutId = setTimeout(() => {
+        const validGoals = goals.filter(Boolean);
+        const validInitiatives = initiatives.filter(Boolean);
+        if (validGoals.length > 0) {
+          bulkSaveGoals(validGoals);
+        }
+        if (validInitiatives.length > 0) {
+          bulkSaveInitiatives(validInitiatives);
+        }
+      }, 2000); // Longer debounce for bulk operations
+      return () => clearTimeout(timeoutId);
+    }
+  }, [goals, initiatives, hasHydrated, isAuthenticated, bulkSaveGoals, bulkSaveInitiatives]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

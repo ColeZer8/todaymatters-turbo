@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Bell,
   Briefcase,
@@ -15,9 +15,11 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
-import { useDemoStore } from '@/stores';
+import { useDemoStore, useAuthStore } from '@/stores';
+import { fetchProfileValues, saveProfileValues, addProfileValue, removeProfileValue } from '@/lib/supabase/services';
 
-const CORE_VALUES = ['Family', 'Integrity', 'Creativity'];
+// Start with empty values - will load from Supabase if authenticated
+const CORE_VALUES: string[] = [];
 
 type AccentTone = 'blue' | 'purple';
 
@@ -36,6 +38,8 @@ const INITIATIVES: ProfileItem[] = [
 export default function ProfileScreen() {
   const router = useRouter();
   const setDemoActive = useDemoStore((state) => state.setActive);
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const handleStartDemo = () => {
     setDemoActive(true);
@@ -89,22 +93,116 @@ export default function ProfileScreen() {
     { id: 'logout', label: 'Log Out', icon: LogOut },
   ];
   const [isEditing, setIsEditing] = useState(false);
-  const [coreValues, setCoreValues] = useState<string[]>(CORE_VALUES);
+  const [coreValues, setCoreValues] = useState<string[]>([]);
   const [newValueText, setNewValueText] = useState('');
   const [goals, setGoals] = useState<ProfileItem[]>(GOALS);
   const [newGoalText, setNewGoalText] = useState('');
   const [initiatives, setInitiatives] = useState<ProfileItem[]>(INITIATIVES);
   const [newInitiativeText, setNewInitiativeText] = useState('');
+  const [isLoadingValues, setIsLoadingValues] = useState(false);
+  const [hasLoadedValues, setHasLoadedValues] = useState(false);
 
-  const handleAddValue = () => {
+  // Fetch profile values from Supabase on mount (if authenticated)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || hasLoadedValues) {
+      if (!isAuthenticated) {
+        console.log('🔒 Not authenticated, skipping profile values fetch');
+      }
+      return;
+    }
+
+    const loadValues = async () => {
+      console.log('🔄 Loading profile values for user:', user.id, user.email);
+      setIsLoadingValues(true);
+      try {
+        const values = await fetchProfileValues(user.id);
+        if (values.length > 0) {
+          console.log('✅ Loaded', values.length, 'values from Supabase:', values);
+          setCoreValues(values);
+        } else {
+          console.log('ℹ️ No values found in Supabase, starting with empty list');
+          setCoreValues([]);
+        }
+        setHasLoadedValues(true);
+      } catch (error) {
+        console.error('❌ Failed to load profile values from Supabase, using local defaults:', error);
+        // Fallback to default values - don't break the UI
+        setHasLoadedValues(true);
+      } finally {
+        setIsLoadingValues(false);
+      }
+    };
+
+    loadValues();
+  }, [isAuthenticated, user?.id, hasLoadedValues]);
+
+  // Save values to Supabase when they change (if authenticated)
+  const syncValuesToSupabase = useCallback(
+    async (values: string[]) => {
+      if (!isAuthenticated || !user?.id) return;
+
+      try {
+        await saveProfileValues(user.id, values);
+      } catch (error) {
+        console.error('Failed to save profile values to Supabase:', error);
+        // Don't throw - optimistic update already happened
+        // User can retry by editing again
+      }
+    },
+    [isAuthenticated, user?.id]
+  );
+
+  const handleAddValue = async () => {
     const next = newValueText.trim();
     if (!next) return;
-    setCoreValues((prev) => [...prev, next]);
+
+    // Store previous state for rollback
+    const previousValues = coreValues;
+
+    // Optimistic update - update UI immediately
+    const newValues = [...coreValues, next];
+    setCoreValues(newValues);
     setNewValueText('');
+
+    // Sync to Supabase in background
+    if (isAuthenticated && user?.id) {
+      try {
+        await addProfileValue(user.id, next);
+      } catch (error) {
+        console.error('Failed to add value to Supabase:', error);
+        // Rollback on error
+        setCoreValues(previousValues);
+      }
+    }
   };
 
-  const handleRemoveValue = (value: string) => {
-    setCoreValues((prev) => prev.filter((item) => item !== value));
+  const handleRemoveValue = async (value: string) => {
+    // Store previous state for rollback
+    const previousValues = coreValues;
+
+    // Optimistic update - update UI immediately
+    const newValues = coreValues.filter((item) => item !== value);
+    setCoreValues(newValues);
+
+    // Sync to Supabase in background
+    if (isAuthenticated && user?.id) {
+      try {
+        await removeProfileValue(user.id, value);
+      } catch (error) {
+        console.error('Failed to remove value from Supabase:', error);
+        // Rollback on error
+        setCoreValues(previousValues);
+      }
+    }
+  };
+
+  // Save all values when editing is done
+  const handleDoneEditing = async () => {
+    setIsEditing(false);
+    // Sync current values to Supabase
+    if (isAuthenticated && user?.id) {
+      await syncValuesToSupabase(coreValues);
+    }
   };
 
   const handleAddGoal = () => {
@@ -147,7 +245,7 @@ export default function ProfileScreen() {
       personalizationItems={personalizationItems}
       isEditing={isEditing}
       onEditPress={() => setIsEditing(true)}
-      onDonePress={() => setIsEditing(false)}
+      onDonePress={handleDoneEditing}
       newValueText={newValueText}
       onChangeNewValue={setNewValueText}
       onAddValue={handleAddValue}

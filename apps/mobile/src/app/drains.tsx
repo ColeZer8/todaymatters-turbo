@@ -5,6 +5,7 @@ import { TagSelectionTemplate, CategoryOption } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const DRAIN_OPTIONS: CategoryOption[] = [
   {
@@ -165,7 +166,21 @@ export default function DrainsScreen() {
   const toggleSelection = useOnboardingStore((state) => state.toggleDrainSelection);
   const addCustomOption = useOnboardingStore((state) => state.addDrainCustomOption);
 
+  // Supabase sync
+  const { saveDrainSelections } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
   const [searchValue, setSearchValue] = useState('');
+
+  // Save to Supabase when selections change
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated && selected.length >= 0) {
+      // Debounce saves - only save after user stops selecting for 1 second
+      const timeoutId = setTimeout(() => {
+        saveDrainSelections(selected);
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selected, hasHydrated, isAuthenticated, saveDrainSelections]);
 
   const options = useMemo(() => {
     if (customOptions.length > 0) {

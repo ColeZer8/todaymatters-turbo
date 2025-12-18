@@ -26,6 +26,9 @@ const noopStorage = {
 };
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  db: {
+    schema: 'tm', // Use tm schema instead of public
+  },
   auth: {
     storage: isSSR ? noopStorage : AsyncStorage,
     autoRefreshToken: !isSSR,

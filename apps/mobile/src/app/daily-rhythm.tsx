@@ -5,6 +5,7 @@ import { DailyRhythmTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function DailyRhythmScreen() {
   const router = useRouter();
@@ -20,6 +21,19 @@ export default function DailyRhythmScreen() {
 
   const wakeTime = useMemo(() => new Date(wakeTimeStr), [wakeTimeStr]);
   const sleepTime = useMemo(() => new Date(sleepTimeStr), [sleepTimeStr]);
+
+  // Supabase sync
+  const { saveDailyRhythm } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Save to Supabase when times change (debounced)
+  useEffect(() => {
+    if (hasHydrated && isAuthenticated) {
+      const timeoutId = setTimeout(() => {
+        saveDailyRhythm(wakeTime, sleepTime);
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [wakeTime, sleepTime, hasHydrated, isAuthenticated, saveDailyRhythm]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

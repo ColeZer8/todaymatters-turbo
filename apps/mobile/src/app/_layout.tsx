@@ -8,6 +8,7 @@ import Constants from "expo-constants";
 import { handleAuthCallback } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
+import { verifyAuthAndData } from "@/lib/supabase/services";
 
 // TODO: Re-enable ElevenLabs voice coach integration
 // Voice features require native modules - only available in dev builds, not Expo Go
@@ -39,6 +40,13 @@ export default function Layout() {
 
     run();
     const cleanupLinks = handleAuthCallback();
+
+    // Verify auth and data after initialization (for debugging)
+    if (__DEV__) {
+      setTimeout(() => {
+        verifyAuthAndData().catch(console.error);
+      }, 2000); // Wait 2 seconds for auth to initialize
+    }
 
     return () => {
       cleanupLinks();
