@@ -201,7 +201,7 @@ export default function JoyScreen() {
   const addCustomOption = useOnboardingStore((state) => state.addJoyCustomOption);
 
   // Supabase sync
-  const { saveJoySelections } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveJoySelections, saveJoyCustomOptions } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   const [searchValue, setSearchValue] = useState('');
 
@@ -215,6 +215,14 @@ export default function JoyScreen() {
       return () => clearTimeout(timeoutId);
     }
   }, [selected, hasHydrated, isAuthenticated, saveJoySelections]);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      saveJoyCustomOptions(customOptions);
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [customOptions, hasHydrated, isAuthenticated, saveJoyCustomOptions]);
 
   const options = useMemo(() => {
     if (customOptions.length > 0) {

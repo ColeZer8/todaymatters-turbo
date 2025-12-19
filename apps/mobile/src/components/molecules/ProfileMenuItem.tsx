@@ -6,9 +6,10 @@ interface ProfileMenuItemProps {
   label: string;
   icon: LucideIcon;
   onPress?: () => void;
+  value?: string;
 }
 
-export const ProfileMenuItem = ({ label, icon, onPress }: ProfileMenuItemProps) => {
+export const ProfileMenuItem = ({ label, icon, onPress, value }: ProfileMenuItemProps) => {
   return (
     <Pressable
       accessibilityRole="button"
@@ -22,7 +23,14 @@ export const ProfileMenuItem = ({ label, icon, onPress }: ProfileMenuItemProps) 
         </View>
         <Text className="ml-3 text-[#111827] text-[15px] font-semibold">{label}</Text>
       </View>
-      <Icon icon={ChevronRight} size={18} color="#CBD5E1" />
+      <View className="flex-row items-center gap-2">
+        {value ? (
+          <Text className="text-[14px] font-semibold text-[#64748B]">
+            {value}
+          </Text>
+        ) : null}
+        <Icon icon={ChevronRight} size={18} color="#CBD5E1" />
+      </View>
     </Pressable>
   );
 };

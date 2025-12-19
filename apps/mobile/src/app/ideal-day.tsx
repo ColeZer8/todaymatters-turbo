@@ -5,6 +5,7 @@ import { IdealDayTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useIdealDayStore } from '@/stores/ideal-day-store';
+import { useIdealDaySync } from '@/lib/supabase/hooks';
 
 export default function IdealDayScreen() {
   const router = useRouter();
@@ -25,6 +26,16 @@ export default function IdealDayScreen() {
   const selectedDaysByType = useIdealDayStore((state) => state.selectedDaysByType);
   const customDayConfigs = useIdealDayStore((state) => state.customDayConfigs);
   const toggleDay = useIdealDayStore((state) => state.toggleDay);
+
+  const { saveIdealDay } = useIdealDaySync({ autoLoad: true, onError: (err) => console.error('Failed to sync ideal day:', err) });
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      void saveIdealDay();
+    }, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [dayType, categoriesByType, customDayConfigs, hasHydrated, isAuthenticated, saveIdealDay]);
 
   // Wait for navigation and hydration
   if (!isNavigationReady || !hasHydrated) {
@@ -59,7 +70,10 @@ export default function IdealDayScreen() {
       onCategoryHoursChange={setHours}
       onAddCategory={addCategory}
       onDeleteCategory={deleteCategory}
-      onContinue={() => router.replace('/home')}
+      onContinue={() => {
+        void saveIdealDay();
+        router.replace('/home');
+      }}
       onSkip={() => router.replace('/build-routine')}
       onBack={() => router.replace('/build-routine')}
     />

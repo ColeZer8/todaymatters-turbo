@@ -15,8 +15,16 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
+import { DatePickerPopup } from '@/components/molecules';
 import { useDemoStore, useAuthStore } from '@/stores';
-import { fetchProfileValues, saveProfileValues, addProfileValue, removeProfileValue } from '@/lib/supabase/services';
+import {
+  addProfileValue,
+  fetchProfile,
+  fetchProfileValues,
+  removeProfileValue,
+  saveProfileValues,
+  updateBirthday,
+} from '@/lib/supabase/services';
 
 // Start with empty values - will load from Supabase if authenticated
 const CORE_VALUES: string[] = [];
@@ -101,6 +109,9 @@ export default function ProfileScreen() {
   const [newInitiativeText, setNewInitiativeText] = useState('');
   const [isLoadingValues, setIsLoadingValues] = useState(false);
   const [hasLoadedValues, setHasLoadedValues] = useState(false);
+  const [birthday, setBirthday] = useState<Date | null>(null);
+  const [isBirthdayPickerVisible, setIsBirthdayPickerVisible] = useState(false);
+  const [hasLoadedProfile, setHasLoadedProfile] = useState(false);
 
   // Fetch profile values from Supabase on mount (if authenticated)
   useEffect(() => {
@@ -135,6 +146,28 @@ export default function ProfileScreen() {
 
     loadValues();
   }, [isAuthenticated, user?.id, hasLoadedValues]);
+
+  // Fetch profile (for birthday) on mount (if authenticated)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || hasLoadedProfile) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await fetchProfile(user.id);
+        if (cancelled) return;
+        setBirthday(profile?.birthday ? ymdToDate(profile.birthday) : null);
+        setHasLoadedProfile(true);
+      } catch (error) {
+        console.error('❌ Failed to load profile:', error);
+        setHasLoadedProfile(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.id, hasLoadedProfile]);
 
   // Save values to Supabase when they change (if authenticated)
   const syncValuesToSupabase = useCallback(
@@ -205,6 +238,23 @@ export default function ProfileScreen() {
     }
   };
 
+  const birthdayLabel = birthday
+    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(birthday)
+    : 'Not set';
+
+  const handleBirthdaySelect = async (date: Date) => {
+    setBirthday(date);
+    setIsBirthdayPickerVisible(false);
+
+    if (isAuthenticated && user?.id) {
+      try {
+        await updateBirthday(user.id, date);
+      } catch (error) {
+        console.error('❌ Failed to update birthday:', error);
+      }
+    }
+  };
+
   const handleAddGoal = () => {
     const next = newGoalText.trim();
     if (!next) return;
@@ -234,30 +284,58 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ProfileTemplate
-      name="Paul"
-      role="Professional"
-      badgeLabel="Pro Member"
-      coreValues={coreValues}
-      goals={goals}
-      initiatives={initiatives}
-      menuItems={menuItems}
-      personalizationItems={personalizationItems}
-      isEditing={isEditing}
-      onEditPress={() => setIsEditing(true)}
-      onDonePress={handleDoneEditing}
-      newValueText={newValueText}
-      onChangeNewValue={setNewValueText}
-      onAddValue={handleAddValue}
-      onRemoveValue={handleRemoveValue}
-      newGoalText={newGoalText}
-      onChangeNewGoal={setNewGoalText}
-      onAddGoal={handleAddGoal}
-      onRemoveGoal={handleRemoveGoal}
-      newInitiativeText={newInitiativeText}
-      onChangeNewInitiative={setNewInitiativeText}
-      onAddInitiative={handleAddInitiative}
-      onRemoveInitiative={handleRemoveInitiative}
-    />
+    <>
+      <ProfileTemplate
+        name="Paul"
+        role="Professional"
+        badgeLabel="Pro Member"
+        coreValues={coreValues}
+        goals={goals}
+        initiatives={initiatives}
+        menuItems={menuItems}
+        personalizationItems={[
+          {
+            id: 'birthday',
+            label: 'Birthday',
+            icon: Calendar,
+            value: birthdayLabel,
+            onPress: () => setIsBirthdayPickerVisible(true),
+          },
+          ...personalizationItems,
+        ]}
+        isEditing={isEditing}
+        onEditPress={() => setIsEditing(true)}
+        onDonePress={handleDoneEditing}
+        newValueText={newValueText}
+        onChangeNewValue={setNewValueText}
+        onAddValue={handleAddValue}
+        onRemoveValue={handleRemoveValue}
+        newGoalText={newGoalText}
+        onChangeNewGoal={setNewGoalText}
+        onAddGoal={handleAddGoal}
+        onRemoveGoal={handleRemoveGoal}
+        newInitiativeText={newInitiativeText}
+        onChangeNewInitiative={setNewInitiativeText}
+        onAddInitiative={handleAddInitiative}
+        onRemoveInitiative={handleRemoveInitiative}
+      />
+
+      <DatePickerPopup
+        visible={isBirthdayPickerVisible}
+        selectedDate={birthday ?? new Date()}
+        onSelect={handleBirthdaySelect}
+        onClose={() => setIsBirthdayPickerVisible(false)}
+      />
+    </>
   );
+}
+
+function ymdToDate(ymd: string): Date {
+  const match = ymd.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const d = new Date(year, month, day);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }

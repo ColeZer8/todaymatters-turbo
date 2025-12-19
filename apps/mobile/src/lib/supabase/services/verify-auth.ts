@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { fetchProfileValues } from './profile-values';
 import { handleSupabaseError } from '../utils/error-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Verification helper to check auth status and saved data
@@ -19,6 +20,15 @@ export async function verifyAuthAndData() {
 
   if (!session?.user) {
     console.log('⚠️ No active session - user is not authenticated');
+    if (__DEV__) {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const supabaseKeys = keys.filter((key) => key.includes('sb-') || key.includes('supabase') || key.includes('auth'));
+        console.log('🔍 AsyncStorage keys (filtered):', supabaseKeys);
+      } catch (error) {
+        console.log('⚠️ Unable to read AsyncStorage keys:', error);
+      }
+    }
     return { success: false, authenticated: false };
   }
 
@@ -28,6 +38,14 @@ export async function verifyAuthAndData() {
   console.log('   Email:', user.email);
   console.log('   Created:', user.created_at);
   console.log('   Email Confirmed:', user.email_confirmed_at ? 'Yes' : 'No\n');
+
+  // Extra verification: validate token against Supabase (network)
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) {
+    console.log('⚠️ getUser() error:', userError);
+  } else {
+    console.log('✅ getUser() ok:', { userId: userData.user?.id ?? null });
+  }
 
   // Check profile record
   console.log('📋 Checking Profile Record...');
@@ -62,8 +80,13 @@ export async function verifyAuthAndData() {
       .order('rank', { ascending: true });
 
     if (valuesError) {
-      const error = handleSupabaseError(valuesError);
-      console.error('❌ Error fetching profile values:', error.message);
+      // If table isn't created yet (or schema cache not refreshed), don't spam errors in dev.
+      if (valuesError.code === 'PGRST205') {
+        console.log('⚠️ tm.profile_values not available yet (missing table or schema cache not refreshed).');
+      } else {
+        const error = handleSupabaseError(valuesError);
+        console.error('❌ Error fetching profile values:', error.message);
+      }
     } else {
       const values = valuesData || [];
       console.log('✅ Profile Values Found in Supabase:', values.length);

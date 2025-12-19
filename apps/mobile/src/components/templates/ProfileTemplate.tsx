@@ -25,6 +25,7 @@ interface ProfileMenuEntry {
   label: string;
   icon: LucideIcon;
   onPress?: () => void;
+  value?: string;
 }
 
 interface ProfileTemplateProps {
@@ -252,6 +253,7 @@ export const ProfileTemplate = ({
                   label={item.label}
                   icon={item.icon}
                   onPress={item.onPress}
+                  value={item.value}
                 />
               ))}
             </View>
@@ -265,6 +267,7 @@ export const ProfileTemplate = ({
               label={item.label}
               icon={item.icon}
               onPress={item.onPress}
+              value={item.value}
             />
           ))}
         </View>

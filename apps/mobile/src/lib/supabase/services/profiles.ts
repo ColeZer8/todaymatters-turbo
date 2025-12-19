@@ -5,11 +5,24 @@ import { handleSupabaseError } from '../utils/error-handler';
  * Profile preferences stored in meta JSONB
  */
 export interface ProfilePreferences {
+  permissions?: {
+    calendar?: boolean;
+    notifications?: boolean;
+    email?: boolean;
+    health?: boolean;
+    location?: boolean;
+    contacts?: boolean;
+    browsing?: boolean;
+    appUsage?: boolean;
+  };
   joy_selections?: string[];
+  joy_custom_options?: string[];
   drain_selections?: string[];
+  drain_custom_options?: string[];
   focus_style?: string | null;
   coach_persona?: string | null;
   morning_mindset?: string | null;
+  ideal_day_day_type?: 'weekdays' | 'saturday' | 'sunday' | 'custom' | null;
 }
 
 /**
@@ -20,6 +33,8 @@ export interface ProfileData {
   id?: string; // May not exist in tm.profiles
   user_id: string;
   full_name?: string | null;
+  /** YYYY-MM-DD */
+  birthday?: string | null;
   ideal_work_day?: string | null; // Wake time as "HH:MM" format
   ideal_sabbath?: string | null; // Sleep time as "HH:MM" format
   mission?: string | null; // Purpose/Why selection
@@ -171,6 +186,13 @@ export async function updateFullName(userId: string, fullName: string): Promise<
 }
 
 /**
+ * Update birthday (stored as YYYY-MM-DD).
+ */
+export async function updateBirthday(userId: string, birthday: Date | null): Promise<void> {
+  await updateProfile(userId, { birthday: birthday ? dateToYmdLocal(birthday) : null });
+}
+
+/**
  * Update daily rhythm (wake and sleep times)
  * Times should be in "HH:MM" format (e.g., "06:30", "22:30")
  */
@@ -206,6 +228,13 @@ export function dateToTimeString(date: Date): string {
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;
+}
+
+function dateToYmdLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -252,6 +281,12 @@ export async function updateProfilePreferences(
       .single();
 
     if (error) {
+      if (error.code === 'PGRST204') {
+        throw new Error(
+          "Supabase schema mismatch: tm.profiles.meta column is missing (or PostgREST schema cache is stale). " +
+            "Ask the Supabase team to add `meta jsonb not null default '{}'::jsonb` to tm.profiles and refresh the schema cache."
+        );
+      }
       console.error('❌ Error updating profile preferences:', error);
       throw handleSupabaseError(error);
     }
@@ -297,6 +332,28 @@ export async function updateCoachPersona(userId: string, coachPersona: string | 
  */
 export async function updateMorningMindset(userId: string, morningMindset: string | null): Promise<void> {
   await updateProfilePreferences(userId, { morning_mindset: morningMindset });
+}
+
+export async function updatePermissions(
+  userId: string,
+  permissions: ProfilePreferences['permissions'] | null
+): Promise<void> {
+  await updateProfilePreferences(userId, { permissions: permissions ?? undefined });
+}
+
+export async function updateJoyCustomOptions(userId: string, options: string[]): Promise<void> {
+  await updateProfilePreferences(userId, { joy_custom_options: options });
+}
+
+export async function updateDrainCustomOptions(userId: string, options: string[]): Promise<void> {
+  await updateProfilePreferences(userId, { drain_custom_options: options });
+}
+
+export async function updateIdealDayUiState(
+  userId: string,
+  dayType: ProfilePreferences['ideal_day_day_type']
+): Promise<void> {
+  await updateProfilePreferences(userId, { ideal_day_day_type: dayType ?? undefined });
 }
 
 /**

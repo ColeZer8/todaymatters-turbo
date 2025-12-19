@@ -5,6 +5,7 @@ import { RoutineBuilderTemplate } from '@/components/templates/RoutineBuilderTem
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useRoutineBuilderStore } from '@/stores/routine-builder-store';
+import { useRoutineSync } from '@/lib/supabase/hooks';
 
 const QUICK_ADD = ['Brush Teeth', 'Shower', 'Make Bed', 'Read', 'Meditate', 'Walk Dog', 'Make Breakfast'];
 
@@ -21,6 +22,16 @@ export default function BuildRoutineScreen() {
   const updateMinutes = useRoutineBuilderStore((state) => state.updateMinutes);
   const addItem = useRoutineBuilderStore((state) => state.addItem);
   const deleteItem = useRoutineBuilderStore((state) => state.deleteItem);
+
+  const { saveRoutine } = useRoutineSync({ autoLoad: true, onError: (err) => console.error('Failed to sync routine:', err) });
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      void saveRoutine();
+    }, 1500);
+    return () => clearTimeout(timeoutId);
+  }, [items, wakeTime, hasHydrated, isAuthenticated, saveRoutine]);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -50,7 +61,10 @@ export default function BuildRoutineScreen() {
       onAddItem={addItem}
       quickAddItems={QUICK_ADD}
       wakeTime={wakeTime}
-      onContinue={() => router.replace('/ideal-day')}
+      onContinue={() => {
+        void saveRoutine();
+        router.replace('/ideal-day');
+      }}
       onBack={() => router.replace('/goals')}
     />
   );

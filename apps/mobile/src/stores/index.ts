@@ -8,6 +8,7 @@ export { useEventsStore, getCurrentMinutes, formatMinutesToDisplay } from './eve
 export type { ScheduledEvent, EventCategory } from './events-store';
 export { useDemoStore, useGreeting, useCurrentHour, useCurrentMinutes, TIME_PRESETS } from './demo-store';
 export type { TimeOfDay } from './demo-store';
+export { useHomeBriefStore } from './home-brief-store';
 export { useGoalsStore, selectGoals, selectGoalById, selectHasHydrated as selectGoalsHasHydrated } from './goals-store';
 export type { Goal, GoalTask } from './goals-store';
 export { useInitiativesStore, selectInitiatives, selectInitiativeById, selectHasHydrated as selectInitiativesHasHydrated } from './initiatives-store';

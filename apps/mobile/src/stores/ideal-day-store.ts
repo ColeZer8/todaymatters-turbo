@@ -14,6 +14,10 @@ const ICON_MAP: Record<string, ComponentType<{ size?: number; color?: string }>>
   Sparkles,
 };
 
+export function getIdealDayIconByName(iconName: string): ComponentType<{ size?: number; color?: string }> {
+  return ICON_MAP[iconName] ?? Sparkles;
+}
+
 export interface IdealDayCategory {
   id: string;
   name: string;
@@ -24,7 +28,7 @@ export interface IdealDayCategory {
   maxHours: number;
 }
 
-type DayType = 'weekdays' | 'saturday' | 'sunday' | 'custom';
+export type DayType = 'weekdays' | 'saturday' | 'sunday' | 'custom';
 
 interface IdealDayState {
   dayType: DayType;
@@ -34,6 +38,11 @@ interface IdealDayState {
   customDayConfigs: Record<number, IdealDayCategory[]>;
   _hasHydrated: boolean;
   setHasHydrated: (hydrated: boolean) => void;
+  setFromSupabase: (snapshot: {
+    dayType: DayType;
+    categoriesByType: Record<DayType, IdealDayCategory[]>;
+    customDayConfigs: Record<number, IdealDayCategory[]>;
+  }) => void;
   setDayType: (type: DayType) => void;
   setHours: (id: string, hours: number) => void;
   addCategory: (name: string, color: string) => void;
@@ -126,6 +135,12 @@ export const useIdealDayStore = create<IdealDayState>()(
       customDayConfigs: {},
       _hasHydrated: false,
       setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
+      setFromSupabase: (snapshot) =>
+        set(() => ({
+          dayType: snapshot.dayType,
+          categoriesByType: snapshot.categoriesByType,
+          customDayConfigs: snapshot.customDayConfigs,
+        })),
       setDayType: (type) =>
         set(() => ({
           // Only change the active day type; preserve all selectedDaysByType

@@ -9,7 +9,18 @@ import { useDemoStore } from '@/stores';
 // TODO: Re-enable ElevenLabs voice coach integration
 // import { VoiceCoachButton } from '../organisms/VoiceCoachButton';
 
-export const HomeTemplate = () => {
+export interface HomeTemplateProps {
+    dailyBrief: {
+        name: string;
+        date: string;
+        unassignedCount: number;
+        line1: string;
+        line2: string;
+        line3?: string;
+    };
+}
+
+export const HomeTemplate = ({ dailyBrief }: HomeTemplateProps) => {
     const insets = useSafeAreaInsets();
     
     // Demo mode - show morning routine when "Wake Up" time is selected
@@ -27,7 +38,14 @@ export const HomeTemplate = () => {
             style={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 72 }}
         >
             <View className="flex-1 px-6">
-                <DailyBrief />
+                <DailyBrief
+                    name={dailyBrief.name}
+                    date={dailyBrief.date}
+                    unassignedCount={dailyBrief.unassignedCount}
+                    line1={dailyBrief.line1}
+                    line2={dailyBrief.line2}
+                    line3={dailyBrief.line3}
+                />
                 <ScheduleList />
                 <PendingActions />
             </View>

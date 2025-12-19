@@ -62,9 +62,11 @@ interface OnboardingState {
   setWakeTime: (time: Date) => void;
   setSleepTime: (time: Date) => void;
   setJoySelections: (selections: string[]) => void;
+  setJoyCustomOptions: (options: string[]) => void;
   toggleJoySelection: (value: string) => void;
   addJoyCustomOption: (value: string) => void;
   setDrainSelections: (selections: string[]) => void;
+  setDrainCustomOptions: (options: string[]) => void;
   toggleDrainSelection: (value: string) => void;
   addDrainCustomOption: (value: string) => void;
   setPurpose: (purpose: string | null) => void;
@@ -144,6 +146,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       setSleepTime: (time) => set({ sleepTime: time.toISOString() }),
 
       setJoySelections: (selections) => set({ joySelections: selections }),
+      setJoyCustomOptions: (options) => set({ joyCustomOptions: options }),
       toggleJoySelection: (value) =>
         set((state) => ({
           joySelections: state.joySelections.includes(value)
@@ -157,6 +160,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         })),
 
       setDrainSelections: (selections) => set({ drainSelections: selections }),
+      setDrainCustomOptions: (options) => set({ drainCustomOptions: options }),
       toggleDrainSelection: (value) =>
         set((state) => ({
           drainSelections: state.drainSelections.includes(value)

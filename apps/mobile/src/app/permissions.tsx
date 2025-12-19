@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { PermissionsTemplate } from '@/components/templates';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore, type PermissionKey } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -13,6 +14,8 @@ export default function PermissionsScreen() {
   const permissions = useOnboardingStore((state) => state.permissions);
   const togglePermission = useOnboardingStore((state) => state.togglePermission);
   const setAllPermissions = useOnboardingStore((state) => state.setAllPermissions);
+
+  const { savePermissions } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   // Derived: all permissions enabled = allowAll is on
   const allEnabled = useMemo(
@@ -36,6 +39,7 @@ export default function PermissionsScreen() {
   }, []);
 
   const handleContinue = () => {
+    void savePermissions(permissions);
     router.replace('/setup-questions');
   };
 

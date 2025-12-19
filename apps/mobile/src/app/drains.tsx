@@ -167,7 +167,7 @@ export default function DrainsScreen() {
   const addCustomOption = useOnboardingStore((state) => state.addDrainCustomOption);
 
   // Supabase sync
-  const { saveDrainSelections } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveDrainSelections, saveDrainCustomOptions } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   const [searchValue, setSearchValue] = useState('');
 
@@ -181,6 +181,14 @@ export default function DrainsScreen() {
       return () => clearTimeout(timeoutId);
     }
   }, [selected, hasHydrated, isAuthenticated, saveDrainSelections]);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      saveDrainCustomOptions(customOptions);
+    }, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [customOptions, hasHydrated, isAuthenticated, saveDrainCustomOptions]);
 
   const options = useMemo(() => {
     if (customOptions.length > 0) {

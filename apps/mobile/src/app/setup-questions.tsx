@@ -5,6 +5,7 @@ import { SetupQuestionsTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 const OPTIONS = [
   'Student',
@@ -25,6 +26,16 @@ export default function SetupQuestionsScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const role = useOnboardingStore((state) => state.role);
   const setRole = useOnboardingStore((state) => state.setRole);
+
+  const { saveRole } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      void saveRole(role);
+    }, 600);
+    return () => clearTimeout(timeoutId);
+  }, [role, hasHydrated, isAuthenticated, saveRole]);
 
   useEffect(() => {
     if (!isNavigationReady) return;

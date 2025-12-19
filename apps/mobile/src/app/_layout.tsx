@@ -1,7 +1,7 @@
 import "react-native-gesture-handler";
 import "../global.css";
 import { Stack } from "expo-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Constants from "expo-constants";
@@ -9,6 +9,7 @@ import { handleAuthCallback } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 // TODO: Re-enable ElevenLabs voice coach integration
 // Voice features require native modules - only available in dev builds, not Expo Go
@@ -30,6 +31,10 @@ let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = nu
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const { loadOnboardingData } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const didLoadOnboardingForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;
@@ -40,6 +45,12 @@ export default function Layout() {
 
     run();
     const cleanupLinks = handleAuthCallback();
+
+    // Load onboarding state from Supabase once after auth is ready.
+    // This makes onboarding truly "server-backed" (app can be reinstalled and state restored).
+    if (__DEV__) {
+      console.log("🔍 Onboarding sync: waiting for authentication...");
+    }
 
     // Verify auth and data after initialization (for debugging)
     if (__DEV__) {
@@ -53,6 +64,23 @@ export default function Layout() {
       unsubscribeAuth?.();
     };
   }, [initialize]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    if (didLoadOnboardingForUserRef.current === userId) return;
+    didLoadOnboardingForUserRef.current = userId;
+    (async () => {
+      try {
+        await loadOnboardingData();
+      } catch (error) {
+        if (__DEV__) {
+          console.log("⚠️ Failed to load onboarding data from Supabase:", error);
+        }
+      }
+    })();
+    return () => {
+    };
+  }, [isAuthenticated, userId, loadOnboardingData]);
 
   const appContent = (
     <SafeAreaProvider>

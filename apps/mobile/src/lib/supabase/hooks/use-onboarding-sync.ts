@@ -11,10 +11,13 @@ import {
   updateMission,
   updateRole,
   updateJoySelections,
+  updateJoyCustomOptions,
   updateDrainSelections,
+  updateDrainCustomOptions,
   updateFocusStyle,
   updateCoachPersona,
   updateMorningMindset,
+  updatePermissions,
   updateProfilePreferences,
   getProfilePreferences,
   dateToTimeString,
@@ -38,8 +41,36 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  // Get all onboarding state
-  const onboardingState = useOnboardingStore();
+  // Select state slices + actions explicitly so callbacks stay stable.
+  const permissions = useOnboardingStore((s) => s.permissions);
+  const role = useOnboardingStore((s) => s.role);
+  const wakeTime = useOnboardingStore((s) => s.wakeTime);
+  const sleepTime = useOnboardingStore((s) => s.sleepTime);
+  const purpose = useOnboardingStore((s) => s.purpose);
+  const joySelections = useOnboardingStore((s) => s.joySelections);
+  const joyCustomOptions = useOnboardingStore((s) => s.joyCustomOptions);
+  const drainSelections = useOnboardingStore((s) => s.drainSelections);
+  const drainCustomOptions = useOnboardingStore((s) => s.drainCustomOptions);
+  const focusStyle = useOnboardingStore((s) => s.focusStyle);
+  const coachPersona = useOnboardingStore((s) => s.coachPersona);
+  const morningMindset = useOnboardingStore((s) => s.morningMindset);
+  const goals = useOnboardingStore((s) => s.goals);
+  const initiatives = useOnboardingStore((s) => s.initiatives);
+
+  const setWakeTime = useOnboardingStore((s) => s.setWakeTime);
+  const setSleepTime = useOnboardingStore((s) => s.setSleepTime);
+  const setPurpose = useOnboardingStore((s) => s.setPurpose);
+  const setRole = useOnboardingStore((s) => s.setRole);
+  const setPermissions = useOnboardingStore((s) => s.setPermissions);
+  const setJoySelections = useOnboardingStore((s) => s.setJoySelections);
+  const setJoyCustomOptions = useOnboardingStore((s) => s.setJoyCustomOptions);
+  const setDrainSelections = useOnboardingStore((s) => s.setDrainSelections);
+  const setDrainCustomOptions = useOnboardingStore((s) => s.setDrainCustomOptions);
+  const setFocusStyle = useOnboardingStore((s) => s.setFocusStyle);
+  const setCoachPersona = useOnboardingStore((s) => s.setCoachPersona);
+  const setMorningMindset = useOnboardingStore((s) => s.setMorningMindset);
+  const setGoals = useOnboardingStore((s) => s.setGoals);
+  const setInitiatives = useOnboardingStore((s) => s.setInitiatives);
 
   // Load all onboarding data from Supabase
   const loadOnboardingData = useCallback(async (): Promise<void> => {
@@ -61,37 +92,55 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
           const wakeDate = new Date();
           const [hours, minutes] = profile.ideal_work_day.split(':').map(Number);
           wakeDate.setHours(hours, minutes, 0, 0);
-          onboardingState.setWakeTime(wakeDate);
+          setWakeTime(wakeDate);
         }
         if (profile.ideal_sabbath) {
           const sleepDate = new Date();
           const [hours, minutes] = profile.ideal_sabbath.split(':').map(Number);
           sleepDate.setHours(hours, minutes, 0, 0);
-          onboardingState.setSleepTime(sleepDate);
+          setSleepTime(sleepDate);
         }
         if (profile.mission) {
-          onboardingState.setPurpose(profile.mission);
+          setPurpose(profile.mission);
         }
         if (profile.role) {
-          onboardingState.setRole(profile.role);
+          setRole(profile.role);
         }
 
         // Load preferences from meta
         const preferences = getProfilePreferences(profile);
+        if (preferences.permissions) {
+          setPermissions({
+            calendar: !!preferences.permissions.calendar,
+            notifications: !!preferences.permissions.notifications,
+            email: !!preferences.permissions.email,
+            health: !!preferences.permissions.health,
+            location: !!preferences.permissions.location,
+            contacts: !!preferences.permissions.contacts,
+            browsing: !!preferences.permissions.browsing,
+            appUsage: !!preferences.permissions.appUsage,
+          });
+        }
         if (preferences.joy_selections) {
-          onboardingState.setJoySelections(preferences.joy_selections);
+          setJoySelections(preferences.joy_selections);
+        }
+        if (preferences.joy_custom_options) {
+          setJoyCustomOptions(preferences.joy_custom_options);
         }
         if (preferences.drain_selections) {
-          onboardingState.setDrainSelections(preferences.drain_selections);
+          setDrainSelections(preferences.drain_selections);
+        }
+        if (preferences.drain_custom_options) {
+          setDrainCustomOptions(preferences.drain_custom_options);
         }
         if (preferences.focus_style) {
-          onboardingState.setFocusStyle(preferences.focus_style);
+          setFocusStyle(preferences.focus_style);
         }
         if (preferences.coach_persona) {
-          onboardingState.setCoachPersona(preferences.coach_persona);
+          setCoachPersona(preferences.coach_persona);
         }
         if (preferences.morning_mindset) {
-          onboardingState.setMorningMindset(preferences.morning_mindset);
+          setMorningMindset(preferences.morning_mindset);
         }
       }
 
@@ -104,11 +153,11 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       // Update store with goals/initiatives
       if (goals.length > 0) {
         const goalTitles = goals.map((g) => g.title).filter(Boolean);
-        onboardingState.setGoals(goalTitles);
+        setGoals(goalTitles);
       }
       if (initiatives.length > 0) {
         const initiativeTitles = initiatives.map((i) => i.title).filter(Boolean);
-        onboardingState.setInitiatives(initiativeTitles);
+        setInitiatives(initiativeTitles);
       }
 
       console.log('✅ Onboarding data loaded successfully');
@@ -117,7 +166,25 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       console.error('Failed to load onboarding data:', err);
       onError?.(err);
     }
-  }, [isAuthenticated, user?.id, onboardingState, onError]);
+  }, [
+    isAuthenticated,
+    user?.id,
+    onError,
+    setWakeTime,
+    setSleepTime,
+    setPurpose,
+    setRole,
+    setPermissions,
+    setJoySelections,
+    setJoyCustomOptions,
+    setDrainSelections,
+    setDrainCustomOptions,
+    setFocusStyle,
+    setCoachPersona,
+    setMorningMindset,
+    setGoals,
+    setInitiatives,
+  ]);
 
   // Save all onboarding data to Supabase
   const saveOnboardingData = useCallback(async (): Promise<void> => {
@@ -129,30 +196,33 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       console.log('💾 Saving onboarding data to Supabase...');
 
       // Save profile data
-      const wakeTime = new Date(onboardingState.wakeTime);
-      const sleepTime = new Date(onboardingState.sleepTime);
+      const wake = new Date(wakeTime);
+      const sleep = new Date(sleepTime);
 
       await Promise.all([
-        updateDailyRhythm(user.id, dateToTimeString(wakeTime), dateToTimeString(sleepTime)),
-        onboardingState.purpose && updateMission(user.id, onboardingState.purpose),
-        onboardingState.role && updateRole(user.id, onboardingState.role),
+        updateDailyRhythm(user.id, dateToTimeString(wake), dateToTimeString(sleep)),
+        purpose && updateMission(user.id, purpose),
+        role && updateRole(user.id, role),
       ]);
 
       // Save preferences
       await updateProfilePreferences(user.id, {
-        joy_selections: onboardingState.joySelections,
-        drain_selections: onboardingState.drainSelections,
-        focus_style: onboardingState.focusStyle,
-        coach_persona: onboardingState.coachPersona,
-        morning_mindset: onboardingState.morningMindset,
+        permissions,
+        joy_selections: joySelections,
+        joy_custom_options: joyCustomOptions,
+        drain_selections: drainSelections,
+        drain_custom_options: drainCustomOptions,
+        focus_style: focusStyle,
+        coach_persona: coachPersona,
+        morning_mindset: morningMindset,
       });
 
       // Save goals and initiatives
-      if (onboardingState.goals.length > 0) {
-        await bulkCreateGoals(user.id, onboardingState.goals.filter(Boolean));
+      if (goals.length > 0) {
+        await bulkCreateGoals(user.id, goals.filter(Boolean));
       }
-      if (onboardingState.initiatives.length > 0) {
-        await bulkCreateInitiatives(user.id, onboardingState.initiatives.filter(Boolean));
+      if (initiatives.length > 0) {
+        await bulkCreateInitiatives(user.id, initiatives.filter(Boolean));
       }
 
       console.log('✅ Onboarding data saved successfully');
@@ -162,7 +232,25 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       onError?.(err);
       throw err;
     }
-  }, [isAuthenticated, user?.id, onboardingState, onError]);
+  }, [
+    isAuthenticated,
+    user?.id,
+    onError,
+    wakeTime,
+    sleepTime,
+    purpose,
+    role,
+    permissions,
+    joySelections,
+    joyCustomOptions,
+    drainSelections,
+    drainCustomOptions,
+    focusStyle,
+    coachPersona,
+    morningMindset,
+    goals,
+    initiatives,
+  ]);
 
   // Individual save functions for auto-save
   const saveJoySelections = useCallback(
@@ -177,6 +265,18 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     [isAuthenticated, user?.id, onError]
   );
 
+  const saveJoyCustomOptions = useCallback(
+    async (options: string[]) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateJoyCustomOptions(user.id, options);
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save joy custom options'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
   const saveDrainSelections = useCallback(
     async (selections: string[]) => {
       if (!isAuthenticated || !user?.id) return;
@@ -184,6 +284,42 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         await updateDrainSelections(user.id, selections);
       } catch (error) {
         onError?.(error instanceof Error ? error : new Error('Failed to save drain selections'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveDrainCustomOptions = useCallback(
+    async (options: string[]) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateDrainCustomOptions(user.id, options);
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save drain custom options'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const savePermissions = useCallback(
+    async (permissions: typeof onboardingState.permissions) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updatePermissions(user.id, permissions);
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save permissions'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveRole = useCallback(
+    async (role: string | null) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateRole(user.id, role);
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save role'));
       }
     },
     [isAuthenticated, user?.id, onError]
@@ -260,8 +396,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     loadOnboardingData,
     saveOnboardingData,
     // Individual save functions for auto-save
+    savePermissions,
+    saveRole,
     saveJoySelections,
+    saveJoyCustomOptions,
     saveDrainSelections,
+    saveDrainCustomOptions,
     saveFocusStyle,
     saveCoachPersona,
     saveMorningMindset,

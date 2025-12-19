@@ -5,7 +5,7 @@ import type { ComponentType } from 'react';
 import { BookOpenCheck, Droplet, Moon, Sun, UtensilsCrossed } from 'lucide-react-native';
 import type { RoutineItem } from '@/components/templates/RoutineBuilderTemplate';
 
-type IconKey = 'droplet' | 'book' | 'utensils' | 'moon' | 'sun';
+export type IconKey = 'droplet' | 'book' | 'utensils' | 'moon' | 'sun';
 
 const iconMap: Record<IconKey, ComponentType<{ size?: number; color?: string }>> = {
   droplet: Droplet,
@@ -27,6 +27,7 @@ type RoutineState = {
   wakeTime: string;
   items: Array<RoutineItem & { iconKey: IconKey }>;
   _hasHydrated: boolean;
+  setWakeTime: (wakeTime: string) => void;
   setItems: (items: RoutineState['items']) => void;
   updateMinutes: (id: string, minutes: number) => void;
   addItem: (title: string) => void;
@@ -50,6 +51,7 @@ export const useRoutineBuilderStore = create<RoutineState>()(
       wakeTime: '06:30',
       items: DEFAULT_ITEMS,
       _hasHydrated: false,
+      setWakeTime: (wakeTime) => set({ wakeTime }),
       setItems: (items) => set({ items }),
       updateMinutes: (id, minutes) =>
         set((state) => ({
