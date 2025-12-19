@@ -292,3 +292,4 @@ await saveOnboardingData();
 - Global test functions available in console
 
 **Next Step**: Wait for team to expose `tm` schema, then run `window.testAllIntegrations()`
+

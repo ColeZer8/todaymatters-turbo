@@ -339,3 +339,4 @@ export async function bulkCreateInitiatives(
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
+

@@ -93,3 +93,4 @@ GRANT SELECT ON public.conversation_insights TO authenticated;
 
 
 
+

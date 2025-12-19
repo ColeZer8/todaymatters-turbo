@@ -50,3 +50,4 @@ export async function generateHomeBriefLlm(
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
+

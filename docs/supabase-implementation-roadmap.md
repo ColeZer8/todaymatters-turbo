@@ -396,3 +396,4 @@ updateGoal: (id, updates) => {
 - **Integration Plan**: `docs/supabase-tm-schema-integration-plan.md`
 - **Profile Values DDL**: `docs/profile-values-table-ddl.sql`
 - **Supabase Dashboard**: https://supabase.com/dashboard/project/bqbbuysyiyzdtftctvdk
+

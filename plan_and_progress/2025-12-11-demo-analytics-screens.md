@@ -153,3 +153,4 @@ Analytics Page
 - Consider adding swipe gestures to navigate between analytics tabs
 
 
+

@@ -45,3 +45,4 @@ This allows us to:
 - ✅ Query easily (JSONB is queryable)
 - ✅ Extend easily in the future
 - ✅ Works with existing schema
+

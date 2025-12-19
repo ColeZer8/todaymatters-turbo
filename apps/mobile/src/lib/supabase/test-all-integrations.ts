@@ -349,3 +349,4 @@ export async function testAllIntegrations(): Promise<{
 if (typeof window !== 'undefined') {
   (window as any).testAllIntegrations = testAllIntegrations;
 }
+

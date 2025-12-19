@@ -105,3 +105,4 @@ function isoTimeToMinutesFromMidnight(iso: string | null | undefined): number | 
   if (Number.isNaN(d.getTime())) return null;
   return d.getHours() * 60 + d.getMinutes();
 }
+

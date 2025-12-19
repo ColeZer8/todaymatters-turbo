@@ -290,3 +290,4 @@ function clamp56(value: string): string {
   if (value.length <= 56) return value;
   return value.slice(0, 55).trimEnd() + '…';
 }
+

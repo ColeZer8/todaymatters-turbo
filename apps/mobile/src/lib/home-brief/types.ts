@@ -90,3 +90,4 @@ export interface HomeBriefResult extends HomeBriefDraft {
   /** 'rules' = local rules, 'llm' = OpenAI polished */
   source: 'rules' | 'llm';
 }
+

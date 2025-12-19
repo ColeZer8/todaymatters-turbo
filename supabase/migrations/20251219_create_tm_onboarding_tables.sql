@@ -482,3 +482,4 @@ grant select, insert, update, delete on tm.ideal_day_categories to authenticated
 grant select, insert, update, delete on tm.ideal_day_overrides to authenticated;
 grant select, insert, update, delete on tm.ideal_day_override_categories to authenticated;
 
+

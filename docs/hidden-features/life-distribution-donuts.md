@@ -84,3 +84,4 @@ Hidden per product decision to simplify the Analytics Overview screen. The featu
 | AnalyticsTemplate | `src/components/templates/AnalyticsTemplate.tsx` | Active (section hidden) |
 
 
+

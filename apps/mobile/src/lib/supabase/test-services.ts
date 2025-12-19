@@ -169,3 +169,4 @@ export async function testSupabaseServices() {
 if (typeof window !== 'undefined') {
   (window as any).testSupabaseServices = testSupabaseServices;
 }
+
