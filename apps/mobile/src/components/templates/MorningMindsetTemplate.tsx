@@ -16,7 +16,7 @@ interface MorningMindsetOption {
 interface MorningMindsetTemplateProps {
   step?: number;
   totalSteps?: number;
-  options: MorningMindsetOption[];
+  options: ReadonlyArray<MorningMindsetOption>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onContinue: () => void;

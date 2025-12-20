@@ -5,6 +5,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useAuthStore, useOnboardingStore } from '@/stores';
+import type { PermissionsData } from '@/stores/onboarding-store';
 import {
   fetchProfile,
   updateDailyRhythm,
@@ -302,7 +303,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   );
 
   const savePermissions = useCallback(
-    async (permissions: typeof onboardingState.permissions) => {
+    async (permissions: PermissionsData) => {
       if (!isAuthenticated || !user?.id) return;
       try {
         await updatePermissions(user.id, permissions);
@@ -409,4 +410,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     savePurpose,
   };
 }
+
+
+
 

@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ComponentType } from 'react';
 import { BookOpenCheck, Droplet, Moon, Sun, UtensilsCrossed } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import type { RoutineItem } from '@/components/templates/RoutineBuilderTemplate';
 
 export type IconKey = 'droplet' | 'book' | 'utensils' | 'moon' | 'sun';
 
-const iconMap: Record<IconKey, ComponentType<{ size?: number; color?: string }>> = {
+const iconMap: Record<IconKey, LucideIcon> = {
   droplet: Droplet,
   book: BookOpenCheck,
   utensils: UtensilsCrossed,

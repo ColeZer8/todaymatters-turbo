@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "build": "expo export -p web",
     "dev": "node ./scripts/expo-dev.mjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
+    "lint": "eslint .",
+    "check-types": "tsc -p tsconfig.json --noEmit",
     "test": "jest"
   },
   "dependencies": {
@@ -50,36 +53,16 @@
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
-    "babel-jest": "^30.2.0",
+    "babel-jest": "^29.7.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "~54.0.0",
     "dotenv": "^17.2.3",
     "jest": "^29.7.0",
     "jest-expo": "^54.0.14",
-    "react-test-renderer": "^19.0.0-rc-3",
+    "react-test-renderer": "^19.1.0",
     "typescript": "~5.9.2"
   },
-  "private": true,
-  "jest": {
-    "preset": "jest-expo",
-    "transform": {
-      "^.+\\.(js|jsx|mjs|cjs|ts|tsx)$": "babel-jest"
-    },
-    "transformIgnorePatterns": [
-      "node_modules/(?!((jest-expo|react-native|@react-native)/.*|expo-.*|@expo(nent)?/.*|@unimodules/.*|react-native-svg))"
-    ],
-    "testMatch": [
-      "**/__tests__/**/*.ts?(x)",
-      "**/?(*.)+(spec|test).ts?(x)"
-    ],
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "jsx",
-      "json",
-      "node"
-    ]
-  }
+  "private": true
 }

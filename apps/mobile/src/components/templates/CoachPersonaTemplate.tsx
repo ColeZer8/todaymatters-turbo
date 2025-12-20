@@ -16,7 +16,7 @@ interface CoachPersonaOption {
 interface CoachPersonaTemplateProps {
   step?: number;
   totalSteps?: number;
-  options: CoachPersonaOption[];
+  options: ReadonlyArray<CoachPersonaOption>;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onContinue?: () => void;

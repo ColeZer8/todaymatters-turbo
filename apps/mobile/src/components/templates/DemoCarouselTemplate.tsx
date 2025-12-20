@@ -22,6 +22,7 @@ import {
   Sunset,
   X,
 } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { useDemoStore, TIME_PRESETS, type TimeOfDay } from '@/stores';
 
@@ -35,7 +36,8 @@ import { ProfileTemplate } from './ProfileTemplate';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Time preset icons mapping
-const TIME_ICONS: Record<TimeOfDay, typeof Sun> = {
+const TIME_ICONS: Record<TimeOfDay, LucideIcon> = {
+  devotional: Clock,
   morning: Sunrise,
   midday: Sun,
   afternoon: Sunset,
@@ -44,6 +46,7 @@ const TIME_ICONS: Record<TimeOfDay, typeof Sun> = {
 };
 
 const TIME_COLORS: Record<TimeOfDay, string> = {
+  devotional: '#F59E0B',
   morning: '#F59E0B',
   midday: '#3B82F6',
   afternoon: '#F97316',
@@ -64,7 +67,18 @@ const DEMO_SLIDES: DemoSlide[] = [
     id: 'home',
     title: 'Home Dashboard',
     description: 'Daily brief with personalized greeting and schedule overview',
-    component: <HomeTemplate />,
+    component: (
+      <HomeTemplate
+        dailyBrief={{
+          name: 'Paul',
+          date: 'Friday, Dec 19',
+          unassignedCount: 3,
+          line1: 'This is your day.',
+          line2: 'What matters most right now?',
+          line3: 'You have time to move one thing forward.',
+        }}
+      />
+    ),
   },
   {
     id: 'calendar',
@@ -385,6 +399,9 @@ export const DemoCarouselTemplate = () => {
     </View>
   );
 };
+
+
+
 
 
 

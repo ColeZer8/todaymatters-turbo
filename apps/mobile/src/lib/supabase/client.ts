@@ -25,7 +25,7 @@ const noopStorage = {
   removeItem: async () => {},
 };
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database, 'tm'>(supabaseUrl, supabaseAnonKey, {
   db: {
     schema: 'tm', // Use tm schema instead of public
   },

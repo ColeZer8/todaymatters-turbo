@@ -397,3 +397,6 @@ updateGoal: (id, updates) => {
 - **Profile Values DDL**: `docs/profile-values-table-ddl.sql`
 - **Supabase Dashboard**: https://supabase.com/dashboard/project/bqbbuysyiyzdtftctvdk
 
+
+
+

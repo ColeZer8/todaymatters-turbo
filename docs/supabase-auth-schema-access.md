@@ -109,3 +109,6 @@ Your queries in `profile-values.ts` already use:
 
 **TL;DR**: Yes, you need a user token first. Your Supabase client automatically includes it. Your code is already set up correctly! 🎉
 
+
+
+

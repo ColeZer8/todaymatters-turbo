@@ -22,3 +22,6 @@ export function clampTextToMaxChars(text: string, maxChars: number): string {
   return trimmed.slice(0, Math.max(0, maxChars - 1)).trimEnd() + '…';
 }
 
+
+
+

@@ -1,6 +1,6 @@
 import { act } from 'react-test-renderer';
-import { useIdealDayStore } from '../ideal-day-store';
-import { IdealDayCategory } from '../ideal-day-store';
+import { useIdealDayStore } from './ideal-day-store';
+import { IdealDayCategory } from './ideal-day-store';
 
 // Mock AsyncStorage as it's used by zustand/middleware/persist
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -15,7 +15,7 @@ const initialState = useIdealDayStore.getState();
 beforeEach(() => {
   act(() => {
     useIdealDayStore.setState(initialState, true); // Reset to initial state
-    useIdealDayStore.setState({ _hasHydrated: true }, true); // Ensure store is hydrated for tests
+    useIdealDayStore.setState({ _hasHydrated: true }); // Ensure store is hydrated for tests
   });
 });
 

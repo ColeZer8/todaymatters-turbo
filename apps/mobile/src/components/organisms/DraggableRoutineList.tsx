@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View, type ViewStyle } from 'react-native';
 import { Minus, Plus } from 'lucide-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -278,15 +278,15 @@ const RoutineItemWithDrag = ({
       scale.value = 1;
     });
 
-  const animatedStyle = useAnimatedStyle(() => {
+  const animatedStyle = useAnimatedStyle<ViewStyle>(() => {
     // Dragged item uses dragTranslateY, others use displaceY
     const translateY = isDragged ? dragTranslateY.value : displaceY.value;
-    
+
+    const transform = [{ translateY }, { scale: scale.value }] as const;
+
     return {
-      transform: [
-        { translateY },
-        { scale: scale.value },
-      ],
+      // RN's Transform type is extremely strict; this is a safe runtime shape.
+      transform: transform as unknown as ViewStyle['transform'],
       zIndex: isDragged ? 100 : 0,
       shadowOpacity: isDragged ? 0.15 : 0.05,
       elevation: isDragged ? 12 : 3,

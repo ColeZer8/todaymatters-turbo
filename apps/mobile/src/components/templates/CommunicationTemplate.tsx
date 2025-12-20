@@ -18,7 +18,7 @@ interface Communication {
 }
 
 // Mock data - mixed communications sorted by recency
-const COMMUNICATIONS: Communication[] = [
+const COMMUNICATIONS = ([
     {
         id: '1',
         name: 'Connor',
@@ -122,7 +122,7 @@ const COMMUNICATIONS: Communication[] = [
         initials: 'A',
         source: 'gmail',
     },
-].sort((a, b) => b.timestamp - a.timestamp);
+] satisfies Communication[]).sort((a, b) => b.timestamp - a.timestamp);
 
 // Count unread by source
 const getUnreadCounts = () => {

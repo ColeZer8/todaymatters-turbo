@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Step 1: Permissions
-export interface PermissionsData {
+export interface PermissionsData extends Record<string, boolean> {
   calendar: boolean;
   notifications: boolean;
   email: boolean;
@@ -225,6 +225,9 @@ export const getWakeTimeAsDate = (state: OnboardingState) =>
   new Date(state.wakeTime);
 export const getSleepTimeAsDate = (state: OnboardingState) =>
   new Date(state.sleepTime);
+
+
+
 
 
 

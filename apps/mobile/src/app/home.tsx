@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { HomeTemplate } from '@/components/templates';
-import { buildHomeBriefContext, generateHomeBriefDraft, getNextScheduleBoundary, getNextTimeOfDayBoundary } from '@/lib/home-brief';
+import {
+  buildHomeBriefContext,
+  generateHomeBriefDraft,
+  getNextScheduleBoundary,
+  getNextTimeOfDayBoundary,
+  type HomeBriefDraft,
+} from '@/lib/home-brief';
 import { fetchProfile, generateHomeBriefLlm } from '@/lib/supabase/services';
 import {
   useAuthStore,
@@ -122,7 +128,7 @@ export default function HomeScreen() {
       console.log('🧠 Home brief updated (rules):', trigger, draft.reason);
     };
 
-    function maybePolishWithLlm(ctx: unknown, draft: { line1: string; line2: string; line3?: string; reason: string; momentKey: string; expiresAt: string; contextHash: string }) {
+    function maybePolishWithLlm(ctx: unknown, draft: HomeBriefDraft) {
       if (!(isAuthenticated && user?.id) && !enableLlmInDev) return;
       if (isDemoActive) return;
 

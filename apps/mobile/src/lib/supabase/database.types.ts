@@ -772,6 +772,334 @@ export type Database = {
       [_ in never]: never
     }
   }
+  tm: {
+    Tables: {
+      profiles: {
+        Row: {
+          user_id: string
+          role: string | null
+          mission: string | null
+          ideal_work_day: string | null
+          ideal_sabbath: string | null
+          full_name: string | null
+          birthday: string | null
+          timezone: string
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          role?: string | null
+          mission?: string | null
+          ideal_work_day?: string | null
+          ideal_sabbath?: string | null
+          full_name?: string | null
+          birthday?: string | null
+          timezone?: string
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          role?: string | null
+          mission?: string | null
+          ideal_work_day?: string | null
+          ideal_sabbath?: string | null
+          full_name?: string | null
+          birthday?: string | null
+          timezone?: string
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profile_values: {
+        Row: {
+          id: string
+          user_id: string
+          value_label: string
+          rank: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          value_label: string
+          rank: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          value_label?: string
+          rank?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          description: string | null
+          scheduled_start: string | null
+          scheduled_end: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: string
+          title: string
+          description?: string | null
+          scheduled_start?: string | null
+          scheduled_end?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          description?: string | null
+          scheduled_start?: string | null
+          scheduled_end?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      routines: {
+        Row: {
+          id: string
+          user_id: string
+          kind: string
+          wake_time: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          kind?: string
+          wake_time?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          kind?: string
+          wake_time?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      routine_items: {
+        Row: {
+          id: string
+          routine_id: string
+          user_id: string
+          position: number
+          title: string
+          minutes: number
+          icon_key: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          routine_id: string
+          user_id: string
+          position: number
+          title: string
+          minutes: number
+          icon_key?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          routine_id?: string
+          user_id?: string
+          position?: number
+          title?: string
+          minutes?: number
+          icon_key?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ideal_day_templates: {
+        Row: {
+          id: string
+          user_id: string
+          day_type: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          day_type: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          day_type?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ideal_day_categories: {
+        Row: {
+          id: string
+          template_id: string
+          user_id: string
+          category_key: string
+          name: string
+          minutes: number
+          max_minutes: number
+          color: string | null
+          icon_name: string | null
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          template_id: string
+          user_id: string
+          category_key: string
+          name: string
+          minutes: number
+          max_minutes?: number
+          color?: string | null
+          icon_name?: string | null
+          position: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          template_id?: string
+          user_id?: string
+          category_key?: string
+          name?: string
+          minutes?: number
+          max_minutes?: number
+          color?: string | null
+          icon_name?: string | null
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ideal_day_overrides: {
+        Row: {
+          id: string
+          user_id: string
+          day_of_week: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          day_of_week: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          day_of_week?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ideal_day_override_categories: {
+        Row: {
+          id: string
+          override_id: string
+          user_id: string
+          category_key: string
+          name: string
+          minutes: number
+          max_minutes: number
+          color: string | null
+          icon_name: string | null
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          override_id: string
+          user_id: string
+          category_key: string
+          name: string
+          minutes: number
+          max_minutes?: number
+          color?: string | null
+          icon_name?: string | null
+          position: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          override_id?: string
+          user_id?: string
+          category_key?: string
+          name?: string
+          minutes?: number
+          max_minutes?: number
+          color?: string | null
+          icon_name?: string | null
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
 }
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">

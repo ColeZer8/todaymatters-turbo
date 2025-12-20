@@ -1,10 +1,11 @@
 import { supabase } from '../client';
 import { handleSupabaseError } from '../utils/error-handler';
+import type { Json } from '../database.types';
 
 /**
  * Profile preferences stored in meta JSONB
  */
-export interface ProfilePreferences {
+export interface ProfilePreferences extends Record<string, Json> {
   permissions?: {
     calendar?: boolean;
     notifications?: boolean;
@@ -40,7 +41,7 @@ export interface ProfileData {
   mission?: string | null; // Purpose/Why selection
   role?: string | null; // Setup questions role (needs column in DB)
   timezone?: string | null;
-  meta?: ProfilePreferences | Record<string, any> | null; // JSONB for preferences
+  meta?: ProfilePreferences | null; // JSONB for preferences
   created_at?: string;
   updated_at?: string;
 }

@@ -170,3 +170,6 @@ if (typeof window !== 'undefined') {
   (window as any).testSupabaseServices = testSupabaseServices;
 }
 
+
+
+

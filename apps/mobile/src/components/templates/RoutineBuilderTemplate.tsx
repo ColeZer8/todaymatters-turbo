@@ -1,7 +1,7 @@
-import type { ComponentType } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowRight, Plus } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 import { GradientButton } from '@/components/atoms';
 import { RoutineItemCard } from '@/components/molecules';
 import { DraggableRoutineList, SetupStepLayout } from '@/components/organisms';
@@ -11,7 +11,7 @@ export interface RoutineItem {
   id: string;
   title: string;
   minutes: number;
-  icon: ComponentType<{ size?: number; color?: string }>;
+  icon: LucideIcon;
 }
 
 interface RoutineBuilderTemplateProps {

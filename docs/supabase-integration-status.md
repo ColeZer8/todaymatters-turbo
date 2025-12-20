@@ -301,3 +301,6 @@ Once the schema is accessible, these errors should disappear and you'll see:
 
 **Next Action**: Wait for team to expose `tm` schema, then run full test suite.
 
+
+
+
