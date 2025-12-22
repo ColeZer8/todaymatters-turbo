@@ -2,10 +2,11 @@ import "react-native-gesture-handler";
 import "../global.css";
 import { Stack } from "expo-router";
 import { useEffect, useRef, type ReactNode } from "react";
+import { AppState, AppStateStatus } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Constants from "expo-constants";
-import { handleAuthCallback } from "@/lib/supabase";
+import { handleAuthCallback, refreshSession } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
@@ -81,6 +82,33 @@ export default function Layout() {
     return () => {
     };
   }, [isAuthenticated, userId, loadOnboardingData]);
+
+  // Refresh session when app returns from background
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - refresh session if needed
+        const session = useAuthStore.getState().session;
+        if (session) {
+          try {
+            if (__DEV__) {
+              console.log('🔄 App returned to foreground, refreshing session...');
+            }
+            await refreshSession();
+          } catch (error) {
+            if (__DEV__) {
+              console.error('⚠️ Failed to refresh session on foreground:', error);
+            }
+            // Error handling is done in refreshSession - user will be signed out if needed
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const appContent = (
     <SafeAreaProvider>

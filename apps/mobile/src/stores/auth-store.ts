@@ -161,13 +161,46 @@ export const useAuthStore = create<AuthState>()(
             });
           }
 
-          if (event === 'SIGNED_OUT') {
-            get().setSession(null);
-            return;
-          }
+          switch (event) {
+            case 'SIGNED_OUT':
+              get().setSession(null);
+              if (__DEV__) {
+                console.log('👋 User signed out');
+              }
+              break;
 
-          // For SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, etc.
-          get().setSession(nextSession);
+            case 'TOKEN_REFRESHED':
+              get().setSession(nextSession);
+              if (__DEV__) {
+                console.log('🔄 Token refreshed, new expiry:', nextSession?.expires_at);
+              }
+              break;
+
+            case 'SIGNED_IN':
+              get().setSession(nextSession);
+              if (__DEV__) {
+                console.log('✅ User signed in:', nextSession?.user?.email);
+              }
+              break;
+
+            case 'INITIAL_SESSION':
+              get().setSession(nextSession);
+              if (__DEV__) {
+                console.log('🚀 Restored session for:', nextSession?.user?.email);
+              }
+              break;
+
+            case 'USER_UPDATED':
+              get().setSession(nextSession);
+              if (__DEV__) {
+                console.log('👤 User updated:', nextSession?.user?.email);
+              }
+              break;
+
+            default:
+              // Handle other events generically (PASSWORD_RECOVERY, etc.)
+              get().setSession(nextSession);
+          }
         });
 
         return () => {
