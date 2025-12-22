@@ -41,7 +41,12 @@ double_confirm_changes = true
 enable_confirmations = false
 
 [functions]
-# Enable edge function verification
+# NOTE:
+# Per-function settings live under [functions.<function_name>].
+# Putting `verify_jwt` directly under [functions] is interpreted as a function name
+# by the Supabase CLI and breaks `supabase status/start` on older CLI versions.
+
+[functions.home-brief]
 verify_jwt = true
 
 

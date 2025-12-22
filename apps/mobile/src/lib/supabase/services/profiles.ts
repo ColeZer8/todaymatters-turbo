@@ -284,8 +284,10 @@ export async function updateProfilePreferences(
     if (error) {
       if (error.code === 'PGRST204') {
         throw new Error(
-          "Supabase schema mismatch: tm.profiles.meta column is missing (or PostgREST schema cache is stale). " +
-            "Ask the Supabase team to add `meta jsonb not null default '{}'::jsonb` to tm.profiles and refresh the schema cache."
+          "Supabase schema mismatch: PostgREST can't see `tm.profiles.meta` (column missing OR schema cache stale). " +
+            'Apply the latest migrations to your Supabase project, then refresh the schema cache. ' +
+            "Quick fix (SQL editor): `alter table tm.profiles add column if not exists meta jsonb not null default '{}'::jsonb;` " +
+            "and then `select pg_notify('pgrst','reload schema');`"
         );
       }
       console.error('❌ Error updating profile preferences:', error);
