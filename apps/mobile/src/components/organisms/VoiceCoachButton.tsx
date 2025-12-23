@@ -3,38 +3,19 @@
  *
  * A floating action button that initiates voice conversations with the AI coach.
  * Shows connection status and provides visual feedback during conversations.
- *
- * NOTE: Requires development build - not available in Expo Go.
  */
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react-native';
-import Constants from 'expo-constants';
-
-import { useAuthStore } from '@/stores';
-import type { VoiceCoachDynamicVariables } from '@/lib/elevenlabs';
-
-// Check if running in Expo Go
-const isExpoGo = Constants.appOwnership === 'expo';
-
-// Only load the voice hook in dev builds
-// String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
-let useVoiceCoach: typeof import('@/hooks/use-voice-coach').useVoiceCoach | null = null;
-if (!isExpoGo) {
-  try {
-    const hookPath = '../../hooks' + '/use-voice-coach';
-    useVoiceCoach = require(hookPath).useVoiceCoach;
-  } catch {
-    console.log('[VoiceCoachButton] Voice hook not available');
-  }
-}
+import type { ConversationStatus } from '@/lib/elevenlabs';
 
 interface VoiceCoachButtonProps {
-  /** Additional dynamic variables to pass to the conversation */
-  dynamicVariables?: Partial<VoiceCoachDynamicVariables>;
-  /** Current screen name for context */
-  currentScreen?: string;
+  status: ConversationStatus;
+  isSpeaking: boolean;
+  isMicMuted: boolean;
+  onPressMain: () => void;
+  onPressMute?: () => void;
   /** Custom style classes */
   className?: string;
   /** Position on screen */
@@ -42,39 +23,14 @@ interface VoiceCoachButtonProps {
 }
 
 export function VoiceCoachButton({
-  dynamicVariables = {},
-  currentScreen,
+  status,
+  isSpeaking,
+  isMicMuted,
+  onPressMain,
+  onPressMute,
   className = '',
   position = 'bottom-right',
 }: VoiceCoachButtonProps) {
-  const user = useAuthStore((state) => state.user);
-
-  // Don't render in Expo Go - voice features require native modules
-  if (!useVoiceCoach) {
-    return null;
-  }
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const {
-    status,
-    isSpeaking,
-    isMicMuted,
-    startConversation,
-    endConversation,
-    toggleMute,
-    sendContextualUpdate,
-  } = useVoiceCoach({
-    onConnect: () => {
-      console.log('[VoiceCoachButton] Connected to coach');
-    },
-    onDisconnect: () => {
-      console.log('[VoiceCoachButton] Disconnected from coach');
-    },
-    onError: (error) => {
-      console.error('[VoiceCoachButton] Error:', error.message);
-    },
-  });
-
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -119,31 +75,13 @@ export function VoiceCoachButton({
     }
   }, [status, rotateAnim]);
 
-  // Send contextual update when screen changes
-  useEffect(() => {
-    if (status === 'connected' && currentScreen) {
-      sendContextualUpdate(`User is now viewing the ${currentScreen} screen.`);
-    }
-  }, [currentScreen, status, sendContextualUpdate]);
-
   const handlePress = useCallback(async () => {
-    if (status === 'connected') {
-      await endConversation();
-    } else if (status === 'disconnected') {
-      await startConversation({
-        dynamicVariables: {
-          user_name: user?.email?.split('@')[0] || 'there',
-          user_id: user?.id,
-          current_screen: currentScreen,
-          ...dynamicVariables,
-        },
-      });
-    }
-  }, [status, startConversation, endConversation, user, currentScreen, dynamicVariables]);
+    onPressMain();
+  }, [onPressMain]);
 
   const handleMutePress = useCallback(() => {
-    toggleMute();
-  }, [toggleMute]);
+    onPressMute?.();
+  }, [onPressMute]);
 
   // Position classes
   const positionClasses = {

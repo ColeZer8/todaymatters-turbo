@@ -239,6 +239,13 @@ const startConversation = async () => {
 };
 ```
 
+### Option C: Private Agent with WebSocket Signed URL (WebSocket mode)
+
+If you choose `connectionType: 'websocket'`, ElevenLabs can provide a **signed URL** from your server (never generate it client-side).
+
+- Generate signed URL server-side (requires ElevenLabs API key): see `@elevenlabs/client` docs on npm.
+- Start session client-side with `{ signedUrl, connectionType: 'websocket' }`.
+
 ## Webhooks for Post-Call Data
 
 ElevenLabs can send webhooks after each conversation:
@@ -588,4 +595,6 @@ export function HomeScreen() {
 - [Agent Prompting Guide](https://elevenlabs.io/docs/agents-platform/best-practices/prompting-guide)
 - [Tools Configuration](https://elevenlabs.io/docs/agents-platform/customization/tools)
 - [Webhooks Documentation](https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks)
+- [@elevenlabs/react-native (npm)](https://www.npmjs.com/package/@elevenlabs/react-native)
+- [@elevenlabs/client (npm) - signedUrl + conversationToken examples](https://www.npmjs.com/package/@elevenlabs/client)
 

@@ -30,6 +30,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Export the resolved values for modules that need to call Edge Functions via raw fetch
+// (useful for richer error messages than `supabase.functions.invoke` provides).
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_ANON_KEY = supabaseAnonKey;
+
 // Check if we're in a server-side rendering environment (Expo Router static rendering)
 // In SSR, `window` and native modules aren't available
 const isSSR = typeof window === 'undefined' && Platform.OS === 'web';

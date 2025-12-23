@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
+import Constants from 'expo-constants';
 import { HomeTemplate } from '@/components/templates';
+import type { ConversationStatus, StartConversationOptions } from '@/lib/elevenlabs/types';
 import {
   buildHomeBriefContext,
   generateHomeBriefDraft,
@@ -20,7 +22,40 @@ import {
   useReviewTimeStore,
 } from '@/stores';
 
-export default function HomeScreen() {
+// Voice features require native modules and do not run in Expo Go.
+const isExpoGo = Constants.appOwnership === 'expo';
+
+// Dynamically load ElevenLabsProvider only when native modules are available.
+// String concatenation avoids Metro static analysis in Expo Go builds.
+let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = null;
+if (!isExpoGo) {
+  try {
+    const pkg = '@elevenlabs' + '/react-native';
+    ElevenLabsProvider = require(pkg).ElevenLabsProvider;
+  } catch {
+    ElevenLabsProvider = null;
+  }
+}
+
+// Dynamically load `useVoiceCoach` only when native modules are available.
+// String concatenation avoids Metro static analysis in Expo Go builds.
+let useVoiceCoach: typeof import('@/hooks/use-voice-coach').useVoiceCoach | null = null;
+if (!isExpoGo) {
+  try {
+    const hookPath = '@/hooks' + '/use-voice-coach';
+    useVoiceCoach = require(hookPath).useVoiceCoach;
+  } catch {
+    useVoiceCoach = null;
+  }
+}
+
+interface VoiceCoachApi {
+  status: ConversationStatus;
+  startConversation: (options?: StartConversationOptions) => Promise<void>;
+  endConversation: () => Promise<void>;
+}
+
+function HomeScreenInner() {
   const scheduledEvents = useEventsStore((s) => s.scheduledEvents);
   const unassignedCount = useReviewTimeStore((s) => s.unassignedCount);
   const goals = useGoalsStore((s) => s.goals);
@@ -50,6 +85,20 @@ export default function HomeScreen() {
 
   const timersRef = useRef<{ debounce?: ReturnType<typeof setTimeout>; boundary?: ReturnType<typeof setTimeout> }>({});
   const llmRequestIdRef = useRef(0);
+
+  // Stable callback to avoid re-creating voice hook options every render
+  const onVoiceError = useCallback((error: Error) => {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.error('[Home] Voice coach error:', error.message);
+    }
+  }, []);
+
+  const isVoiceAvailable = !!useVoiceCoach && !!ElevenLabsProvider;
+  const voiceApiRef = useRef<VoiceCoachApi | null>(null);
+  const setVoiceApi = useCallback((voice: VoiceCoachApi | null) => {
+    voiceApiRef.current = voice;
+  }, []);
 
   const nowDate = useMemo(() => {
     return isDemoActive ? getSimulatedDate() : new Date();
@@ -259,18 +308,106 @@ export default function HomeScreen() {
   const name = (profileFullName?.split(' ')[0] || 'Paul').trim();
   const date = formatHomeDate(nowDate);
 
+  // Use refs to keep handler stable and prevent re-renders
+  const nameRef = useRef(name);
+  nameRef.current = name;
+
+  const lastToggleAtRef = useRef(0);
+
+  // Stable handler that doesn't change when voice/name changes (prevents re-renders)
+  const handlePressGreeting = useCallback(() => {
+    const v = voiceApiRef.current;
+    if (!v) return;
+
+    const now = Date.now();
+    if (now - lastToggleAtRef.current < 120) return; // debounce fast double-taps
+    lastToggleAtRef.current = now;
+
+    const run = async () => {
+      try {
+        // Treat anything that's not fully disconnected as "stop"
+        // (covers connected/connecting/disconnecting so we never get stuck)
+        if (v.status !== 'disconnected' && v.status !== 'error') {
+          await v.endConversation();
+          return;
+        }
+
+        await v.startConversation({
+          dynamicVariables: {
+            user_name: nameRef.current,
+            current_screen: 'home',
+          },
+        });
+      } catch (error: unknown) {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.error('[Home] Voice toggle failed:', error);
+        }
+      }
+    };
+
+    void run();
+  }, []); // Empty deps = stable reference
+
+  // Safety: if the user leaves Home, end the session so the mic isn't running "invisibly".
+  useEffect(() => {
+    return () => {
+      const v = voiceApiRef.current;
+      if (v && (v.status === 'connected' || v.status === 'connecting')) {
+        void v.endConversation().catch(() => undefined);
+      }
+    };
+  }, []);
+
   return (
-    <HomeTemplate
-      dailyBrief={{
-        name,
-        date,
-        unassignedCount,
-        line1: displayBrief.line1,
-        line2: displayBrief.line2,
-        line3: displayBrief.line3,
-      }}
-    />
+    <>
+      {isVoiceAvailable ? (
+        // Put the voice hook in its own tiny component so status changes
+        // don't force a full Home rerender (eliminates the "white flash").
+        <VoiceCoachController useVoiceCoachHook={useVoiceCoach!} onError={onVoiceError} onVoiceChange={setVoiceApi} />
+      ) : null}
+      <HomeTemplate
+        dailyBrief={{
+          name,
+          date,
+          unassignedCount,
+          line1: displayBrief.line1,
+          line2: displayBrief.line2,
+          line3: displayBrief.line3,
+        }}
+        onPressGreeting={isVoiceAvailable ? handlePressGreeting : undefined}
+      />
+    </>
   );
+}
+
+function VoiceCoachController({
+  useVoiceCoachHook,
+  onError,
+  onVoiceChange,
+}: {
+  useVoiceCoachHook: NonNullable<typeof useVoiceCoach>;
+  onError: (error: Error) => void;
+  onVoiceChange: (voice: VoiceCoachApi | null) => void;
+}) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const voice = useVoiceCoachHook({ onError });
+  useEffect(() => {
+    onVoiceChange(voice);
+    return () => onVoiceChange(null);
+  }, [onVoiceChange, voice]);
+  return null;
+}
+
+export default function HomeScreen() {
+  if (ElevenLabsProvider) {
+    return (
+      <ElevenLabsProvider>
+        <HomeScreenInner />
+      </ElevenLabsProvider>
+    );
+  }
+  return <HomeScreenInner />;
 }
 
 function formatHomeDate(d: Date): string {

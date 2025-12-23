@@ -16,6 +16,5 @@ export { DemoOverviewInitiatives } from './DemoOverviewInitiatives';
 export { DemoOverviewValues } from './DemoOverviewValues';
 export { DemoPrayerRate } from './DemoPrayerRate';
 export { DemoMeetingRate } from './DemoMeetingRate';
-// TODO: Re-enable ElevenLabs voice coach integration
-// export { VoiceCoachButton } from './VoiceCoachButton';
-// export { VoiceCoachModal } from './VoiceCoachModal';
+export { VoiceCoachButton } from './VoiceCoachButton';
+export { VoiceCoachModal } from './VoiceCoachModal';

@@ -8,12 +8,13 @@ export interface DailyBriefProps {
     line1: string;
     line2: string;
     line3?: string;
+    onPressGreeting?: () => void;
 }
 
-export const DailyBrief = ({ name, date, unassignedCount, line1, line2, line3 }: DailyBriefProps) => {
+export const DailyBrief = ({ name, date, unassignedCount, line1, line2, line3, onPressGreeting }: DailyBriefProps) => {
     return (
         <View>
-            <Greeting name={name} date={date} unassignedCount={unassignedCount} />
+            <Greeting name={name} date={date} unassignedCount={unassignedCount} onPressGreeting={onPressGreeting} />
             <View className="mt-3.5 mb-5">
                 <Text className="text-[17.5px] leading-[29px] font-bold text-[#4A5568] max-w-[90%]">
                     {line1}

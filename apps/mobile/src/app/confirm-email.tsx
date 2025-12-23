@@ -3,7 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useRouter, useLocalSearchParams, useRootNavigationState } from 'expo-router';
 import { ConfirmEmailTemplate } from '@/components/templates';
 import { resendEmailConfirmation } from '@/lib/supabase';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useOnboardingStore } from '@/stores';
 
 export default function ConfirmEmailScreen() {
   const router = useRouter();
@@ -11,6 +11,8 @@ export default function ConfirmEmailScreen() {
   const navigationState = useRootNavigationState();
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const onboardingHydrated = useOnboardingStore((s) => s._hasHydrated);
+  const hasCompletedOnboarding = useOnboardingStore((s) => s.hasCompletedOnboarding);
 
   const [email, setEmail] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -27,12 +29,15 @@ export default function ConfirmEmailScreen() {
     if (!isNavigationReady) {
       return;
     }
+    if (!onboardingHydrated) {
+      return;
+    }
     if (isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/permissions');
+        router.replace(hasCompletedOnboarding ? '/home' : '/permissions');
       });
     }
-  }, [isAuthenticated, isNavigationReady, router]);
+  }, [isAuthenticated, isNavigationReady, onboardingHydrated, hasCompletedOnboarding, router]);
 
   const canResend = useMemo(() => email.trim().length > 0, [email]);
 

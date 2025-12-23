@@ -5,9 +5,8 @@
  * This keeps the ElevenLabs API key secure on the server side.
  *
  * The token is short-lived (10 minutes) and tied to a specific agent.
- * 
- * TODO: Re-enable ElevenLabs voice coach integration
- * STATUS: DISABLED - Voice coach feature temporarily disabled
+ *
+ * IMPORTANT: This function keeps the ElevenLabs API key server-side.
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -18,24 +17,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// TODO: Re-enable ElevenLabs voice coach integration
-const ELEVENLABS_DISABLED = true;
-
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // TODO: Remove this block when re-enabling ElevenLabs
-  if (ELEVENLABS_DISABLED) {
-    return new Response(
-      JSON.stringify({ error: 'Voice coach feature is temporarily disabled' }),
-      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
   try {
+    // Allow agent_id to be provided by the client (safe to expose), or fall back to server env.
+    // This avoids requiring ELEVENLABS_AGENT_ID to be configured server-side.
+    const url = new URL(req.url);
+    const agentIdFromQuery = url.searchParams.get('agent_id') || undefined;
+    let agentIdFromBody: string | undefined;
+    if (req.headers.get('content-type')?.includes('application/json')) {
+      try {
+        const body = (await req.json()) as { agentId?: string; agent_id?: string } | null;
+        agentIdFromBody = body?.agentId ?? body?.agent_id;
+      } catch {
+        // ignore body parsing errors; agentId is optional
+      }
+    }
+
     // Verify the user is authenticated
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -68,12 +70,18 @@ serve(async (req: Request) => {
 
     // Get ElevenLabs configuration from environment
     const elevenLabsApiKey = Deno.env.get('ELEVENLABS_API_KEY');
-    const agentId = Deno.env.get('ELEVENLABS_AGENT_ID');
+    const agentId = agentIdFromQuery ?? agentIdFromBody ?? Deno.env.get('ELEVENLABS_AGENT_ID');
 
     if (!elevenLabsApiKey || !agentId) {
       console.error('Missing ElevenLabs configuration');
       return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
+        JSON.stringify({
+          error: 'Server configuration error',
+          missing: {
+            ELEVENLABS_API_KEY: !elevenLabsApiKey,
+            ELEVENLABS_AGENT_ID: !agentId,
+          },
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -93,7 +101,11 @@ serve(async (req: Request) => {
       const errorText = await response.text();
       console.error('ElevenLabs API error:', response.status, errorText);
       return new Response(
-        JSON.stringify({ error: 'Failed to get conversation token' }),
+        JSON.stringify({
+          error: 'Failed to get conversation token',
+          elevenlabsStatus: response.status,
+          elevenlabsBody: errorText,
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

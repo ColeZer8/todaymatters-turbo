@@ -80,7 +80,8 @@ export interface StartConversationOptions {
   agentIdOverride?: string;
 }
 
-export type ConversationStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+// Matches the SDK's Status type from @elevenlabs/types
+export type ConversationStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error';
 
 export interface VoiceCoachState {
   /** Current connection status */

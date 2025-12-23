@@ -3,7 +3,7 @@ import { InteractionManager } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { SignUpTemplate } from '@/components/templates';
 import { performOAuth } from '@/lib/supabase';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useOnboardingStore } from '@/stores';
 
 type OAuthProvider = 'apple' | 'google';
 
@@ -14,6 +14,8 @@ export default function SignUpScreen() {
   const signUp = useAuthStore((state) => state.signUp);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const onboardingHydrated = useOnboardingStore((s) => s._hasHydrated);
+  const hasCompletedOnboarding = useOnboardingStore((s) => s.hasCompletedOnboarding);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,12 +27,15 @@ export default function SignUpScreen() {
     if (!isNavigationReady) {
       return;
     }
+    if (!onboardingHydrated) {
+      return;
+    }
     if (isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/permissions');
+        router.replace(hasCompletedOnboarding ? '/home' : '/permissions');
       });
     }
-  }, [isAuthenticated, isNavigationReady, router]);
+  }, [isAuthenticated, isNavigationReady, onboardingHydrated, hasCompletedOnboarding, router]);
 
   const handleEmailPasswordSignUp = async () => {
     if (!email || !password) {

@@ -51,6 +51,9 @@ interface OnboardingState {
   goals: string[];
   initiatives: string[];
 
+  // Completion state
+  hasCompletedOnboarding: boolean;
+
   // Hydration state
   _hasHydrated: boolean;
 
@@ -81,6 +84,8 @@ interface OnboardingState {
   addInitiative: () => void;
   removeInitiative: (index: number) => void;
   changeInitiative: (index: number, value: string) => void;
+
+  setHasCompletedOnboarding: (value: boolean) => void;
 }
 
 // Helper to create time string from hours and minutes
@@ -119,6 +124,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       morningMindset: 'slow',
       goals: ['Launch MVP', 'Run 5k'],
       initiatives: ['Q4 Strategy', 'Team Hiring'],
+      hasCompletedOnboarding: false,
       _hasHydrated: false,
 
       // Actions
@@ -200,6 +206,8 @@ export const useOnboardingStore = create<OnboardingState>()(
             idx === index ? value : i
           ),
         })),
+
+      setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
     }),
     {
       name: 'onboarding-storage',

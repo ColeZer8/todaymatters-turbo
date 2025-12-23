@@ -18,9 +18,10 @@ export interface HomeTemplateProps {
         line2: string;
         line3?: string;
     };
+    onPressGreeting?: () => void;
 }
 
-export const HomeTemplate = ({ dailyBrief }: HomeTemplateProps) => {
+export const HomeTemplate = ({ dailyBrief, onPressGreeting }: HomeTemplateProps) => {
     const insets = useSafeAreaInsets();
     
     // Demo mode - show morning routine when "Wake Up" time is selected
@@ -45,6 +46,7 @@ export const HomeTemplate = ({ dailyBrief }: HomeTemplateProps) => {
                     line1={dailyBrief.line1}
                     line2={dailyBrief.line2}
                     line3={dailyBrief.line3}
+                    onPressGreeting={onPressGreeting}
                 />
                 <ScheduleList />
                 <PendingActions />

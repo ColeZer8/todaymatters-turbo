@@ -8,9 +8,9 @@
  * - post_call_transcription: Full conversation data after a call ends
  * - transcript: Real-time transcript updates (if enabled)
  * - audio: Audio chunks (if enabled)
- * 
- * TODO: Re-enable ElevenLabs voice coach integration
- * STATUS: DISABLED - Voice coach feature temporarily disabled
+ *
+ * SECURITY:
+ * - If `ELEVENLABS_WEBHOOK_SECRET` is set, we verify `elevenlabs-signature` HMAC.
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -21,9 +21,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, elevenlabs-signature',
 };
-
-// TODO: Re-enable ElevenLabs voice coach integration
-const ELEVENLABS_DISABLED = true;
 
 interface TranscriptMessage {
   role: 'agent' | 'user';
@@ -110,14 +107,6 @@ serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
-  }
-
-  // TODO: Remove this block when re-enabling ElevenLabs
-  if (ELEVENLABS_DISABLED) {
-    return new Response(
-      JSON.stringify({ status: 'disabled', message: 'Voice coach feature is temporarily disabled' }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   }
 
   if (req.method !== 'POST') {

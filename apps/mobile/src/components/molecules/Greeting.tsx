@@ -15,9 +15,10 @@ interface GreetingProps {
     name: string;
     date: string;
     unassignedCount?: number;
+    onPressGreeting?: () => void;
 }
 
-export const Greeting = ({ name, date, unassignedCount = 0 }: GreetingProps) => {
+export const Greeting = ({ name, date, unassignedCount = 0, onPressGreeting }: GreetingProps) => {
     const router = useRouter();
     const pulseAnim = useRef(new Animated.Value(1)).current;
     
@@ -55,9 +56,18 @@ export const Greeting = ({ name, date, unassignedCount = 0 }: GreetingProps) => 
     return (
         <View className="mt-1 mb-4">
             <View className="flex-row items-center justify-between">
-                <Text className="text-[38px] leading-[42px] font-extrabold text-[#111827]">
-                    {greeting}
-                </Text>
+                <Pressable
+                    onPress={onPressGreeting}
+                    disabled={!onPressGreeting}
+                    hitSlop={12}
+                    accessibilityRole={onPressGreeting ? 'button' : undefined}
+                    accessibilityLabel={onPressGreeting ? 'Toggle voice assistant' : undefined}
+                    android_disableSound
+                >
+                    <Text className="text-[38px] leading-[42px] font-extrabold text-[#111827]">
+                        {greeting}
+                    </Text>
+                </Pressable>
                 {unassignedCount > 0 && (
                     <Pressable
                         onPress={handleBadgePress}
@@ -75,9 +85,18 @@ export const Greeting = ({ name, date, unassignedCount = 0 }: GreetingProps) => 
                     </Pressable>
                 )}
             </View>
-            <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-                {name}.
-            </Text>
+            <Pressable
+                onPress={onPressGreeting}
+                disabled={!onPressGreeting}
+                hitSlop={12}
+                accessibilityRole={onPressGreeting ? 'button' : undefined}
+                accessibilityLabel={onPressGreeting ? 'Toggle voice assistant' : undefined}
+                android_disableSound
+            >
+                <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
+                    {name}.
+                </Text>
+            </Pressable>
         </View>
     );
 };

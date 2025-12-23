@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useConversation } from '@elevenlabs/react-native';
+import type * as ElevenLabsReactNative from '@elevenlabs/react-native';
 import { useRouter } from 'expo-router';
 
 import { ELEVENLABS_CONFIG } from '../lib/elevenlabs/config';
@@ -24,7 +24,10 @@ import type {
   VoiceCoachState,
   ConversationMessage,
 } from '../lib/elevenlabs/types';
-import { supabase } from '../lib/supabase';
+
+// Use `require` so we always resolve the same module instance as the dynamically-loaded
+// `ElevenLabsProvider` in `src/app/_layout.tsx` (prevents context mismatch in monorepos).
+const { useConversation } = require('@elevenlabs/react-native') as typeof ElevenLabsReactNative;
 
 interface UseVoiceCoachOptions extends VoiceCoachCallbacks {
   /** Custom server URL (optional) */
@@ -77,6 +80,43 @@ function getCurrentTime(): string {
   });
 }
 
+async function fetchPublicConversationTokenDiagnostics(agentId: string): Promise<{
+  ok: boolean;
+  status: number;
+  bodyText: string;
+}> {
+  // Mirror the SDK’s unauthenticated token exchange for public agents.
+  // This is purely for diagnostics when the agentId flow fails.
+  // NOTE: Some ElevenLabs deployments validate `source` against a fixed allowlist.
+  // Use a known-good value so our diagnostics don’t create false negatives.
+  const url = `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}&source=react_native_sdk`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  });
+  const bodyText = await response.text();
+  return { ok: response.ok, status: response.status, bodyText };
+}
+
+async function fetchPublicConversationToken(agentId: string): Promise<{
+  token: string | null;
+  ok: boolean;
+  status: number;
+  bodyText: string;
+}> {
+  const diag = await fetchPublicConversationTokenDiagnostics(agentId);
+  if (!diag.ok) return { token: null, ...diag };
+
+  try {
+    const parsed = JSON.parse(diag.bodyText) as { token?: unknown };
+    const token = typeof parsed.token === 'string' && parsed.token.length > 0 ? parsed.token : null;
+    return { token, ...diag };
+  } catch {
+    return { token: null, ...diag };
+  }
+}
+
 export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoachReturn {
   const {
     onConnect,
@@ -90,14 +130,17 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
 
   const router = useRouter();
 
-  // Local state
-  const [status, setStatus] = useState<ConversationStatus>('disconnected');
+  // Local state - only for things SDK doesn't track
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
-  // Refs for callbacks
+  // Prevent overlapping start/end calls (can cause LiveKit "PC manager is closed" races)
+  const startInFlightRef = useRef(false);
+  const endInFlightRef = useRef(false);
+
+  // Refs for callbacks (stable references to avoid re-renders)
   const onConnectRef = useRef(onConnect);
   const onDisconnectRef = useRef(onDisconnect);
   const onMessageRef = useRef(onMessage);
@@ -116,35 +159,11 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
   // Build client tools including defaults
   const builtClientTools = useMemo(() => {
     const defaultTools: Record<string, (params: unknown) => string | Promise<string>> = {
-      // Navigate to a specific screen
-      navigate_to_screen: (params) => {
-        const { screen } = params as { screen: string };
-        try {
-          router.push(screen as never);
-          return `Navigated to ${screen}`;
-        } catch {
-          return `Failed to navigate to ${screen}`;
-        }
-      },
-
-      // Open a specific feature/section
-      open_feature: (params) => {
-        const { feature } = params as { feature: string };
-        const featureRoutes: Record<string, string> = {
-          routine: '/build-routine',
-          calendar: '/calendar',
-          analytics: '/analytics',
-          profile: '/profile',
-          goals: '/goals',
-          home: '/home',
-        };
-        const route = featureRoutes[feature.toLowerCase()];
-        if (route) {
-          router.push(route as never);
-          return `Opened ${feature}`;
-        }
-        return `Unknown feature: ${feature}`;
-      },
+      // NOTE: Navigation-related tools are intentionally disabled for now.
+      // We want the agent to be "invisible" and not move the user around the app.
+      // We'll re-enable this later once we add explicit UI for agent actions.
+      navigate_to_screen: () => 'Navigation is currently disabled.',
+      open_feature: () => 'Navigation is currently disabled.',
 
       // Placeholder for task completion
       mark_task_complete: async (params) => {
@@ -157,8 +176,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       show_routine_item: (params) => {
         const { item_id } = params as { item_id: string };
         console.log('[VoiceCoach] Show routine item:', item_id);
-        router.push(`/routine-item/${item_id}` as never);
-        return `Showing details for item ${item_id}`;
+        return `Requested routine item ${item_id} (UI navigation currently disabled).`;
       },
 
       // Play celebration
@@ -172,24 +190,30 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
   }, [router, customClientTools]);
 
   // Initialize the ElevenLabs conversation hook
+  // The SDK tracks status internally - we use conversation.status directly
   const conversation = useConversation({
     serverUrl,
     clientTools: builtClientTools,
+    onStatusChange: (event: { status: string }) => {
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.log('[VoiceCoach] Status:', event.status);
+      }
+    },
     onConnect: () => {
-      console.log('[VoiceCoach] Connected to conversation');
-      setStatus('connected');
+      if (__DEV__) console.log('[VoiceCoach] Connected');
       setErrorMessage(null);
+      startInFlightRef.current = false;
       onConnectRef.current?.();
     },
     onDisconnect: () => {
-      console.log('[VoiceCoach] Disconnected from conversation');
-      setStatus('disconnected');
+      if (__DEV__) console.log('[VoiceCoach] Disconnected');
       setConversationId(null);
+      startInFlightRef.current = false;
+      endInFlightRef.current = false;
       onDisconnectRef.current?.();
     },
     onMessage: (message) => {
-      console.log('[VoiceCoach] Message received:', message);
-      // The message type from ElevenLabs can vary, handle it safely
       const msgText = typeof message === 'string' ? message : (message as { message?: string })?.message ?? '';
       const msgSource = (message as { source?: string })?.source;
       const conversationMessage: ConversationMessage = {
@@ -201,12 +225,13 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       onMessageRef.current?.(conversationMessage);
     },
     onError: (error: unknown) => {
-      console.error('[VoiceCoach] Error:', error);
-      setStatus('error');
+      if (__DEV__) console.error('[VoiceCoach] Error:', error);
       const errorMsg = typeof error === 'object' && error !== null && 'message' in error 
         ? (error as { message: string }).message 
         : String(error ?? 'Unknown error');
       setErrorMessage(errorMsg || 'An error occurred');
+      startInFlightRef.current = false;
+      endInFlightRef.current = false;
       const errorObj = error instanceof Error ? error : new Error(String(error ?? 'Unknown error'));
       onErrorRef.current?.(errorObj);
     },
@@ -222,31 +247,21 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
   }, [conversation.isSpeaking]);
 
   /**
-   * Fetch a conversation token from the backend (for private agents)
-   */
-  const fetchConversationToken = useCallback(async (): Promise<string> => {
-    const { data, error } = await supabase.functions.invoke('conversation-token');
-
-    if (error) {
-      throw new Error(`Failed to get conversation token: ${error.message}`);
-    }
-
-    if (!data?.token) {
-      throw new Error('No token returned from server');
-    }
-
-    return data.token;
-  }, []);
-
-  /**
    * Start a conversation with the AI coach
    */
   const startConversation = useCallback(
     async (startOptions: StartConversationOptions = {}) => {
       const { dynamicVariables, agentIdOverride } = startOptions;
 
+      // Use SDK's status directly to avoid race conditions
+      const currentStatus = conversation.status;
+      if (startInFlightRef.current) return;
+      // Only start from fully disconnected/error states
+      // NOTE: SDK status does not include 'error'. We represent errors via `errorMessage`.
+      if (currentStatus !== 'disconnected') return;
+      startInFlightRef.current = true;
+
       try {
-        setStatus('connecting');
         setErrorMessage(null);
         setMessages([]);
 
@@ -256,7 +271,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
           const result = await requestMicrophonePermission();
           if (!result.granted) {
             if (!result.canAskAgain) {
-              showPermissionDeniedAlert();
+              await showPermissionDeniedAlert();
             }
             throw new Error('Microphone permission denied');
           }
@@ -272,51 +287,106 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
         // Determine if we need to use a token (private agent) or agentId (public)
         const agentId = agentIdOverride || ELEVENLABS_CONFIG.agentId;
 
-        if (ELEVENLABS_CONFIG.isPrivateAgent) {
-          // Private agent - fetch token from backend
-          const token = await fetchConversationToken();
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[VoiceCoach] Starting session...', {
+            status: conversation.status,
+            agentId: !!agentId,
+            isPrivateAgent: ELEVENLABS_CONFIG.isPrivateAgent,
+          });
+        }
+
+        // Option A (NO SUPABASE): Public agent flow.
+        // The RN SDK can exchange agentId -> conversationToken internally.
+        // However, if that internal exchange becomes flaky, we can fetch the public token
+        // ourselves (still unauthenticated for public agents) and pass it explicitly.
+        if (!agentId) {
+          throw new Error('Agent ID not configured');
+        }
+
+        // Try to fetch the public conversation token first and pass it explicitly.
+        // This avoids relying on the SDK’s internal token exchange (which can fail silently).
+        const tokenResult = await fetchPublicConversationToken(agentId);
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.log('[VoiceCoach] Public token fetch', {
+            ok: tokenResult.ok,
+            status: tokenResult.status,
+            hasToken: !!tokenResult.token,
+            body: tokenResult.ok ? '(ok)' : tokenResult.bodyText,
+          });
+        }
+
+        if (tokenResult.token) {
           await conversation.startSession({
-            conversationToken: token,
+            conversationToken: tokenResult.token,
             dynamicVariables: variables,
           });
         } else {
-          // Public agent - use agentId directly
-          if (!agentId) {
-            throw new Error('Agent ID not configured');
-          }
           await conversation.startSession({
             agentId,
             dynamicVariables: variables,
           });
         }
 
-        // Store conversation ID
+        // Store conversation ID (SDK-specific)
         const id = conversation.getId();
         if (id) {
           setConversationId(id);
         }
+
+        // Ensure microphone is unmuted when starting conversation
+        setIsMicMuted(false);
+        conversation.setMicMuted(false);
       } catch (error) {
-        console.error('[VoiceCoach] Failed to start conversation:', error);
-        setStatus('error');
-        setErrorMessage(
-          error instanceof Error ? error.message : 'Failed to start conversation'
-        );
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.error('[VoiceCoach] Failed to start conversation:', error);
+        }
+        const msg =
+          error instanceof Error ? error.message : 'Failed to start conversation';
+        const help =
+          !ELEVENLABS_CONFIG.isPrivateAgent
+            ? ' (Option A requires a PUBLIC ElevenLabs agent. If the agent is private, token exchange will fail and the session will disconnect.)'
+            : '';
+        setErrorMessage(`${msg}${help}`);
         throw error;
+      } finally {
+        startInFlightRef.current = false;
       }
     },
-    [conversation, fetchConversationToken]
+    [conversation]
   );
 
   /**
    * End the current conversation
    */
   const endConversation = useCallback(async () => {
+    // Use SDK's status directly
+    const currentStatus = conversation.status;
+    // Allow ending even if already in-flight (force stop)
+    // Only skip if we're truly disconnected
+    if (currentStatus === 'disconnected' && !startInFlightRef.current) return;
+
     try {
-      await conversation.endSession();
-      setStatus('disconnected');
-      setConversationId(null);
+      endInFlightRef.current = true;
+      await conversation.endSession('user');
     } catch (error) {
-      console.error('[VoiceCoach] Failed to end conversation:', error);
+      // LiveKit can throw if end is called during teardown; treat as non-fatal.
+      const message = error instanceof Error ? error.message : String(error ?? '');
+      const isBenignShutdown =
+        message.includes('PC manager is closed') ||
+        message.includes('UnexpectedConnectionState') ||
+        message.includes('already disconnected');
+
+      if (!isBenignShutdown && __DEV__) {
+        console.warn('[VoiceCoach] endSession error (non-fatal):', message);
+      }
+    } finally {
+      // Reset in-flight flags
+      setConversationId(null);
+      startInFlightRef.current = false;
+      endInFlightRef.current = false;
     }
   }, [conversation]);
 
@@ -325,13 +395,13 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
    */
   const sendMessage = useCallback(
     async (message: string) => {
-      if (status !== 'connected') {
+      if (conversation.status !== 'connected') {
         console.warn('[VoiceCoach] Cannot send message - not connected');
         return;
       }
       await conversation.sendUserMessage(message);
     },
-    [conversation, status]
+    [conversation]
   );
 
   /**
@@ -339,13 +409,13 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
    */
   const sendContextualUpdate = useCallback(
     (update: string) => {
-      if (status !== 'connected') {
+      if (conversation.status !== 'connected') {
         console.warn('[VoiceCoach] Cannot send contextual update - not connected');
         return;
       }
       conversation.sendContextualUpdate(update);
     },
-    [conversation, status]
+    [conversation]
   );
 
   /**
@@ -397,26 +467,47 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
     return result.granted;
   }, []);
 
-  return {
-    // State
-    status,
-    isSpeaking: conversation.isSpeaking,
-    canSendFeedback: conversation.canSendFeedback,
-    conversationId,
-    isMicMuted,
-    errorMessage,
-    messages,
+  // Memoize return object to prevent cascading re-renders in consumers
+  return useMemo(
+    () => ({
+      // State - use SDK's status directly for consistency
+      status: (errorMessage ? 'error' : conversation.status),
+      isSpeaking: conversation.isSpeaking,
+      canSendFeedback: conversation.canSendFeedback,
+      conversationId,
+      isMicMuted,
+      errorMessage,
+      messages,
 
-    // Actions
-    startConversation,
-    endConversation,
-    sendMessage,
-    sendContextualUpdate,
-    sendFeedback,
-    toggleMute,
-    setMuted,
-    checkPermission,
-    requestPermission,
-  };
+      // Actions
+      startConversation,
+      endConversation,
+      sendMessage,
+      sendContextualUpdate,
+      sendFeedback,
+      toggleMute,
+      setMuted,
+      checkPermission,
+      requestPermission,
+    }),
+    [
+      conversation.status,
+      conversation.isSpeaking,
+      conversation.canSendFeedback,
+      conversationId,
+      isMicMuted,
+      errorMessage,
+      messages,
+      startConversation,
+      endConversation,
+      sendMessage,
+      sendContextualUpdate,
+      sendFeedback,
+      toggleMute,
+      setMuted,
+      checkPermission,
+      requestPermission,
+    ]
+  );
 }
 

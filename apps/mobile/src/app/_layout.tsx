@@ -1,34 +1,15 @@
 import "react-native-gesture-handler";
 import "../global.css";
 import { Stack } from "expo-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import Constants from "expo-constants";
 import { handleAuthCallback, refreshSession } from "@/lib/supabase";
 import { useAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
 import { useOnboardingSync } from "@/lib/supabase/hooks";
-
-// TODO: Re-enable ElevenLabs voice coach integration
-// Voice features require native modules - only available in dev builds, not Expo Go
-const isExpoGo = Constants.appOwnership === 'expo';
-
-// Dynamically load ElevenLabsProvider only in dev builds
-// String concatenation tricks Metro's static analysis so it doesn't bundle in Expo Go
-// TODO: Re-enable when voice coach is ready for production
-let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = null;
-// DISABLED: ElevenLabs integration temporarily disabled
-// if (!isExpoGo) {
-//   try {
-//     const pkg = '@elevenlabs' + '/react-native';
-//     ElevenLabsProvider = require(pkg).ElevenLabsProvider;
-//   } catch {
-//     console.log("[Layout] ElevenLabs not available - voice features disabled");
-//   }
-// }
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -155,11 +136,7 @@ export default function Layout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {ElevenLabsProvider ? (
-        <ElevenLabsProvider>{appContent}</ElevenLabsProvider>
-      ) : (
-        appContent
-      )}
+      {appContent}
     </GestureHandlerRootView>
   );
 }

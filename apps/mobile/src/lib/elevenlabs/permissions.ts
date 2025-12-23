@@ -4,7 +4,7 @@
  * Handles requesting microphone permissions for both iOS and Android.
  */
 
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
+import { PermissionsAndroid, Platform, Alert, Linking } from 'react-native';
 
 export interface PermissionResult {
   granted: boolean;
@@ -13,13 +13,13 @@ export interface PermissionResult {
 
 /**
  * Request microphone permission from the user.
- * On iOS, this is handled by the Info.plist configuration.
- * On Android, we need to request at runtime.
+ * On iOS, microphone permission is driven by the underlying audio stack (LiveKit/AVAudioSession)
+ * and the `NSMicrophoneUsageDescription` entry in `app.json` / Info.plist.
+ * On Android, uses PermissionsAndroid to request at runtime.
  */
 export async function requestMicrophonePermission(): Promise<PermissionResult> {
   if (Platform.OS === 'ios') {
-    // iOS permissions are handled by Info.plist
-    // The system will prompt automatically when we try to use the mic
+    // iOS will prompt automatically the first time the mic is actually used.
     return { granted: true, canAskAgain: true };
   }
 
@@ -45,7 +45,7 @@ export async function requestMicrophonePermission(): Promise<PermissionResult> {
         return { granted: false, canAskAgain: true };
       }
     } catch (error) {
-      console.error('Error requesting microphone permission:', error);
+      console.error('Error requesting Android microphone permission:', error);
       return { granted: false, canAskAgain: true };
     }
   }
@@ -55,24 +55,34 @@ export async function requestMicrophonePermission(): Promise<PermissionResult> {
 }
 
 /**
- * Check if microphone permission is already granted (Android only)
+ * Check if microphone permission is already granted
  */
 export async function checkMicrophonePermission(): Promise<boolean> {
-  if (Platform.OS === 'android') {
-    const result = await PermissionsAndroid.check(
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
-    );
-    return result;
+  if (Platform.OS === 'ios') {
+    // We don't pre-check on iOS here; allow session start to trigger the system prompt if needed.
+    return true;
   }
 
-  // iOS and other platforms - assume granted (will prompt when used)
+  if (Platform.OS === 'android') {
+    try {
+      const result = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      );
+      return result;
+    } catch (error) {
+      console.error('Error checking Android microphone permission:', error);
+      return false;
+    }
+  }
+
+  // Web or other platforms - assume granted
   return true;
 }
 
 /**
  * Show an alert directing user to settings when permission is denied
  */
-export function showPermissionDeniedAlert(): void {
+export async function showPermissionDeniedAlert(): Promise<void> {
   Alert.alert(
     'Microphone Permission Required',
     'To use voice conversations with your AI coach, please enable microphone access in your device settings.',
@@ -80,13 +90,22 @@ export function showPermissionDeniedAlert(): void {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Open Settings',
-        onPress: () => {
-          // Note: Opening settings requires expo-linking or react-native Linking
-          // The user will need to manually navigate to app settings
-          Alert.alert(
-            'Open Settings',
-            'Please go to Settings > Apps > TodayMatters > Permissions > Microphone and enable it.'
-          );
+        onPress: async () => {
+          try {
+            if (Platform.OS === 'ios') {
+              await Linking.openURL('app-settings:');
+            } else {
+              await Linking.openSettings();
+            }
+          } catch (error) {
+            console.error('Error opening settings:', error);
+            Alert.alert(
+              'Open Settings',
+              Platform.OS === 'ios'
+                ? 'Please go to Settings > TodayMatters > Microphone and enable it.'
+                : 'Please go to Settings > Apps > TodayMatters > Permissions > Microphone and enable it.'
+            );
+          }
         },
       },
     ]
