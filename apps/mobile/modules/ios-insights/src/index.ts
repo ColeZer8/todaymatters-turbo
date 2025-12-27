@@ -18,6 +18,21 @@ export interface StepCountSumOptions {
   endDateMs: number;
 }
 
+export interface ScreenTimeAppUsage {
+  bundleIdentifier: string;
+  displayName: string;
+  durationSeconds: number;
+  pickups: number;
+}
+
+export interface ScreenTimeSummary {
+  generatedAtIso: string;
+  dayStartIso: string;
+  dayEndIso: string;
+  totalSeconds: number;
+  topApps: ScreenTimeAppUsage[];
+}
+
 interface IosInsightsNativeModule {
   // HealthKit
   isHealthDataAvailable(): Promise<boolean>;
@@ -27,6 +42,10 @@ interface IosInsightsNativeModule {
   // Screen Time (FamilyControls)
   getScreenTimeAuthorizationStatus(): Promise<ScreenTimeAuthorizationStatus>;
   requestScreenTimeAuthorization(): Promise<ScreenTimeAuthorizationStatus>;
+
+  // Screen Time report (DeviceActivityReport)
+  getCachedScreenTimeSummaryJson(): Promise<string | null>;
+  presentTodayScreenTimeReport(): Promise<void>;
 }
 
 const NativeModule = requireOptionalNativeModule<IosInsightsNativeModule>('IosInsights');
@@ -58,6 +77,17 @@ export async function getScreenTimeAuthorizationStatusAsync(): Promise<ScreenTim
 
 export async function requestScreenTimeAuthorizationAsync(): Promise<ScreenTimeAuthorizationStatus> {
   return await requireIosInsights().requestScreenTimeAuthorization();
+}
+
+export async function getCachedScreenTimeSummaryAsync(): Promise<ScreenTimeSummary | null> {
+  if (!NativeModule) return null;
+  const json = await NativeModule.getCachedScreenTimeSummaryJson();
+  if (!json) return null;
+  return JSON.parse(json) as ScreenTimeSummary;
+}
+
+export async function presentTodayScreenTimeReportAsync(): Promise<void> {
+  return await requireIosInsights().presentTodayScreenTimeReport();
 }
 
 

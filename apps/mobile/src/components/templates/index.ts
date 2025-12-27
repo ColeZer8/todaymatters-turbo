@@ -21,3 +21,4 @@ export { ReviewTimeTemplate } from './ReviewTimeTemplate';
 export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
 export { DemoCarouselTemplate } from './DemoCarouselTemplate';
+export { ScreenTimeAnalyticsTemplate } from './ScreenTimeAnalyticsTemplate';

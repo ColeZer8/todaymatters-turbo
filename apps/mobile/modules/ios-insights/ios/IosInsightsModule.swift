@@ -1,6 +1,8 @@
 import ExpoModulesCore
 import Foundation
 import HealthKit
+import SwiftUI
+import UIKit
 
 // Screen Time APIs (iOS 15+)
 import DeviceActivity
@@ -9,6 +11,8 @@ import ManagedSettings
 
 public class IosInsightsModule: Module {
   private let healthStore = HKHealthStore()
+  private let appGroupId = "group.com.todaymatters.mobile"
+  private let screenTimeSummaryKey = "iosInsights.screenTime.summary.latest"
 
   public func definition() -> ModuleDefinition {
     Name("IosInsights")
@@ -121,6 +125,39 @@ public class IosInsightsModule: Module {
         }
       }
     }
+
+    // MARK: - Screen Time Report (DeviceActivityReport)
+
+    AsyncFunction("getCachedScreenTimeSummaryJson") { () -> String? in
+      guard let defaults = UserDefaults(suiteName: self.appGroupId) else {
+        return nil
+      }
+      return defaults.string(forKey: self.screenTimeSummaryKey)
+    }
+
+    AsyncFunction("presentTodayScreenTimeReport") { (promise: Promise) in
+      guard #available(iOS 16.0, *) else {
+        promise.reject("ERR_UNSUPPORTED", "DeviceActivityReport requires iOS 16.0+.")
+        return
+      }
+
+      DispatchQueue.main.async {
+        guard let presenter = Self.findTopViewController() else {
+          promise.reject("ERR_NO_VIEW_CONTROLLER", "Unable to find a view controller to present from.")
+          return
+        }
+
+        let hosting = UIHostingController(rootView: IosInsightsScreenTimeReportModal(
+          onClose: {
+            presenter.dismiss(animated: true) {
+              promise.resolve(nil)
+            }
+          }
+        ))
+        hosting.modalPresentationStyle = .formSheet
+        presenter.present(hosting, animated: true)
+      }
+    }
   }
 
   private func screenTimeAuthorizationStatusString() -> String {
@@ -135,6 +172,68 @@ public class IosInsightsModule: Module {
     @unknown default:
       return "unknown"
     }
+  }
+}
+
+@available(iOS 16.0, *)
+private struct IosInsightsScreenTimeReportModal: View {
+  let onClose: () -> Void
+
+  @State private var filter: DeviceActivityFilter = {
+    let calendar = Calendar.current
+    let now = Date()
+    let interval = calendar.dateInterval(of: .day, for: now) ?? DateInterval(start: now, end: now)
+
+    return DeviceActivityFilter(
+      segment: .daily(during: interval),
+      users: .all,
+      devices: .init([.iPhone]),
+      applications: Set<ApplicationToken>(),
+      categories: Set<ActivityCategoryToken>(),
+      webDomains: Set<WebDomainToken>()
+    )
+  }()
+
+  var body: some View {
+    NavigationStack {
+      VStack(spacing: 0) {
+        DeviceActivityReport(.totalActivity, filter: filter)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+      .navigationTitle("Screen Time (Today)")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button("Done") { onClose() }
+        }
+      }
+    }
+  }
+}
+
+@available(iOS 16.0, *)
+private extension DeviceActivityReport.Context {
+  static let totalActivity = Self("total-activity")
+}
+
+private extension IosInsightsModule {
+  static func findTopViewController() -> UIViewController? {
+    let scenes = UIApplication.shared.connectedScenes
+    let windowScene = scenes.compactMap { $0 as? UIWindowScene }.first(where: { $0.activationState == .foregroundActive })
+    let window = windowScene?.windows.first(where: { $0.isKeyWindow }) ?? windowScene?.windows.first
+    guard var top = window?.rootViewController else { return nil }
+
+    while let presented = top.presentedViewController {
+      top = presented
+    }
+
+    if let nav = top as? UINavigationController {
+      return nav.visibleViewController ?? nav
+    }
+    if let tab = top as? UITabBarController {
+      return tab.selectedViewController ?? tab
+    }
+    return top
   }
 }
 

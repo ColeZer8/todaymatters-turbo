@@ -78,7 +78,7 @@ This plugin adds:
 
 ## Device Activity Report Extension (added)
 
-We added a minimal **DeviceActivity report extension** target so the app can render Screen Time usage reports the Apple-supported way.
+We added a **DeviceActivity report extension** target so the app can render Screen Time usage reports the Apple-supported way, and also persist a summary for React Native to render in our existing analytics UI.
 
 - **Extension point**: `com.apple.deviceactivityui.report-extension`  
   Apple docs: `https://developer.apple.com/documentation/deviceactivity/deviceactivityreport`
@@ -88,6 +88,18 @@ Code lives at:
 - `apps/mobile/ios/IosInsightsReport/IosInsightsReportExtension.swift`
 - `apps/mobile/ios/IosInsightsReport/Info.plist`
 
-Current report implementation is intentionally minimal: it returns a placeholder string so we can validate the extension is built, embedded, signed, and invokable. Next step is to evolve the report configuration to produce per-app totals and a richer SwiftUI view.
+### Data flow into React Native (demo screen)
+
+Apple’s privacy model runs the report extension in a sandbox. We keep everything on-device by writing a compact, aggregated summary into a shared app group:
+
+- **App Group**: `group.com.todaymatters.mobile`
+- **Key**: `iosInsights.screenTime.summary.latest`
+- **Writer**: `IosInsightsReport` extension
+- **Reader**: `ios-insights` Expo module
+- **UI**: RN demo route `/demo-screen-time`
+
+Official note on sandboxing: Apple docs mention the report extension runs sandboxed and cannot make network requests.  
+`https://developer.apple.com/documentation/deviceactivity/deviceactivityreport`
+
 
 

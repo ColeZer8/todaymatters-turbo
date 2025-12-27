@@ -39,6 +39,8 @@ All integration must be implemented safely:
   - Added iOS config plugin `apps/mobile/plugins/with-ios-insights.js` to set entitlements + usage strings.
   - Added dev validation route `/dev/ios-insights`.
   - Added Device Activity Report Extension target `IosInsightsReport` (iOS 16+) embedded into the app.
+  - Added demo route `/demo-screen-time` rendering "Today total screen time + top 5 apps" in our analytics styling.
+  - Implemented report aggregation in the extension and caching via App Group for RN rendering.
 
 ## Verification
 
@@ -51,7 +53,7 @@ All integration must be implemented safely:
 
 - HealthKit access is implemented (authorization + step count sum query).
 - Screen Time authorization is implemented with iOS 16+ async API and iOS 15.x fallback API.
-- Device Activity Report Extension target exists and builds/embeds successfully (currently placeholder report).
+- Device Activity Report Extension aggregates today total + top 5 apps and caches summary for the RN demo screen.
 
 ## Follow-ups
 

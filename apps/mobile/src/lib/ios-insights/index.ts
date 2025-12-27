@@ -1,15 +1,18 @@
 import { Platform } from 'react-native';
 import {
+  getCachedScreenTimeSummaryAsync,
   getScreenTimeAuthorizationStatusAsync,
   getStepCountSumAsync,
   isHealthDataAvailableAsync,
   requestHealthAuthorizationAsync,
+  presentTodayScreenTimeReportAsync,
   requestScreenTimeAuthorizationAsync,
   type ScreenTimeAuthorizationStatus,
+  type ScreenTimeSummary,
   type StepCountSumOptions,
 } from 'ios-insights';
 
-export { type ScreenTimeAuthorizationStatus, type StepCountSumOptions };
+export { type ScreenTimeAuthorizationStatus, type ScreenTimeSummary, type StepCountSumOptions };
 
 export async function isIosInsightsSupportedAsync(): Promise<boolean> {
   return Platform.OS === 'ios';
@@ -42,12 +45,38 @@ export async function getTodayStepCountAsync(): Promise<number> {
 
 export async function getScreenTimeAuthorizationStatusSafeAsync(): Promise<ScreenTimeAuthorizationStatus> {
   if (Platform.OS !== 'ios') return 'unsupported';
-  return await getScreenTimeAuthorizationStatusAsync();
+  try {
+    return await getScreenTimeAuthorizationStatusAsync();
+  } catch {
+    return 'unsupported';
+  }
 }
 
 export async function requestScreenTimeAuthorizationSafeAsync(): Promise<ScreenTimeAuthorizationStatus> {
   if (Platform.OS !== 'ios') return 'unsupported';
-  return await requestScreenTimeAuthorizationAsync();
+  try {
+    return await requestScreenTimeAuthorizationAsync();
+  } catch {
+    return 'unsupported';
+  }
+}
+
+export async function getCachedScreenTimeSummarySafeAsync(): Promise<ScreenTimeSummary | null> {
+  if (Platform.OS !== 'ios') return null;
+  try {
+    return await getCachedScreenTimeSummaryAsync();
+  } catch {
+    return null;
+  }
+}
+
+export async function presentTodayScreenTimeReportSafeAsync(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  try {
+    await presentTodayScreenTimeReportAsync();
+  } catch {
+    // no-op: if the native module isn't present, keep the demo screen usable
+  }
 }
 
 

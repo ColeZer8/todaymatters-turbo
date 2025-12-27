@@ -39,6 +39,7 @@ const TIME_COLORS: Record<TimeOfDay, string> = {
 // Demo tour - screens to navigate through
 const DEMO_TOUR = [
   { path: '/home', label: 'Home' },
+  { path: '/demo-screen-time', label: 'Screen Time' },
   { path: '/demo-workout-interruption', label: 'Focus Alert' },
   { path: '/demo-workout-summary', label: 'Workout' },
   { path: '/demo-meeting', label: 'Meeting' },

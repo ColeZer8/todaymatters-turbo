@@ -119,6 +119,7 @@ export default function Layout() {
         <Stack.Screen name="demo-meeting" options={{ headerShown: false }} />
         <Stack.Screen name="demo-traffic" options={{ headerShown: false }} />
         <Stack.Screen name="demo-prayer" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-screen-time" options={{ headerShown: false }} />
         <Stack.Screen name="demo-workout-interruption" options={{ headerShown: false }} />
         <Stack.Screen name="demo-workout-summary" options={{ headerShown: false }} />
         <Stack.Screen name="demo-traffic-accident" options={{ headerShown: false }} />
