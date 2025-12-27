@@ -8,6 +8,8 @@
  * For EAS builds: Use EAS Secrets or environment-specific variables
  */
 
+import withIosInsights from './plugins/with-ios-insights';
+
 // Environment-specific configuration
 const ENV = {
   development: {
@@ -110,6 +112,7 @@ export default {
           },
         },
       ],
+      withIosInsights,
     ],
     extra: {
       // Preserve existing extra config

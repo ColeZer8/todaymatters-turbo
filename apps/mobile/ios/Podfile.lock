@@ -242,6 +242,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoSecureStore (15.0.8):
+    - ExpoModulesCore
   - ExpoSplashScreen (31.0.10):
     - ExpoModulesCore
   - ExpoWebBrowser (15.0.9):
@@ -252,6 +254,8 @@ PODS:
   - hermes-engine (0.81.4):
     - hermes-engine/Pre-built (= 0.81.4)
   - hermes-engine/Pre-built (0.81.4)
+  - ios-insights (0.0.1):
+    - ExpoModulesCore
   - livekit-react-native (2.9.5):
     - hermes-engine
     - livekit-react-native-webrtc
@@ -2304,11 +2308,13 @@ DEPENDENCIES:
   - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@15.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-ro_ywmkkwro3aemheyt54u7lyu3wm/node_modules/expo-linear-gradient/ios`)"
   - "ExpoLinking (from `../../../node_modules/.pnpm/expo-linking@8.0.8_expo@54.0.23_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-linking/ios`)"
   - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@3.0.25_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-modules-core`)"
+  - "ExpoSecureStore (from `../../../node_modules/.pnpm/expo-secure-store@15.0.8_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-route_msa3rhiytdaw66hn7bi3mjkmvq/node_modules/expo-secure-store/ios`)"
   - "ExpoSplashScreen (from `../../../node_modules/.pnpm/expo-splash-screen@31.0.10_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-rou_l4lvcpuwx52ucdeiqdsz3b3ari/node_modules/expo-splash-screen/ios`)"
   - "ExpoWebBrowser (from `../../../node_modules/.pnpm/expo-web-browser@15.0.9_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router_k5vknylgldgseao4yrig33fa4a/node_modules/expo-web-browser/ios`)"
   - "EXUpdatesInterface (from `../../../node_modules/.pnpm/expo-updates-interface@2.0.0_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-r_m52glk5jfrik34tatuaerwtnjm/node_modules/expo-updates-interface/ios`)"
   - "FBLazyVector (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/Libraries/FBLazyVector`)"
   - "hermes-engine (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)"
+  - ios-insights (from `../modules/ios-insights`)
   - "livekit-react-native (from `../../../node_modules/.pnpm/@livekit+react-native@2.9.5_@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+c_xeuue2q5n3fca6vi3rqdlagmwa/node_modules/@livekit/react-native`)"
   - "livekit-react-native-webrtc (from `../../../node_modules/.pnpm/@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0_/node_modules/@livekit/react-native-webrtc`)"
   - "LiveKitExpoPlugin (from `../../../node_modules/.pnpm/@livekit+react-native-expo-plugin@1.0.1_@livekit+react-native@2.9.5_@livekit+react-native-web_ruthczyqgfqcdlwz5zmdamt544/node_modules/@livekit/react-native-expo-plugin/ios`)"
@@ -2428,6 +2434,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-linking@8.0.8_expo@54.0.23_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-linking/ios"
   ExpoModulesCore:
     :path: "../../../node_modules/.pnpm/expo-modules-core@3.0.25_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-modules-core"
+  ExpoSecureStore:
+    :path: "../../../node_modules/.pnpm/expo-secure-store@15.0.8_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-route_msa3rhiytdaw66hn7bi3mjkmvq/node_modules/expo-secure-store/ios"
   ExpoSplashScreen:
     :path: "../../../node_modules/.pnpm/expo-splash-screen@31.0.10_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-rou_l4lvcpuwx52ucdeiqdsz3b3ari/node_modules/expo-splash-screen/ios"
   ExpoWebBrowser:
@@ -2439,6 +2447,8 @@ EXTERNAL SOURCES:
   hermes-engine:
     :podspec: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
+  ios-insights:
+    :path: "../modules/ios-insights"
   livekit-react-native:
     :path: "../../../node_modules/.pnpm/@livekit+react-native@2.9.5_@livekit+react-native-webrtc@137.0.2_react-native@0.81.4_@babel+c_xeuue2q5n3fca6vi3rqdlagmwa/node_modules/@livekit/react-native"
   livekit-react-native-webrtc:
@@ -2611,11 +2621,13 @@ SPEC CHECKSUMS:
   ExpoLinearGradient: a464898cb95153125e3b81894fd479bcb1c7dd27
   ExpoLinking: f051f28e50ea9269ff539317c166adec81d9342d
   ExpoModulesCore: aa1a8e103d41de84baa5d7c6b98314e2230f1eef
+  ExpoSecureStore: d32f751874a2ceb5aaeebeb3578e165c1ba2b24a
   ExpoSplashScreen: cbb839de72110dea1851dd3e85080b7923af2540
   ExpoWebBrowser: b973e1351fdcf5fec0c400997b1851f5a8219ec3
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: 9e0cd874afd81d9a4d36679daca991b58b260d42
   hermes-engine: 35c763d57c9832d0eef764316ca1c4d043581394
+  ios-insights: 1240d3520c6617ff24442de080a2d6b1aa2878c1
   livekit-react-native: 4c2a613b3c389c7c94122ad77d5e4e21b76bc8e9
   livekit-react-native-webrtc: c03e72c608fbb8284a99e095dd7835a85bdb0279
   LiveKitExpoPlugin: 8e0f4bdffa921c27c13e1504ea0e668b6f859278

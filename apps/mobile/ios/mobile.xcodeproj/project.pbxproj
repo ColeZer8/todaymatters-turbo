@@ -10,11 +10,27 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		827BE7D3027269364423AFE1 /* libPods-mobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3FF446EAF505E0A47059E722 /* libPods-mobile.a */; };
+		A55A55A55A55A55A55A55A55 /* IosInsightsReportExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */; };
+		A66A66A66A66A66A66A66A66 /* IosInsightsReport.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B823EBE0FDDB0F36181B3FAE /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F244C8AC5D1CBBFEEDDF4C /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		BD1C7EB13F7CEB5E4DB0C717 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 000402BB851527E878EAB409 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		ABABABABABABABABABABABAB /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A66A66A66A66A66A66A66A66 /* IosInsightsReport.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		000402BB851527E878EAB409 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = mobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -23,6 +39,9 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = mobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = mobile/Info.plist; sourceTree = "<group>"; };
 		3FF446EAF505E0A47059E722 /* libPods-mobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-mobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInsightsReportExtension.swift; sourceTree = "<group>"; };
+		A22A22A22A22A22A22A22A22 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IosInsightsReport.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8F244C8AC5D1CBBFEEDDF4C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-mobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = mobile/SplashScreen.storyboard; sourceTree = "<group>"; };
 		AB6475A6266BE0C77255C08B /* Pods-mobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mobile.debug.xcconfig"; path = "Target Support Files/Pods-mobile/Pods-mobile.debug.xcconfig"; sourceTree = "<group>"; };
@@ -38,6 +57,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				827BE7D3027269364423AFE1 /* libPods-mobile.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A99A99A99A99A99A99A99A99 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07FAE1A68108700A75B9A /* mobile */,
+				A44A44A44A44A44A44A44A44 /* IosInsightsReport */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
@@ -110,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* mobile.app */,
+				A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -120,6 +148,16 @@
 				1FED9880A909DC0CB0025A79 /* mobile */,
 			);
 			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		A44A44A44A44A44A44A44A44 /* IosInsightsReport */ = {
+			isa = PBXGroup;
+			children = (
+				A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */,
+				A22A22A22A22A22A22A22A22 /* Info.plist */,
+			);
+			name = IosInsightsReport;
+			path = IosInsightsReport;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -146,6 +184,7 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				C9B087EA01B5D394601DED0B /* [CP] Embed Pods Frameworks */,
+				ABABABABABABABABABABABAB /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
@@ -155,6 +194,23 @@
 			productName = mobile;
 			productReference = 13B07F961A680F5B00A75B9A /* mobile.app */;
 			productType = "com.apple.product-type.application";
+		};
+		ACACACACACACACACACACACAC /* IosInsightsReport */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ADADADADADADADADADADADAD /* Build configuration list for PBXNativeTarget "IosInsightsReport" */;
+			buildPhases = (
+				A77A77A77A77A77A77A77A77 /* Sources */,
+				A99A99A99A99A99A99A99A99 /* Frameworks */,
+				A88A88A88A88A88A88A88A88 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = IosInsightsReport;
+			productName = IosInsightsReport;
+			productReference = A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -184,6 +240,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* mobile */,
+				ACACACACACACACACACACACAC /* IosInsightsReport */,
 			);
 		};
 /* End PBXProject section */
@@ -197,6 +254,13 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				BD1C7EB13F7CEB5E4DB0C717 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A88A88A88A88A88A88A88A88 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -335,6 +399,14 @@
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				B823EBE0FDDB0F36181B3FAE /* ExpoModulesProvider.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A77A77A77A77A77A77A77A77 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A55A55A55A55A55A55A55A55 /* IosInsightsReportExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -534,6 +606,54 @@
 			};
 			name = Release;
 		};
+		AEAEAEAEAEAEAEAEAEAEAEAE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XUF36G5828;
+				INFOPLIST_FILE = IosInsightsReport/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
+				PRODUCT_BUNDLE_IDENTIFIER = com.todaymatters.mobile.IosInsightsReport;
+				PRODUCT_NAME = IosInsightsReport;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AFAFAFAFAFAFAFAFAFAFAFAF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = XUF36G5828;
+				INFOPLIST_FILE = IosInsightsReport/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
+				PRODUCT_BUNDLE_IDENTIFIER = com.todaymatters.mobile.IosInsightsReport;
+				PRODUCT_NAME = IosInsightsReport;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -551,6 +671,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		ADADADADADADADADADADADAD /* Build configuration list for PBXNativeTarget "IosInsightsReport" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AEAEAEAEAEAEAEAEAEAEAEAE /* Debug */,
+				AFAFAFAFAFAFAFAFAFAFAFAF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
