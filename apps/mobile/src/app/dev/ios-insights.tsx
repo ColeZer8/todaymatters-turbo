@@ -3,11 +3,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { GradientButton } from '@/components/atoms/GradientButton';
 import {
+  getHealthSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
   getTodayStepCountAsync,
   isHealthKitAvailableAsync,
   requestHealthKitAuthorizationAsync,
   requestScreenTimeAuthorizationSafeAsync,
+  type HealthRangeKey,
+  type HealthSummary,
   type ScreenTimeAuthorizationStatus,
 } from '@/lib/ios-insights';
 
@@ -15,12 +18,14 @@ export default function IosInsightsDevScreen() {
   const [healthKitAvailable, setHealthKitAvailable] = useState<boolean | null>(null);
   const [healthKitAuthorized, setHealthKitAuthorized] = useState<boolean | null>(null);
   const [todaySteps, setTodaySteps] = useState<number | null>(null);
+  const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null);
+  const [healthRange, setHealthRange] = useState<HealthRangeKey>('today');
 
   const [screenTimeStatus, setScreenTimeStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const healthSummary = useMemo(() => {
+  const healthStatusSummary = useMemo(() => {
     const available = healthKitAvailable === null ? '—' : healthKitAvailable ? 'yes' : 'no';
     const authorized = healthKitAuthorized === null ? '—' : healthKitAuthorized ? 'yes' : 'no';
     const steps = todaySteps === null ? '—' : String(Math.round(todaySteps));
@@ -57,6 +62,16 @@ export default function IosInsightsDevScreen() {
     }
   }, []);
 
+  const onFetchHealthSummary = useCallback(async () => {
+    setErrorMessage(null);
+    try {
+      const summary = await getHealthSummarySafeAsync(healthRange);
+      setHealthSummary(summary);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : String(e));
+    }
+  }, [healthRange]);
+
   const onGetScreenTimeStatus = useCallback(async () => {
     setErrorMessage(null);
     try {
@@ -90,14 +105,45 @@ export default function IosInsightsDevScreen() {
           <View className="mt-6 rounded-2xl bg-slate-900 p-4">
             <Text className="text-lg font-semibold text-white">HealthKit</Text>
 
-            <Text className="mt-3 text-sm text-slate-300">Available: {healthSummary.available}</Text>
-            <Text className="mt-1 text-sm text-slate-300">Authorized: {healthSummary.authorized}</Text>
-            <Text className="mt-1 text-sm text-slate-300">Today steps (sum): {healthSummary.steps}</Text>
+            <Text className="mt-3 text-sm text-slate-300">Available: {healthStatusSummary.available}</Text>
+            <Text className="mt-1 text-sm text-slate-300">Authorized: {healthStatusSummary.authorized}</Text>
+            <Text className="mt-1 text-sm text-slate-300">Today steps (sum): {healthStatusSummary.steps}</Text>
 
             <View className="mt-4 gap-3">
               <GradientButton label="Check availability" onPress={onCheckHealthKit} />
               <GradientButton label="Request authorization" onPress={onRequestHealthKit} />
               <GradientButton label="Fetch today's steps" onPress={onGetTodaySteps} />
+            </View>
+
+            <View className="mt-6 rounded-2xl bg-slate-950/60 p-4">
+              <Text className="text-sm font-semibold text-white">Health Summary (real data)</Text>
+              <Text className="mt-1 text-xs text-slate-400">Range: {healthRange}</Text>
+              <View className="mt-3 gap-2">
+                <GradientButton
+                  label="Range: today"
+                  onPress={() => setHealthRange('today')}
+                />
+                <GradientButton
+                  label="Range: week"
+                  onPress={() => setHealthRange('week')}
+                />
+                <GradientButton
+                  label="Range: month"
+                  onPress={() => setHealthRange('month')}
+                />
+                <GradientButton
+                  label="Range: year"
+                  onPress={() => setHealthRange('year')}
+                />
+                <GradientButton label="Fetch health summary" onPress={onFetchHealthSummary} />
+              </View>
+
+              <View className="mt-4">
+                <Text className="text-xs text-slate-400">
+                  Steps: {healthSummary?.steps ?? '—'} · Sleep(s): {healthSummary?.sleepAsleepSeconds ?? '—'} · HR(avg):{' '}
+                  {healthSummary?.heartRateAvgBpm ?? '—'}
+                </Text>
+              </View>
             </View>
           </View>
 

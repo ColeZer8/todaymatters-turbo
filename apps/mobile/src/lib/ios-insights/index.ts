@@ -1,18 +1,45 @@
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import {
   getCachedScreenTimeSummaryAsync,
   getScreenTimeAuthorizationStatusAsync,
+  getHealthSummaryAsync,
+  getHealthAuthorizationStatusAsync,
+  getTodayActivityRingsSummaryAsync,
+  getLatestWorkoutSummaryAsync,
   getStepCountSumAsync,
   isHealthDataAvailableAsync,
   requestHealthAuthorizationAsync,
   presentTodayScreenTimeReportAsync,
   requestScreenTimeAuthorizationAsync,
+  isIosInsightsNativeModuleAvailable,
   type ScreenTimeAuthorizationStatus,
   type ScreenTimeSummary,
+  type HealthAuthorizationStatus,
+  type ActivityRingsSummary,
+  type WorkoutSummary,
+  type HealthSummary,
   type StepCountSumOptions,
 } from 'ios-insights';
 
-export { type ScreenTimeAuthorizationStatus, type ScreenTimeSummary, type StepCountSumOptions };
+export {
+  type ScreenTimeAuthorizationStatus,
+  type ScreenTimeSummary,
+  type StepCountSumOptions,
+  type HealthSummary,
+  type HealthAuthorizationStatus,
+  type ActivityRingsSummary,
+  type WorkoutSummary,
+};
+
+export type IosInsightsSupportStatus = 'notIos' | 'expoGo' | 'missingNativeModule' | 'available';
+
+export function getIosInsightsSupportStatus(): IosInsightsSupportStatus {
+  if (Platform.OS !== 'ios') return 'notIos';
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return 'expoGo';
+  if (!isIosInsightsNativeModuleAvailable()) return 'missingNativeModule';
+  return 'available';
+}
 
 export async function isIosInsightsSupportedAsync(): Promise<boolean> {
   return Platform.OS === 'ios';
@@ -26,6 +53,76 @@ export async function isHealthKitAvailableAsync(): Promise<boolean> {
 export async function requestHealthKitAuthorizationAsync(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   return await requestHealthAuthorizationAsync();
+}
+
+export async function getHealthAuthorizationStatusSafeAsync(): Promise<HealthAuthorizationStatus> {
+  const support = getIosInsightsSupportStatus();
+  if (support !== 'available') return 'denied';
+  if (Platform.OS !== 'ios') return 'denied';
+  return await getHealthAuthorizationStatusAsync();
+}
+
+export type HealthRangeKey = 'today' | 'week' | 'month' | 'year';
+
+function getRangeDates(range: HealthRangeKey): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now);
+
+  if (range === 'today') {
+    start.setHours(0, 0, 0, 0);
+    return { start, end: now };
+  }
+
+  if (range === 'week') {
+    start.setDate(now.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return { start, end: now };
+  }
+
+  if (range === 'month') {
+    start.setDate(now.getDate() - 29);
+    start.setHours(0, 0, 0, 0);
+    return { start, end: now };
+  }
+
+  // year
+  start.setDate(now.getDate() - 364);
+  start.setHours(0, 0, 0, 0);
+  return { start, end: now };
+}
+
+export async function getHealthSummarySafeAsync(range: HealthRangeKey): Promise<HealthSummary | null> {
+  const support = getIosInsightsSupportStatus();
+  if (support !== 'available') return null;
+  if (Platform.OS !== 'ios') return null;
+
+  const { start, end } = getRangeDates(range);
+  const options: StepCountSumOptions = {
+    startDateMs: start.getTime(),
+    endDateMs: end.getTime(),
+  };
+
+  return await getHealthSummaryAsync(options);
+}
+
+export async function getTodayActivityRingsSummarySafeAsync(): Promise<ActivityRingsSummary | null> {
+  const support = getIosInsightsSupportStatus();
+  if (support !== 'available') return null;
+  if (Platform.OS !== 'ios') return null;
+  return await getTodayActivityRingsSummaryAsync();
+}
+
+export async function getLatestWorkoutSummarySafeAsync(range: HealthRangeKey): Promise<WorkoutSummary | null> {
+  const support = getIosInsightsSupportStatus();
+  if (support !== 'available') return null;
+  if (Platform.OS !== 'ios') return null;
+
+  const { start, end } = getRangeDates(range);
+  const options: StepCountSumOptions = {
+    startDateMs: start.getTime(),
+    endDateMs: end.getTime(),
+  };
+  return await getLatestWorkoutSummaryAsync(options);
 }
 
 export async function getTodayStepCountAsync(): Promise<number> {
@@ -44,26 +141,30 @@ export async function getTodayStepCountAsync(): Promise<number> {
 }
 
 export async function getScreenTimeAuthorizationStatusSafeAsync(): Promise<ScreenTimeAuthorizationStatus> {
-  if (Platform.OS !== 'ios') return 'unsupported';
   try {
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') return 'unsupported';
     return await getScreenTimeAuthorizationStatusAsync();
-  } catch {
-    return 'unsupported';
+  } catch (e) {
+    // Important: do NOT collapse native errors to "unsupported" (it hides stale dev-client/method mismatch issues).
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }
 
 export async function requestScreenTimeAuthorizationSafeAsync(): Promise<ScreenTimeAuthorizationStatus> {
-  if (Platform.OS !== 'ios') return 'unsupported';
   try {
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') return 'unsupported';
     return await requestScreenTimeAuthorizationAsync();
-  } catch {
-    return 'unsupported';
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }
 
 export async function getCachedScreenTimeSummarySafeAsync(): Promise<ScreenTimeSummary | null> {
-  if (Platform.OS !== 'ios') return null;
   try {
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') return null;
     return await getCachedScreenTimeSummaryAsync();
   } catch {
     return null;
@@ -71,11 +172,12 @@ export async function getCachedScreenTimeSummarySafeAsync(): Promise<ScreenTimeS
 }
 
 export async function presentTodayScreenTimeReportSafeAsync(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
   try {
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') return;
     await presentTodayScreenTimeReportAsync();
-  } catch {
-    // no-op: if the native module isn't present, keep the demo screen usable
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }
 

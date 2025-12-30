@@ -9,7 +9,7 @@ export { DemoMeetingReminder } from './DemoMeetingReminder';
 export { DemoTrafficAlert } from './DemoTrafficAlert';
 export { DemoPrayerAction } from './DemoPrayerAction';
 export { DemoWorkoutInterruption } from './DemoWorkoutInterruption';
-export { DemoWorkoutSummary } from './DemoWorkoutSummary';
+export { DemoWorkoutSummary, type DemoWorkoutSummaryData } from './DemoWorkoutSummary';
 export { DemoTrafficAccident } from './DemoTrafficAccident';
 export { DemoOverviewGoals } from './DemoOverviewGoals';
 export { DemoOverviewInitiatives } from './DemoOverviewInitiatives';

@@ -22,3 +22,4 @@ export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
 export { DemoCarouselTemplate } from './DemoCarouselTemplate';
 export { ScreenTimeAnalyticsTemplate } from './ScreenTimeAnalyticsTemplate';
+export { HealthKitDashboardTemplate } from './HealthKitDashboardTemplate';

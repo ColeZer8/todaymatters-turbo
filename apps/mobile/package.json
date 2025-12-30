@@ -29,7 +29,7 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "^8.5.1",
     "@supabase/supabase-js": "^2.81.1",
-    "ios-insights": "file:./modules/ios-insights",
+    "ios-insights": "workspace:*",
     "expo": "^54.0.1",
     "expo-auth-session": "^7.0.9",
     "expo-constants": "~18.0.10",
@@ -74,3 +74,5 @@
   },
   "private": true
 }
+
+

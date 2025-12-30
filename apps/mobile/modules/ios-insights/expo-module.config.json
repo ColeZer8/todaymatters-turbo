@@ -1,7 +1,8 @@
 {
   "platforms": ["ios"],
   "ios": {
-    "modules": ["IosInsightsModule"]
+    "modules": ["IosInsightsModule"],
+    "podspecPath": "ios-insights.podspec"
   }
 }
 

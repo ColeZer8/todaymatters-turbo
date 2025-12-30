@@ -609,11 +609,11 @@
 		AEAEAEAEAEAEAEAEAEAEAEAE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XUF36G5828;
 				INFOPLIST_FILE = IosInsightsReport/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -635,11 +635,11 @@
 		AFAFAFAFAFAFAFAFAFAFAFAF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
+				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XUF36G5828;
 				INFOPLIST_FILE = IosInsightsReport/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;

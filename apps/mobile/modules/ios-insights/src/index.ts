@@ -37,7 +37,11 @@ interface IosInsightsNativeModule {
   // HealthKit
   isHealthDataAvailable(): Promise<boolean>;
   requestHealthAuthorization(): Promise<boolean>;
+  getHealthAuthorizationStatus(): Promise<'notDetermined' | 'denied' | 'authorized'>;
   getStepCountSum(options: StepCountSumOptions): Promise<number>;
+  getHealthSummaryJson(options: StepCountSumOptions): Promise<string | null>;
+  getTodayActivityRingsSummaryJson(): Promise<string | null>;
+  getLatestWorkoutSummaryJson(options: StepCountSumOptions): Promise<string | null>;
 
   // Screen Time (FamilyControls)
   getScreenTimeAuthorizationStatus(): Promise<ScreenTimeAuthorizationStatus>;
@@ -50,6 +54,10 @@ interface IosInsightsNativeModule {
 
 const NativeModule = requireOptionalNativeModule<IosInsightsNativeModule>('IosInsights');
 
+export function isIosInsightsNativeModuleAvailable(): boolean {
+  return Boolean(NativeModule);
+}
+
 function requireIosInsights(): IosInsightsNativeModule {
   if (!NativeModule) {
     throw new Error('IosInsights native module not available (are you running on iOS dev build?)');
@@ -57,37 +65,118 @@ function requireIosInsights(): IosInsightsNativeModule {
   return NativeModule;
 }
 
+function requireIosInsightsMethod<K extends keyof IosInsightsNativeModule>(key: K): IosInsightsNativeModule[K] {
+  const mod = requireIosInsights() as unknown as Record<string, unknown>;
+  const value = mod[String(key)];
+  if (typeof value !== 'function') {
+    throw new Error(
+      `IosInsights native module missing method "${String(key)}". This usually means your iOS dev client is out of date—rebuild it (pnpm --filter mobile ios) and reopen the app.`,
+    );
+  }
+  return value as IosInsightsNativeModule[K];
+}
+
 export async function isHealthDataAvailableAsync(): Promise<boolean> {
-  return await requireIosInsights().isHealthDataAvailable();
+  return await requireIosInsightsMethod('isHealthDataAvailable')();
 }
 
 export async function requestHealthAuthorizationAsync(): Promise<boolean> {
-  return await requireIosInsights().requestHealthAuthorization();
+  return await requireIosInsightsMethod('requestHealthAuthorization')();
 }
 
 export async function getStepCountSumAsync(options: StepCountSumOptions): Promise<number> {
-  return await requireIosInsights().getStepCountSum(options);
+  return await requireIosInsightsMethod('getStepCountSum')(options);
+}
+
+export interface HealthSummary {
+  generatedAtIso: string;
+  startIso: string;
+  endIso: string;
+
+  steps: number | null;
+  activeEnergyKcal: number | null;
+  distanceWalkingRunningMeters: number | null;
+
+  heartRateAvgBpm: number | null;
+  restingHeartRateAvgBpm: number | null;
+  hrvSdnnAvgSeconds: number | null;
+
+  sleepAsleepSeconds: number | null;
+
+  workoutsCount: number | null;
+  workoutsDurationSeconds: number | null;
+
+  errors?: string[] | null;
+}
+
+export async function getHealthSummaryAsync(options: StepCountSumOptions): Promise<HealthSummary | null> {
+  if (!NativeModule) return null;
+  const json = await requireIosInsightsMethod('getHealthSummaryJson')(options);
+  if (!json) return null;
+  return JSON.parse(json) as HealthSummary;
+}
+
+export type HealthAuthorizationStatus = 'notDetermined' | 'denied' | 'authorized';
+
+export async function getHealthAuthorizationStatusAsync(): Promise<HealthAuthorizationStatus> {
+  if (!NativeModule) return 'denied';
+  return await requireIosInsightsMethod('getHealthAuthorizationStatus')();
+}
+
+export interface ActivityRingsSummary {
+  generatedAtIso: string;
+  dateIso: string;
+  moveKcal: number;
+  moveGoalKcal: number;
+  exerciseMinutes: number;
+  exerciseGoalMinutes: number;
+  standHours: number;
+  standGoalHours: number;
+}
+
+export async function getTodayActivityRingsSummaryAsync(): Promise<ActivityRingsSummary | null> {
+  if (!NativeModule) return null;
+  const json = await requireIosInsightsMethod('getTodayActivityRingsSummaryJson')();
+  if (!json) return null;
+  return JSON.parse(json) as ActivityRingsSummary;
+}
+
+export interface WorkoutSummary {
+  workoutStartIso: string;
+  workoutEndIso: string;
+  durationSeconds: number;
+  totalEnergyBurnedKcal: number | null;
+  avgHeartRateBpm: number | null;
+  maxHeartRateBpm: number | null;
+  errors?: string[] | null;
+}
+
+export async function getLatestWorkoutSummaryAsync(options: StepCountSumOptions): Promise<WorkoutSummary | null> {
+  if (!NativeModule) return null;
+  const json = await requireIosInsightsMethod('getLatestWorkoutSummaryJson')(options);
+  if (!json) return null;
+  return JSON.parse(json) as WorkoutSummary;
 }
 
 export async function getScreenTimeAuthorizationStatusAsync(): Promise<ScreenTimeAuthorizationStatus> {
   // If we're not on iOS or no native module exists, normalize to "unsupported".
   if (!NativeModule) return 'unsupported';
-  return await NativeModule.getScreenTimeAuthorizationStatus();
+  return await requireIosInsightsMethod('getScreenTimeAuthorizationStatus')();
 }
 
 export async function requestScreenTimeAuthorizationAsync(): Promise<ScreenTimeAuthorizationStatus> {
-  return await requireIosInsights().requestScreenTimeAuthorization();
+  return await requireIosInsightsMethod('requestScreenTimeAuthorization')();
 }
 
 export async function getCachedScreenTimeSummaryAsync(): Promise<ScreenTimeSummary | null> {
   if (!NativeModule) return null;
-  const json = await NativeModule.getCachedScreenTimeSummaryJson();
+  const json = await requireIosInsightsMethod('getCachedScreenTimeSummaryJson')();
   if (!json) return null;
   return JSON.parse(json) as ScreenTimeSummary;
 }
 
 export async function presentTodayScreenTimeReportAsync(): Promise<void> {
-  return await requireIosInsights().presentTodayScreenTimeReport();
+  return await requireIosInsightsMethod('presentTodayScreenTimeReport')();
 }
 
 

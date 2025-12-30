@@ -55,6 +55,12 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your camera</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>TodayMatters uses Apple Health data to help you understand and improve your wellbeing.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>TodayMatters may write limited health data to Apple Health when you choose to sync.</string>
+    <key>NSFamilyControlsUsageDescription</key>
+    <string>TodayMatters uses Screen Time data to help you understand and improve your digital wellbeing.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>TodayMatters uses your microphone to have voice conversations with your AI coach.</string>
     <key>NSUserActivityTypes</key>
