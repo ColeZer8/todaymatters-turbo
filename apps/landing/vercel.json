@@ -1,0 +1,7 @@
+{
+  "installCommand": "cd ../.. && pnpm install",
+  "buildCommand": "cd ../.. && pnpm --filter landing build",
+  "outputDirectory": ".next",
+  "framework": "nextjs"
+}
+
