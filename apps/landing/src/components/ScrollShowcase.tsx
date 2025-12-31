@@ -112,7 +112,8 @@ export const ScrollShowcase = () => {
     setActiveIndex(index);
   });
 
-  const activeItem = items[activeIndex];
+  // Ensure activeItem is always defined - items always has at least one element
+  const activeItem: ShowcaseItem = items[activeIndex] ?? items[0]!;
 
   return (
     <section 
