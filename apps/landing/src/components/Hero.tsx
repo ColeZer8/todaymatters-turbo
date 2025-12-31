@@ -26,7 +26,9 @@ export const Hero = () => {
             transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
             className="text-[3.5rem] md:text-[5.5rem] lg:text-[6.5rem] font-bold text-[#0a0a0a] tracking-[-0.04em] mb-8 leading-[0.95] max-w-5xl"
           >
-            The Everything Life App
+            <span className="text-[0.72em] tracking-[-0.02em]">
+              Control your day, transform your life.
+            </span>
           </motion.h1>
 
           {/* Subtitle - Bevel style */}

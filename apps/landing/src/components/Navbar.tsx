@@ -48,7 +48,7 @@ export const Navbar = () => {
             <div className="absolute inset-0 bg-white/10 rounded-2xl" />
             <span className="relative text-white font-bold text-base tracking-tight" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>TM</span>
           </div>
-          <span className="text-lg font-bold text-[#0a0a0a] tracking-tight hidden sm:inline group-hover:text-brand-primary transition-colors">
+          <span className="text-lg font-bold text-brand-primary tracking-tight hidden sm:inline">
             Today Matters
           </span>
         </Link>
