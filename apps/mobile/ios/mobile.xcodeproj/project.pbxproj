@@ -156,7 +156,6 @@
 				A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */,
 				A22A22A22A22A22A22A22A22 /* Info.plist */,
 			);
-			name = IosInsightsReport;
 			path = IosInsightsReport;
 			sourceTree = "<group>";
 		};

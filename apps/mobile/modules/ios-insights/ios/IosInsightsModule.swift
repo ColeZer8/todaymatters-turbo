@@ -12,7 +12,9 @@ import ManagedSettings
 public class IosInsightsModule: Module {
   private let healthStore = HKHealthStore()
   private let appGroupId = "group.com.todaymatters.mobile"
-  private let screenTimeSummaryKey = "iosInsights.screenTime.summary.latest"
+  private let screenTimeSummaryKeyPrefix = "iosInsights.screenTime.summary.latest"
+  private let screenTimeGeneratedAtKeyPrefix = "iosInsights.screenTime.summary.generatedAtIso"
+  private let screenTimeGeneratedAtLegacyKey = "iosInsights.screenTime.summary.generatedAtIso"
 
   public func definition() -> ModuleDefinition {
     Name("IosInsights")
@@ -345,13 +347,56 @@ public class IosInsightsModule: Module {
 
     // MARK: - Screen Time Report (DeviceActivityReport)
 
-    AsyncFunction("getCachedScreenTimeSummaryJson") { () -> String? in
+    AsyncFunction("getCachedScreenTimeSummaryJson") { (range: String) -> String? in
       guard let defaults = UserDefaults(suiteName: self.appGroupId) else {
         return nil
       }
-      return defaults.string(forKey: self.screenTimeSummaryKey)
+      // New format: range-scoped key.
+      if let ranged = defaults.string(forKey: "\(self.screenTimeSummaryKeyPrefix).\(range)") {
+        return ranged
+      }
+
+      // Back-compat: older extensions wrote without a range suffix.
+      // Only treat this as valid for "today" reads to avoid leaking old day values into other ranges.
+      if range == "today" {
+        return defaults.string(forKey: "\(self.screenTimeSummaryKeyPrefix)")
+      }
+      return nil
     }
 
+    AsyncFunction("presentScreenTimeReport") { (range: String, promise: Promise) in
+      guard #available(iOS 16.0, *) else {
+        promise.reject("ERR_UNSUPPORTED", "DeviceActivityReport requires iOS 16.0+.")
+        return
+      }
+
+      DispatchQueue.main.async {
+        guard let presenter = Self.findTopViewController() else {
+          promise.reject("ERR_NO_VIEW_CONTROLLER", "Unable to find a view controller to present from.")
+          return
+        }
+
+        let defaults = UserDefaults(suiteName: self.appGroupId)
+        let generatedAtKey = "\(self.screenTimeGeneratedAtKeyPrefix).\(range)"
+        // Baseline matters: if the extension is an older build, it may only write the legacy key.
+        // If we start with a nil baseline but legacy has a value, we would instantly close and the
+        // report wouldn’t have time to run (result: blank UI after a brief "sync").
+        let initialGeneratedAtIso =
+          defaults?.string(forKey: generatedAtKey) ??
+          (range == "today" ? defaults?.string(forKey: self.screenTimeGeneratedAtLegacyKey) : nil)
+
+        self.presentReportModal(
+          presenter: presenter,
+          range: range,
+          generatedAtKey: generatedAtKey,
+          initialGeneratedAtIso: initialGeneratedAtIso,
+          onResolved: { promise.resolve(nil) }
+        )
+      }
+    }
+
+    // Back-compat alias: older JS called this method name.
+    // Keep it invisible and map to the new implementation so physical devices don't regress.
     AsyncFunction("presentTodayScreenTimeReport") { (promise: Promise) in
       guard #available(iOS 16.0, *) else {
         promise.reject("ERR_UNSUPPORTED", "DeviceActivityReport requires iOS 16.0+.")
@@ -364,15 +409,20 @@ public class IosInsightsModule: Module {
           return
         }
 
-        let hosting = UIHostingController(rootView: IosInsightsScreenTimeReportModal(
-          onClose: {
-            presenter.dismiss(animated: true) {
-              promise.resolve(nil)
-            }
-          }
-        ))
-        hosting.modalPresentationStyle = .formSheet
-        presenter.present(hosting, animated: true)
+        let defaults = UserDefaults(suiteName: self.appGroupId)
+        let range = "today"
+        let generatedAtKey = "\(self.screenTimeGeneratedAtKeyPrefix).\(range)"
+        let initialGeneratedAtIso =
+          defaults?.string(forKey: generatedAtKey) ??
+          defaults?.string(forKey: self.screenTimeGeneratedAtLegacyKey)
+
+        self.presentReportModal(
+          presenter: presenter,
+          range: range,
+          generatedAtKey: generatedAtKey,
+          initialGeneratedAtIso: initialGeneratedAtIso,
+          onResolved: { promise.resolve(nil) }
+        )
       }
     }
   }
@@ -389,6 +439,38 @@ public class IosInsightsModule: Module {
     @unknown default:
       return "unknown"
     }
+  }
+}
+
+@available(iOS 16.0, *)
+private extension IosInsightsModule {
+  func presentReportModal(
+    presenter: UIViewController,
+    range: String,
+    generatedAtKey: String,
+    initialGeneratedAtIso: String?,
+    onResolved: @escaping () -> Void
+  ) {
+    // IMPORTANT: Apple's DeviceActivityReport extension REQUIRES the view to be properly
+    // presented and visible. Hidden/invisible approaches do NOT work - the extension's
+    // makeConfiguration method only runs when the DeviceActivityReport view is properly rendered.
+    // This is why the original "black screen" worked but invisible approaches failed.
+
+    let hosting = UIHostingController(
+      rootView: IosInsightsScreenTimeReportModal(
+        appGroupId: self.appGroupId,
+        contextKey: range,
+        generatedAtKey: generatedAtKey,
+        initialGeneratedAtIso: initialGeneratedAtIso,
+        onClose: {
+          presenter.dismiss(animated: true) {
+            onResolved()
+          }
+        }
+      )
+    )
+    hosting.modalPresentationStyle = .fullScreen
+    presenter.present(hosting, animated: true)
   }
 }
 
@@ -733,50 +815,120 @@ private extension IosInsightsModule {
 
 @available(iOS 16.0, *)
 private struct IosInsightsScreenTimeReportModal: View {
+  let appGroupId: String
+  let contextKey: String
+  let generatedAtKey: String
+  let initialGeneratedAtIso: String?
   let onClose: () -> Void
-
-  @State private var filter: DeviceActivityFilter = {
-    let calendar = Calendar.current
-    let now = Date()
-    let interval = calendar.dateInterval(of: .day, for: now) ?? DateInterval(start: now, end: now)
-
-    return DeviceActivityFilter(
-      segment: .daily(during: interval),
-      users: .all,
-      devices: .init([.iPhone]),
-      applications: Set<ApplicationToken>(),
-      categories: Set<ActivityCategoryToken>(),
-      webDomains: Set<WebDomainToken>()
-    )
-  }()
 
   var body: some View {
     NavigationStack {
-      ZStack {
-        // If the report extension fails to load (misconfigured Info.plist / missing principal class),
-        // DeviceActivityReport can present a blank view. Keep a visible fallback behind it.
-        Color.black.ignoresSafeArea()
-        Text("Loading Screen Time report…")
-          .foregroundStyle(.white.opacity(0.7))
-          .font(.system(size: 14, weight: .medium))
-
-        DeviceActivityReport(.totalActivity, filter: filter)
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
-      .navigationTitle("Screen Time (Today)")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button("Done") { onClose() }
+      // The DeviceActivityReport renders the SwiftUI view from the extension (ScreenTimeReportView).
+      // The extension handles all the content UI. We just provide a nav bar with Done button.
+      DeviceActivityReport(context(for: contextKey), filter: buildFilter(contextKey: contextKey))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .topBarLeading) {
+            Button(action: onClose) {
+              Image(systemName: "arrow.left")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(red: 0.067, green: 0.094, blue: 0.153))
+            }
+          }
+          ToolbarItem(placement: .principal) {
+            Text("Digital Wellbeing")
+              .font(.system(size: 12, weight: .bold))
+              .tracking(1.4)
+              .textCase(.uppercase)
+              .foregroundStyle(Color(red: 0.145, green: 0.388, blue: 0.922))
+          }
+          ToolbarItem(placement: .topBarTrailing) {
+            Button(action: {}) {
+              Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color(red: 0.067, green: 0.094, blue: 0.153))
+            }
+          }
         }
-      }
+        .toolbarBackground(
+          LinearGradient(
+            colors: [
+              Color(red: 0.984, green: 0.988, blue: 1.0),
+              Color(red: 0.957, green: 0.969, blue: 1.0),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          for: .navigationBar
+        )
+        .toolbarBackground(.visible, for: .navigationBar)
     }
   }
 }
 
 @available(iOS 16.0, *)
 private extension DeviceActivityReport.Context {
+  // CRITICAL: These MUST match the context strings in IosInsightsReportExtension.swift exactly.
+  // The extension's DeviceActivityReportScene.context must equal the context we pass to DeviceActivityReport.
+  static let totalActivityToday = Self("total-activity-today")
+  static let totalActivityWeek = Self("total-activity-week")
+  static let totalActivityMonth = Self("total-activity-month")
+  static let totalActivityYear = Self("total-activity-year")
+  // Legacy context from the original working version - use this for "today" to ensure backward compatibility.
   static let totalActivity = Self("total-activity")
+}
+
+@available(iOS 16.0, *)
+private func context(for range: String) -> DeviceActivityReport.Context {
+  switch range {
+  case "week":
+    return .totalActivityWeek
+  case "month":
+    return .totalActivityMonth
+  case "year":
+    return .totalActivityYear
+  default:
+    // Use the LEGACY context for "today" to maximize compatibility.
+    // The new extension supports BOTH "total-activity" and "total-activity-today" contexts.
+    return .totalActivity
+  }
+}
+
+@available(iOS 16.0, *)
+private func buildFilter(contextKey: String) -> DeviceActivityFilter {
+  let calendar = Calendar.current
+  let now = Date()
+  let interval: DateInterval
+
+  switch contextKey {
+  case "week":
+    let weekStart = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -6, to: now) ?? now)
+    let weekEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+    interval = DateInterval(start: weekStart, end: weekEnd)
+  case "month":
+    let monthStart = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -29, to: now) ?? now)
+    let monthEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+    interval = DateInterval(start: monthStart, end: monthEnd)
+  case "year":
+    let yearStart = calendar.startOfDay(for: calendar.date(byAdding: .day, value: -364, to: now) ?? now)
+    let yearEnd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+    interval = DateInterval(start: yearStart, end: yearEnd)
+  default:
+    // For "today", use the full day interval (midnight to midnight) like the original working version.
+    // This is critical - using a partial day (start to now) may produce incomplete data.
+    interval = calendar.dateInterval(of: .day, for: now) ?? DateInterval(start: calendar.startOfDay(for: now), end: now)
+  }
+
+  // IMPORTANT:
+  // Do NOT pass empty `applications/categories/webDomains` sets — that filters to "none"
+  // and yields blank reports.
+  // This initializer intentionally leaves app/category/domain filters unspecified (all).
+  return DeviceActivityFilter(
+    segment: .daily(during: interval),
+    users: .all,
+    devices: .init([.iPhone])
+  )
 }
 
 private extension IosInsightsModule {

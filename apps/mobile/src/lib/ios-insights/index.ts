@@ -10,20 +10,24 @@ import {
   getStepCountSumAsync,
   isHealthDataAvailableAsync,
   requestHealthAuthorizationAsync,
-  presentTodayScreenTimeReportAsync,
+  presentScreenTimeReportAsync,
   requestScreenTimeAuthorizationAsync,
   isIosInsightsNativeModuleAvailable,
   type ScreenTimeAuthorizationStatus,
+  type ScreenTimeRangeKey,
   type ScreenTimeSummary,
   type HealthAuthorizationStatus,
   type ActivityRingsSummary,
   type WorkoutSummary,
   type HealthSummary,
   type StepCountSumOptions,
+  getScreenTimeReportSupport,
+  getScreenTimeNativeMethodAvailability,
 } from 'ios-insights';
 
 export {
   type ScreenTimeAuthorizationStatus,
+  type ScreenTimeRangeKey,
   type ScreenTimeSummary,
   type StepCountSumOptions,
   type HealthSummary,
@@ -31,6 +35,18 @@ export {
   type ActivityRingsSummary,
   type WorkoutSummary,
 };
+
+export function getScreenTimeReportSupportStatus(): { supportsRange: boolean } {
+  return getScreenTimeReportSupport();
+}
+
+export function getScreenTimeNativeMethodAvailabilityStatus(): {
+  hasPresentScreenTimeReport: boolean;
+  hasPresentTodayScreenTimeReport: boolean;
+  hasGetCachedScreenTimeSummaryJson: boolean;
+} {
+  return getScreenTimeNativeMethodAvailability();
+}
 
 export type IosInsightsSupportStatus = 'notIos' | 'expoGo' | 'missingNativeModule' | 'available';
 
@@ -161,21 +177,21 @@ export async function requestScreenTimeAuthorizationSafeAsync(): Promise<ScreenT
   }
 }
 
-export async function getCachedScreenTimeSummarySafeAsync(): Promise<ScreenTimeSummary | null> {
+export async function getCachedScreenTimeSummarySafeAsync(range: ScreenTimeRangeKey): Promise<ScreenTimeSummary | null> {
   try {
     const support = getIosInsightsSupportStatus();
     if (support !== 'available') return null;
-    return await getCachedScreenTimeSummaryAsync();
+    return await getCachedScreenTimeSummaryAsync(range);
   } catch {
     return null;
   }
 }
 
-export async function presentTodayScreenTimeReportSafeAsync(): Promise<void> {
+export async function presentScreenTimeReportSafeAsync(range: ScreenTimeRangeKey): Promise<void> {
   try {
     const support = getIosInsightsSupportStatus();
     if (support !== 'available') return;
-    await presentTodayScreenTimeReportAsync();
+    await presentScreenTimeReportAsync(range);
   } catch (e) {
     throw e instanceof Error ? e : new Error(String(e));
   }

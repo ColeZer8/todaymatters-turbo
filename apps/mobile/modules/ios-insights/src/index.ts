@@ -7,6 +7,8 @@ export type ScreenTimeAuthorizationStatus =
   | 'unknown'
   | 'unsupported';
 
+export type ScreenTimeRangeKey = 'today' | 'week' | 'month' | 'year';
+
 export interface StepCountSumOptions {
   /**
    * Milliseconds since epoch (Date.now()).
@@ -31,6 +33,7 @@ export interface ScreenTimeSummary {
   dayEndIso: string;
   totalSeconds: number;
   topApps: ScreenTimeAppUsage[];
+  hourlyBucketsSeconds?: number[] | null;
 }
 
 interface IosInsightsNativeModule {
@@ -48,8 +51,8 @@ interface IosInsightsNativeModule {
   requestScreenTimeAuthorization(): Promise<ScreenTimeAuthorizationStatus>;
 
   // Screen Time report (DeviceActivityReport)
-  getCachedScreenTimeSummaryJson(): Promise<string | null>;
-  presentTodayScreenTimeReport(): Promise<void>;
+  getCachedScreenTimeSummaryJson(range: ScreenTimeRangeKey): Promise<string | null>;
+  presentScreenTimeReport(range: ScreenTimeRangeKey): Promise<void>;
 }
 
 const NativeModule = requireOptionalNativeModule<IosInsightsNativeModule>('IosInsights');
@@ -74,6 +77,39 @@ function requireIosInsightsMethod<K extends keyof IosInsightsNativeModule>(key: 
     );
   }
   return value as IosInsightsNativeModule[K];
+}
+
+function getOptionalIosInsightsMethod(key: string): ((...args: unknown[]) => Promise<unknown>) | null {
+  if (!NativeModule) return null;
+  const mod = NativeModule as unknown as Record<string, unknown>;
+  const value = mod[key];
+  return typeof value === 'function' ? ((...args: unknown[]) => (value as (...a: unknown[]) => Promise<unknown>)(...args)) : null;
+}
+
+export function getScreenTimeReportSupport(): { supportsRange: boolean } {
+  if (!NativeModule) return { supportsRange: false };
+  const mod = NativeModule as unknown as Record<string, unknown>;
+  return { supportsRange: typeof mod.presentScreenTimeReport === 'function' };
+}
+
+export function getScreenTimeNativeMethodAvailability(): {
+  hasPresentScreenTimeReport: boolean;
+  hasPresentTodayScreenTimeReport: boolean;
+  hasGetCachedScreenTimeSummaryJson: boolean;
+} {
+  if (!NativeModule) {
+    return {
+      hasPresentScreenTimeReport: false,
+      hasPresentTodayScreenTimeReport: false,
+      hasGetCachedScreenTimeSummaryJson: false,
+    };
+  }
+  const mod = NativeModule as unknown as Record<string, unknown>;
+  return {
+    hasPresentScreenTimeReport: typeof mod.presentScreenTimeReport === 'function',
+    hasPresentTodayScreenTimeReport: typeof mod.presentTodayScreenTimeReport === 'function',
+    hasGetCachedScreenTimeSummaryJson: typeof mod.getCachedScreenTimeSummaryJson === 'function',
+  };
 }
 
 export async function isHealthDataAvailableAsync(): Promise<boolean> {
@@ -168,15 +204,37 @@ export async function requestScreenTimeAuthorizationAsync(): Promise<ScreenTimeA
   return await requireIosInsightsMethod('requestScreenTimeAuthorization')();
 }
 
-export async function getCachedScreenTimeSummaryAsync(): Promise<ScreenTimeSummary | null> {
+export async function getCachedScreenTimeSummaryAsync(range: ScreenTimeRangeKey): Promise<ScreenTimeSummary | null> {
   if (!NativeModule) return null;
-  const json = await requireIosInsightsMethod('getCachedScreenTimeSummaryJson')();
+  const fn = requireIosInsightsMethod('getCachedScreenTimeSummaryJson') as unknown as (...args: unknown[]) => Promise<string | null>;
+  let json: string | null = null;
+  try {
+    json = await fn(range);
+  } catch {
+    // Back-compat: older dev clients had a no-arg method.
+    json = await fn();
+  }
   if (!json) return null;
   return JSON.parse(json) as ScreenTimeSummary;
 }
 
-export async function presentTodayScreenTimeReportAsync(): Promise<void> {
-  return await requireIosInsightsMethod('presentTodayScreenTimeReport')();
+export async function presentScreenTimeReportAsync(range: ScreenTimeRangeKey): Promise<void> {
+  const fnNew = getOptionalIosInsightsMethod('presentScreenTimeReport');
+  if (fnNew) {
+    await fnNew(range);
+    return;
+  }
+
+  // Back-compat alias: newer native builds expose this as an invisible report host as well.
+  const fnLegacyToday = getOptionalIosInsightsMethod('presentTodayScreenTimeReport');
+  if (fnLegacyToday) {
+    await fnLegacyToday();
+    return;
+  }
+
+  throw new Error(
+    'Screen Time sync requires an updated iOS build. Rebuild the dev client (pnpm --filter mobile ios) and reopen the app.',
+  );
 }
 
 
