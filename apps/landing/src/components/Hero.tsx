@@ -19,26 +19,26 @@ export const Hero = () => {
 
       <div className="relative z-10 h-full max-w-7xl mx-auto px-6 flex flex-col items-center justify-center">
         <div className="flex flex-col items-center text-center">
-          {/* Main headline - Bevel style */}
+          {/* Main headline - "Today Matters" in blue */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-            className="text-[3.5rem] md:text-[5.5rem] lg:text-[6.5rem] font-bold text-[#0a0a0a] tracking-[-0.04em] mb-8 leading-[0.95] max-w-5xl"
+            className="text-[3.5rem] md:text-[5.5rem] lg:text-[6.5rem] font-bold text-brand-primary tracking-[-0.04em] mb-6 leading-[0.95] max-w-5xl"
+            suppressHydrationWarning
           >
-            <span className="text-[0.72em] tracking-[-0.02em]">
-              Control your day, transform your life.
-            </span>
+            Today Matters
           </motion.h1>
 
-          {/* Subtitle - Bevel style */}
+          {/* Subtitle */}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
             className="text-lg md:text-xl text-[#52525b] max-w-2xl mb-12 leading-relaxed font-medium"
+            suppressHydrationWarning
           >
-            Today Matters turns your daily data into personalized insights and recommendations across faith, family, work, and health.
+            Control your day, transform your life!
           </motion.p>
 
           {/* Download buttons - iOS and Android */}
