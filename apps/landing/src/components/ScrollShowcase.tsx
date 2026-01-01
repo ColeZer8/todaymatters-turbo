@@ -44,7 +44,7 @@ export const ScrollShowcase = () => {
         calloutPlacement: "topLeft",
         accentColor: "#2563EB",
         floatingCards: [
-          { type: "metric", label: "Day", value: "58", status: "of your life", statusColor: "#2563EB", position: { x: -280, y: -100 }, rotate: -4, delay: 0.1, size: "md" },
+          { type: "metric", label: "Day", value: "13,653", status: "of your life", statusColor: "#2563EB", position: { x: -280, y: -100 }, rotate: -4, delay: 0.1, size: "md" },
           { type: "icon", icon: "☀️", position: { x: -180, y: 140 }, rotate: 8, delay: 0.2, size: "sm" },
           { type: "metric", label: "Big 3", value: "3", status: "priorities", statusColor: "#10B981", position: { x: 300, y: -80 }, rotate: 6, delay: 0.15, size: "md" },
           { type: "icon", icon: "📅", position: { x: 260, y: 180 }, rotate: -6, delay: 0.25, size: "sm" },
@@ -281,7 +281,9 @@ function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; acce
             {card.status}
           </span>
         </div>
-        <div className="text-2xl font-bold text-gray-900">{card.value}</div>
+        <div suppressHydrationWarning className="text-2xl font-bold text-gray-900">
+          {card.value}
+        </div>
         {/* Mini bar graph */}
         <div className="flex items-end gap-1 mt-3 h-6">
           {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8].map((h, i) => (
@@ -304,7 +306,9 @@ function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; acce
       className={`${sizeClasses[card.size]} rounded-2xl bg-white/95 backdrop-blur-xl shadow-2xl border border-white/60 p-4`}
     >
       <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{card.label}</div>
-      <div className="text-3xl font-bold text-gray-900">{card.value}</div>
+      <div suppressHydrationWarning className="text-3xl font-bold text-gray-900">
+        {card.value}
+      </div>
       <div className="text-xs font-medium mt-1" style={{ color: card.statusColor }}>
         {card.status}
       </div>
