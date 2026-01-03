@@ -26,6 +26,12 @@ import {
 } from './services/events';
 import { fetchProfileValues, saveProfileValues } from './services/profile-values';
 
+interface TestDatum {
+  success: boolean;
+  error?: string;
+  data?: unknown;
+}
+
 export async function testSupabaseServices() {
   console.log('🧪 Testing Supabase Services...\n');
 
@@ -38,7 +44,7 @@ export async function testSupabaseServices() {
   }
 
   const userId = user.id;
-  const results: Record<string, { success: boolean; error?: string; data?: any }> = {};
+  const results: Record<string, TestDatum> = {};
 
   // Test 1: Profile - Fetch
   console.log('1️⃣ Testing Profile Fetch...');
@@ -167,8 +173,17 @@ export async function testSupabaseServices() {
 
 // Make it available globally for easy console access
 if (typeof window !== 'undefined') {
-  (window as any).testSupabaseServices = testSupabaseServices;
+  window.testSupabaseServices = testSupabaseServices;
 }
+
+declare global {
+  interface Window {
+    testSupabaseServices?: typeof testSupabaseServices;
+  }
+}
+
+export {};
+
 
 
 

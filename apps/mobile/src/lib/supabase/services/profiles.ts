@@ -72,16 +72,8 @@ export async function ensureProfileExists(userId: string): Promise<void> {
 
     // If error is not "not found", something else went wrong
     if (checkError && checkError.code !== 'PGRST116') {
-      // If column doesn't exist (42703), the table structure might be different
-      // Try a simpler check - just see if we can query the table at all
-      if (checkError.code === '42703') {
-        console.log('⚠️ Column structure issue - assuming profile might exist, attempting to create/update');
-        // Continue to try creating - if it already exists, the insert will fail with a unique constraint
-        // which we can handle gracefully
-      } else {
-        console.error('❌ Error checking profile:', checkError);
-        throw handleSupabaseError(checkError);
-      }
+      console.error('❌ Error checking profile:', checkError);
+      throw handleSupabaseError(checkError);
     }
 
     // Profile doesn't exist, create it

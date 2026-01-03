@@ -113,5 +113,13 @@ export async function verifyAuthAndData() {
 
 // Make it available globally for easy console access
 if (typeof window !== 'undefined') {
-  (window as any).verifyAuth = verifyAuthAndData;
+  window.verifyAuth = verifyAuthAndData;
 }
+
+declare global {
+  interface Window {
+    verifyAuth?: typeof verifyAuthAndData;
+  }
+}
+
+export {};

@@ -1,12 +1,6 @@
 import { supabase } from '../client';
-import type { Database } from '../database.types';
 import { ensureProfileExists } from './profiles';
 import { handleSupabaseError } from '../utils/error-handler';
-
-// Note: Using tm schema - profile_values table must exist in tm schema
-// If it doesn't exist, queries will fail with a clear error
-// TODO: Regenerate database types from tm schema to get proper TypeScript types
-type ProfileValue = Database['public']['Tables']['profile_values']['Row'];
 
 /**
  * Fetch all profile values for the current user
@@ -20,14 +14,9 @@ export async function fetchProfileValues(userId: string): Promise<string[]> {
       .from('profile_values')
       .select('value_label, rank')
       .eq('user_id', userId)
-      .order('rank', { ascending: true, nullsFirst: false });
+      .order('rank', { ascending: true });
 
     if (error) {
-      // If table doesn't exist yet, return empty array instead of throwing
-      if (error.code === 'PGRST205') {
-        console.log('⚠️ Profile values table not found - returning empty array');
-        return [];
-      }
       console.error('❌ Error fetching profile values:', error);
       throw handleSupabaseError(error);
     }
@@ -60,13 +49,8 @@ export async function saveProfileValues(userId: string, values: string[]): Promi
       .eq('user_id', userId);
 
     if (deleteError) {
-      // If table doesn't exist yet, skip delete and continue to insert
-      if (deleteError.code === 'PGRST205') {
-        console.log('⚠️ Profile values table not found - will create on insert');
-      } else {
-        console.error('❌ Error deleting existing profile values:', deleteError);
-        throw handleSupabaseError(deleteError);
-      }
+      console.error('❌ Error deleting existing profile values:', deleteError);
+      throw handleSupabaseError(deleteError);
     }
 
     // If no values to save, we're done
@@ -89,15 +73,6 @@ export async function saveProfileValues(userId: string, values: string[]): Promi
       .select();
 
     if (insertError) {
-      // If table doesn't exist, provide helpful error message
-      if (insertError.code === 'PGRST205') {
-        const err = handleSupabaseError(insertError);
-        console.error('❌ Profile values table not found:', err.message);
-        throw new Error(
-          'Profile values table does not exist yet. ' +
-          'Please ask your Supabase team to create the table using the DDL in docs/profile-values-table-ddl.sql'
-        );
-      }
       console.error('❌ Error inserting profile values:', insertError);
       throw handleSupabaseError(insertError);
     }
@@ -129,13 +104,8 @@ export async function addProfileValue(userId: string, valueLabel: string): Promi
       .limit(1);
 
     if (fetchError) {
-      // If table doesn't exist, start with rank 0
-      if (fetchError.code === 'PGRST205') {
-        console.log('⚠️ Profile values table not found - starting with rank 0');
-      } else {
-        console.error('❌ Error fetching current values for rank:', fetchError);
-        throw handleSupabaseError(fetchError);
-      }
+      console.error('❌ Error fetching current values for rank:', fetchError);
+      throw handleSupabaseError(fetchError);
     }
 
     const nextRank = existing && existing.length > 0 ? (existing[0].rank ?? -1) + 1 : 0;
@@ -152,13 +122,6 @@ export async function addProfileValue(userId: string, valueLabel: string): Promi
       .select();
 
     if (insertError) {
-      // If table doesn't exist, provide helpful error
-      if (insertError.code === 'PGRST205') {
-        throw new Error(
-          'Profile values table does not exist yet. ' +
-          'Please ask your Supabase team to create the table using the DDL in docs/profile-values-table-ddl.sql'
-        );
-      }
       console.error('❌ Error adding profile value:', insertError);
       throw handleSupabaseError(insertError);
     }
@@ -207,7 +170,7 @@ async function reorderProfileValues(userId: string): Promise<void> {
       .from('profile_values')
       .select('id, value_label')
       .eq('user_id', userId)
-      .order('rank', { ascending: true, nullsFirst: false });
+      .order('rank', { ascending: true });
 
     if (fetchError) {
       console.error('Error fetching values for reorder:', fetchError);

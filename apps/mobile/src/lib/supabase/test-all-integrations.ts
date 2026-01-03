@@ -50,7 +50,7 @@ interface TestResult {
   name: string;
   success: boolean;
   error?: string;
-  data?: any;
+  data?: unknown;
   duration?: number;
 }
 
@@ -78,7 +78,7 @@ export async function testAllIntegrations(): Promise<{
   const results: TestResult[] = [];
 
   // Helper to run test
-  const runTest = async (name: string, testFn: () => Promise<any>): Promise<void> => {
+  const runTest = async (name: string, testFn: () => Promise<unknown>): Promise<void> => {
     const start = Date.now();
     try {
       const data = await testFn();
@@ -347,8 +347,17 @@ export async function testAllIntegrations(): Promise<{
 
 // Make it available globally for easy console access
 if (typeof window !== 'undefined') {
-  (window as any).testAllIntegrations = testAllIntegrations;
+  window.testAllIntegrations = testAllIntegrations;
 }
+
+declare global {
+  interface Window {
+    testAllIntegrations?: typeof testAllIntegrations;
+  }
+}
+
+export {};
+
 
 
 

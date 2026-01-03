@@ -1086,6 +1086,45 @@ export type Database = {
         }
         Relationships: []
       }
+      links: {
+        Row: {
+          id: string
+          user_id: string
+          obj1_type: Database["tm"]["Enums"]["link_object_type"]
+          obj1_id: string
+          obj2_type: Database["tm"]["Enums"]["link_object_type"]
+          obj2_id: string
+          link_kind: string
+          canonical_key: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          obj1_type: Database["tm"]["Enums"]["link_object_type"]
+          obj1_id: string
+          obj2_type: Database["tm"]["Enums"]["link_object_type"]
+          obj2_id: string
+          link_kind: string
+          canonical_key?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          obj1_type?: Database["tm"]["Enums"]["link_object_type"]
+          obj1_id?: string
+          obj2_type?: Database["tm"]["Enums"]["link_object_type"]
+          obj2_id?: string
+          link_kind?: string
+          canonical_key?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1094,7 +1133,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      link_object_type:
+        | "event"
+        | "contact"
+        | "goal"
+        | "project"
+        | "task"
+        | "tag"
+        | "asset"
+        | "communication"
     }
     CompositeTypes: {
       [_ in never]: never
