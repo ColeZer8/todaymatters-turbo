@@ -1,10 +1,10 @@
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
-import { HealthKitDashboardTemplate } from '@/components/templates';
+import { CategoryHealthTemplate } from '@/components/templates';
 import {
-  getIosInsightsSupportStatus,
   getHealthSummarySafeAsync,
+  getIosInsightsSupportStatus,
   requestHealthKitAuthorizationAsync,
   type HealthRangeKey,
   type HealthSummary,
@@ -18,14 +18,6 @@ export default function HealthHealthScreen() {
 
   const support = useMemo(() => getIosInsightsSupportStatus(), []);
   const canUseNative = Platform.OS === 'ios' && support === 'available';
-
-  const statusLabel = useMemo(() => {
-    if (Platform.OS !== 'ios') return 'iOS only.';
-    if (support === 'expoGo') return 'Apple Health requires a custom iOS dev client (not Expo Go).';
-    if (support === 'missingNativeModule') return 'Native module missing in this build. Rebuild the iOS dev client.';
-    if (errorMessage) return `Error: ${errorMessage}`;
-    return 'Connect Apple Health, then refresh to load your metrics.';
-  }, [errorMessage, support]);
 
   const refresh = useCallback(async () => {
     if (!canUseNative) return;
@@ -45,7 +37,7 @@ export default function HealthHealthScreen() {
     void refresh();
   }, [refresh]);
 
-  const onRequestAuthorization = useCallback(async () => {
+  const onLiveUpdatesPress = useCallback(async () => {
     if (!canUseNative) return;
     setErrorMessage(null);
     try {
@@ -59,16 +51,14 @@ export default function HealthHealthScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <HealthKitDashboardTemplate
+      <CategoryHealthTemplate
+        categoryId="health"
         range={range}
         onChangeRange={setRange}
-        summary={summary}
-        statusLabel={statusLabel}
-        canRequestAuthorization={canUseNative}
-        canRefresh={canUseNative}
-        onRequestAuthorization={onRequestAuthorization}
-        onRefresh={refresh}
-        isRefreshing={isRefreshing}
+        healthSummary={summary}
+        onPressLiveUpdates={onLiveUpdatesPress}
+        isRefreshingHealth={isRefreshing}
+        healthErrorMessage={errorMessage}
       />
     </>
   );

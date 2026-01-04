@@ -106,6 +106,20 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   appUsage: true,
 };
 
+function dedupeStringList(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set, get) => ({
@@ -215,10 +229,15 @@ export const useOnboardingStore = create<OnboardingState>()(
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<OnboardingState> | undefined;
         console.log('🔀 Onboarding - Loading saved data');
-        return {
+        const merged = {
           ...currentState,
           ...persisted,
           _hasHydrated: true,
+        };
+        return {
+          ...merged,
+          goals: dedupeStringList(merged.goals ?? []),
+          initiatives: dedupeStringList(merged.initiatives ?? []),
         };
       },
       onRehydrateStorage: () => () => {

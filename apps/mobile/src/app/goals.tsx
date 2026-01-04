@@ -7,6 +7,20 @@ import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { useEventsSync } from '@/lib/supabase/hooks';
 
+function dedupeTitles(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of values) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 export default function GoalsScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -16,6 +30,8 @@ export default function GoalsScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const goals = useOnboardingStore((state) => state.goals);
   const initiatives = useOnboardingStore((state) => state.initiatives);
+  const setGoals = useOnboardingStore((state) => state.setGoals);
+  const setInitiatives = useOnboardingStore((state) => state.setInitiatives);
   const addGoal = useOnboardingStore((state) => state.addGoal);
   const removeGoal = useOnboardingStore((state) => state.removeGoal);
   const changeGoal = useOnboardingStore((state) => state.changeGoal);
@@ -26,12 +42,25 @@ export default function GoalsScreen() {
   // Supabase sync
   const { bulkSaveGoals, bulkSaveInitiatives } = useEventsSync({ onError: (err) => console.error('Failed to save goals/initiatives:', err) });
 
+  // Defensive: if stale persisted data contains duplicates, normalize it once for a clean UX.
+  useEffect(() => {
+    if (!hasHydrated) return;
+    const uniqueGoals = dedupeTitles(goals);
+    const uniqueInitiatives = dedupeTitles(initiatives);
+    if (uniqueGoals.length !== goals.filter(Boolean).length) {
+      setGoals(uniqueGoals);
+    }
+    if (uniqueInitiatives.length !== initiatives.filter(Boolean).length) {
+      setInitiatives(uniqueInitiatives);
+    }
+  }, [goals, initiatives, hasHydrated, setGoals, setInitiatives]);
+
   // Save to Supabase when goals/initiatives change (debounced)
   useEffect(() => {
     if (hasHydrated && isAuthenticated) {
       const timeoutId = setTimeout(() => {
-        const validGoals = goals.filter(Boolean);
-        const validInitiatives = initiatives.filter(Boolean);
+        const validGoals = dedupeTitles(goals);
+        const validInitiatives = dedupeTitles(initiatives);
         if (validGoals.length > 0) {
           bulkSaveGoals(validGoals);
         }

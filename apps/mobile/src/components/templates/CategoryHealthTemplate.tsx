@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
+import type { HealthSummary } from '@/lib/ios-insights';
 
 type CategoryId = 'faith' | 'family' | 'work' | 'health';
 type RangeKey = 'today' | 'week' | 'month' | 'year';
@@ -280,7 +281,7 @@ const CATEGORY_CONFIGS: Record<CategoryId, CategoryConfig> = {
         habits: [
           { icon: Zap, label: 'Sleep', current: '7.5h', goal: '8h', progress: 0.94 },
           { icon: Zap, label: 'Steps', current: '10k', goal: '10k', progress: 1.0 },
-          { icon: Zap, label: 'Water', current: '2.8L', goal: '3L', progress: 0.93 },
+          { icon: Zap, label: 'Active Energy', current: '450 kcal', goal: '500 kcal', progress: 0.9 },
         ],
       },
       week: {
@@ -295,7 +296,7 @@ const CATEGORY_CONFIGS: Record<CategoryId, CategoryConfig> = {
         habits: [
           { icon: Zap, label: 'Sleep', current: '52h', goal: '56h', progress: 0.93 },
           { icon: Zap, label: 'Steps', current: '68k', goal: '70k', progress: 0.97 },
-          { icon: Zap, label: 'Water', current: '19L', goal: '21L', progress: 0.9 },
+          { icon: Zap, label: 'Active Energy', current: '3,200 kcal', goal: '3,500 kcal', progress: 0.91 },
         ],
       },
       month: {
@@ -310,7 +311,7 @@ const CATEGORY_CONFIGS: Record<CategoryId, CategoryConfig> = {
         habits: [
           { icon: Zap, label: 'Sleep', current: '220h', goal: '240h', progress: 0.92 },
           { icon: Zap, label: 'Steps', current: '285k', goal: '300k', progress: 0.95 },
-          { icon: Zap, label: 'Water', current: '82L', goal: '90L', progress: 0.91 },
+          { icon: Zap, label: 'Active Energy', current: '14,000 kcal', goal: '15,000 kcal', progress: 0.93 },
         ],
       },
       year: {
@@ -325,7 +326,7 @@ const CATEGORY_CONFIGS: Record<CategoryId, CategoryConfig> = {
         habits: [
           { icon: Zap, label: 'Sleep', current: '2,700h', goal: '2,920h', progress: 0.92 },
           { icon: Zap, label: 'Steps', current: '3.4M', goal: '3.65M', progress: 0.93 },
-          { icon: Zap, label: 'Water', current: '980L', goal: '1,095L', progress: 0.9 },
+          { icon: Zap, label: 'Active Energy', current: '170k kcal', goal: '182.5k kcal', progress: 0.93 },
         ],
       },
     },
@@ -505,14 +506,105 @@ const StripedProgressBar = ({
 
 interface CategoryHealthTemplateProps {
   categoryId: CategoryId;
+  range?: RangeKey;
+  onChangeRange?: (range: RangeKey) => void;
+  healthSummary?: HealthSummary | null;
+  onPressLiveUpdates?: () => void;
+  isRefreshingHealth?: boolean;
+  healthErrorMessage?: string | null;
 }
 
-export const CategoryHealthTemplate = ({ categoryId }: CategoryHealthTemplateProps) => {
-  const [range, setRange] = useState<RangeKey>('today');
+export const CategoryHealthTemplate = ({
+  categoryId,
+  range: controlledRange,
+  onChangeRange,
+  healthSummary,
+  onPressLiveUpdates,
+  isRefreshingHealth,
+}: CategoryHealthTemplateProps) => {
+  const [uncontrolledRange, setUncontrolledRange] = useState<RangeKey>('today');
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const range = controlledRange ?? uncontrolledRange;
   const config = CATEGORY_CONFIGS[categoryId];
   const currentData = config.rangeData[range];
+
+  const handleChangeRange = (next: RangeKey) => {
+    if (onChangeRange) onChangeRange(next);
+    else setUncontrolledRange(next);
+  };
+
+  const formatNumber = (value: number) => new Intl.NumberFormat(undefined).format(value);
+
+  const formatNumberCompact = (value: number) =>
+    new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+
+  const formatDurationSeconds = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const habitsToRender: HabitTracker[] = useMemo(() => {
+    if (categoryId !== 'health') return currentData.habits;
+    if (!healthSummary) return currentData.habits;
+
+    const sleepGoalSeconds: Record<RangeKey, number> = {
+      today: 8 * 3600,
+      week: 56 * 3600,
+      month: 240 * 3600,
+      year: 2920 * 3600,
+    };
+
+    const stepsGoal: Record<RangeKey, number> = {
+      today: 10_000,
+      week: 70_000,
+      month: 300_000,
+      year: 3_650_000,
+    };
+
+    const activeEnergyGoalKcal: Record<RangeKey, number> = {
+      today: 500,
+      week: 500 * 7,
+      month: 500 * 30,
+      year: 500 * 365,
+    };
+
+    const steps = healthSummary.steps ?? null;
+    const sleepSeconds = healthSummary.sleepAsleepSeconds ?? null;
+    const activeEnergyKcal = healthSummary.activeEnergyKcal ?? null;
+
+    const stepsProgress = steps !== null && steps !== undefined ? Math.min(steps / stepsGoal[range], 1) : 0;
+    const sleepProgress =
+      sleepSeconds !== null && sleepSeconds !== undefined ? Math.min(sleepSeconds / sleepGoalSeconds[range], 1) : 0;
+    const activeEnergyProgress =
+      activeEnergyKcal !== null && activeEnergyKcal !== undefined ? Math.min(activeEnergyKcal / activeEnergyGoalKcal[range], 1) : 0;
+
+    return [
+      {
+        icon: Zap,
+        label: 'Sleep',
+        current: sleepSeconds !== null && sleepSeconds !== undefined ? formatDurationSeconds(sleepSeconds) : '—',
+        goal: formatDurationSeconds(sleepGoalSeconds[range]),
+        progress: sleepProgress,
+      },
+      {
+        icon: Zap,
+        label: 'Steps',
+        current: steps !== null && steps !== undefined ? formatNumberCompact(steps) : '—',
+        goal: formatNumberCompact(stepsGoal[range]),
+        progress: stepsProgress,
+      },
+      {
+        icon: Zap,
+        label: 'Active Energy',
+        current: activeEnergyKcal !== null && activeEnergyKcal !== undefined ? `${formatNumber(activeEnergyKcal)} kcal` : '—',
+        goal: `${formatNumber(activeEnergyGoalKcal[range])} kcal`,
+        progress: activeEnergyProgress,
+      },
+    ];
+  }, [categoryId, currentData.habits, healthSummary, range]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -583,7 +675,7 @@ export const CategoryHealthTemplate = ({ categoryId }: CategoryHealthTemplatePro
             <AnalyticsRangeToggle
               options={RANGE_OPTIONS}
               value={range}
-              onChange={(next) => setRange(next as RangeKey)}
+              onChange={(next) => handleChangeRange(next as RangeKey)}
               accessibilityLabel="Switch time range"
             />
           </View>
@@ -702,7 +794,7 @@ export const CategoryHealthTemplate = ({ categoryId }: CategoryHealthTemplatePro
             style={{ backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: '#F0F0F0' }}
           >
             <View className="gap-4">
-              {currentData.habits.map((habit, index) => (
+              {habitsToRender.map((habit, index) => (
                 <View key={index} className="flex-row items-center gap-3">
                   <Icon icon={habit.icon} size={16} color={config.color} />
                   <View className="flex-1">
@@ -722,7 +814,11 @@ export const CategoryHealthTemplate = ({ categoryId }: CategoryHealthTemplatePro
 
             <Pressable 
               className="flex-row items-center justify-center gap-1 mt-4 pt-3 border-t border-[#E5E7EB]"
-              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              onPress={onPressLiveUpdates}
+              disabled={!onPressLiveUpdates || Boolean(isRefreshingHealth)}
+              style={({ pressed }) => ({
+                opacity: !onPressLiveUpdates || isRefreshingHealth ? 0.55 : pressed ? 0.7 : 1,
+              })}
             >
               <Text className="text-[12px] text-[#9CA3AF]">↻ Live Updates</Text>
             </Pressable>

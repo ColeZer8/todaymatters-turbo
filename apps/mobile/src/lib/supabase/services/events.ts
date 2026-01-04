@@ -2,6 +2,24 @@ import { supabase } from '../client';
 import { handleSupabaseError } from '../utils/error-handler';
 import type { Json } from '../database.types';
 
+function normalizeTitleKey(title: string): string {
+  return title.trim().toLowerCase();
+}
+
+function dedupeTitles(titles: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of titles) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const key = normalizeTitleKey(trimmed);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 /**
  * Event data structure matching tm.events table
  */
@@ -263,30 +281,34 @@ export async function bulkCreateGoals(
   goalTitles: string[]
 ): Promise<EventData[]> {
   try {
-    console.log('📦 Bulk saving goals (replace):', goalTitles.length, 'for user:', userId);
-    
-    // Replace strategy: wipe existing goal-category events, then insert the current list.
-    // This avoids duplicates when the onboarding screen debounces saves on each edit.
-    const { error: deleteError } = await supabase
-      .schema('tm')
-      .from('events')
-      .delete()
-      .eq('user_id', userId)
-      .eq('type', 'goal')
-      // include legacy rows where meta is null (we treat those as "goal" in fetchGoals)
-      .or('meta->>category.eq.goal,meta.is.null');
+    const uniqueTitles = dedupeTitles(goalTitles);
+    console.log('📦 Bulk saving goals (replace):', uniqueTitles.length, 'for user:', userId);
 
-    if (deleteError) {
-      console.error('❌ Error clearing existing goals:', deleteError);
-      throw handleSupabaseError(deleteError);
+    // Replace strategy: fetch existing goals then delete by id.
+    // This avoids reliance on JSON-path filters inside DELETE, which can be inconsistent across PostgREST/Supabase versions.
+    const existingGoals = await fetchGoals(userId);
+    const existingGoalIds = existingGoals
+      .map((g) => g.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    if (existingGoalIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .schema('tm')
+        .from('events')
+        .delete()
+        .eq('user_id', userId)
+        .in('id', existingGoalIds);
+
+      if (deleteError) {
+        console.error('❌ Error clearing existing goals:', deleteError);
+        throw handleSupabaseError(deleteError);
+      }
     }
 
-    const goalsToInsert = goalTitles
-      .filter((title) => title.trim())
-      .map((title, index) => ({
+    const goalsToInsert = uniqueTitles.map((title) => ({
         user_id: userId,
         type: 'goal' as const,
-        title: title.trim(),
+        title,
         meta: {
           category: 'goal' as const,
           createdAt: new Date().toISOString(),
@@ -325,28 +347,33 @@ export async function bulkCreateInitiatives(
   initiativeTitles: string[]
 ): Promise<EventData[]> {
   try {
-    console.log('📦 Bulk saving initiatives (replace):', initiativeTitles.length, 'for user:', userId);
-    
-    // Replace strategy: wipe existing initiative-category events, then insert the current list.
-    const { error: deleteError } = await supabase
-      .schema('tm')
-      .from('events')
-      .delete()
-      .eq('user_id', userId)
-      .eq('type', 'goal')
-      .or('meta->>category.eq.initiative');
+    const uniqueTitles = dedupeTitles(initiativeTitles);
+    console.log('📦 Bulk saving initiatives (replace):', uniqueTitles.length, 'for user:', userId);
 
-    if (deleteError) {
-      console.error('❌ Error clearing existing initiatives:', deleteError);
-      throw handleSupabaseError(deleteError);
+    // Replace strategy: fetch existing initiatives then delete by id.
+    const existingInitiatives = await fetchInitiatives(userId);
+    const existingInitiativeIds = existingInitiatives
+      .map((i) => i.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+    if (existingInitiativeIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .schema('tm')
+        .from('events')
+        .delete()
+        .eq('user_id', userId)
+        .in('id', existingInitiativeIds);
+
+      if (deleteError) {
+        console.error('❌ Error clearing existing initiatives:', deleteError);
+        throw handleSupabaseError(deleteError);
+      }
     }
 
-    const initiativesToInsert = initiativeTitles
-      .filter((title) => title.trim())
-      .map((title) => ({
+    const initiativesToInsert = uniqueTitles.map((title) => ({
         user_id: userId,
         type: 'goal' as const,
-        title: title.trim(),
+        title,
         meta: {
           category: 'initiative' as const,
           description: '',
@@ -377,6 +404,7 @@ export async function bulkCreateInitiatives(
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
+
 
 
 

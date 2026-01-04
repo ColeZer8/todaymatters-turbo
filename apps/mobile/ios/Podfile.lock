@@ -2303,7 +2303,7 @@ DEPENDENCIES:
   - "ExpoCrypto (from `../../../node_modules/.pnpm/expo-crypto@15.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@6.0._ehixljbdnktqfcokvjmhhu4n34/node_modules/expo-crypto/ios`)"
   - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@19.0.17_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-route_tr2v5plrtfccfamjiyzvjjjnmm/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@14.0.9_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@6.0.14_ykh4m5zaypskey5a5eg4fbi32q/node_modules/expo-font/ios`)"
-  - "ExpoHead (from `../../../node_modules/.pnpm/expo-router@6.0.14_@expo+metro-runtime@6.1.2_@types+react-dom@19.2.2_@types+react@19.1.17__@t_oxyalic4f3rqrobbcfkwswgvdm/node_modules/expo-router/ios`)"
+  - "ExpoHead (from `../../../node_modules/.pnpm/expo-router@6.0.14_@expo+metro-runtime@6.1.2_@types+react-dom@18.3.7_@types+react@19.1.17__@t_kmxts6jzbqtgexgy7f3ocm777m/node_modules/expo-router/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@15.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@_3pu7cqaf6bdaxammjbohkjrbhi/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@15.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-ro_ywmkkwro3aemheyt54u7lyu3wm/node_modules/expo-linear-gradient/ios`)"
   - "ExpoLinking (from `../../../node_modules/.pnpm/expo-linking@8.0.8_expo@54.0.23_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0__react@19.1.0/node_modules/expo-linking/ios`)"
@@ -2425,7 +2425,7 @@ EXTERNAL SOURCES:
   ExpoFont:
     :path: "../../../node_modules/.pnpm/expo-font@14.0.9_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@6.0.14_ykh4m5zaypskey5a5eg4fbi32q/node_modules/expo-font/ios"
   ExpoHead:
-    :path: "../../../node_modules/.pnpm/expo-router@6.0.14_@expo+metro-runtime@6.1.2_@types+react-dom@19.2.2_@types+react@19.1.17__@t_oxyalic4f3rqrobbcfkwswgvdm/node_modules/expo-router/ios"
+    :path: "../../../node_modules/.pnpm/expo-router@6.0.14_@expo+metro-runtime@6.1.2_@types+react-dom@18.3.7_@types+react@19.1.17__@t_kmxts6jzbqtgexgy7f3ocm777m/node_modules/expo-router/ios"
   ExpoKeepAwake:
     :path: "../../../node_modules/.pnpm/expo-keep-awake@15.0.7_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runtime@6.1.2_expo-router@_3pu7cqaf6bdaxammjbohkjrbhi/node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:

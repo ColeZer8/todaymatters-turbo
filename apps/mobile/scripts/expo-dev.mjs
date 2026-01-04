@@ -26,6 +26,15 @@ for (let i = 0; i < rawArgs.length; i += 1) {
 const hasHostFlag = forwardedArgs.some((arg) => arg === "--host" || arg.startsWith("--host="));
 const finalArgs = [...forwardedArgs];
 
+// Default to Dev Client so we don't accidentally open Expo Go (which won't have custom native modules like ios-insights).
+// Users can still force Expo Go explicitly with `--go`, or pass `--dev-client` themselves.
+const hasDevClientFlag = forwardedArgs.includes("--dev-client");
+const hasGoFlag = forwardedArgs.includes("--go");
+
+if (!hasDevClientFlag && !hasGoFlag) {
+  finalArgs.push("--dev-client");
+}
+
 if (!hasHostFlag) {
   finalArgs.push("--host", "localhost");
 }
