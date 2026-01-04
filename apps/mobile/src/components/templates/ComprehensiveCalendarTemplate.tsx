@@ -207,7 +207,7 @@ export const ComprehensiveCalendarTemplate = () => {
     const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('planned');
     const [isEditorVisible, setIsEditorVisible] = useState(false);
     const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
-    const actualEvents = useEventsStore((state) => state.actualEvents);
+    const actualEvents = useEventsStore((state) => state.derivedActualEvents ?? state.actualEvents);
 
     // Demo mode support - use simulated time when active
     const isDemoActive = useDemoStore((state) => state.isActive);

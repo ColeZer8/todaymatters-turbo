@@ -37,9 +37,15 @@ interface EventsState {
   scheduledEvents: ScheduledEvent[];
   /** Actual events (what really happened) */
   actualEvents: ScheduledEvent[];
+  /**
+   * Derived Actual events (e.g., inferred from Screen Time) used for display only.
+   * IMPORTANT: This should not be persisted; it is regenerated on-demand.
+   */
+  derivedActualEvents: ScheduledEvent[] | null;
   _hasHydrated: boolean;
   setScheduledEvents: (events: ScheduledEvent[]) => void;
   setActualEvents: (events: ScheduledEvent[]) => void;
+  setDerivedActualEvents: (events: ScheduledEvent[] | null) => void;
   addScheduledEvent: (event: ScheduledEvent) => void;
   removeScheduledEvent: (id: string) => void;
   toggleBig3: (id: string) => void;
@@ -267,10 +273,12 @@ export const useEventsStore = create<EventsState>()(
     (set) => ({
       scheduledEvents: DEFAULT_SCHEDULED_EVENTS,
       actualEvents: DEFAULT_ACTUAL_EVENTS,
+      derivedActualEvents: null,
       _hasHydrated: false,
 
       setScheduledEvents: (events) => set({ scheduledEvents: events }),
       setActualEvents: (events) => set({ actualEvents: events }),
+      setDerivedActualEvents: (events) => set({ derivedActualEvents: events }),
 
       addScheduledEvent: (event) =>
         set((state) => ({
