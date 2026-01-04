@@ -51,7 +51,11 @@ export const DailyLifeGrid = () => {
   }, [isInView]);
 
   return (
-    <section ref={ref} className="relative py-24 md:py-32 bg-gradient-to-b from-white via-[#fafafa] to-white overflow-hidden">
+    <section
+      ref={ref}
+      className="relative min-h-screen pt-10 pb-20 md:pt-12 md:pb-24 bg-gradient-to-b from-white via-[#fafafa] to-white overflow-hidden"
+      style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+    >
       {/* Animated Background Patterns */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Radial Gradient Orbs */}

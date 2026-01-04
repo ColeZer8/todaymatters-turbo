@@ -114,6 +114,7 @@ export const ScrollShowcase = () => {
 
   // Ensure activeItem is always defined - items always has at least one element
   const activeItem: ShowcaseItem = items[activeIndex] ?? items[0]!;
+  const mobileFloatingCards = activeItem.floatingCards.filter((c) => c.type !== "icon").slice(0, 2);
 
   return (
     <section 
@@ -122,7 +123,7 @@ export const ScrollShowcase = () => {
       className="relative bg-white z-20" 
       style={{ height: `${items.length * 100}vh` }}
     >
-      <div className="sticky top-0 h-screen overflow-hidden flex items-center justify-center">
+      <div className="sticky top-0 h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden flex items-center justify-center">
         {/* Immersive Background Layer */}
         <div className="absolute inset-0 z-0">
           {items.map((item, idx) => (
@@ -168,11 +169,57 @@ export const ScrollShowcase = () => {
               <FloatingCardComponent card={card} accentColor={activeItem.accentColor} />
             </motion.div>
           ))}
+
+          {/* Mobile-only floating cards (Bevel-style) */}
+          {mobileFloatingCards.map((card, i) => {
+            const pos = getMobileFloatingPosition(card.position, i);
+            return (
+              <motion.div
+                key={`${activeItem.id}-mobile-card-${i}`}
+                initial={{ opacity: 0, scale: 0.9, x: pos.x, y: pos.y, rotate: card.rotate * 0.5 }}
+                animate={{ opacity: 1, scale: 0.92, x: pos.x, y: pos.y, rotate: card.rotate * 0.5 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
+                className="absolute lg:hidden"
+              >
+                <FloatingCardComponent card={card} accentColor={activeItem.accentColor} />
+              </motion.div>
+            );
+          })}
         </div>
 
-        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 h-full flex flex-col justify-center items-center">
+        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 h-full flex flex-col items-center justify-start pt-6 pb-0 md:justify-center md:pt-0 md:pb-0">
           <div className="relative flex items-center justify-center w-full">
-            <div className="relative w-[320px] md:w-[400px]">
+            <div className="relative w-full max-w-[360px] md:w-[400px]">
+              {/* Mobile-only header (Bevel-style) - more compact */}
+              <div className="mb-4 text-center lg:hidden px-4">
+                <div
+                  className="mx-auto mb-2 h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor: activeItem.accentColor,
+                    boxShadow: `0 0 16px ${activeItem.accentColor}70`,
+                  }}
+                />
+                <motion.div
+                  key={`header-${activeItem.id}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="text-2xl font-bold text-[#0a0a0a] tracking-tight leading-tight"
+                >
+                  {activeItem.title}
+                </motion.div>
+                <motion.div
+                  key={`desc-${activeItem.id}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.05 }}
+                  className="mt-2 text-sm text-[#52525b] leading-relaxed max-w-xs mx-auto"
+                >
+                  {activeItem.description}
+                </motion.div>
+              </div>
+
               {/* Callouts */}
               {items.map((item, idx) => (
                 <Callout
@@ -182,8 +229,8 @@ export const ScrollShowcase = () => {
                 />
               ))}
 
-              {/* iPhone 16 Pro Mockup */}
-              <div className="relative mx-auto w-[220px] md:w-[280px] aspect-[9/19.5] bg-[#1a1a1a] rounded-[3.5rem] p-[10px] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] ring-[1.5px] ring-black/10">
+              {/* iPhone 16 Pro Mockup - smaller on mobile to ensure the full device is always visible */}
+              <div className="relative mx-auto w-[280px] aspect-[9/19.5] origin-center translate-y-8 scale-[0.56] max-[380px]:translate-y-6 max-[380px]:scale-[0.52] sm:translate-y-10 sm:scale-[0.6] md:translate-y-0 md:scale-100 bg-[#1a1a1a] rounded-[3.5rem] p-[10px] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] ring-[1.5px] ring-black/10">
                 {/* Modern Dynamic Island */}
                 <div className="absolute top-[1.1rem] left-1/2 -translate-x-1/2 w-[5.5rem] h-7 bg-black rounded-full z-50 flex items-center px-2 justify-between">
                   <div className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
@@ -242,7 +289,18 @@ export const ScrollShowcase = () => {
         </div>
 
         {/* Section Transition Fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white to-transparent z-30 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-[45vh] bg-gradient-to-t from-white via-white/95 to-transparent md:h-48 md:from-white md:via-transparent md:to-transparent z-30 pointer-events-none" />
+      </div>
+
+      {/* Snap Points Container (match “Step into your calling” panel-by-panel snap feel) */}
+      <div className="absolute inset-0 pointer-events-none">
+        {items.map((_, i) => (
+          <div
+            key={i}
+            className="h-screen w-full"
+            style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+          />
+        ))}
       </div>
     </section>
   );
@@ -366,4 +424,20 @@ function Callout({
       </div>
     </motion.div>
   );
+}
+
+function getMobileFloatingPosition(
+  pos: { x: number; y: number },
+  index: number
+): { x: number; y: number } {
+  // Desktop positions are large (±300px). Mobile needs gentler offsets.
+  const baseX = clamp(pos.x * 0.35, -140, 140);
+  const baseY = clamp(pos.y * 0.35, -160, 160);
+  const nudgeX = index % 2 === 0 ? -20 : 20;
+  const nudgeY = index % 2 === 0 ? 10 : -10;
+  return { x: baseX + nudgeX, y: baseY + nudgeY };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

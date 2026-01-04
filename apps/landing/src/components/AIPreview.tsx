@@ -153,7 +153,7 @@ export const AIPreview = () => {
       className="relative bg-[#0a0a0a]"
       style={{ height: `${panels.length * 100}vh` }}
     >
-      <div className="sticky top-0 h-screen overflow-hidden">
+      <div className="sticky top-0 h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden">
         {/* Dynamic Panels */}
         {panels.map((panel, index) => (
           <Panel 

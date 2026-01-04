@@ -39,6 +39,111 @@ const testimonials = [
     text: "The integration with screen time is genius. It doesn't just track, it actually coaches me to be better. Best investment I've made in myself.",
     rating: 5,
   },
+  {
+    title: "Feels like a daily reset button",
+    author: "Emily S.",
+    date: "Dec 27, 2025",
+    text: "I start my mornings with a plan and end my evenings with clarity. The way it keeps my priorities visible is simple but powerful.",
+    rating: 5,
+  },
+  {
+    title: "Made my weeks calmer",
+    author: "Jason P.",
+    date: "Dec 23, 2025",
+    text: "I stopped overbooking myself. Seeing planned vs actual helped me set realistic days and actually keep my commitments.",
+    rating: 5,
+  },
+  {
+    title: "The best kind of accountability",
+    author: "Hannah T.",
+    date: "Dec 19, 2025",
+    text: "Not guilt. Just gentle insight. The coaching feels human and keeps me aligned with what I say matters most.",
+    rating: 5,
+  },
+  {
+    title: "Finally, my time matches my values",
+    author: "Mark L.",
+    date: "Dec 18, 2025",
+    text: "I thought I was busy with important things — I wasn’t. This helped me protect family time and still get meaningful work done.",
+    rating: 5,
+  },
+  {
+    title: "The UI is gorgeous",
+    author: "Olivia N.",
+    date: "Dec 14, 2025",
+    text: "Everything feels intentional — from the flows to the little details. It’s the first app I’ve used that makes me want to keep showing up.",
+    rating: 5,
+  },
+  {
+    title: "My screen time finally makes sense",
+    author: "Chris B.",
+    date: "Dec 12, 2025",
+    text: "It’s not just tracking — it connects the dots. I can see where my attention leaks happen and fix them before the day is gone.",
+    rating: 5,
+  },
+  {
+    title: "Helped me follow through",
+    author: "Priya K.",
+    date: "Dec 08, 2025",
+    text: "The structure is simple enough to stick with, but deep enough to grow with you. My 'Big 3' actually happen now.",
+    rating: 5,
+  },
+  {
+    title: "A calmer way to plan",
+    author: "Daniela R.",
+    date: "Dec 06, 2025",
+    text: "I used to spiral in planning apps. This one keeps me grounded — like a clear map for the day, not a to-do list that shames you.",
+    rating: 5,
+  },
+  {
+    title: "More present at home",
+    author: "Brian W.",
+    date: "Dec 03, 2025",
+    text: "The reminders around boundaries are huge. I’m finishing work on time and showing up for dinner without my mind still at the office.",
+    rating: 5,
+  },
+  {
+    title: "Exactly what I needed",
+    author: "Sophia A.",
+    date: "Nov 30, 2025",
+    text: "It helped me stop saying yes to everything. I can see my week clearly and make tradeoffs without regret.",
+    rating: 5,
+  },
+  {
+    title: "A coach that doesn't overwhelm",
+    author: "Noah G.",
+    date: "Nov 26, 2025",
+    text: "The nudges are timely and kind. It’s like having someone who understands your goals and gently steers you back on track.",
+    rating: 5,
+  },
+  {
+    title: "My days feel intentional again",
+    author: "Grace F.",
+    date: "Nov 18, 2025",
+    text: "I was drifting through weeks. Now I have a rhythm: plan, live, reflect. It’s changing the way I make decisions.",
+    rating: 5,
+  },
+  {
+    title: "Simple, but deep",
+    author: "Aiden J.",
+    date: "Nov 12, 2025",
+    text: "It’s easy to start, but the insights get better the more you use it. The planned vs actual view is a game-changer.",
+    rating: 5,
+  },
+  {
+    title: "Helps me protect what matters",
+    author: "Leah C.",
+    date: "Nov 09, 2025",
+    text: "I can finally defend my priorities with a plan. It’s helping me say no to noise and yes to the people I love.",
+    rating: 5,
+  },
+  {
+    title: "My favorite productivity app",
+    author: "Ethan V.",
+    date: "Nov 02, 2025",
+    text: "It’s not hustle culture. It’s alignment. I’ve tried everything — this is the first one that feels like it respects real life.",
+    rating: 5,
+  },
 ];
 
 const StarRating = () => (
@@ -59,7 +164,11 @@ export const Testimonials = () => {
   const doubledTestimonials = [...testimonials, ...testimonials];
 
   return (
-    <section ref={ref} className="py-24 md:py-32 bg-white overflow-hidden">
+    <section
+      ref={ref}
+      className="min-h-screen pt-10 pb-20 md:pt-12 md:pb-24 bg-white overflow-hidden"
+      style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+    >
       <div className="max-w-7xl mx-auto px-6 mb-12">
         <motion.h2
           initial={{ opacity: 0, y: 20 }}
