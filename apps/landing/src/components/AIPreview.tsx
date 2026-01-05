@@ -165,17 +165,6 @@ export const AIPreview = () => {
           />
         ))}
       </div>
-
-      {/* Snap Points Container */}
-      <div className="absolute inset-0 pointer-events-none">
-        {panels.map((_, i) => (
-          <div 
-            key={i} 
-            className="h-screen w-full flex items-center justify-center" 
-            style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
-          />
-        ))}
-      </div>
     </section>
   );
 };

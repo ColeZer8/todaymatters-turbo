@@ -292,16 +292,6 @@ export const ScrollShowcase = () => {
         <div className="absolute bottom-0 left-0 right-0 h-[45vh] bg-gradient-to-t from-white via-white/95 to-transparent md:h-48 md:from-white md:via-transparent md:to-transparent z-30 pointer-events-none" />
       </div>
 
-      {/* Snap Points Container (match “Step into your calling” panel-by-panel snap feel) */}
-      <div className="absolute inset-0 pointer-events-none">
-        {items.map((_, i) => (
-          <div
-            key={i}
-            className="h-screen w-full"
-            style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
-          />
-        ))}
-      </div>
     </section>
   );
 };

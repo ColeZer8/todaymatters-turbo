@@ -54,7 +54,6 @@ export const DailyLifeGrid = () => {
     <section
       ref={ref}
       className="relative min-h-screen pt-10 pb-20 md:pt-12 md:pb-24 bg-gradient-to-b from-white via-[#fafafa] to-white overflow-hidden"
-      style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
     >
       {/* Animated Background Patterns */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

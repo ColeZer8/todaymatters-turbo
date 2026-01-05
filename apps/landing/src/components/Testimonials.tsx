@@ -167,7 +167,6 @@ export const Testimonials = () => {
     <section
       ref={ref}
       className="min-h-screen pt-10 pb-20 md:pt-12 md:pb-24 bg-white overflow-hidden"
-      style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
     >
       <div className="max-w-7xl mx-auto px-6 mb-12">
         <motion.h2

@@ -6,10 +6,12 @@ import { DailyLifeGrid } from "@/components/DailyLifeGrid";
 import { Testimonials } from "@/components/Testimonials";
 import { FinalCTA } from "@/components/FinalCTA";
 import { Footer } from "@/components/Footer";
+import { ScrollSnapController } from "@/components/ScrollSnapController";
 
 export default function Home() {
   return (
     <main className="bg-white">
+      <ScrollSnapController enabled />
       <Navbar />
       <Hero />
       <ScrollShowcase />
@@ -17,7 +19,9 @@ export default function Home() {
       <DailyLifeGrid />
       <Testimonials />
       <FinalCTA />
-      <Footer />
+      <section>
+        <Footer />
+      </section>
     </main>
   );
 }

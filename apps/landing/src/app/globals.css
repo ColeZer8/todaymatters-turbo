@@ -9,7 +9,14 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+html[data-scroll-snap="on"] {
   scroll-snap-type: y mandatory;
+}
+
+html[data-scroll-snap="on"] section {
+  scroll-snap-align: start;
 }
 
 body {
@@ -17,10 +24,6 @@ body {
   background: rgb(var(--background-rgb));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-section {
-  scroll-snap-align: start;
 }
 
 /* Hide scrollbar for testimonials */

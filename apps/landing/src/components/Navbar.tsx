@@ -56,19 +56,19 @@ export const Navbar = () => {
         {/* Nav links - Bevel style */}
         <div className="hidden md:flex items-center gap-8">
           <Link 
-            href="#features" 
+            href="/about" 
             className="text-sm font-medium text-[#52525b] hover:text-[#0a0a0a] transition-colors"
           >
             About us
           </Link>
           <Link 
-            href="#testimonials" 
+            href="/blog" 
             className="text-sm font-medium text-[#52525b] hover:text-[#0a0a0a] transition-colors"
           >
             Blog
           </Link>
           <Link
-            href="#"
+            href="/download"
             className="text-sm font-semibold text-[#0a0a0a] hover:text-brand-primary transition-colors"
           >
             Download App
