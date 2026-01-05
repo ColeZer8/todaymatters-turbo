@@ -61,9 +61,9 @@ export default function SetupQuestionsScreen() {
       options={OPTIONS}
       selectedOption={role}
       onSelect={setRole}
-      onContinue={() => router.replace('/daily-rhythm')}
+      onContinue={() => router.replace('/name')}
       onBack={() => router.replace('/permissions')}
-      onSkip={() => router.replace('/daily-rhythm')}
+      onSkip={() => router.replace('/name')}
     />
   );
 }

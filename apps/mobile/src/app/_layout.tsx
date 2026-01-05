@@ -99,6 +99,7 @@ export default function Layout() {
         <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
         <Stack.Screen name="permissions" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
+        <Stack.Screen name="name" options={{ headerShown: false }} />
         <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />
         <Stack.Screen name="joy" options={{ headerShown: false }} />
         <Stack.Screen name="drains" options={{ headerShown: false }} />

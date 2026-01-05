@@ -175,11 +175,24 @@ struct ScreenTimeSummary: Codable {
   let totalSeconds: Int
   let topApps: [ScreenTimeAppUsage]
   let hourlyBucketsSeconds: [Int]?
+  // Per-app hourly breakdown: [hour: [appId: seconds]]
+  let hourlyByApp: [String: [Int: Int]]?
+  // Per-app time intervals (sessions)
+  let appSessions: [ScreenTimeAppSession]?
 }
 
 struct ScreenTimeAppUsage: Codable {
   let bundleIdentifier: String
   let displayName: String
+  let durationSeconds: Int
+  let pickups: Int
+}
+
+struct ScreenTimeAppSession: Codable {
+  let bundleIdentifier: String
+  let displayName: String
+  let startedAtIso: String
+  let endedAtIso: String
   let durationSeconds: Int
   let pickups: Int
 }
@@ -717,10 +730,17 @@ private enum ScreenTimeAggregator {
 
     var usageByBundle: [String: ScreenTimeAppUsage] = [:]
     var hourlyBuckets = Array(repeating: 0, count: 24)
+    // Per-app hourly breakdown: [appId: [hour: seconds]]
+    var hourlyByApp: [String: [Int: Int]] = [:]
+    // Per-app time intervals (sessions)
+    var appSessions: [ScreenTimeAppSession] = []
 
     for await deviceData in data {
       for await segment in deviceData.activitySegments {
+        let segmentStart = segment.dateInterval.start
+        let segmentEnd = segment.dateInterval.end
         var segmentTotalSeconds = 0
+        
         for await categoryActivity in segment.categories {
           for await applicationActivity in categoryActivity.applications {
             let bundleId = applicationActivity.application.bundleIdentifier ?? "unknown"
@@ -730,6 +750,7 @@ private enum ScreenTimeAggregator {
             let pickups = Int(applicationActivity.numberOfPickups)
             segmentTotalSeconds += durationSeconds
 
+            // Update daily totals
             if let existing = usageByBundle[bundleId] {
               usageByBundle[bundleId] = ScreenTimeAppUsage(
                 bundleIdentifier: bundleId,
@@ -745,12 +766,62 @@ private enum ScreenTimeAggregator {
                 pickups: pickups
               )
             }
+
+            // Track per-app hourly breakdown (only for today range)
+            if range == .today {
+              let startHour = calendar.component(.hour, from: segmentStart)
+              let endHour = calendar.component(.hour, from: segmentEnd)
+              
+              // Distribute duration across hours if segment spans multiple hours
+              let segmentDuration = segmentEnd.timeIntervalSince(segmentStart)
+              if segmentDuration > 0 {
+                for hour in startHour...min(endHour, 23) {
+                  // Calculate hour boundaries
+                  var hourComponents = calendar.dateComponents([.year, .month, .day], from: segmentStart)
+                  hourComponents.hour = hour
+                  hourComponents.minute = 0
+                  hourComponents.second = 0
+                  guard let hourStart = calendar.date(from: hourComponents) else { continue }
+                  guard let hourEnd = calendar.date(byAdding: .hour, value: 1, to: hourStart) else { continue }
+                  
+                  let overlapStart = max(segmentStart, hourStart)
+                  let overlapEnd = min(segmentEnd, hourEnd)
+                  let overlapDuration = overlapEnd.timeIntervalSince(overlapStart)
+                  
+                  if overlapDuration > 0 {
+                    let hourSeconds = Int((overlapDuration / segmentDuration) * Double(durationSeconds))
+                    if hourlyByApp[bundleId] == nil {
+                      hourlyByApp[bundleId] = [:]
+                    }
+                    hourlyByApp[bundleId]?[hour] = (hourlyByApp[bundleId]?[hour] ?? 0) + hourSeconds
+                  }
+                }
+              } else {
+                // Single hour case
+                if hourlyByApp[bundleId] == nil {
+                  hourlyByApp[bundleId] = [:]
+                }
+                hourlyByApp[bundleId]?[startHour] = (hourlyByApp[bundleId]?[startHour] ?? 0) + durationSeconds
+              }
+            }
+
+            // Track per-app sessions (only for today range)
+            if range == .today {
+              appSessions.append(ScreenTimeAppSession(
+                bundleIdentifier: bundleId,
+                displayName: displayName,
+                startedAtIso: ScreenTimeFormatter.isoString(segmentStart),
+                endedAtIso: ScreenTimeFormatter.isoString(segmentEnd),
+                durationSeconds: durationSeconds,
+                pickups: pickups
+              ))
+            }
           }
         }
 
         if range == .today {
           // Best-effort bucketization: segments are time-windowed; attribute segment total to the start hour.
-          let hour = calendar.component(.hour, from: segment.dateInterval.start)
+          let hour = calendar.component(.hour, from: segmentStart)
           if hour >= 0 && hour < 24 {
             hourlyBuckets[hour] += segmentTotalSeconds
           }
@@ -767,7 +838,9 @@ private enum ScreenTimeAggregator {
       dayEndIso: ScreenTimeFormatter.isoString(dayEnd),
       totalSeconds: totalSeconds,
       topApps: Array(sorted.prefix(5)),
-      hourlyBucketsSeconds: range == .today ? hourlyBuckets : nil
+      hourlyBucketsSeconds: range == .today ? hourlyBuckets : nil,
+      hourlyByApp: range == .today && !hourlyByApp.isEmpty ? hourlyByApp : nil,
+      appSessions: range == .today && !appSessions.isEmpty ? appSessions : nil
     )
   }
 }

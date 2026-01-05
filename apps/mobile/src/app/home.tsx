@@ -21,6 +21,7 @@ import {
   useOnboardingStore,
   useReviewTimeStore,
 } from '@/stores';
+import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
 
 // Voice features require native modules and do not run in Expo Go.
 const isExpoGo = Constants.appOwnership === 'expo';
@@ -65,6 +66,8 @@ function HomeScreenInner() {
   const focusStyle = useOnboardingStore((s) => s.focusStyle);
   const wakeTimeIso = useOnboardingStore((s) => s.wakeTime);
   const sleepTimeIso = useOnboardingStore((s) => s.sleepTime);
+  const fullName = useOnboardingStore((s) => s.fullName);
+  const setFullName = useOnboardingStore((s) => s.setFullName);
 
   const nowMinutesFromMidnight = useCurrentMinutes();
   const isDemoActive = useDemoStore((s) => s.isActive);
@@ -80,7 +83,6 @@ function HomeScreenInner() {
   const lastLlmAt = useHomeBriefStore((s) => s.lastLlmAt);
   const setLastLlmAt = useHomeBriefStore((s) => s.setLastLlmAt);
 
-  const [profileFullName, setProfileFullName] = useState<string | null>(null);
   const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
 
   const timersRef = useRef<{ debounce?: ReturnType<typeof setTimeout>; boundary?: ReturnType<typeof setTimeout> }>({});
@@ -131,7 +133,9 @@ function HomeScreenInner() {
       try {
         const profile = await fetchProfile(user.id);
         if (cancelled) return;
-        setProfileFullName(profile?.full_name ?? null);
+        if (profile?.full_name) {
+          setFullName(profile.full_name);
+        }
         setProfileBirthday(profile?.birthday ?? null);
       } catch {
         // Non-blocking: brief works without profile fields.
@@ -149,7 +153,7 @@ function HomeScreenInner() {
         nowDate,
         nowMinutesFromMidnight,
         rhythm: { wakeTimeIso, sleepTimeIso },
-        profile: { fullName: profileFullName, birthday: profileBirthday },
+        profile: { fullName, birthday: profileBirthday },
         persona: { coachPersona, morningMindset, focusStyle },
         scheduledEvents,
         goals: goalsSummary,
@@ -259,7 +263,7 @@ function HomeScreenInner() {
     nowDate,
     nowMinutesFromMidnight,
     profileBirthday,
-    profileFullName,
+    fullName,
     scheduledEvents,
     setBrief,
     setLastEvaluatedAt,
@@ -305,7 +309,10 @@ function HomeScreenInner() {
     source: 'rules' as const,
   };
 
-  const name = (profileFullName?.split(' ')[0] || 'Paul').trim();
+  const derivedFromEmail = deriveFullNameFromEmail(user?.email);
+  const firstName =
+    getFirstName(fullName) ?? getFirstName(derivedFromEmail) ?? 'there';
+  const name = firstName.trim();
   const date = formatHomeDate(nowDate);
 
   // Use refs to keep handler stable and prevent re-renders

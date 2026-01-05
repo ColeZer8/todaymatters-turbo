@@ -23,6 +23,9 @@ interface OnboardingState {
   // Step 2: Setup Questions
   role: string | null;
 
+  // Step 3: Name
+  fullName: string;
+
   // Step 3: Daily Rhythm
   wakeTime: string; // Store as ISO string for serialization
   sleepTime: string;
@@ -62,6 +65,7 @@ interface OnboardingState {
   togglePermission: (key: PermissionKey) => void;
   setAllPermissions: (value: boolean) => void;
   setRole: (role: string | null) => void;
+  setFullName: (fullName: string) => void;
   setWakeTime: (time: Date) => void;
   setSleepTime: (time: Date) => void;
   setJoySelections: (selections: string[]) => void;
@@ -126,6 +130,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       // Initial state
       permissions: DEFAULT_PERMISSIONS,
       role: null,
+      fullName: '',
       wakeTime: createTimeString(6, 30),
       sleepTime: createTimeString(22, 30),
       joySelections: [],
@@ -161,6 +166,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           },
         }),
       setRole: (role) => set({ role }),
+      setFullName: (fullName) => set({ fullName }),
 
       setWakeTime: (time) => set({ wakeTime: time.toISOString() }),
       setSleepTime: (time) => set({ sleepTime: time.toISOString() }),

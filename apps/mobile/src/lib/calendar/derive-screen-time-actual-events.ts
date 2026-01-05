@@ -1,4 +1,4 @@
-import type { ScreenTimeSummary } from '@/lib/ios-insights';
+import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights';
 import type { ScheduledEvent } from '@/stores/events-store';
 
 interface DeriveActualEventsFromScreenTimeOptions {
@@ -16,14 +16,23 @@ interface DeriveActualEventsFromScreenTimeOptions {
   minScreenTimeBlockMinutes?: number;
 }
 
+interface DistractionInfo {
+  totalMinutes: number;
+  topApps: Array<{ appName: string; minutes: number }>;
+}
+
 export function deriveActualEventsFromScreenTime({
   existingActualEvents,
   screenTimeSummary,
   distractionThresholdMinutes = 10,
   minScreenTimeBlockMinutes = 15,
 }: DeriveActualEventsFromScreenTimeOptions): ScheduledEvent[] {
-  const hourlyBucketsSeconds = screenTimeSummary.hourlyBucketsSeconds ?? null;
-  if (!hourlyBucketsSeconds || hourlyBucketsSeconds.length === 0) {
+  // Prefer sessions for precise overlap detection, fallback to hourlyByApp, then aggregate hourly buckets
+  const hasSessions = screenTimeSummary.appSessions && screenTimeSummary.appSessions.length > 0;
+  const hasHourlyByApp = screenTimeSummary.hourlyByApp && Object.keys(screenTimeSummary.hourlyByApp).length > 0;
+  const hasHourlyBuckets = screenTimeSummary.hourlyBucketsSeconds && screenTimeSummary.hourlyBucketsSeconds.length > 0;
+
+  if (!hasSessions && !hasHourlyByApp && !hasHourlyBuckets) {
     return existingActualEvents;
   }
 
@@ -36,18 +45,29 @@ export function deriveActualEventsFromScreenTime({
     // Don't mark "Screen Time" itself as distracted.
     if (event.category === 'digital') return event;
 
-    const distractedMinutes = estimateDistractedMinutes(event, hourlyBucketsSeconds);
-    if (distractedMinutes < distractionThresholdMinutes) return event;
+    // Use sessions for precise detection, fallback to hourlyByApp, then aggregate buckets
+    const distractionInfo = hasSessions
+      ? calculateDistractionFromSessions(event, screenTimeSummary.appSessions!)
+      : hasHourlyByApp
+        ? calculateDistractionFromHourlyByApp(event, screenTimeSummary.hourlyByApp!, screenTimeSummary.topApps)
+        : calculateDistractionFromAggregateHourly(event, screenTimeSummary.hourlyBucketsSeconds!);
 
-    const distractedLabel = formatMinuteLabel(distractedMinutes);
+    if (distractionInfo.totalMinutes < distractionThresholdMinutes) return event;
+
+    const distractedLabel = formatMinuteLabel(distractionInfo.totalMinutes);
+    const topAppLabel = distractionInfo.topApps.length > 0 ? distractionInfo.topApps[0].appName : null;
+
     if (event.category === 'sleep') {
       // For sleep: interpret phone time as "sleep started late" and (when possible) represent it
       // as a Screen Time block immediately before sleep (only if it won't overlap other non-digital events).
-      const nextDescription = `Started late (${distractedLabel} on phone)`;
+      const nextDescription = topAppLabel
+        ? `Started late (${distractedLabel} on ${topAppLabel})`
+        : `Started late (${distractedLabel} on phone)`;
       const preSleepBlock = buildPreSleepScreenTimeBlock({
         screenTimeSummary,
         sleepEvent: event,
-        distractedMinutes,
+        distractedMinutes: distractionInfo.totalMinutes,
+        topAppName: topAppLabel,
       });
       if (preSleepBlock) {
         const overlapsNonDigital = baseActualEvents
@@ -68,7 +88,7 @@ export function deriveActualEventsFromScreenTime({
       return { ...event, description: nextDescription };
     }
 
-    const nextDescription = buildDistractedDescription(event, distractedLabel);
+    const nextDescription = buildDistractedDescription(event, distractedLabel, topAppLabel);
 
     return {
       ...event,
@@ -78,7 +98,9 @@ export function deriveActualEventsFromScreenTime({
 
   const screenTimeBlocks = deriveStandaloneScreenTimeBlocks({
     screenTimeSummary,
-    hourlyBucketsSeconds,
+    hourlyBucketsSeconds: screenTimeSummary.hourlyBucketsSeconds ?? null,
+    hourlyByApp: screenTimeSummary.hourlyByApp ?? null,
+    appSessions: screenTimeSummary.appSessions ?? null,
     existingNonDigitalEvents: baseActualEvents.filter((e) => e.category !== 'digital'),
     minScreenTimeBlockMinutes,
   });
@@ -86,10 +108,113 @@ export function deriveActualEventsFromScreenTime({
   return [...distractedActualEvents, ...sleepLateBlocks, ...screenTimeBlocks].sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
-function estimateDistractedMinutes(event: ScheduledEvent, hourlyBucketsSeconds: number[]): number {
+/**
+ * Calculate distraction using precise session overlap (most accurate).
+ */
+function calculateDistractionFromSessions(event: ScheduledEvent, appSessions: ScreenTimeAppSession[]): DistractionInfo {
+  const eventStartMinutes = clampMinutes(event.startMinutes);
+  const eventEndMinutes = clampMinutes(event.startMinutes + event.duration);
+  if (eventEndMinutes <= eventStartMinutes) {
+    return { totalMinutes: 0, topApps: [] };
+  }
+
+  const eventStartMs = minutesToMs(eventStartMinutes);
+  const eventEndMs = minutesToMs(eventEndMinutes);
+
+  const appUsage: Record<string, number> = {};
+
+  for (const session of appSessions) {
+    const sessionStartMs = new Date(session.startedAtIso).getTime();
+    const sessionEndMs = new Date(session.endedAtIso).getTime();
+
+    // Calculate precise overlap
+    const overlapStartMs = Math.max(eventStartMs, sessionStartMs);
+    const overlapEndMs = Math.min(eventEndMs, sessionEndMs);
+    if (overlapEndMs <= overlapStartMs) continue;
+
+    const overlapSeconds = (overlapEndMs - overlapStartMs) / 1000;
+    const appName = session.displayName;
+    appUsage[appName] = (appUsage[appName] ?? 0) + overlapSeconds;
+  }
+
+  const totalSeconds = Object.values(appUsage).reduce((sum, seconds) => sum + seconds, 0);
+  const totalMinutes = roundToNearest(totalSeconds / 60, 5);
+
+  const topApps = Object.entries(appUsage)
+    .map(([appName, seconds]) => ({ appName, minutes: roundToNearest(seconds / 60, 5) }))
+    .filter((app) => app.minutes > 0)
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, 3);
+
+  return { totalMinutes, topApps };
+}
+
+/**
+ * Calculate distraction using per-app hourly breakdown (fallback when sessions unavailable).
+ */
+function calculateDistractionFromHourlyByApp(
+  event: ScheduledEvent,
+  hourlyByApp: Record<string, Record<number, number>>,
+  topApps: Array<{ bundleIdentifier: string; displayName: string }>,
+): DistractionInfo {
   const eventStart = clampMinutes(event.startMinutes);
   const eventEnd = clampMinutes(event.startMinutes + event.duration);
-  if (eventEnd <= eventStart) return 0;
+  if (eventEnd <= eventStart) {
+    return { totalMinutes: 0, topApps: [] };
+  }
+
+  const startHour = Math.floor(eventStart / 60);
+  const endHour = Math.floor((eventEnd - 1) / 60);
+
+  // Build app ID -> display name mapping
+  const appIdToDisplayName = new Map<string, string>();
+  for (const app of topApps) {
+    appIdToDisplayName.set(app.bundleIdentifier, app.displayName);
+  }
+
+  const appUsage: Record<string, number> = {};
+
+  for (let hour = startHour; hour <= endHour; hour++) {
+    const hourStart = hour * 60;
+    const hourEnd = hourStart + 60;
+    const overlapMinutes = Math.max(0, Math.min(eventEnd, hourEnd) - Math.max(eventStart, hourStart));
+    if (overlapMinutes <= 0) continue;
+
+    const hourFraction = overlapMinutes / 60;
+
+    // Sum per-app usage for this hour
+    for (const [appId, hourData] of Object.entries(hourlyByApp)) {
+      const appSeconds = hourData[hour] ?? 0;
+      if (appSeconds <= 0) continue;
+
+      // Distribute app usage proportionally across the overlap
+      const appOverlapSeconds = appSeconds * hourFraction;
+      const appName = appIdToDisplayName.get(appId) ?? appId;
+      appUsage[appName] = (appUsage[appName] ?? 0) + appOverlapSeconds;
+    }
+  }
+
+  const totalSeconds = Object.values(appUsage).reduce((sum, seconds) => sum + seconds, 0);
+  const totalMinutes = roundToNearest(totalSeconds / 60, 5);
+
+  const topAppsList = Object.entries(appUsage)
+    .map(([appName, seconds]) => ({ appName, minutes: roundToNearest(seconds / 60, 5) }))
+    .filter((app) => app.minutes > 0)
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, 3);
+
+  return { totalMinutes, topApps: topAppsList };
+}
+
+/**
+ * Calculate distraction using aggregate hourly buckets (fallback when per-app data unavailable).
+ */
+function calculateDistractionFromAggregateHourly(event: ScheduledEvent, hourlyBucketsSeconds: number[]): DistractionInfo {
+  const eventStart = clampMinutes(event.startMinutes);
+  const eventEnd = clampMinutes(event.startMinutes + event.duration);
+  if (eventEnd <= eventStart) {
+    return { totalMinutes: 0, topApps: [] };
+  }
 
   let distractedSeconds = 0;
   const startHour = Math.floor(eventStart / 60);
@@ -109,23 +234,159 @@ function estimateDistractedMinutes(event: ScheduledEvent, hourlyBucketsSeconds: 
     distractedSeconds += bucketSeconds * hourFraction;
   }
 
-  // Round to the nearest 5 minutes to keep labels stable with coarse hourly buckets.
-  const distractedMinutesRaw = distractedSeconds / 60;
-  return roundToNearest(distractedMinutesRaw, 5);
+  const totalMinutes = roundToNearest(distractedSeconds / 60, 5);
+  return { totalMinutes, topApps: [] };
+}
+
+
+function minutesToMs(minutes: number): number {
+  return minutes * 60 * 1000;
 }
 
 function deriveStandaloneScreenTimeBlocks(options: {
   screenTimeSummary: ScreenTimeSummary;
-  hourlyBucketsSeconds: number[];
+  hourlyBucketsSeconds: number[] | null;
+  hourlyByApp: Record<string, Record<number, number>> | null;
+  appSessions: ScreenTimeAppSession[] | null;
   existingNonDigitalEvents: ScheduledEvent[];
   minScreenTimeBlockMinutes: number;
 }): ScheduledEvent[] {
-  const { screenTimeSummary, hourlyBucketsSeconds, existingNonDigitalEvents, minScreenTimeBlockMinutes } = options;
-  const topAppName = screenTimeSummary.topApps[0]?.displayName ?? null;
-  const description = topAppName ? toScreenTimePhrase(topAppName) : 'Phone use';
+  const {
+    screenTimeSummary,
+    hourlyBucketsSeconds,
+    hourlyByApp,
+    appSessions,
+    existingNonDigitalEvents,
+    minScreenTimeBlockMinutes,
+  } = options;
 
+  // Prefer sessions for precise blocks, fallback to hourly data
+  if (appSessions && appSessions.length > 0) {
+    return deriveBlocksFromSessions(appSessions, existingNonDigitalEvents, minScreenTimeBlockMinutes, screenTimeSummary);
+  }
+
+  if (hourlyByApp && Object.keys(hourlyByApp).length > 0) {
+    return deriveBlocksFromHourlyByApp(hourlyByApp, existingNonDigitalEvents, minScreenTimeBlockMinutes, screenTimeSummary);
+  }
+
+  if (hourlyBucketsSeconds && hourlyBucketsSeconds.length > 0) {
+    return deriveBlocksFromAggregateHourly(
+      hourlyBucketsSeconds,
+      existingNonDigitalEvents,
+      minScreenTimeBlockMinutes,
+      screenTimeSummary,
+    );
+  }
+
+  return [];
+}
+
+function deriveBlocksFromSessions(
+  appSessions: ScreenTimeAppSession[],
+  existingNonDigitalEvents: ScheduledEvent[],
+  minScreenTimeBlockMinutes: number,
+  screenTimeSummary: ScreenTimeSummary,
+): ScheduledEvent[] {
   const blocks: ScheduledEvent[] = [];
   let derivedIndex = 0;
+
+  // Group sessions by hour and check for overlaps
+  for (const session of appSessions) {
+    const sessionStartMs = new Date(session.startedAtIso).getTime();
+    const sessionEndMs = new Date(session.endedAtIso).getTime();
+    const sessionStartMinutes = Math.floor(sessionStartMs / (60 * 1000)) % (24 * 60);
+    const sessionEndMinutes = Math.floor(sessionEndMs / (60 * 1000)) % (24 * 60);
+    const sessionDuration = Math.round((sessionEndMs - sessionStartMs) / (60 * 1000));
+
+    if (sessionDuration < minScreenTimeBlockMinutes) continue;
+
+    // Check if this session overlaps any non-digital events
+    const overlapsNonDigital = existingNonDigitalEvents.some((e) =>
+      intervalsOverlap(sessionStartMinutes, sessionEndMinutes, e.startMinutes, e.startMinutes + e.duration),
+    );
+    if (overlapsNonDigital) continue;
+
+    const description = toScreenTimePhrase(session.displayName);
+
+    blocks.push({
+      id: `st_session_${screenTimeSummary.generatedAtIso}_${derivedIndex++}`,
+      title: 'Screen Time',
+      description,
+      startMinutes: sessionStartMinutes,
+      duration: clampDurationMinutes(sessionDuration),
+      category: 'digital',
+    });
+  }
+
+  return blocks;
+}
+
+function deriveBlocksFromHourlyByApp(
+  hourlyByApp: Record<string, Record<number, number>>,
+  existingNonDigitalEvents: ScheduledEvent[],
+  minScreenTimeBlockMinutes: number,
+  screenTimeSummary: ScreenTimeSummary,
+): ScheduledEvent[] {
+  const blocks: ScheduledEvent[] = [];
+  let derivedIndex = 0;
+
+  // Aggregate per-app hourly data into hour-level blocks
+  const hourlyTotals: Record<number, { seconds: number; topApp: string | null }> = {};
+
+  for (const [appId, hourData] of Object.entries(hourlyByApp)) {
+    for (const [hour, seconds] of Object.entries(hourData)) {
+      const hourNum = parseInt(hour, 10);
+      if (!hourlyTotals[hourNum]) {
+        hourlyTotals[hourNum] = { seconds: 0, topApp: null };
+      }
+      hourlyTotals[hourNum].seconds += seconds;
+      if (!hourlyTotals[hourNum].topApp || seconds > (hourlyTotals[hourNum].seconds - seconds)) {
+        hourlyTotals[hourNum].topApp = appId;
+      }
+    }
+  }
+
+  for (let hour = 0; hour < 24; hour++) {
+    const hourData = hourlyTotals[hour];
+    if (!hourData || hourData.seconds === 0) continue;
+
+    const bucketMinutes = Math.round(hourData.seconds / 60);
+    if (bucketMinutes < minScreenTimeBlockMinutes) continue;
+
+    const startMinutes = hour * 60;
+    const duration = clampDurationMinutes(bucketMinutes);
+    const endMinutes = startMinutes + duration;
+
+    const overlapsNonDigital = existingNonDigitalEvents.some((e) =>
+      intervalsOverlap(startMinutes, endMinutes, e.startMinutes, e.startMinutes + e.duration),
+    );
+    if (overlapsNonDigital) continue;
+
+    const description = hourData.topApp ? toScreenTimePhrase(hourData.topApp) : 'Phone use';
+
+    blocks.push({
+      id: `st_${screenTimeSummary.generatedAtIso}_${startMinutes}_${derivedIndex++}`,
+      title: 'Screen Time',
+      description,
+      startMinutes,
+      duration,
+      category: 'digital',
+    });
+  }
+
+  return blocks;
+}
+
+function deriveBlocksFromAggregateHourly(
+  hourlyBucketsSeconds: number[],
+  existingNonDigitalEvents: ScheduledEvent[],
+  minScreenTimeBlockMinutes: number,
+  screenTimeSummary: ScreenTimeSummary,
+): ScheduledEvent[] {
+  const blocks: ScheduledEvent[] = [];
+  let derivedIndex = 0;
+  const topAppName = screenTimeSummary.topApps[0]?.displayName ?? null;
+  const description = topAppName ? toScreenTimePhrase(topAppName) : 'Phone use';
 
   for (let hour = 0; hour < 24; hour++) {
     const bucketSeconds = hourlyBucketsSeconds[hour] ?? 0;
@@ -136,7 +397,6 @@ function deriveStandaloneScreenTimeBlocks(options: {
     const duration = clampDurationMinutes(bucketMinutes);
     const endMinutes = startMinutes + duration;
 
-    // Conservative: only render standalone "Screen Time" blocks in truly open space (no overlap at all).
     const overlapsNonDigital = existingNonDigitalEvents.some((e) =>
       intervalsOverlap(startMinutes, endMinutes, e.startMinutes, e.startMinutes + e.duration),
     );
@@ -159,8 +419,9 @@ function buildPreSleepScreenTimeBlock(options: {
   screenTimeSummary: ScreenTimeSummary;
   sleepEvent: ScheduledEvent;
   distractedMinutes: number;
+  topAppName: string | null;
 }): ScheduledEvent | null {
-  const { screenTimeSummary, sleepEvent, distractedMinutes } = options;
+  const { screenTimeSummary, sleepEvent, distractedMinutes, topAppName } = options;
   const duration = clampDurationMinutes(distractedMinutes);
   if (duration <= 0) return null;
 
@@ -168,7 +429,6 @@ function buildPreSleepScreenTimeBlock(options: {
   const startMinutes = clampMinutes(endMinutes - duration);
   if (endMinutes <= startMinutes) return null;
 
-  const topAppName = screenTimeSummary.topApps[0]?.displayName ?? null;
   const description = topAppName ? toScreenTimePhrase(topAppName) : 'Phone use';
 
   return {
@@ -181,17 +441,19 @@ function buildPreSleepScreenTimeBlock(options: {
   };
 }
 
-function buildDistractedDescription(event: ScheduledEvent, distractedLabel: string): string {
+function buildDistractedDescription(event: ScheduledEvent, distractedLabel: string, topAppName: string | null): string {
+  const appLabel = topAppName ? `on ${topAppName}` : 'on phone';
+
   // Favor the distraction note for family time (matches the user story).
   if (event.category === 'family') {
-    return `Distracted: ${distractedLabel} on phone`;
+    return `Distracted: ${distractedLabel} ${appLabel}`;
   }
 
   if (!event.description) {
-    return `Distracted: ${distractedLabel} on phone`;
+    return `Distracted: ${distractedLabel} ${appLabel}`;
   }
 
-  return `${event.description} • Distracted: ${distractedLabel} on phone`;
+  return `${event.description} • Distracted: ${distractedLabel} ${appLabel}`;
 }
 
 function toScreenTimePhrase(appName: string): string {

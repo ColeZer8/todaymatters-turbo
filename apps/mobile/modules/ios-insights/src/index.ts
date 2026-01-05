@@ -27,6 +27,15 @@ export interface ScreenTimeAppUsage {
   pickups: number;
 }
 
+export interface ScreenTimeAppSession {
+  bundleIdentifier: string;
+  displayName: string;
+  startedAtIso: string;
+  endedAtIso: string;
+  durationSeconds: number;
+  pickups: number;
+}
+
 export interface ScreenTimeSummary {
   generatedAtIso: string;
   dayStartIso: string;
@@ -34,6 +43,10 @@ export interface ScreenTimeSummary {
   totalSeconds: number;
   topApps: ScreenTimeAppUsage[];
   hourlyBucketsSeconds?: number[] | null;
+  // Per-app hourly breakdown: { [appId: string]: { [hour: number]: seconds } }
+  hourlyByApp?: Record<string, Record<number, number>> | null;
+  // Per-app time intervals (sessions)
+  appSessions?: ScreenTimeAppSession[] | null;
 }
 
 interface IosInsightsNativeModule {

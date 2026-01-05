@@ -16,7 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
 import { DatePickerPopup } from '@/components/molecules';
-import { useDemoStore, useAuthStore } from '@/stores';
+import { useDemoStore, useAuthStore, useOnboardingStore } from '@/stores';
 import {
   addProfileValue,
   fetchProfile,
@@ -24,7 +24,9 @@ import {
   removeProfileValue,
   saveProfileValues,
   updateBirthday,
+  updateFullName,
 } from '@/lib/supabase/services';
+import { deriveFullNameFromEmail } from '@/lib/user-name';
 
 // Start with empty values - will load from Supabase if authenticated
 const CORE_VALUES: string[] = [];
@@ -48,6 +50,8 @@ export default function ProfileScreen() {
   const setDemoActive = useDemoStore((state) => state.setActive);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const fullName = useOnboardingStore((s) => s.fullName);
+  const setFullName = useOnboardingStore((s) => s.setFullName);
 
   const handleStartDemo = () => {
     setDemoActive(true);
@@ -101,6 +105,7 @@ export default function ProfileScreen() {
     { id: 'logout', label: 'Log Out', icon: LogOut },
   ];
   const [isEditing, setIsEditing] = useState(false);
+  const [draftFullName, setDraftFullName] = useState(fullName);
   const [coreValues, setCoreValues] = useState<string[]>([]);
   const [newValueText, setNewValueText] = useState('');
   const [goals, setGoals] = useState<ProfileItem[]>(GOALS);
@@ -147,6 +152,11 @@ export default function ProfileScreen() {
     loadValues();
   }, [isAuthenticated, user?.id, hasLoadedValues]);
 
+  // Keep local draft in sync when store changes (e.g. loaded from Supabase elsewhere).
+  useEffect(() => {
+    setDraftFullName(fullName);
+  }, [fullName]);
+
   // Fetch profile (for birthday) on mount (if authenticated)
   useEffect(() => {
     if (!isAuthenticated || !user?.id || hasLoadedProfile) return;
@@ -156,6 +166,9 @@ export default function ProfileScreen() {
       try {
         const profile = await fetchProfile(user.id);
         if (cancelled) return;
+        if (profile?.full_name) {
+          setFullName(profile.full_name);
+        }
         setBirthday(profile?.birthday ? ymdToDate(profile.birthday) : null);
         setHasLoadedProfile(true);
       } catch (error) {
@@ -234,6 +247,16 @@ export default function ProfileScreen() {
     setIsEditing(false);
     // Sync current values to Supabase
     if (isAuthenticated && user?.id) {
+      const nextName = draftFullName.trim();
+      if (nextName !== fullName.trim()) {
+        // Update locally so Home greeting changes immediately.
+        setFullName(nextName);
+        try {
+          await updateFullName(user.id, nextName);
+        } catch (error) {
+          console.error('❌ Failed to update name:', error);
+        }
+      }
       await syncValuesToSupabase(coreValues);
     }
   };
@@ -286,13 +309,15 @@ export default function ProfileScreen() {
   return (
     <>
       <ProfileTemplate
-        name="Paul"
+        name={fullName.trim() || deriveFullNameFromEmail(user?.email) || 'Profile'}
         role="Professional"
         badgeLabel="Pro Member"
         coreValues={coreValues}
         goals={goals}
         initiatives={initiatives}
         menuItems={menuItems}
+        nameValue={draftFullName}
+        onChangeName={setDraftFullName}
         personalizationItems={[
           {
             id: 'birthday',
@@ -304,7 +329,10 @@ export default function ProfileScreen() {
           ...personalizationItems,
         ]}
         isEditing={isEditing}
-        onEditPress={() => setIsEditing(true)}
+        onEditPress={() => {
+          setDraftFullName(fullName);
+          setIsEditing(true);
+        }}
         onDonePress={handleDoneEditing}
         newValueText={newValueText}
         onChangeNewValue={setNewValueText}

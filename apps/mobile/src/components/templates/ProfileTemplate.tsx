@@ -38,6 +38,8 @@ interface ProfileTemplateProps {
   menuItems: ProfileMenuEntry[];
   /** Personalization settings (Daily Rhythm, Coach Persona, etc.) */
   personalizationItems?: ProfileMenuEntry[];
+  nameValue?: string;
+  onChangeName?: (text: string) => void;
   onEditPress?: () => void;
   onDonePress?: () => void;
   isEditing?: boolean;
@@ -67,6 +69,8 @@ export const ProfileTemplate = ({
   initiatives,
   menuItems,
   personalizationItems = [],
+  nameValue = '',
+  onChangeName,
   onEditPress,
   onDonePress,
   isEditing = false,
@@ -148,6 +152,22 @@ export const ProfileTemplate = ({
         <View className="mt-6 px-6">
           <ProfileSummaryCard name={name} role={role} badgeLabel={badgeLabel} />
         </View>
+
+        {isEditing && (
+          <View className="mt-4 px-6">
+            <Text className={sectionTitleClass}>Name</Text>
+            <TextInput
+              value={nameValue}
+              onChangeText={onChangeName || (() => {})}
+              placeholder="Full name"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="words"
+              returnKeyType="done"
+              className="mt-3 h-12 rounded-2xl border border-[#E5E7EB] bg-[#FFFFFF] px-4 text-base font-semibold text-[#111827]"
+              accessibilityLabel="Full name"
+            />
+          </View>
+        )}
 
         <View className="mt-8 px-6">
           <Text className={sectionTitleClass}>Core Values</Text>

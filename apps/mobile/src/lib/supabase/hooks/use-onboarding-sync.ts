@@ -9,6 +9,7 @@ import type { PermissionsData } from '@/stores/onboarding-store';
 import {
   fetchProfile,
   updateDailyRhythm,
+  updateFullName,
   updateMission,
   updateRole,
   updateJoySelections,
@@ -45,6 +46,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   // Select state slices + actions explicitly so callbacks stay stable.
   const permissions = useOnboardingStore((s) => s.permissions);
   const role = useOnboardingStore((s) => s.role);
+  const fullName = useOnboardingStore((s) => s.fullName);
   const wakeTime = useOnboardingStore((s) => s.wakeTime);
   const sleepTime = useOnboardingStore((s) => s.sleepTime);
   const purpose = useOnboardingStore((s) => s.purpose);
@@ -62,6 +64,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setSleepTime = useOnboardingStore((s) => s.setSleepTime);
   const setPurpose = useOnboardingStore((s) => s.setPurpose);
   const setRole = useOnboardingStore((s) => s.setRole);
+  const setFullName = useOnboardingStore((s) => s.setFullName);
   const setPermissions = useOnboardingStore((s) => s.setPermissions);
   const setJoySelections = useOnboardingStore((s) => s.setJoySelections);
   const setJoyCustomOptions = useOnboardingStore((s) => s.setJoyCustomOptions);
@@ -87,7 +90,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       if (profile) {
         // Update store with profile data
         if (profile.full_name) {
-          // Note: We don't have a setFullName in onboarding store, but we can set it
+          setFullName(profile.full_name);
         }
         if (profile.ideal_work_day) {
           const wakeDate = new Date();
@@ -171,6 +174,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     isAuthenticated,
     user?.id,
     onError,
+    setFullName,
     setWakeTime,
     setSleepTime,
     setPurpose,
@@ -326,6 +330,18 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     [isAuthenticated, user?.id, onError]
   );
 
+  const saveFullName = useCallback(
+    async (fullName: string) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateFullName(user.id, fullName);
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save name'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
   const saveFocusStyle = useCallback(
     async (focusStyle: string | null) => {
       if (!isAuthenticated || !user?.id) return;
@@ -398,6 +414,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     saveOnboardingData,
     // Individual save functions for auto-save
     savePermissions,
+    saveFullName,
     saveRole,
     saveJoySelections,
     saveJoyCustomOptions,
@@ -410,6 +427,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     savePurpose,
   };
 }
+
 
 
 
