@@ -82,7 +82,7 @@ export const ScheduleList = () => {
         <View style={styles.container}>
             <View style={styles.big3HeaderRow}>
                 <Text style={styles.big3Label}>{headerLabel}</Text>
-                <TouchableOpacity onPress={() => router.replace('/calendar')}>
+                <TouchableOpacity onPress={() => router.replace('/comprehensive-calendar')}>
                     <Text style={styles.big3ViewAll}>View All</Text>
                 </TouchableOpacity>
             </View>

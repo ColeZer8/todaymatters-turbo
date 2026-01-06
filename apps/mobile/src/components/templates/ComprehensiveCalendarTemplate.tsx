@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,8 +6,8 @@ import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react-native';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
-import { useReviewTimeStore, useEventsStore, useDemoStore } from '@/stores';
-import type { ScheduledEvent } from '@/stores';
+import { useReviewTimeStore, useDemoStore } from '@/stores';
+import type { EventCategory, ScheduledEvent } from '@/stores';
 import { EventEditorModal } from '../molecules/EventEditorModal';
 
 // Configuration
@@ -194,9 +194,32 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
     );
 };
 
-export const ComprehensiveCalendarTemplate = () => {
+interface ComprehensiveCalendarTemplateProps {
+    selectedDate: Date;
+    plannedEvents: ScheduledEvent[];
+    actualEvents: ScheduledEvent[];
+    onPrevDay: () => void;
+    onNextDay: () => void;
+    onAddEvent: () => void;
+    onUpdatePlannedEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onDeletePlannedEvent: (eventId: string) => void | Promise<void>;
+    onUpdateActualEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onDeleteActualEvent: (eventId: string) => void | Promise<void>;
+}
+
+export const ComprehensiveCalendarTemplate = ({
+    selectedDate,
+    plannedEvents,
+    actualEvents,
+    onPrevDay,
+    onNextDay,
+    onAddEvent,
+    onUpdatePlannedEvent,
+    onDeletePlannedEvent,
+    onUpdateActualEvent,
+    onDeleteActualEvent,
+}: ComprehensiveCalendarTemplateProps) => {
     const insets = useSafeAreaInsets();
-    const router = useRouter();
     const scrollViewRef = useRef<ScrollView | null>(null);
     const [scrollViewHeight, setScrollViewHeight] = useState(0);
     const [hasAutoCentered, setHasAutoCentered] = useState(false);
@@ -206,8 +229,6 @@ export const ComprehensiveCalendarTemplate = () => {
     const [editorEvent, setEditorEvent] = useState<ScheduledEvent | null>(null);
     const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('planned');
     const [isEditorVisible, setIsEditorVisible] = useState(false);
-    const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
-    const actualEvents = useEventsStore((state) => state.derivedActualEvents ?? state.actualEvents);
 
     // Demo mode support - use simulated time when active
     const isDemoActive = useDemoStore((state) => state.isActive);
@@ -220,7 +241,7 @@ export const ComprehensiveCalendarTemplate = () => {
         : realMinutes;
 
     const handleAddEvent = () => {
-        router.push('/add-event');
+        onAddEvent();
     };
 
     const hours = [];
@@ -247,16 +268,13 @@ export const ComprehensiveCalendarTemplate = () => {
     const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;
 
     const handleOpenEditor = (event: CalendarEvent, column: 'planned' | 'actual') => {
-        // Find the full event from the store to get isBig3 status
-        const fullEvent = column === 'planned' 
-            ? scheduledEvents.find(e => e.id === event.id)
-            : actualEvents.find(e => e.id === event.id);
-        
-        if (fullEvent) {
-            setEditorEvent(fullEvent);
-            setEditorColumn(column);
-            setIsEditorVisible(true);
-        }
+        const fullEvent = column === 'planned'
+            ? plannedEvents.find((e) => e.id === event.id)
+            : actualEvents.find((e) => e.id === event.id);
+        if (!fullEvent) return;
+        setEditorEvent(fullEvent);
+        setEditorColumn(column);
+        setIsEditorVisible(true);
     };
 
     const handleCloseEditor = () => {
@@ -277,9 +295,13 @@ export const ComprehensiveCalendarTemplate = () => {
         setHasAutoCentered(true);
     }, [contentHeight, currentIndicatorOffset, hasAutoCentered, scrollViewHeight, shouldShowCurrentIndicator]);
 
-    // Format date like Home page
-    const dayName = 'Friday,';
-    const dateStr = 'November 8';
+    const dayName = useMemo(() => {
+        return new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(selectedDate) + ',';
+    }, [selectedDate]);
+
+    const dateStr = useMemo(() => {
+        return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric' }).format(selectedDate);
+    }, [selectedDate]);
 
     return (
         <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -291,10 +313,10 @@ export const ComprehensiveCalendarTemplate = () => {
                         <Text style={styles.dateText}>{dateStr}</Text>
                     </View>
                     <View style={styles.navButtons}>
-                        <TouchableOpacity style={styles.navButton} activeOpacity={0.7}>
+                        <TouchableOpacity style={styles.navButton} activeOpacity={0.7} onPress={onPrevDay}>
                             <Icon icon={ChevronLeft} size={22} color={COLORS.textMuted} />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.navButton} activeOpacity={0.7}>
+                        <TouchableOpacity style={styles.navButton} activeOpacity={0.7} onPress={onNextDay}>
                             <Icon icon={ChevronRight} size={22} color={COLORS.textMuted} />
                         </TouchableOpacity>
                     </View>
@@ -357,7 +379,7 @@ export const ComprehensiveCalendarTemplate = () => {
                             {/* Events Layer */}
                             <View style={styles.eventsContainer}>
                                 <View style={styles.column}>
-                                    {scheduledEvents.map(event => (
+                                    {plannedEvents.map(event => (
                                         <TimeEventBlock
                                             key={event.id}
                                             event={event}
@@ -367,30 +389,13 @@ export const ComprehensiveCalendarTemplate = () => {
                                 </View>
                                 <View style={styles.columnDivider} />
                                 <View style={styles.column}>
-                                    {actualEvents.map(event => {
-                                        if (!shouldShowCurrentIndicator) {
-                                            return <TimeEventBlock key={event.id} event={event} />;
-                                        }
-
-                                        const hasStarted = currentMinutes >= event.startMinutes;
-                                        const pastDelay = currentMinutes >= event.startMinutes + VISIBILITY_DELAY_MINUTES;
-                                        if (!pastDelay) {
-                                            return null;
-                                        }
-
-                                        const visibleUntil = hasStarted
-                                            ? Math.min(event.startMinutes + event.duration, currentMinutes)
-                                            : undefined;
-
-                                        return (
-                                            <TimeEventBlock
-                                                key={event.id}
-                                                event={event}
-                                                visibleUntilMinutes={visibleUntil}
-                                                onPress={(evt) => handleOpenEditor(evt, 'actual')}
-                                            />
-                                        );
-                                    })}
+                                    {actualEvents.map(event => (
+                                        <TimeEventBlock
+                                            key={event.id}
+                                            event={event}
+                                            onPress={(evt) => handleOpenEditor(evt, 'actual')}
+                                        />
+                                    ))}
                                 </View>
                             </View>
 
@@ -417,7 +422,24 @@ export const ComprehensiveCalendarTemplate = () => {
                 event={editorEvent}
                 visible={isEditorVisible}
                 onClose={handleCloseEditor}
-                column={editorColumn}
+                onSave={(updates) => {
+                    if (!editorEvent) return;
+                    if (editorColumn === 'planned') {
+                        void onUpdatePlannedEvent(editorEvent.id, updates);
+                    } else {
+                        void onUpdateActualEvent(editorEvent.id, updates);
+                    }
+                    handleCloseEditor();
+                }}
+                onDelete={() => {
+                    if (!editorEvent) return;
+                    if (editorColumn === 'planned') {
+                        void onDeletePlannedEvent(editorEvent.id);
+                    } else {
+                        void onDeleteActualEvent(editorEvent.id);
+                    }
+                    handleCloseEditor();
+                }}
             />
 
             <FloatingActionButton bottomOffset={insets.bottom + 82} onPress={handleAddEvent} />

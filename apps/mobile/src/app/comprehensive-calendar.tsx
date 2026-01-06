@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
+import { USE_MOCK_CALENDAR } from '@/lib/config';
+import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
 import { useEventsStore } from '@/stores';
 import {
   getIosInsightsSupportStatus,
@@ -11,14 +14,45 @@ import {
   type ScreenTimeSummary,
 } from '@/lib/ios-insights';
 import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
+import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+import { useAuthStore } from '@/stores';
 
 export default function ComprehensiveCalendarScreen() {
+  const router = useRouter();
   const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
-  const actualEvents = useEventsStore((state) => state.actualEvents);
   const setDerivedActualEvents = useEventsStore((state) => state.setDerivedActualEvents);
+
+  const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
+  const setSelectedDateYmd = useEventsStore((s) => s.setSelectedDateYmd);
+  const plannedEvents = useEventsStore((s) => s.scheduledEvents);
+  const plannedCount = useEventsStore((s) => (s.plannedEventsByDate[s.selectedDateYmd] ?? []).length);
+  const setPlannedEventsForDate = useEventsStore((s) => s.setPlannedEventsForDate);
+
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const updateScheduledEvent = useEventsStore((s) => s.updateScheduledEvent);
+  const removeScheduledEvent = useEventsStore((s) => s.removeScheduledEvent);
+  const setActualDateYmd = useEventsStore((s) => s.setActualDateYmd);
+  const actualDateYmd = useEventsStore((s) => s.actualDateYmd);
+  const actualEvents = useEventsStore((s) => s.actualEvents);
+  const setActualEventsForDate = useEventsStore((s) => s.setActualEventsForDate);
+  const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
+  const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
+
+  const handleCalendarSyncError = useCallback((error: Error) => {
+    if (__DEV__) {
+      console.error('[Calendar] Failed to load planned events:', error.message);
+    }
+  }, []);
+
+  const { loadPlannedForDay, loadActualForDay, updatePlanned, updateActual, deletePlanned, deleteActual } =
+    useCalendarEventsSync({
+      onError: handleCalendarSyncError,
+    });
+
+  const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
 
   const isStale = useCallback((generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
     if (!generatedAtIso) return true;
@@ -26,6 +60,41 @@ export default function ComprehensiveCalendarScreen() {
     if (Number.isNaN(parsed.getTime())) return true;
     return Date.now() - parsed.getTime() > maxAgeMinutes * 60_000;
   }, []);
+
+  useEffect(() => {
+    if (USE_MOCK_CALENDAR) {
+      if (plannedCount > 0) return;
+      setPlannedEventsForDate(selectedDateYmd, getMockPlannedEventsForDay(selectedDateYmd));
+      return;
+    }
+
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const events = await loadPlannedForDay(selectedDateYmd);
+      if (cancelled) return;
+      setPlannedEventsForDate(selectedDateYmd, events);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadPlannedForDay, plannedCount, selectedDateYmd, setPlannedEventsForDate, userId]);
+
+  useEffect(() => {
+    if (actualDateYmd !== selectedDateYmd) {
+      setActualDateYmd(selectedDateYmd);
+    }
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const events = await loadActualForDay(selectedDateYmd);
+      if (cancelled) return;
+      setActualEventsForDate(selectedDateYmd, events);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actualDateYmd, loadActualForDay, selectedDateYmd, setActualDateYmd, setActualEventsForDate, userId]);
 
   const maybeAutoSync = useCallback(async (): Promise<void> => {
     if (Platform.OS !== 'ios') return;
@@ -82,6 +151,112 @@ export default function ComprehensiveCalendarScreen() {
     setDerivedActualEvents(derived);
   }, [actualEvents, setDerivedActualEvents, status, summary, supportStatus]);
 
-  // Keep template unchanged (it reads derivedActualEvents if present).
-  return <ComprehensiveCalendarTemplate />;
+  // Actual events are Supabase-backed (no mock defaults). Screen Time derivation remains separate.
+  const displayActualEvents = actualEvents;
+
+  const openAddEventPicker = useCallback(() => {
+    router.push({ pathname: '/add-event', params: { date: selectedDateYmd, column: 'planned' } });
+  }, [router, selectedDateYmd]);
+
+  return (
+    <ComprehensiveCalendarTemplate
+      selectedDate={selectedDate}
+      plannedEvents={plannedEvents}
+      actualEvents={displayActualEvents}
+      onPrevDay={() => {
+        const prev = new Date(selectedDate);
+        prev.setDate(prev.getDate() - 1);
+        setSelectedDateYmd(dateToYmd(prev));
+      }}
+      onNextDay={() => {
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() + 1);
+        setSelectedDateYmd(dateToYmd(next));
+      }}
+      onAddEvent={openAddEventPicker}
+      onUpdatePlannedEvent={async (eventId, updates) => {
+        const existing = plannedEvents.find((e) => e.id === eventId);
+        if (!existing) return;
+
+        if (USE_MOCK_CALENDAR) {
+          updateScheduledEvent(
+            {
+              ...existing,
+              title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              category: updates.category ?? existing.category,
+              isBig3: updates.isBig3 ?? existing.isBig3,
+            },
+            selectedDateYmd
+          );
+          return;
+        }
+
+        const updated = await updatePlanned(eventId, {
+          title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          meta: {
+            category: updates.category ?? existing.category,
+            isBig3: updates.isBig3 ?? existing.isBig3,
+            source: 'user',
+          },
+        });
+
+        updateScheduledEvent(updated, selectedDateYmd);
+      }}
+      onDeletePlannedEvent={async (eventId) => {
+        if (USE_MOCK_CALENDAR) {
+          removeScheduledEvent(eventId, selectedDateYmd);
+          return;
+        }
+        await deletePlanned(eventId);
+        removeScheduledEvent(eventId, selectedDateYmd);
+      }}
+      onUpdateActualEvent={async (eventId, updates) => {
+        const existing = displayActualEvents.find((e) => e.id === eventId);
+        if (!existing) return;
+
+        if (USE_MOCK_CALENDAR) {
+          updateActualEvent(
+            {
+              ...existing,
+              title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              category: updates.category ?? existing.category,
+              isBig3: updates.isBig3 ?? existing.isBig3,
+            },
+            selectedDateYmd
+          );
+          return;
+        }
+
+        const updated = await updateActual(eventId, {
+          title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          meta: {
+            category: updates.category ?? existing.category,
+            isBig3: updates.isBig3 ?? existing.isBig3,
+            source: 'user',
+          },
+        });
+        updateActualEvent(updated, selectedDateYmd);
+      }}
+      onDeleteActualEvent={async (eventId) => {
+        await deleteActual(eventId);
+        removeActualEvent(eventId, selectedDateYmd);
+      }}
+    />
+  );
+}
+
+function ymdToDate(ymd: string): Date {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return new Date(year, month, day);
+}
+
+function dateToYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }

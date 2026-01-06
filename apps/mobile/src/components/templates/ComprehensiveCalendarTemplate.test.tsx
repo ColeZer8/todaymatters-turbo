@@ -37,7 +37,20 @@ describe.skip('ComprehensiveCalendarTemplate', () => {
     let tree: renderer.ReactTestRenderer;
 
     act(() => {
-      tree = renderer.create(<ComprehensiveCalendarTemplate />);
+      tree = renderer.create(
+        <ComprehensiveCalendarTemplate
+          selectedDate={new Date()}
+          plannedEvents={[]}
+          actualEvents={[]}
+          onPrevDay={() => {}}
+          onNextDay={() => {}}
+          onAddEvent={() => {}}
+          onUpdatePlannedEvent={() => {}}
+          onDeletePlannedEvent={() => {}}
+          onUpdateActualEvent={() => {}}
+          onDeleteActualEvent={() => {}}
+        />
+      );
     });
 
     expect(tree).toBeTruthy();

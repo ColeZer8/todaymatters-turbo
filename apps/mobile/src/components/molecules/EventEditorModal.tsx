@@ -3,7 +3,7 @@ import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
-import { useOnboardingStore, useEventsStore } from '@/stores';
+import { useOnboardingStore } from '@/stores';
 import type { ScheduledEvent, EventCategory } from '@/stores';
 
 // Life areas with icons - simplified from full category list
@@ -27,13 +27,13 @@ interface EventEditorModalProps {
     event: ScheduledEvent | null;
     visible: boolean;
     onClose: () => void;
-    column?: 'planned' | 'actual';
+    onSave?: (updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onDelete?: () => void | Promise<void>;
 }
 
-export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }: EventEditorModalProps) => {
+export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: EventEditorModalProps) => {
     const insets = useSafeAreaInsets();
     const { joySelections, goals, initiatives } = useOnboardingStore();
-    const toggleBig3 = useEventsStore((state) => state.toggleBig3);
     
     // Animated values for backdrop fade and panel slide
     const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -86,11 +86,11 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
     const timeRange = `${formatTime(event.startMinutes)} - ${formatTime(event.startMinutes + event.duration)}`;
     
     const handleSave = () => {
-        // Toggle Big 3 if changed
-        if (isBig3 !== event.isBig3) {
-            toggleBig3(event.id);
-        }
-        onClose();
+        void onSave?.({
+            title: title.trim(),
+            category: selectedCategory,
+            isBig3,
+        });
     };
     
     const handleToggleBig3 = () => {
@@ -270,7 +270,13 @@ export const EventEditorModal = ({ event, visible, onClose, column = 'planned' }
                         </Pressable>
                         
                         <Pressable 
-                            onPress={onClose}
+                            onPress={() => {
+                                if (onDelete) {
+                                    void onDelete();
+                                    return;
+                                }
+                                onClose();
+                            }}
                             className="mt-3 items-center py-3"
                         >
                             <Text className="text-sm font-semibold text-[#CBD5E1]">Delete Event</Text>

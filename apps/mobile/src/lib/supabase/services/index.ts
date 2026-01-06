@@ -1,6 +1,7 @@
 export * from './profile-values';
 export * from './profiles';
 export * from './events';
+export * from './calendar-events';
 export * from './verify-auth';
 export * from './home-brief';
 export * from './routines';

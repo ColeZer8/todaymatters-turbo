@@ -1,7 +1,8 @@
-import { Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { ScreenTimeAnalyticsTemplate } from '@/components/templates';
+import { useDemoStore } from '@/stores';
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -30,6 +31,7 @@ const isStale = (generatedAtIso: string | undefined, maxAgeMinutes: number): boo
 };
 
 export default function DemoScreenTimeScreen() {
+  const isDemoActive = useDemoStore((s) => s.isActive);
   const router = useRouter();
   const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
@@ -159,10 +161,12 @@ export default function DemoScreenTimeScreen() {
   }, [range]);
 
   useEffect(() => {
+    if (!isDemoActive) return;
     void refreshStatusAndCache();
-  }, [refreshStatusAndCache]);
+  }, [isDemoActive, refreshStatusAndCache]);
 
   const onRequestAuthorization = useCallback(async () => {
+    if (!isDemoActive) return;
     setErrorMessage(null);
     try {
       const nextStatus = await requestScreenTimeAuthorizationSafeAsync();
@@ -186,9 +190,10 @@ export default function DemoScreenTimeScreen() {
       setErrorMessage(e instanceof Error ? e.message : String(e));
       setStatus('unknown');
     }
-  }, [refreshStatusAndCache]);
+  }, [isDemoActive, refreshStatusAndCache]);
 
   const maybeAutoSync = useCallback(async () => {
+    if (!isDemoActive) return;
     if (!(supportStatus === 'available' && status === 'approved')) return;
     // Keep it light: only auto-sync if we have no data yet or it's stale.
     const shouldSync = !summary || isStale(summary.generatedAtIso, 15);
@@ -222,11 +227,16 @@ export default function DemoScreenTimeScreen() {
     } finally {
       setIsSyncing(false);
     }
-  }, [range, refreshStatusAndCache, status, summary, supportStatus]);
+  }, [isDemoActive, range, refreshStatusAndCache, status, summary, supportStatus]);
 
   useEffect(() => {
+    if (!isDemoActive) return;
     void maybeAutoSync();
-  }, [maybeAutoSync]);
+  }, [isDemoActive, maybeAutoSync]);
+
+  if (!isDemoActive) {
+    return <Redirect href="/comprehensive-calendar" />;
+  }
 
   return (
     <>

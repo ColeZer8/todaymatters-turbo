@@ -33,9 +33,22 @@ export interface ScheduledEvent {
 }
 
 interface EventsState {
-  /** Planned events (source of truth) */
+  /** Selected day (YYYY-MM-DD) for calendar views */
+  selectedDateYmd: string;
+  /** Planned events keyed by day (YYYY-MM-DD) */
+  plannedEventsByDate: Record<string, ScheduledEvent[]>;
+  /**
+   * Backward-compatible view of planned events for the selected date.
+   * Prefer `plannedEventsByDate[selectedDateYmd]` when writing new code.
+   */
   scheduledEvents: ScheduledEvent[];
   /** Actual events (what really happened) */
+  actualDateYmd: string;
+  actualEventsByDate: Record<string, ScheduledEvent[]>;
+  /**
+   * Backward-compatible view of actual events for the selected actual date.
+   * Prefer `actualEventsByDate[actualDateYmd]` when writing new code.
+   */
   actualEvents: ScheduledEvent[];
   /**
    * Derived Actual events (e.g., inferred from Screen Time) used for display only.
@@ -43,283 +56,214 @@ interface EventsState {
    */
   derivedActualEvents: ScheduledEvent[] | null;
   _hasHydrated: boolean;
+  setSelectedDateYmd: (ymd: string) => void;
+  setPlannedEventsForDate: (ymd: string, events: ScheduledEvent[]) => void;
   setScheduledEvents: (events: ScheduledEvent[]) => void;
   setActualEvents: (events: ScheduledEvent[]) => void;
+  setActualDateYmd: (ymd: string) => void;
+  setActualEventsForDate: (ymd: string, events: ScheduledEvent[]) => void;
   setDerivedActualEvents: (events: ScheduledEvent[] | null) => void;
-  addScheduledEvent: (event: ScheduledEvent) => void;
-  removeScheduledEvent: (id: string) => void;
+  addScheduledEvent: (event: ScheduledEvent, ymd?: string) => void;
+  updateScheduledEvent: (event: ScheduledEvent, ymd?: string) => void;
+  removeScheduledEvent: (id: string, ymd?: string) => void;
+  addActualEvent: (event: ScheduledEvent, ymd?: string) => void;
+  updateActualEvent: (event: ScheduledEvent, ymd?: string) => void;
+  removeActualEvent: (id: string, ymd?: string) => void;
   toggleBig3: (id: string) => void;
 }
 
-// Default PLANNED events - matching ComprehensiveCalendarTemplate
-const DEFAULT_SCHEDULED_EVENTS: ScheduledEvent[] = [
-  {
-    id: 'p_sleep_start',
-    title: 'Sleep',
-    description: 'Target: 7 hours',
-    startMinutes: 0,
-    duration: 7 * 60,
-    category: 'sleep',
-  },
-  {
-    id: 'p_morning',
-    title: 'Morning Routine',
-    description: 'Prayer & Exercise',
-    startMinutes: 7 * 60,
-    duration: 60,
-    category: 'routine',
-  },
-  {
-    id: 'p_deep_work',
-    title: 'Deep Work',
-    description: 'Q4 Strategy Deck',
-    startMinutes: 9 * 60,
-    duration: 180,
-    category: 'work',
-    isBig3: true,
-  },
-  {
-    id: 'p_lunch',
-    title: 'Lunch',
-    description: 'Take a real break',
-    startMinutes: 12 * 60,
-    duration: 60,
-    category: 'meal',
-  },
-  {
-    id: 'p_team_sync',
-    title: 'Team Sync',
-    description: 'Weekly Standup',
-    startMinutes: 13 * 60,
-    duration: 60,
-    category: 'meeting',
-  },
-  {
-    id: 'p_cole_meeting',
-    title: 'Meeting w/ Cole',
-    description: 'Strategy Sync',
-    startMinutes: 15 * 60,
-    duration: 45,
-    category: 'meeting',
-  },
-  {
-    id: 'p_shutdown',
-    title: 'Shutdown Ritual',
-    description: 'Clear inbox',
-    startMinutes: 17 * 60,
-    duration: 30,
-    category: 'routine',
-  },
-  {
-    id: 'p_family',
-    title: 'Family Dinner',
-    description: 'No phones',
-    startMinutes: 18 * 60 + 30,
-    duration: 90,
-    category: 'family',
-  },
-  {
-    id: 'p_sleep',
-    title: 'Sleep',
-    description: 'Target: 10 PM',
-    startMinutes: 22 * 60,
-    duration: 2 * 60,
-    category: 'sleep',
-  },
-];
+// Default ACTUAL events - source of truth is Supabase. No mock defaults.
+const DEFAULT_ACTUAL_EVENTS: ScheduledEvent[] = [];
 
-// Default ACTUAL events - what really happened
-const DEFAULT_ACTUAL_EVENTS: ScheduledEvent[] = [
-  {
-    id: 'a_sleep',
-    title: 'Sleep',
-    description: 'Overslept 30 min',
-    startMinutes: 0,
-    duration: 7 * 60 + 30,
-    category: 'sleep',
-  },
-  {
-    id: 'a_morning',
-    title: 'Rushed Morning',
-    description: 'Quick routine',
-    startMinutes: 7 * 60 + 30,
-    duration: 30,
-    category: 'routine',
-  },
-  {
-    id: 'a_commute_in',
-    title: 'Commute',
-    description: 'Left late, traffic',
-    startMinutes: 8 * 60,
-    duration: 45,
-    category: 'travel',
-  },
-  {
-    id: 'a_coffee',
-    title: 'Coffee Stop',
-    description: 'Quick Starbucks',
-    startMinutes: 8 * 60 + 45,
-    duration: 15,
-    category: 'meal',
-  },
-  {
-    id: 'a_deep_work_1',
-    title: 'Deep Work',
-    description: 'Q4 Strategy Deck',
-    startMinutes: 9 * 60,
-    duration: 150,
-    category: 'work',
-  },
-  {
-    id: 'a_unknown_1',
-    title: 'Unknown',
-    description: 'Tap to assign',
-    startMinutes: 11 * 60 + 30,
-    duration: 30,
-    category: 'unknown',
-  },
-  {
-    id: 'a_lunch',
-    title: 'Lunch',
-    description: 'With coworkers',
-    startMinutes: 12 * 60,
-    duration: 50,
-    category: 'meal',
-  },
-  {
-    id: 'a_team_sync',
-    title: 'Team Sync',
-    description: 'Ran 15 min over',
-    startMinutes: 13 * 60,
-    duration: 75,
-    category: 'meeting',
-  },
-  {
-    id: 'a_unknown_2',
-    title: 'Unknown',
-    description: 'Tap to assign',
-    startMinutes: 14 * 60 + 15,
-    duration: 45,
-    category: 'unknown',
-  },
-  {
-    id: 'a_cole_meeting',
-    title: 'Meeting w/ Cole',
-    description: 'Ran 30 min over!',
-    startMinutes: 15 * 60,
-    duration: 75,
-    category: 'meeting',
-  },
-  {
-    id: 'a_wrap_up',
-    title: 'Wrap Up',
-    description: 'Emails only',
-    startMinutes: 16 * 60 + 15,
-    duration: 45,
-    category: 'work',
-  },
-  {
-    id: 'a_commute_home',
-    title: 'Commute Home',
-    description: 'Rush hour traffic',
-    startMinutes: 17 * 60,
-    duration: 50,
-    category: 'travel',
-  },
-  {
-    id: 'a_errands',
-    title: 'Quick Errands',
-    description: 'Grocery stop',
-    startMinutes: 17 * 60 + 50,
-    duration: 25,
-    category: 'routine',
-  },
-  {
-    id: 'a_family',
-    title: 'Family Dinner',
-    description: 'Made it!',
-    startMinutes: 18 * 60 + 15,
-    duration: 105,
-    category: 'family',
-  },
-  {
-    id: 'a_screen_time',
-    title: 'Screen Time',
-    description: 'YouTube rabbit hole',
-    startMinutes: 20 * 60,
-    duration: 90,
-    category: 'digital',
-  },
-  {
-    id: 'a_wind_down',
-    title: 'Wind Down',
-    description: 'Finally relaxed',
-    startMinutes: 21 * 60 + 30,
-    duration: 60,
-    category: 'routine',
-  },
-  {
-    id: 'a_sleep_end',
-    title: 'Sleep',
-    description: '30 min late',
-    startMinutes: 22 * 60 + 30,
-    duration: 90,
-    category: 'sleep',
-  },
-];
+function getTodayYmd(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizePlanned(events: ScheduledEvent[]): ScheduledEvent[] {
+  return [...events].sort((a, b) => a.startMinutes - b.startMinutes);
+}
 
 export const useEventsStore = create<EventsState>()(
   persist(
     (set) => ({
-      scheduledEvents: DEFAULT_SCHEDULED_EVENTS,
+      selectedDateYmd: getTodayYmd(),
+      plannedEventsByDate: {},
+      scheduledEvents: [],
+      actualDateYmd: getTodayYmd(),
+      actualEventsByDate: {},
       actualEvents: DEFAULT_ACTUAL_EVENTS,
       derivedActualEvents: null,
       _hasHydrated: false,
 
+      setSelectedDateYmd: (ymd) =>
+        set((state) => {
+          if (state.selectedDateYmd === ymd) return {};
+          return {
+            selectedDateYmd: ymd,
+            scheduledEvents: state.plannedEventsByDate[ymd] ?? [],
+          };
+        }),
+
+      setPlannedEventsForDate: (ymd, events) =>
+        set((state) => {
+          const normalized = normalizePlanned(events);
+          const nextByDate = { ...state.plannedEventsByDate, [ymd]: normalized };
+          const isSelected = ymd === state.selectedDateYmd;
+          return {
+            plannedEventsByDate: nextByDate,
+            scheduledEvents: isSelected ? normalized : state.scheduledEvents,
+          };
+        }),
+
       setScheduledEvents: (events) => set({ scheduledEvents: events }),
       setActualEvents: (events) => set({ actualEvents: events }),
+      setActualDateYmd: (ymd) =>
+        set((state) => {
+          if (state.actualDateYmd === ymd) return {};
+          return {
+            actualDateYmd: ymd,
+            actualEvents: state.actualEventsByDate[ymd] ?? [],
+          };
+        }),
+      setActualEventsForDate: (ymd, events) =>
+        set((state) => {
+          const normalized = normalizePlanned(events);
+          const nextByDate = { ...state.actualEventsByDate, [ymd]: normalized };
+          const isSelected = ymd === state.actualDateYmd;
+          return {
+            actualEventsByDate: nextByDate,
+            actualEvents: isSelected ? normalized : state.actualEvents,
+          };
+        }),
       setDerivedActualEvents: (events) => set({ derivedActualEvents: events }),
 
-      addScheduledEvent: (event) =>
-        set((state) => ({
-          scheduledEvents: [...state.scheduledEvents, event].sort(
-            (a, b) => a.startMinutes - b.startMinutes
-          ),
-        })),
+      addScheduledEvent: (event, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.selectedDateYmd;
+          const prev = state.plannedEventsByDate[targetYmd] ?? [];
+          const nextList = normalizePlanned([...prev, event]);
+          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.selectedDateYmd;
+          return {
+            plannedEventsByDate: nextByDate,
+            scheduledEvents: isSelected ? nextList : state.scheduledEvents,
+          };
+        }),
 
-      removeScheduledEvent: (id) =>
-        set((state) => ({
-          scheduledEvents: state.scheduledEvents.filter((e) => e.id !== id),
-        })),
+      updateScheduledEvent: (event, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.selectedDateYmd;
+          const prev = state.plannedEventsByDate[targetYmd] ?? [];
+          const nextList = normalizePlanned(prev.map((e) => (e.id === event.id ? event : e)));
+          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.selectedDateYmd;
+          return {
+            plannedEventsByDate: nextByDate,
+            scheduledEvents: isSelected ? nextList : state.scheduledEvents,
+          };
+        }),
+
+      removeScheduledEvent: (id, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.selectedDateYmd;
+          const prev = state.plannedEventsByDate[targetYmd] ?? [];
+          const nextList = prev.filter((e) => e.id !== id);
+          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.selectedDateYmd;
+          return {
+            plannedEventsByDate: nextByDate,
+            scheduledEvents: isSelected ? nextList : state.scheduledEvents,
+          };
+        }),
+
+      addActualEvent: (event, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.actualDateYmd;
+          const prev = state.actualEventsByDate[targetYmd] ?? [];
+          const nextList = normalizePlanned([...prev, event]);
+          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.actualDateYmd;
+          return {
+            actualEventsByDate: nextByDate,
+            actualEvents: isSelected ? nextList : state.actualEvents,
+          };
+        }),
+
+      updateActualEvent: (event, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.actualDateYmd;
+          const prev = state.actualEventsByDate[targetYmd] ?? [];
+          const nextList = normalizePlanned(prev.map((e) => (e.id === event.id ? event : e)));
+          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.actualDateYmd;
+          return {
+            actualEventsByDate: nextByDate,
+            actualEvents: isSelected ? nextList : state.actualEvents,
+          };
+        }),
+
+      removeActualEvent: (id, ymd) =>
+        set((state) => {
+          const targetYmd = ymd ?? state.actualDateYmd;
+          const prev = state.actualEventsByDate[targetYmd] ?? [];
+          const nextList = prev.filter((e) => e.id !== id);
+          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const isSelected = targetYmd === state.actualDateYmd;
+          return {
+            actualEventsByDate: nextByDate,
+            actualEvents: isSelected ? nextList : state.actualEvents,
+          };
+        }),
 
       toggleBig3: (id) =>
         set((state) => ({
-          scheduledEvents: state.scheduledEvents.map((e) =>
-            e.id === id ? { ...e, isBig3: !e.isBig3 } : e
-          ),
+          plannedEventsByDate: {
+            ...state.plannedEventsByDate,
+            [state.selectedDateYmd]: (state.plannedEventsByDate[state.selectedDateYmd] ?? []).map((e) =>
+              e.id === id ? { ...e, isBig3: !e.isBig3 } : e
+            ),
+          },
+          scheduledEvents: state.scheduledEvents.map((e) => (e.id === id ? { ...e, isBig3: !e.isBig3 } : e)),
         })),
     }),
     {
       name: 'events-storage',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
-        scheduledEvents: state.scheduledEvents,
-        actualEvents: state.actualEvents,
+        selectedDateYmd: state.selectedDateYmd,
+        plannedEventsByDate: state.plannedEventsByDate,
+        actualDateYmd: state.actualDateYmd,
+        actualEventsByDate: state.actualEventsByDate,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as {
-          scheduledEvents?: ScheduledEvent[];
-          actualEvents?: ScheduledEvent[];
+          selectedDateYmd?: string;
+          plannedEventsByDate?: Record<string, ScheduledEvent[]>;
+          actualDateYmd?: string;
+          actualEventsByDate?: Record<string, ScheduledEvent[]>;
         } | undefined;
 
         if (!persisted) {
           return { ...currentState, _hasHydrated: true };
         }
 
+        const selectedDateYmd = persisted.selectedDateYmd ?? currentState.selectedDateYmd;
+        const plannedEventsByDate = persisted.plannedEventsByDate ?? currentState.plannedEventsByDate;
+        const actualDateYmd = persisted.actualDateYmd ?? currentState.actualDateYmd;
+        const actualEventsByDate = persisted.actualEventsByDate ?? currentState.actualEventsByDate;
+
         return {
           ...currentState,
-          scheduledEvents: persisted.scheduledEvents ?? currentState.scheduledEvents,
-          actualEvents: persisted.actualEvents ?? currentState.actualEvents,
+          selectedDateYmd,
+          plannedEventsByDate,
+          scheduledEvents: plannedEventsByDate[selectedDateYmd] ?? [],
+          actualDateYmd,
+          actualEventsByDate,
+          actualEvents: actualEventsByDate[actualDateYmd] ?? [],
           _hasHydrated: true,
         };
       },

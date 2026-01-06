@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
+import type { EventCategory } from '@/stores';
 import { DatePickerPopup } from '../molecules/DatePickerPopup';
 import { TimePickerModal } from '../organisms/TimePickerModal';
 
 // Life areas with icons - same as EventEditorModal
-const LIFE_AREAS = [
+const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
     { id: 'routine', label: 'Faith', icon: Sun },
     { id: 'family', label: 'Family', icon: Heart },
     { id: 'work', label: 'Work', icon: Briefcase },
@@ -29,17 +29,31 @@ const formatTime = (date: Date) => {
     return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
-export const AddEventTemplate = () => {
+interface AddEventDraft {
+    title: string;
+    category: EventCategory;
+    isBig3: boolean;
+    selectedDate: Date;
+    startTime: Date;
+    endTime: Date;
+}
+
+interface AddEventTemplateProps {
+    initialDate: Date;
+    onClose: () => void;
+    onSave: (draft: AddEventDraft) => void | Promise<void>;
+}
+    
+export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTemplateProps) => {
     const insets = useSafeAreaInsets();
-    const router = useRouter();
     const { joySelections, goals, initiatives } = useOnboardingStore();
     
     // Local draft state
-    const [selectedCategory, setSelectedCategory] = useState('work');
+    const [selectedCategory, setSelectedCategory] = useState<EventCategory>('work');
     const [isBig3, setIsBig3] = useState(false);
     const [selectedValue, setSelectedValue] = useState<string | null>(null);
     const [title, setTitle] = useState('');
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(initialDate);
     const [startTime, setStartTime] = useState(() => {
         const date = new Date();
         date.setHours(9, 30, 0, 0);
@@ -67,13 +81,18 @@ export const AddEventTemplate = () => {
     const timeRange = `${formatTime(startTime)} - ${formatTime(endTime)}`;
     
     const handleClose = () => {
-        router.back();
+        onClose();
     };
     
     const handleSave = () => {
-        // TODO: Save event logic
-        console.log('Saving new event:', { title, selectedCategory, isBig3, selectedValue });
-        router.back();
+        void onSave({
+            title,
+            category: selectedCategory,
+            isBig3,
+            selectedDate,
+            startTime,
+            endTime,
+        });
     };
     
     const handleToggleBig3 = () => {
@@ -246,7 +265,7 @@ export const AddEventTemplate = () => {
                     onPress={handleClose}
                     className="mt-3 items-center py-3"
                 >
-                    <Text className="text-sm font-semibold text-[#CBD5E1]">Delete Event</Text>
+                    <Text className="text-sm font-semibold text-[#CBD5E1]">Cancel</Text>
                 </Pressable>
             </View>
             

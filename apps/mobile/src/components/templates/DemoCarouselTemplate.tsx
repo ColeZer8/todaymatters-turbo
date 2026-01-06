@@ -25,6 +25,7 @@ import {
 import type { LucideIcon } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { useDemoStore, TIME_PRESETS, type TimeOfDay } from '@/stores';
+import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
 
 // Import templates for the demo
 import { HomeTemplate } from './HomeTemplate';
@@ -61,6 +62,25 @@ interface DemoSlide {
   component: React.ReactNode;
 }
 
+function DemoCalendarSlide() {
+  const today = new Date();
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return (
+    <ComprehensiveCalendarTemplate
+      selectedDate={today}
+      plannedEvents={getMockPlannedEventsForDay(ymd)}
+      actualEvents={[]}
+      onPrevDay={() => {}}
+      onNextDay={() => {}}
+      onAddEvent={() => {}}
+      onUpdatePlannedEvent={() => {}}
+      onDeletePlannedEvent={() => {}}
+      onUpdateActualEvent={() => {}}
+      onDeleteActualEvent={() => {}}
+    />
+  );
+}
+
 // Demo slides configuration
 const DEMO_SLIDES: DemoSlide[] = [
   {
@@ -84,7 +104,7 @@ const DEMO_SLIDES: DemoSlide[] = [
     id: 'calendar',
     title: 'Planned vs Actual',
     description: 'Side-by-side view comparing your plan to what actually happened',
-    component: <ComprehensiveCalendarTemplate />,
+    component: <DemoCalendarSlide />,
   },
   {
     id: 'analytics',

@@ -1,5 +1,5 @@
-import { CalendarTemplate } from '../components/templates/CalendarTemplate';
+import { Redirect } from 'expo-router';
 
 export default function CalendarScreen() {
-    return <CalendarTemplate />;
+    return <Redirect href="/comprehensive-calendar" />;
 }
