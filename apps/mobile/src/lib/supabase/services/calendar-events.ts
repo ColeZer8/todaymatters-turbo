@@ -13,8 +13,10 @@ type TmEventUpdate = Database['tm']['Tables']['events']['Update'];
 export interface PlannedCalendarMeta extends Record<string, Json> {
   category: EventCategory;
   isBig3?: boolean;
-  source?: 'user';
+  source?: 'user' | 'system';
   plannedEventId?: string;
+  kind?: 'sleep_schedule';
+  startYmd?: string;
 }
 
 function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
@@ -40,8 +42,57 @@ function addDays(date: Date, days: number): Date {
   return next;
 }
 
+function ymdToDate(ymd: string): Date {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return new Date(year, month, day);
+}
+
+function parseTimeIsoToHoursMinutes(timeIso: string): { hours: number; minutes: number } {
+  const parsed = new Date(timeIso);
+  if (Number.isNaN(parsed.getTime())) return { hours: 22, minutes: 30 };
+  return { hours: parsed.getHours(), minutes: parsed.getMinutes() };
+}
+
 function dateToMinutesFromMidnightLocal(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
+}
+
+function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date): ScheduledEvent | null {
+  if (!row.id) return null;
+  if (!row.scheduled_start || !row.scheduled_end) return null;
+  const start = new Date(row.scheduled_start);
+  const end = new Date(row.scheduled_end);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+
+  // Clip to the visible day window so cross-midnight events render correctly on both days.
+  const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
+  const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
+  const clippedStartMs = clippedStart.getTime();
+  const clippedEndMs = clippedEnd.getTime();
+  if (clippedEndMs <= clippedStartMs) return null;
+
+  const startMinutes = Math.max(0, Math.round((clippedStartMs - dayStart.getTime()) / 60_000));
+  const duration = Math.max(Math.round((clippedEndMs - clippedStartMs) / 60_000), 1);
+
+  const meta = row.meta as Json;
+  const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
+  const category = (metaParsed?.category ?? 'work') as EventCategory;
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? '',
+    startMinutes,
+    duration,
+    category,
+    isBig3: metaParsed?.isBig3 ?? false,
+  };
 }
 
 function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
@@ -84,14 +135,15 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
       .select('*')
       .eq('user_id', userId)
       .eq('type', PLANNED_EVENT_TYPE)
-      .gte('scheduled_start', startIso)
+      // Include events that overlap the day (handles cross-midnight sleep blocks).
       .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso)
       .order('scheduled_start', { ascending: true });
 
     if (error) throw handleSupabaseError(error);
 
     return (data ?? [])
-      .map((row) => rowToScheduledEvent(row as TmEventRow))
+      .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
       .filter((e): e is ScheduledEvent => !!e)
       .sort((a, b) => a.startMinutes - b.startMinutes);
   } catch (error) {
@@ -112,14 +164,15 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
       .select('*')
       .eq('user_id', userId)
       .eq('type', ACTUAL_EVENT_TYPE)
-      .gte('scheduled_start', startIso)
+      // Include events that overlap the day (supports cross-midnight actual blocks too).
       .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso)
       .order('scheduled_start', { ascending: true });
 
     if (error) throw handleSupabaseError(error);
 
     return (data ?? [])
-      .map((row) => rowToScheduledEvent(row as TmEventRow))
+      .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
       .filter((e): e is ScheduledEvent => !!e)
       .sort((a, b) => a.startMinutes - b.startMinutes);
   } catch (error) {
@@ -182,6 +235,114 @@ export async function createActualCalendarEvent(input: CreateActualCalendarEvent
     if (!mapped) {
       throw new Error('Failed to map created actual event');
     }
+    return mapped;
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+export interface EnsureSleepScheduleInput {
+  userId: string;
+  startYmd: string;
+  wakeTimeIso: string;
+  sleepTimeIso: string;
+}
+
+/**
+ * Ensures there is a single "system" sleep schedule planned event for the given start day.
+ * Creates (or updates) a cross-midnight event from sleepTime -> wakeTime.
+ */
+export async function ensurePlannedSleepScheduleForDay(input: EnsureSleepScheduleInput): Promise<ScheduledEvent> {
+  const { userId, startYmd, wakeTimeIso, sleepTimeIso } = input;
+  try {
+    const day = ymdToDate(startYmd);
+    const wake = parseTimeIsoToHoursMinutes(wakeTimeIso);
+    const sleep = parseTimeIsoToHoursMinutes(sleepTimeIso);
+
+    const start = new Date(day);
+    start.setHours(sleep.hours, sleep.minutes, 0, 0);
+
+    const end = new Date(day);
+    end.setHours(wake.hours, wake.minutes, 0, 0);
+
+    const sleepMinutes = sleep.hours * 60 + sleep.minutes;
+    const wakeMinutes = wake.hours * 60 + wake.minutes;
+    if (sleepMinutes >= wakeMinutes) {
+      end.setDate(end.getDate() + 1);
+    }
+
+    const desiredStartIso = start.toISOString();
+    const desiredEndIso = end.toISOString();
+
+    const targetMeta: PlannedCalendarMeta = {
+      category: 'sleep',
+      isBig3: false,
+      source: 'system',
+      kind: 'sleep_schedule',
+      startYmd,
+    };
+
+    const { data: existing, error: existingError } = await supabase
+      .schema('tm')
+      .from('events')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('type', PLANNED_EVENT_TYPE)
+      .eq('meta->>kind', 'sleep_schedule')
+      .eq('meta->>startYmd', startYmd)
+      .maybeSingle();
+
+    if (existingError) throw handleSupabaseError(existingError);
+
+    if (existing?.id) {
+      const needsUpdate =
+        existing.scheduled_start !== desiredStartIso ||
+        existing.scheduled_end !== desiredEndIso ||
+        existing.title !== 'Sleep' ||
+        existing.description !== 'Sleep schedule';
+
+      if (!needsUpdate) {
+        const mapped = rowToScheduledEvent(existing as TmEventRow);
+        if (!mapped) throw new Error('Failed to map existing sleep schedule event');
+        return mapped;
+      }
+
+      const updates: TmEventUpdate = {
+        title: 'Sleep',
+        description: 'Sleep schedule',
+        scheduled_start: desiredStartIso,
+        scheduled_end: desiredEndIso,
+        meta: targetMeta as unknown as Json,
+      };
+
+      const { data, error } = await supabase
+        .schema('tm')
+        .from('events')
+        .update(updates)
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+
+      if (error) throw handleSupabaseError(error);
+      const mapped = rowToScheduledEvent(data as TmEventRow);
+      if (!mapped) throw new Error('Failed to map updated sleep schedule event');
+      return mapped;
+    }
+
+    const insert: TmEventInsert = {
+      user_id: userId,
+      type: PLANNED_EVENT_TYPE,
+      title: 'Sleep',
+      description: 'Sleep schedule',
+      scheduled_start: desiredStartIso,
+      scheduled_end: desiredEndIso,
+      meta: targetMeta as unknown as Json,
+    };
+
+    const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
+    if (error) throw handleSupabaseError(error);
+    const mapped = rowToScheduledEvent(data as TmEventRow);
+    if (!mapped) throw new Error('Failed to map created sleep schedule event');
     return mapped;
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);

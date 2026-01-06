@@ -16,6 +16,8 @@ import {
 import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { useAuthStore } from '@/stores';
+import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
+import { useOnboardingStore } from '@/stores';
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function ComprehensiveCalendarScreen() {
   const setPlannedEventsForDate = useEventsStore((s) => s.setPlannedEventsForDate);
 
   const userId = useAuthStore((s) => s.user?.id ?? null);
+  const wakeTimeIso = useOnboardingStore((s) => s.wakeTime);
+  const sleepTimeIso = useOnboardingStore((s) => s.sleepTime);
   const updateScheduledEvent = useEventsStore((s) => s.updateScheduledEvent);
   const removeScheduledEvent = useEventsStore((s) => s.removeScheduledEvent);
   const setActualDateYmd = useEventsStore((s) => s.setActualDateYmd);
@@ -71,6 +75,19 @@ export default function ComprehensiveCalendarScreen() {
     if (!userId) return;
     let cancelled = false;
     (async () => {
+      // Ensure sleep schedule exists (for today + previous day so morning sleep appears).
+      try {
+        const prev = new Date(selectedDate);
+        prev.setDate(prev.getDate() - 1);
+        const prevYmd = dateToYmd(prev);
+        await ensurePlannedSleepScheduleForDay({ userId, startYmd: prevYmd, wakeTimeIso, sleepTimeIso });
+        await ensurePlannedSleepScheduleForDay({ userId, startYmd: selectedDateYmd, wakeTimeIso, sleepTimeIso });
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[Calendar] Failed to ensure sleep schedule:', error);
+        }
+      }
+
       const events = await loadPlannedForDay(selectedDateYmd);
       if (cancelled) return;
       setPlannedEventsForDate(selectedDateYmd, events);
@@ -78,7 +95,7 @@ export default function ComprehensiveCalendarScreen() {
     return () => {
       cancelled = true;
     };
-  }, [loadPlannedForDay, plannedCount, selectedDateYmd, setPlannedEventsForDate, userId]);
+  }, [loadPlannedForDay, plannedCount, selectedDate, selectedDateYmd, setPlannedEventsForDate, sleepTimeIso, userId, wakeTimeIso]);
 
   useEffect(() => {
     if (actualDateYmd !== selectedDateYmd) {
