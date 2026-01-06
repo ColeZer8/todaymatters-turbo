@@ -62,7 +62,7 @@ export default function SetupQuestionsScreen() {
       selectedOption={role}
       onSelect={setRole}
       onContinue={() => router.replace('/name')}
-      onBack={() => router.replace('/permissions')}
+      onBack={() => router.replace('/connect-google-services')}
       onSkip={() => router.replace('/name')}
     />
   );

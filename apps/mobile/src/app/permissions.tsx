@@ -40,7 +40,7 @@ export default function PermissionsScreen() {
 
   const handleContinue = () => {
     void savePermissions(permissions);
-    router.replace('/setup-questions');
+    router.replace('/connect-google-services');
   };
 
   if (!hasHydrated) {

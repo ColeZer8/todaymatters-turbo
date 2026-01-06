@@ -6,7 +6,8 @@ import { AppState, AppStateStatus } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { handleAuthCallback, refreshSession } from "@/lib/supabase";
-import { useAuthStore } from "@/stores";
+import { handleGoogleServicesOAuthCallback } from "@/lib/google-services-oauth";
+import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
 import { useOnboardingSync } from "@/lib/supabase/hooks";
@@ -17,6 +18,8 @@ export default function Layout() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const { loadOnboardingData } = useOnboardingSync({ autoLoad: false, autoSave: false });
   const didLoadOnboardingForUserRef = useRef<string | null>(null);
+  const setGoogleOAuthProcessing = useGoogleServicesOAuthStore((state) => state.setProcessing);
+  const setGoogleOAuthResult = useGoogleServicesOAuthStore((state) => state.setResult);
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;
@@ -27,6 +30,15 @@ export default function Layout() {
 
     run();
     const cleanupLinks = handleAuthCallback();
+    const cleanupGoogleOAuth = handleGoogleServicesOAuthCallback({
+      onStart: () => setGoogleOAuthProcessing(true),
+      onResult: (result) => {
+        setGoogleOAuthResult(result);
+        if (__DEV__) {
+          console.log("🔗 Google services OAuth result:", result);
+        }
+      },
+    });
 
     // Load onboarding state from Supabase once after auth is ready.
     // This makes onboarding truly "server-backed" (app can be reinstalled and state restored).
@@ -43,9 +55,10 @@ export default function Layout() {
 
     return () => {
       cleanupLinks();
+      cleanupGoogleOAuth();
       unsubscribeAuth?.();
     };
-  }, [initialize]);
+  }, [initialize, setGoogleOAuthProcessing, setGoogleOAuthResult]);
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return;
@@ -98,6 +111,7 @@ export default function Layout() {
         <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
         <Stack.Screen name="permissions" options={{ headerShown: false }} />
+        <Stack.Screen name="connect-google-services" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
         <Stack.Screen name="name" options={{ headerShown: false }} />
         <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />

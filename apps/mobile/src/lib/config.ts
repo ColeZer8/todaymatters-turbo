@@ -1,3 +1,10 @@
+import appConfig from './config/index';
+
+// Default export: centralized app config (from Expo `extra`)
+// This keeps `import appConfig from '@/lib/config'` valid across the codebase
+// even though this file also exports env-driven helpers.
+export default appConfig;
+
 function readEnv(key: string): string | undefined {
   // In Expo/React Native, `process.env` is available at build time.
   // Guard so this doesn’t explode in unusual runtimes.
