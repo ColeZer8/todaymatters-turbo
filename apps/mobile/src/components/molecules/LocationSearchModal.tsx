@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -12,12 +12,12 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { Search, X, Navigation, Video, Mic, MapPin, Briefcase, Home } from 'lucide-react-native';
+import { Search, X, Navigation, Video, Mic, MapPin, Briefcase, Home, Trash2 } from 'lucide-react-native';
 import { Icon } from '../atoms/Icon';
+import { useOnboardingStore } from '@/stores';
+import { useOnboardingSync } from '@/lib/supabase/hooks/use-onboarding-sync';
 
 // Surgical fix: Use a guarded require for expo-location 
-// to prevent "Cannot find native module 'ExpoLocation'" crashes
-// when the native code isn't yet compiled into the binary.
 let Location: any = null;
 try {
     Location = require('expo-location');
@@ -29,24 +29,41 @@ interface LocationResult {
     id: string;
     name: string;
     address: string;
-    type: 'location' | 'video' | 'suggestion';
+    type: 'location' | 'video' | 'suggestion' | 'action';
 }
 
 interface LocationSearchModalProps {
     visible: boolean;
     onClose: () => void;
     onSelect: (location: string) => void;
+    currentLocation?: string;
 }
 
-export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSearchModalProps) => {
+export const LocationSearchModal = ({ visible, onClose, onSelect, currentLocation }: LocationSearchModalProps) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState<LocationResult[]>([]);
     const [loading, setLoading] = useState(false);
+    const [pendingAddressType, setPendingAddressType] = useState<'home' | 'work' | null>(null);
+    const searchInputRef = useRef<TextInput>(null);
+    
+    // Privacy and personalization: Get home/work from store
+    const { homeAddress, workAddress, setHomeAddress, setWorkAddress } = useOnboardingStore();
+    const { saveHomeAddress, saveWorkAddress } = useOnboardingSync({ autoLoad: false });
 
-    // Mock suggestions - in production these would come from user profile
+    // Dynamic suggestions based on what's set
     const suggestions: LocationResult[] = [
-        { id: 'work', name: 'Work', address: '8701 RM-2338, Georgetown TX', type: 'suggestion' },
-        { id: 'home', name: 'Home', address: '455 Logan Rd, Georgetown TX', type: 'suggestion' },
+        { 
+            id: 'work', 
+            name: workAddress ? 'Work' : 'Set Work Address', 
+            address: workAddress || 'Tap to search and save your work address', 
+            type: 'suggestion' 
+        },
+        { 
+            id: 'home', 
+            name: homeAddress ? 'Home' : 'Set Home Address', 
+            address: homeAddress || 'Tap to search and save your home address', 
+            type: 'suggestion' 
+        },
     ];
 
     const searchLocations = async (query: string) => {
@@ -131,29 +148,52 @@ export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSear
 
     const renderItem = ({ item }: { item: LocationResult }) => (
         <Pressable
-            onPress={() => {
-                onSelect(item.type === 'suggestion' ? item.address : item.name + (item.address ? `, ${item.address}` : ''));
+            onPress={async () => {
+                if (item.id === 'clear') {
+                    onSelect('');
+                } else {
+                    const finalLocation = item.type === 'suggestion' ? item.address : item.name + (item.address ? `, ${item.address}` : '');
+                    
+                    // If we were in "Set Home/Work" mode, save it
+                    if (pendingAddressType === 'work') {
+                        setWorkAddress(finalLocation);
+                        void saveWorkAddress(finalLocation);
+                        alert(`Saved "${item.name}" as Work address.`);
+                    } else if (pendingAddressType === 'home') {
+                        setHomeAddress(finalLocation);
+                        void saveHomeAddress(finalLocation);
+                        alert(`Saved "${item.name}" as Home address.`);
+                    }
+
+                    onSelect(finalLocation);
+                }
                 onClose();
             }}
             className="flex-row items-center px-4 py-3 border-b border-[#F2F2F7]"
         >
             <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                item.type === 'suggestion' ? 'bg-[#F2F2F7]' : 
+                item.id === 'clear' ? 'bg-[#FEE2E2]' :
                 item.type === 'video' ? 'bg-[#34C759]' : 'bg-[#F2F2F7]'
             }`}>
                 <Icon 
                     icon={
+                        item.id === 'clear' ? Trash2 :
                         item.type === 'video' ? Video : 
                         item.id === 'work' ? Briefcase : 
                         item.id === 'home' ? Home : 
                         MapPin
                     } 
                     size={16} 
-                    color={item.type === 'video' ? 'white' : '#8E8E93'} 
+                    color={
+                        item.id === 'clear' ? '#EF4444' :
+                        item.type === 'video' ? 'white' : '#8E8E93'
+                    } 
                 />
             </View>
             <View className="flex-1">
-                <Text className="text-lg font-semibold text-[#111827]">{item.name}</Text>
+                <Text className={`text-lg font-semibold ${item.id === 'clear' ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
+                    {item.name}
+                </Text>
                 {item.address && (
                     <Text className="text-sm text-[#8E8E93]" numberOfLines={1}>{item.address}</Text>
                 )}
@@ -186,6 +226,7 @@ export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSear
                     <View className="flex-row items-center bg-[#E5E5EA] rounded-xl px-3 py-2">
                         <Icon icon={Search} size={18} color="#8E8E93" />
                         <TextInput
+                            ref={searchInputRef}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                             placeholder="Enter Location or Video Call"
@@ -203,25 +244,59 @@ export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSear
                         <>
                             {/* Suggestions */}
                             <View className="mt-2 bg-white">
-                                {suggestions.map((item) => (
+                                {suggestions.map((item) => {
+                                    const isWork = item.id === 'work';
+                                    const addr = isWork ? workAddress : homeAddress;
+                                    
+                                    return (
+                                        <Pressable
+                                            key={item.id}
+                                            onPress={async () => {
+                                                if (!addr) {
+                                                    // Enter "Set Mode" and focus search bar
+                                                    setPendingAddressType(isWork ? 'work' : 'home');
+                                                    searchInputRef.current?.focus();
+                                                    return;
+                                                }
+                                                
+                                                onSelect(addr);
+                                                onClose();
+                                            }}
+                                            className="flex-row items-center px-4 py-3 border-b border-[#F2F2F7]"
+                                        >
+                                            <View className={`w-8 h-8 rounded-full bg-[#F2F2F7] items-center justify-center mr-3 ${
+                                                pendingAddressType === (isWork ? 'work' : 'home') ? 'border-2 border-[#3B82F6]' : ''
+                                            }`}>
+                                                <Icon icon={isWork ? Briefcase : Home} size={16} color={pendingAddressType === (isWork ? 'work' : 'home') ? '#3B82F6' : '#8E8E93'} />
+                                            </View>
+                                            <View className="flex-1">
+                                                <Text className="text-lg font-semibold text-[#111827]">{item.name}</Text>
+                                                <Text className={`text-sm ${addr ? 'text-[#8E8E93]' : 'text-[#3B82F6]'}`} numberOfLines={1}>
+                                                    {addr || item.address}
+                                                </Text>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </View>
+
+                            {/* Actions (Clear Location) */}
+                            {currentLocation && (
+                                <View className="mt-2 bg-white">
                                     <Pressable
-                                        key={item.id}
                                         onPress={() => {
-                                            onSelect(item.address);
+                                            onSelect('');
                                             onClose();
                                         }}
-                                        className="flex-row items-center px-4 py-3 border-b border-[#F2F2F7]"
+                                        className="flex-row items-center px-4 py-4 border-b border-[#F2F2F7]"
                                     >
-                                        <View className="w-8 h-8 rounded-full bg-[#F2F2F7] items-center justify-center mr-3">
-                                            <Icon icon={item.id === 'work' ? Briefcase : Home} size={16} color="#8E8E93" />
+                                        <View className="w-8 h-8 rounded-full bg-[#FEE2E2] items-center justify-center mr-3">
+                                            <Icon icon={Trash2} size={16} color="#EF4444" />
                                         </View>
-                                        <View className="flex-1">
-                                            <Text className="text-lg font-semibold text-[#111827]">{item.name}</Text>
-                                            <Text className="text-sm text-[#8E8E93]" numberOfLines={1}>{item.address}</Text>
-                                        </View>
+                                        <Text className="text-lg text-[#EF4444] font-semibold">Remove Location</Text>
                                     </Pressable>
-                                ))}
-                            </View>
+                                </View>
+                            )}
 
                             {/* Current Location */}
                             <Pressable 
@@ -240,7 +315,7 @@ export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSear
                             </View>
                             <Pressable 
                                 onPress={() => {
-                                    onSelect('FaceTime');
+                                    onSelect('Video Call');
                                     onClose();
                                 }}
                                 className="flex-row items-center px-4 py-3 bg-white"
@@ -248,7 +323,7 @@ export const LocationSearchModal = ({ visible, onClose, onSelect }: LocationSear
                                 <View className="w-8 h-8 rounded-full bg-[#34C759] items-center justify-center mr-3">
                                     <Icon icon={Video} size={16} color="white" />
                                 </View>
-                                <Text className="text-lg text-[#111827] font-semibold">FaceTime</Text>
+                                <Text className="text-lg text-[#111827] font-semibold">Video Call</Text>
                             </Pressable>
                         </>
                     )}

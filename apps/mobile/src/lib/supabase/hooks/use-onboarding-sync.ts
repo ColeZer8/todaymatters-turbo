@@ -57,6 +57,8 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const focusStyle = useOnboardingStore((s) => s.focusStyle);
   const coachPersona = useOnboardingStore((s) => s.coachPersona);
   const morningMindset = useOnboardingStore((s) => s.morningMindset);
+  const homeAddress = useOnboardingStore((s) => s.homeAddress);
+  const workAddress = useOnboardingStore((s) => s.workAddress);
   const goals = useOnboardingStore((s) => s.goals);
   const initiatives = useOnboardingStore((s) => s.initiatives);
 
@@ -73,6 +75,8 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setFocusStyle = useOnboardingStore((s) => s.setFocusStyle);
   const setCoachPersona = useOnboardingStore((s) => s.setCoachPersona);
   const setMorningMindset = useOnboardingStore((s) => s.setMorningMindset);
+  const setHomeAddress = useOnboardingStore((s) => s.setHomeAddress);
+  const setWorkAddress = useOnboardingStore((s) => s.setWorkAddress);
   const setGoals = useOnboardingStore((s) => s.setGoals);
   const setInitiatives = useOnboardingStore((s) => s.setInitiatives);
 
@@ -145,6 +149,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         }
         if (preferences.morning_mindset) {
           setMorningMindset(preferences.morning_mindset);
+        }
+        if (preferences.home_address) {
+          setHomeAddress(preferences.home_address);
+        }
+        if (preferences.work_address) {
+          setWorkAddress(preferences.work_address);
         }
       }
 
@@ -220,6 +230,8 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         focus_style: focusStyle,
         coach_persona: coachPersona,
         morning_mindset: morningMindset,
+        home_address: homeAddress,
+        work_address: workAddress,
       });
 
       // Save goals and initiatives
@@ -402,6 +414,30 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     [isAuthenticated, user?.id, onError]
   );
 
+  const saveHomeAddress = useCallback(
+    async (address: string | null) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfilePreferences(user.id, { home_address: address });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save home address'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveWorkAddress = useCallback(
+    async (address: string | null) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfilePreferences(user.id, { work_address: address });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save work address'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
   // Auto-load on mount if enabled
   useEffect(() => {
     if (autoLoad && isAuthenticated && user?.id) {
@@ -425,6 +461,8 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     saveMorningMindset,
     saveDailyRhythm,
     savePurpose,
+    saveHomeAddress,
+    saveWorkAddress,
   };
 }
 

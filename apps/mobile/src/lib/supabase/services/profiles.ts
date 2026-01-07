@@ -24,6 +24,8 @@ export interface ProfilePreferences extends Record<string, Json> {
   coach_persona?: string | null;
   morning_mindset?: string | null;
   ideal_day_day_type?: 'weekdays' | 'saturday' | 'sunday' | 'custom' | null;
+  home_address?: string | null;
+  work_address?: string | null;
 }
 
 /**

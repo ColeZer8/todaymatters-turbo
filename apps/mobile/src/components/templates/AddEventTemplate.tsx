@@ -394,6 +394,7 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
                 visible={showLocationPicker}
                 onClose={() => setShowLocationPicker(false)}
                 onSelect={setLocation}
+                currentLocation={location}
             />
         </View>
     );

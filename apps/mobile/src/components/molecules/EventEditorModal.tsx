@@ -401,6 +401,7 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                 visible={showLocationPicker}
                 onClose={() => setShowLocationPicker(false)}
                 onSelect={setLocation}
+                currentLocation={location}
             />
         </Modal>
     );

@@ -49,6 +49,8 @@ interface OnboardingState {
 
   // Step 9: Morning Mindset
   morningMindset: string | null;
+  homeAddress: string | null;
+  workAddress: string | null;
 
   // Step 10: Goals
   goals: string[];
@@ -80,6 +82,8 @@ interface OnboardingState {
   setFocusStyle: (style: string | null) => void;
   setCoachPersona: (persona: string | null) => void;
   setMorningMindset: (mindset: string | null) => void;
+  setHomeAddress: (address: string | null) => void;
+  setWorkAddress: (address: string | null) => void;
   setGoals: (goals: string[]) => void;
   addGoal: () => void;
   removeGoal: (index: number) => void;
@@ -141,6 +145,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       focusStyle: 'flow',
       coachPersona: 'strategist',
       morningMindset: 'slow',
+      homeAddress: null,
+      workAddress: null,
       goals: ['Launch MVP', 'Run 5k'],
       initiatives: ['Q4 Strategy', 'Team Hiring'],
       hasCompletedOnboarding: false,
@@ -203,6 +209,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       setFocusStyle: (style) => set({ focusStyle: style }),
       setCoachPersona: (persona) => set({ coachPersona: persona }),
       setMorningMindset: (mindset) => set({ morningMindset: mindset }),
+      setHomeAddress: (address) => set({ homeAddress: address }),
+      setWorkAddress: (address) => set({ workAddress: address }),
 
       setGoals: (goals) => set({ goals }),
       addGoal: () => set((state) => ({ goals: [...state.goals, ''] })),
