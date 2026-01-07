@@ -1,8 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, Text, TouchableOpacity, LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+    runOnJS,
+    cancelAnimation,
+    useAnimatedReaction,
+} from 'react-native-reanimated';
 import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
@@ -57,11 +67,11 @@ const CATEGORY_STYLES: Record<string, { bg: string; accent: string; text: string
 
 // Helper to calculate position
 const getCurrentMinutes = () => {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
+    return new Date().getHours() * 60 + new Date().getMinutes();
 };
 
 const formatMinutesLabel = (minutes: number) => {
+    'worklet';
     const hrs = Math.floor(minutes / 60);
     const mins = minutes % 60;
     const suffix = hrs >= 12 ? 'p' : 'a';
@@ -70,6 +80,7 @@ const formatMinutesLabel = (minutes: number) => {
 };
 
 const getPosition = (startMinutes: number, duration: number) => {
+    'worklet';
     const startOffset = startMinutes - START_HOUR * 60;
     const rawTop = (startOffset / 60) * HOUR_HEIGHT;
     const rawHeight = (duration / 60) * HOUR_HEIGHT;
@@ -200,10 +211,10 @@ interface ComprehensiveCalendarTemplateProps {
     actualEvents: ScheduledEvent[];
     onPrevDay: () => void;
     onNextDay: () => void;
-    onAddEvent: () => void;
-    onUpdatePlannedEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onAddEvent: (column?: 'planned' | 'actual', startMinutes?: number) => void;
+    onUpdatePlannedEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
     onDeletePlannedEvent: (eventId: string) => void | Promise<void>;
-    onUpdateActualEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onUpdateActualEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
     onDeleteActualEvent: (eventId: string) => void | Promise<void>;
 }
 
@@ -229,20 +240,105 @@ export const ComprehensiveCalendarTemplate = ({
     const [editorEvent, setEditorEvent] = useState<ScheduledEvent | null>(null);
     const [editorColumn, setEditorColumn] = useState<'planned' | 'actual'>('planned');
     const [isEditorVisible, setIsEditorVisible] = useState(false);
+    const [isScrollEnabled, setIsScrollEnabled] = useState(true);
 
     // Demo mode support - use simulated time when active
     const isDemoActive = useDemoStore((state) => state.isActive);
     const simulatedHour = useDemoStore((state) => state.simulatedHour);
     const simulatedMinute = useDemoStore((state) => state.simulatedMinute);
-    
+
     // Use simulated time in demo mode, real time otherwise
-    const currentMinutes = isDemoActive 
-        ? (simulatedHour * 60 + simulatedMinute) 
+    const currentMinutes = isDemoActive
+        ? (simulatedHour * 60 + simulatedMinute)
         : realMinutes;
 
-    const handleAddEvent = () => {
-        onAddEvent();
-    };
+    // Shared values for dragging new event
+    const isDraggingNew = useSharedValue(false);
+    const dragMinutes = useSharedValue(0);
+    const dragColumnIndex = useSharedValue(0); // 0 = planned, 1 = actual
+    const gridLayoutWidth = useSharedValue(0);
+
+    const [dragTimeLabel, setDragTimeLabel] = useState('');
+
+    const handleAddEvent = useCallback((column?: 'planned' | 'actual', minutes?: number) => {
+        onAddEvent(column, minutes);
+    }, [onAddEvent]);
+
+    const updateDragLabel = useCallback((minutes: number) => {
+        setDragTimeLabel(formatMinutesLabel(minutes));
+    }, []);
+
+    useAnimatedReaction(
+        () => ({
+            minutes: dragMinutes.value,
+            isDragging: isDraggingNew.value
+        }),
+        (data) => {
+            if (data.isDragging) {
+                runOnJS(updateDragLabel)(data.minutes);
+            }
+        }
+    );
+
+    const dragGesture = Gesture.Pan()
+        .activateAfterLongPress(400)
+        .onStart((e) => {
+            'worklet';
+            isDraggingNew.value = true;
+            runOnJS(setIsScrollEnabled)(false);
+
+            const columnWidth = gridLayoutWidth.value / 2;
+            if (columnWidth > 0) {
+                dragColumnIndex.value = e.x > columnWidth ? 1 : 0;
+            }
+
+            const minutes = (e.y / HOUR_HEIGHT) * 60;
+            dragMinutes.value = Math.round(minutes / 15) * 15;
+        })
+        .onUpdate((e) => {
+            'worklet';
+            const y = e.y;
+            const minutes = (y / HOUR_HEIGHT) * 60;
+            dragMinutes.value = Math.round(minutes / 15) * 15;
+
+            const columnWidth = gridLayoutWidth.value / 2;
+            if (columnWidth > 0) {
+                dragColumnIndex.value = e.x > columnWidth ? 1 : 0;
+            }
+        })
+        .onEnd(() => {
+            'worklet';
+            const finalMinutes = dragMinutes.value;
+            const finalColumn = dragColumnIndex.value === 1 ? 'actual' : 'planned';
+            runOnJS(handleAddEvent)(finalColumn, finalMinutes);
+        })
+        .onFinalize(() => {
+            'worklet';
+            isDraggingNew.value = false;
+            runOnJS(setIsScrollEnabled)(true);
+        });
+
+    const shadowBlockStyle = useAnimatedStyle(() => {
+        if (!isDraggingNew.value) return { display: 'none' };
+
+        const { top, height } = getPosition(dragMinutes.value, 15);
+        const columnWidth = gridLayoutWidth.value / 2;
+        const left = dragColumnIndex.value === 0 ? 0 : columnWidth;
+
+        return {
+            display: 'flex',
+            position: 'absolute',
+            top,
+            height,
+            left: left + 3,
+            width: columnWidth - 6,
+            backgroundColor: 'rgba(37, 99, 235, 0.15)',
+            borderLeftWidth: 3,
+            borderLeftColor: COLORS.primary,
+            borderRadius: 6,
+            zIndex: 100,
+        };
+    });
 
     const hours = [];
     for (let i = START_HOUR; i <= END_HOUR; i++) {
@@ -339,6 +435,7 @@ export const ComprehensiveCalendarTemplate = ({
 
                 <ScrollView
                     ref={scrollViewRef}
+                    scrollEnabled={isScrollEnabled}
                     style={styles.scrollView}
                     contentContainerStyle={{
                         height: contentHeight,
@@ -354,50 +451,76 @@ export const ComprehensiveCalendarTemplate = ({
                     <View style={[styles.gridRow, { height: GRID_HEIGHT }]}>
                         {/* Time Column */}
                         <View style={styles.timeColumn}>
-                {hours.map((hour) => (
-                    <View key={hour} style={styles.timeSlot}>
-                        <Text style={styles.timeLabel}>
-                            {hour === 0
-                                ? '12a'
-                                : hour === 12
-                                    ? '12p'
-                                    : hour > 12
-                                        ? `${hour - 12}p`
-                                        : `${hour}a`}
-                        </Text>
-                    </View>
-                ))}
+                {hours.map((hour) => {
+                    const isCurrentHour = Math.floor(currentMinutes / 60) === hour;
+                    return (
+                        <View key={hour} style={styles.timeSlot}>
+                            {!isCurrentHour && (
+                                <Text style={styles.timeLabel}>
+                                    {hour === 0
+                                        ? '12a'
+                                        : hour === 12
+                                            ? '12p'
+                                            : hour > 12
+                                                ? `${hour - 12}p`
+                                                : `${hour}a`}
+                                </Text>
+                            )}
+                        </View>
+                    );
+                })}
                         </View>
 
                         {/* Grid Container */}
-                        <View style={styles.gridContainer}>
+                        <View 
+                            style={styles.gridContainer}
+                            onLayout={(e) => {
+                                gridLayoutWidth.value = e.nativeEvent.layout.width;
+                            }}
+                        >
                             {/* Base grid for spacing */}
                             {hours.map((hour) => (
                                 <View key={`grid-${hour}`} style={styles.gridLine} />
                             ))}
 
                             {/* Events Layer */}
-                            <View style={styles.eventsContainer}>
-                                <View style={styles.column}>
-                                    {plannedEvents.map(event => (
-                                        <TimeEventBlock
-                                            key={event.id}
-                                            event={event}
-                                            onPress={(evt) => handleOpenEditor(evt, 'planned')}
-                                        />
-                                    ))}
+                            <GestureDetector gesture={dragGesture}>
+                                <View style={styles.eventsContainer}>
+                                    <View style={styles.column}>
+                                        {plannedEvents.map(event => (
+                                            <TimeEventBlock
+                                                key={event.id}
+                                                event={event}
+                                                onPress={(evt) => handleOpenEditor(evt, 'planned')}
+                                            />
+                                        ))}
+                                    </View>
+                                    <View style={styles.columnDivider} />
+                                    <View style={styles.column}>
+                                        {actualEvents.map(event => (
+                                            <TimeEventBlock
+                                                key={event.id}
+                                                event={event}
+                                                onPress={(evt) => handleOpenEditor(evt, 'actual')}
+                                            />
+                                        ))}
+                                    </View>
+
+                                    {/* Shadow block for dragging new event */}
+                                    <Animated.View style={shadowBlockStyle}>
+                                        <View style={{ padding: 4, flex: 1 }}>
+                                            <Text style={{ fontSize: 10, fontWeight: '800', color: COLORS.primary }}>
+                                                New Event
+                                            </Text>
+                                            <Text 
+                                                style={{ fontSize: 9, fontWeight: '600', color: COLORS.primary, opacity: 0.8 }}
+                                            >
+                                                {dragTimeLabel}
+                                            </Text>
+                                        </View>
+                                    </Animated.View>
                                 </View>
-                                <View style={styles.columnDivider} />
-                                <View style={styles.column}>
-                                    {actualEvents.map(event => (
-                                        <TimeEventBlock
-                                            key={event.id}
-                                            event={event}
-                                            onPress={(evt) => handleOpenEditor(evt, 'actual')}
-                                        />
-                                    ))}
-                                </View>
-                            </View>
+                            </GestureDetector>
 
                             {/* Overlay grid lines so they sit above events */}
                             <View pointerEvents="none" style={styles.gridLinesOverlay}>
@@ -410,7 +533,11 @@ export const ComprehensiveCalendarTemplate = ({
                         {/* Current Time Indicator */}
                         {shouldShowCurrentIndicator && (
                             <View style={[styles.currentTimeIndicator, { top: clampedIndicatorTop }]}>
-                                <View style={styles.currentTimeDot} />
+                                <View style={styles.currentTimeLabelContainer}>
+                                    <Text style={styles.currentTimeLabel}>
+                                        {formatMinutesLabel(currentMinutes).replace(/[ap]$/, '')}
+                                    </Text>
+                                </View>
                                 <View style={styles.currentTimeLine} />
                             </View>
                         )}
@@ -627,28 +754,31 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 0,
         right: 0,
-        height: 2,
+        height: 24, // Increased to allow label to be visible
+        marginTop: -12, // Center it on the actual time position
         flexDirection: 'row',
         alignItems: 'center',
-        zIndex: 100,
+        zIndex: 1000,
     },
-    currentTimeDot: {
-        position: 'absolute',
-        left: TIME_COLUMN_WIDTH - 5,
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+    currentTimeLabelContainer: {
         backgroundColor: COLORS.red,
-        shadowColor: COLORS.red,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 3,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 12,
+        marginLeft: 4,
+        minWidth: 44,
+        height: 20, // Explicit height for the pill
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+    },
+    currentTimeLabel: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '800',
     },
     currentTimeLine: {
-        position: 'absolute',
-        left: TIME_COLUMN_WIDTH + 5,
-        right: 0,
+        flex: 1,
         height: 2,
         backgroundColor: COLORS.red,
         borderRadius: 1,

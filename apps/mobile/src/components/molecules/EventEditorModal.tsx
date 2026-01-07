@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated } from 'react-native';
+import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell } from 'lucide-react-native';
+import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, Check } from 'lucide-react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { ScheduledEvent, EventCategory } from '@/stores';
+import { LocationSearchModal } from './LocationSearchModal';
 
-// Life areas with icons - simplified from full category list
+// Life areas with icons - same as AddEventTemplate
 const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
     { id: 'routine', label: 'Faith', icon: Sun },
     { id: 'family', label: 'Family', icon: Heart },
@@ -14,20 +16,27 @@ const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> 
     { id: 'health', label: 'Health', icon: Dumbbell },
 ];
 
-// Helper to format minutes to display time
-const formatTime = (minutes: number): string => {
-    const hours24 = Math.floor(minutes / 60) % 24;
-    const mins = minutes % 60;
-    const period = hours24 >= 12 ? 'PM' : 'AM';
-    const hours12 = hours24 % 12 || 12;
-    return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+const formatDateFull = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+};
+
+const formatTime = (date: Date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
 interface EventEditorModalProps {
     event: ScheduledEvent | null;
     visible: boolean;
     onClose: () => void;
-    onSave?: (updates: { title?: string; category?: EventCategory; isBig3?: boolean }) => void | Promise<void>;
+    onSave?: (updates: { title?: string; location?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
     onDelete?: () => void | Promise<void>;
 }
 
@@ -37,41 +46,71 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
     
     // Animated values for backdrop fade and panel slide
     const backdropOpacity = useRef(new Animated.Value(0)).current;
-    const panelTranslateY = useRef(new Animated.Value(500)).current;
+    const panelTranslateY = useRef(new Animated.Value(1000)).current;
     
+    // Local draft state
+    const [selectedCategory, setSelectedCategory] = useState<EventCategory>('work');
+    const [isBig3, setIsBig3] = useState(false);
+    const [selectedValue, setSelectedValue] = useState<string | null>(null);
+    const [title, setTitle] = useState('');
+    const [location, setLocation] = useState('');
+    
+    // Time/Date state
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [startTime, setStartTime] = useState(new Date());
+    const [endTime, setEndTime] = useState(new Date());
+    
+    // Picker states
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+    const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+    const [showLocationPicker, setShowLocationPicker] = useState(false);
+    const [allDay, setAllDay] = useState(false);
+
     useEffect(() => {
-        if (visible) {
-            // Run both animations in parallel: fade backdrop + slide panel
+        if (visible && event) {
+            // Initialize state from event
+            setSelectedCategory(event.category || 'work');
+            setIsBig3(event.isBig3 || false);
+            setTitle(event.title || '');
+            setLocation(event.location || '');
+            
+            // Assume today for simplicity or parse from event context if available
+            // Since ScheduledEvent only has startMinutes, we use today's date
+            const today = new Date();
+            setSelectedDate(today);
+            
+            const start = new Date(today);
+            start.setHours(Math.floor(event.startMinutes / 60), event.startMinutes % 60, 0, 0);
+            setStartTime(start);
+            
+            const end = new Date(today);
+            const endMinutes = event.startMinutes + event.duration;
+            end.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+            setEndTime(end);
+
+            // Run animations
             Animated.parallel([
                 Animated.timing(backdropOpacity, {
                     toValue: 1,
                     duration: 250,
                     useNativeDriver: true,
                 }),
-                Animated.timing(panelTranslateY, {
+                Animated.spring(panelTranslateY, {
                     toValue: 0,
-                    duration: 300,
+                    tension: 50,
+                    friction: 8,
                     useNativeDriver: true,
                 }),
             ]).start();
         } else {
             backdropOpacity.setValue(0);
-            panelTranslateY.setValue(500);
+            panelTranslateY.setValue(1000);
+            setShowDatePicker(false);
+            setShowStartTimePicker(false);
+            setShowEndTimePicker(false);
         }
-    }, [visible, backdropOpacity, panelTranslateY]);
-    
-    // Local draft state
-    const [selectedCategory, setSelectedCategory] = useState<EventCategory>(event?.category || 'work');
-    const [isBig3, setIsBig3] = useState(event?.isBig3 || false);
-    const [selectedValue, setSelectedValue] = useState<string | null>(null);
-    const [title, setTitle] = useState(event?.title || '');
-    
-    // Sync title when event changes
-    useEffect(() => {
-        if (event?.title) {
-            setTitle(event.title);
-        }
-    }, [event?.title]);
+    }, [visible, event, backdropOpacity, panelTranslateY]);
     
     // Combine joy selections as "values" - use defaults if empty
     const values = joySelections.length > 0 
@@ -83,18 +122,31 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
     
     if (!event) return null;
     
-    const timeRange = `${formatTime(event.startMinutes)} - ${formatTime(event.startMinutes + event.duration)}`;
-    
     const handleSave = () => {
+        const startMins = startTime.getHours() * 60 + startTime.getMinutes();
+        const endMins = endTime.getHours() * 60 + endTime.getMinutes();
+        const duration = Math.max(endMins - startMins, 15);
+
         void onSave?.({
             title: title.trim(),
+            location: location.trim(),
             category: selectedCategory,
             isBig3,
+            startMinutes: startMins,
+            duration: duration,
         });
     };
-    
-    const handleToggleBig3 = () => {
-        setIsBig3(!isBig3);
+
+    const onDateChange = (ev: DateTimePickerEvent, date?: Date) => {
+        if (date) setSelectedDate(date);
+    };
+
+    const onStartTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
+        if (date) setStartTime(date);
+    };
+
+    const onEndTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
+        if (date) setEndTime(date);
     };
 
     return (
@@ -105,75 +157,168 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
             onRequestClose={onClose}
         >
             <View className="flex-1 justify-end">
-                {/* Animated backdrop - fades in */}
+                {/* Animated backdrop */}
                 <Animated.View 
                     className="absolute inset-0 bg-black/40"
                     style={{ opacity: backdropOpacity }}
                 />
-                {/* Panel - slides up */}
+                
+                {/* Panel */}
                 <Animated.View 
-                    className="bg-white rounded-t-3xl"
+                    className="bg-[#F2F2F7] rounded-t-3xl"
                     style={{ 
-                        paddingBottom: insets.bottom + 16,
+                        height: '92%',
                         transform: [{ translateY: panelTranslateY }],
                     }}
                 >
                     {/* Header */}
-                    <View className="flex-row items-center justify-end px-6 pt-5 pb-2">
-                        <Pressable 
-                            onPress={onClose}
-                            className="h-9 w-9 items-center justify-center rounded-full bg-[#F1F5F9]"
-                        >
-                            <Icon icon={X} size={18} color="#64748B" />
+                    <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+                        <Pressable onPress={onClose}>
+                            <Text className="text-lg text-[#2563EB]">Cancel</Text>
+                        </Pressable>
+                        <Text className="text-lg font-bold text-[#111827]">Edit Event</Text>
+                        <Pressable onPress={handleSave}>
+                            <Text className="text-lg font-bold text-[#2563EB]">Done</Text>
                         </Pressable>
                     </View>
                     
                     <ScrollView 
-                        className="px-6"
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{ paddingBottom: 20 }}
+                        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
                     >
-                        {/* Title Section */}
-                        <View className="mt-2">
-                            <TextInput
-                                value={title}
-                                onChangeText={setTitle}
-                                placeholder="Enter title..."
-                                placeholderTextColor="#94A3B8"
-                                className="text-3xl font-extrabold text-[#111827]"
-                                multiline
-                            />
-                        </View>
-                        
-                        {/* Date & Time Pills */}
-                        <View className="mt-6 flex-row gap-3">
-                            <View className="flex-row items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-4 py-2.5">
-                                <Icon icon={Calendar} size={16} color="#2563EB" />
-                                <Text className="text-sm font-semibold text-[#2563EB]">Nov 8</Text>
+                        {/* Title & Location Section */}
+                        <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
+                            <View className="px-4 py-3">
+                                <TextInput
+                                    value={title}
+                                    onChangeText={setTitle}
+                                    placeholder="Title"
+                                    placeholderTextColor="#94A3B8"
+                                    className="text-lg text-[#111827]"
+                                />
                             </View>
-                            <View className="flex-row items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#FFF7ED] px-4 py-2.5">
-                                <Icon icon={Clock} size={16} color="#F97316" />
-                                <Text className="text-sm font-medium text-[#78716C]">{timeRange}</Text>
-                            </View>
+                            <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+                            <Pressable 
+                                onPress={() => setShowLocationPicker(true)}
+                                className="px-4 py-3"
+                            >
+                                <Text className={`text-lg ${location ? 'text-[#111827]' : 'text-[#94A3B8]'}`}>
+                                    {location || 'Location or Video Call'}
+                                </Text>
+                            </Pressable>
                         </View>
-                        
-                        {/* Mark as Big 3 */}
-                        <Pressable 
-                            onPress={handleToggleBig3}
-                            className={`mt-5 flex-row items-center gap-2 self-start rounded-full border px-4 py-2.5 ${
-                                isBig3 
-                                    ? 'border-[#FCD34D] bg-[#FFFBEB]' 
-                                    : 'border-[#E2E8F0] bg-white'
-                            }`}
-                        >
-                            <Icon icon={Flag} size={16} color={isBig3 ? '#F59E0B' : '#94A3B8'} />
-                            <Text className={`text-sm font-semibold ${isBig3 ? 'text-[#D97706]' : 'text-[#94A3B8]'}`}>
-                                Mark as Big 3
-                            </Text>
-                        </Pressable>
+
+                        {/* Time & Date Section */}
+                        <View className="mt-8 mx-4 overflow-hidden rounded-xl bg-white">
+                            <View className="flex-row items-center justify-between px-4 py-3">
+                                <Text className="text-lg text-[#111827]">All-day</Text>
+                                <Switch
+                                    value={allDay}
+                                    onValueChange={setAllDay}
+                                    trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                                />
+                            </View>
+                            <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+                            
+                            <Pressable 
+                                onPress={() => setShowDatePicker(!showDatePicker)}
+                                className="flex-row items-center justify-between px-4 py-3"
+                            >
+                                <Text className="text-lg text-[#111827]">Starts</Text>
+                                <View className="flex-row items-center gap-2">
+                                    <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
+                                        <Text className="text-lg text-[#111827]">{formatDateFull(selectedDate)}</Text>
+                                    </View>
+                                    {!allDay && (
+                                        <Pressable onPress={() => setShowStartTimePicker(!showStartTimePicker)}>
+                                            <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
+                                                <Text className={`text-lg ${showStartTimePicker ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
+                                                    {formatTime(startTime)}
+                                                </Text>
+                                            </View>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            </Pressable>
+                            
+                            {showDatePicker && (
+                                <View className="bg-white px-4 pb-4">
+                                    <DateTimePicker
+                                        value={selectedDate}
+                                        mode="date"
+                                        display="inline"
+                                        onChange={onDateChange}
+                                        themeVariant="light"
+                                    />
+                                </View>
+                            )}
+
+                            {showStartTimePicker && !allDay && (
+                                <View className="bg-white">
+                                    <View className="h-[1px] bg-[#E5E5EA]" />
+                                    <DateTimePicker
+                                        value={startTime}
+                                        mode="time"
+                                        display="spinner"
+                                        onChange={onStartTimeChange}
+                                        themeVariant="light"
+                                        style={{ height: 200 }}
+                                    />
+                                </View>
+                            )}
+
+                            <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+
+                            {!allDay && (
+                                <>
+                                    <Pressable 
+                                        onPress={() => setShowEndTimePicker(!showEndTimePicker)}
+                                        className="flex-row items-center justify-between px-4 py-3"
+                                    >
+                                        <Text className="text-lg text-[#111827]">Ends</Text>
+                                        <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
+                                            <Text className={`text-lg ${showEndTimePicker ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
+                                                {formatTime(endTime)}
+                                            </Text>
+                                        </View>
+                                    </Pressable>
+                                    {showEndTimePicker && (
+                                        <View className="bg-white">
+                                            <View className="h-[1px] bg-[#E5E5EA]" />
+                                            <DateTimePicker
+                                                value={endTime}
+                                                mode="time"
+                                                display="spinner"
+                                                onChange={onEndTimeChange}
+                                                themeVariant="light"
+                                                style={{ height: 200 }}
+                                            />
+                                        </View>
+                                    )}
+                                </>
+                            )}
+                        </View>
+
+                        {/* Big 3 Section */}
+                        <View className="mt-8 mx-4 overflow-hidden rounded-xl bg-white">
+                            <Pressable 
+                                onPress={() => setIsBig3(!isBig3)}
+                                className="flex-row items-center justify-between px-4 py-3"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <Icon icon={Flag} size={20} color={isBig3 ? '#F59E0B' : '#8E8E93'} />
+                                    <Text className="text-lg text-[#111827]">Mark as Big 3</Text>
+                                </View>
+                                <Switch
+                                    value={isBig3}
+                                    onValueChange={setIsBig3}
+                                    trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                                />
+                            </Pressable>
+                        </View>
                         
                         {/* Life Area */}
-                        <View className="mt-8">
+                        <View className="mt-8 px-6">
                             <Text className="text-xs font-semibold tracking-wider text-[#F97316]">
                                 LIFE AREA
                             </Text>
@@ -207,7 +352,7 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                         </View>
                         
                         {/* Align with Values */}
-                        <View className="mt-8">
+                        <View className="mt-8 px-6">
                             <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
                                 ALIGN WITH VALUES
                             </Text>
@@ -237,53 +382,26 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                 </Pressable>
                             </View>
                         </View>
-                        
-                        {/* Goals (if any) */}
-                        {allGoals.length > 0 && (
-                            <View className="mt-8">
-                                <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
-                                    LINKED GOAL
-                                </Text>
-                                <View className="mt-3 flex-row flex-wrap gap-2">
-                                    {allGoals.slice(0, 3).map((goal) => (
-                                        <View
-                                            key={goal}
-                                            className="rounded-full border border-[#E2E8F0] bg-white px-4 py-2.5"
-                                        >
-                                            <Text className="text-sm font-semibold text-[#64748B]">
-                                                {goal}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                        )}
-                    </ScrollView>
-                    
-                    {/* Footer Actions */}
-                    <View className="px-6 pt-4">
-                        <Pressable 
-                            onPress={handleSave}
-                            className="items-center rounded-2xl bg-[#2563EB] py-4"
-                        >
-                            <Text className="text-base font-bold text-white">Save Changes</Text>
-                        </Pressable>
-                        
+
+                        {/* Delete Button */}
                         <Pressable 
                             onPress={() => {
-                                if (onDelete) {
-                                    void onDelete();
-                                    return;
-                                }
+                                void onDelete?.();
                                 onClose();
                             }}
-                            className="mt-3 items-center py-3"
+                            className="mt-8 mx-6 items-center justify-center rounded-xl bg-white py-4 border border-[#E5E5EA]"
                         >
-                            <Text className="text-sm font-semibold text-[#CBD5E1]">Delete Event</Text>
+                            <Text className="text-lg font-semibold text-[#EF4444]">Delete Event</Text>
                         </Pressable>
-                    </View>
+                    </ScrollView>
                 </Animated.View>
             </View>
+
+            <LocationSearchModal
+                visible={showLocationPicker}
+                onClose={() => setShowLocationPicker(false)}
+                onSelect={setLocation}
+            />
         </Modal>
     );
 };

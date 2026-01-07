@@ -7,7 +7,7 @@ import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-
 
 export default function AddEventScreen() {
     const router = useRouter();
-    const params = useLocalSearchParams<{ date?: string; column?: string }>();
+    const params = useLocalSearchParams<{ date?: string; column?: string; startMinutes?: string }>();
     const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
     const addScheduledEvent = useEventsStore((s) => s.addScheduledEvent);
     const addActualEvent = useEventsStore((s) => s.addActualEvent);
@@ -20,10 +20,12 @@ export default function AddEventScreen() {
     const ymd = typeof params.date === 'string' ? params.date : selectedDateYmd;
     const column = params.column === 'actual' ? 'actual' : 'planned';
     const initialDate = ymdToDate(ymd);
+    const initialStartMinutes = params.startMinutes ? parseInt(params.startMinutes, 10) : undefined;
 
     return (
         <AddEventTemplate
             initialDate={initialDate}
+            initialStartMinutes={initialStartMinutes}
             onClose={() => router.back()}
             onSave={async (draft) => {
                 const title = draft.title.trim();
@@ -48,6 +50,7 @@ export default function AddEventScreen() {
                         id: `mock_user_${column}_${targetYmd}_${Date.now()}`,
                         title,
                         description: '',
+                        location: draft.location,
                         startMinutes,
                         duration,
                         category: draft.category,
@@ -64,6 +67,7 @@ export default function AddEventScreen() {
                         ? await createActual({
                               title,
                               description: '',
+                              location: draft.location,
                               scheduledStartIso: start.toISOString(),
                               scheduledEndIso: end.toISOString(),
                               meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
@@ -71,6 +75,7 @@ export default function AddEventScreen() {
                         : await createPlanned({
                               title,
                               description: '',
+                              location: draft.location,
                               scheduledStartIso: start.toISOString(),
                               scheduledEndIso: end.toISOString(),
                               meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },

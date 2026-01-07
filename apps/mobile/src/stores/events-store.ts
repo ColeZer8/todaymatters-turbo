@@ -23,6 +23,7 @@ export interface ScheduledEvent {
   id: string;
   title: string;
   description: string;
+  location?: string;
   /** Minutes from midnight, e.g., 9 * 60 = 540 for 9:00 AM */
   startMinutes: number;
   /** Duration in minutes */

@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell } from 'lucide-react-native';
+import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, ChevronRight, Check } from 'lucide-react-native';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { EventCategory } from '@/stores';
-import { DatePickerPopup } from '../molecules/DatePickerPopup';
-import { TimePickerModal } from '../organisms/TimePickerModal';
+import { LocationSearchModal } from '../molecules/LocationSearchModal';
 
 // Life areas with icons - same as EventEditorModal
 const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
@@ -16,9 +16,12 @@ const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> 
     { id: 'health', label: 'Health', icon: Dumbbell },
 ];
 
-const formatDate = (date: Date) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[date.getMonth()]} ${date.getDate()}`;
+const formatDateFull = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
 };
 
 const formatTime = (date: Date) => {
@@ -31,6 +34,7 @@ const formatTime = (date: Date) => {
 
 interface AddEventDraft {
     title: string;
+    location: string;
     category: EventCategory;
     isBig3: boolean;
     selectedDate: Date;
@@ -40,11 +44,12 @@ interface AddEventDraft {
 
 interface AddEventTemplateProps {
     initialDate: Date;
+    initialStartMinutes?: number;
     onClose: () => void;
     onSave: (draft: AddEventDraft) => void | Promise<void>;
 }
-    
-export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTemplateProps) => {
+
+export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, onSave }: AddEventTemplateProps) => {
     const insets = useSafeAreaInsets();
     const { joySelections, goals, initiatives } = useOnboardingStore();
     
@@ -53,22 +58,34 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
     const [isBig3, setIsBig3] = useState(false);
     const [selectedValue, setSelectedValue] = useState<string | null>(null);
     const [title, setTitle] = useState('');
+    const [location, setLocation] = useState('');
     const [selectedDate, setSelectedDate] = useState(initialDate);
     const [startTime, setStartTime] = useState(() => {
-        const date = new Date();
-        date.setHours(9, 30, 0, 0);
+        const date = new Date(initialDate);
+        if (initialStartMinutes !== undefined) {
+            date.setHours(Math.floor(initialStartMinutes / 60), initialStartMinutes % 60, 0, 0);
+        } else {
+            date.setHours(9, 30, 0, 0);
+        }
         return date;
     });
     const [endTime, setEndTime] = useState(() => {
-        const date = new Date();
-        date.setHours(11, 30, 0, 0);
+        const date = new Date(initialDate);
+        if (initialStartMinutes !== undefined) {
+            const endMins = initialStartMinutes + 15;
+            date.setHours(Math.floor(endMins / 60), endMins % 60, 0, 0);
+        } else {
+            date.setHours(10, 30, 0, 0);
+        }
         return date;
     });
     
-    // Modal state
+    // Picker states
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showStartTimePicker, setShowStartTimePicker] = useState(false);
     const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+    const [showLocationPicker, setShowLocationPicker] = useState(false);
+    const [allDay, setAllDay] = useState(false);
     
     // Combine joy selections as "values" - use defaults if empty
     const values = joySelections.length > 0 
@@ -78,15 +95,10 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
     // Combine goals and initiatives
     const allGoals = [...goals, ...initiatives].filter(Boolean);
     
-    const timeRange = `${formatTime(startTime)} - ${formatTime(endTime)}`;
-    
-    const handleClose = () => {
-        onClose();
-    };
-    
     const handleSave = () => {
         void onSave({
             title,
+            location,
             category: selectedCategory,
             isBig3,
             selectedDate,
@@ -94,78 +106,204 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
             endTime,
         });
     };
-    
-    const handleToggleBig3 = () => {
-        setIsBig3(!isBig3);
+
+    const onDateChange = (event: DateTimePickerEvent, date?: Date) => {
+        if (date) {
+            setSelectedDate(date);
+            // Also update start/end times to keep them on the same day if needed
+            const newStart = new Date(date);
+            newStart.setHours(startTime.getHours(), startTime.getMinutes());
+            setStartTime(newStart);
+            const newEnd = new Date(date);
+            newEnd.setHours(endTime.getHours(), endTime.getMinutes());
+            setEndTime(newEnd);
+        }
+    };
+
+    const onStartTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+        if (date) setStartTime(date);
+    };
+
+    const onEndTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+        if (date) setEndTime(date);
+    };
+
+    const toggleDatePicker = () => {
+        setShowDatePicker(!showDatePicker);
+        setShowStartTimePicker(false);
+        setShowEndTimePicker(false);
+    };
+
+    const toggleStartTimePicker = () => {
+        setShowStartTimePicker(!showStartTimePicker);
+        setShowDatePicker(false);
+        setShowEndTimePicker(false);
+    };
+
+    const toggleEndTimePicker = () => {
+        setShowEndTimePicker(!showEndTimePicker);
+        setShowDatePicker(false);
+        setShowStartTimePicker(false);
     };
 
     return (
         <View 
-            className="bg-white rounded-t-3xl flex-1"
-            style={{ paddingBottom: insets.bottom + 16 }}
+            className="flex-1 bg-[#F2F2F7]"
+            style={{ paddingBottom: insets.bottom }}
         >
             {/* Header */}
-            <View className="flex-row items-center justify-end px-6 pt-5 pb-2">
-                <Pressable 
-                    onPress={handleClose}
-                    className="h-9 w-9 items-center justify-center rounded-full bg-[#F1F5F9]"
-                >
-                    <Icon icon={X} size={18} color="#64748B" />
+            <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+                <Pressable onPress={onClose}>
+                    <Text className="text-lg text-[#2563EB]">Cancel</Text>
+                </Pressable>
+                <Text className="text-lg font-bold text-[#111827]">New Event</Text>
+                <Pressable onPress={handleSave}>
+                    <Text className="text-lg font-bold text-[#2563EB]">Add</Text>
                 </Pressable>
             </View>
             
             <ScrollView 
-                className="px-6"
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20 }}
+                contentContainerStyle={{ paddingBottom: 40 }}
             >
-                {/* Title Section */}
-                <View className="mt-2">
-                    <TextInput
-                        value={title}
-                        onChangeText={setTitle}
-                        placeholder="Enter title..."
-                        placeholderTextColor="#94A3B8"
-                        className="text-3xl font-extrabold text-[#111827]"
-                        multiline
-                    />
-                </View>
-                
-                {/* Date & Time Pills */}
-                <View className="mt-6 flex-row gap-3">
+                {/* Title & Location Section */}
+                <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
+                    <View className="px-4 py-3">
+                        <TextInput
+                            value={title}
+                            onChangeText={setTitle}
+                            placeholder="Title"
+                            placeholderTextColor="#94A3B8"
+                            className="text-lg text-[#111827]"
+                        />
+                    </View>
+                    <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
                     <Pressable 
-                        onPress={() => setShowDatePicker(true)}
-                        className="flex-row items-center gap-2 rounded-full border border-[#E2E8F0] bg-white px-4 py-2.5"
+                        onPress={() => setShowLocationPicker(true)}
+                        className="px-4 py-3"
                     >
-                        <Icon icon={Calendar} size={16} color="#2563EB" />
-                        <Text className="text-sm font-semibold text-[#2563EB]">{formatDate(selectedDate)}</Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={() => setShowStartTimePicker(true)}
-                        className="flex-row items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#FFF7ED] px-4 py-2.5"
-                    >
-                        <Icon icon={Clock} size={16} color="#F97316" />
-                        <Text className="text-sm font-medium text-[#78716C]">{timeRange}</Text>
+                        <Text className={`text-lg ${location ? 'text-[#111827]' : 'text-[#94A3B8]'}`}>
+                            {location || 'Location or Video Call'}
+                        </Text>
                     </Pressable>
                 </View>
-                
-                {/* Mark as Big 3 */}
-                <Pressable 
-                    onPress={handleToggleBig3}
-                    className={`mt-5 flex-row items-center gap-2 self-start rounded-full border px-4 py-2.5 ${
-                        isBig3 
-                            ? 'border-[#FCD34D] bg-[#FFFBEB]' 
-                            : 'border-[#E2E8F0] bg-white'
-                    }`}
-                >
-                    <Icon icon={Flag} size={16} color={isBig3 ? '#F59E0B' : '#94A3B8'} />
-                    <Text className={`text-sm font-semibold ${isBig3 ? 'text-[#D97706]' : 'text-[#94A3B8]'}`}>
-                        Mark as Big 3
-                    </Text>
-                </Pressable>
+
+                {/* Time & Date Section */}
+                <View className="mt-8 mx-4 overflow-hidden rounded-xl bg-white">
+                    {/* All-day row */}
+                    <View className="flex-row items-center justify-between px-4 py-3">
+                        <Text className="text-lg text-[#111827]">All-day</Text>
+                        <Switch
+                            value={allDay}
+                            onValueChange={setAllDay}
+                            trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                        />
+                    </View>
+                    <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+                    
+                    {/* Starts Row */}
+                    <Pressable 
+                        onPress={toggleDatePicker}
+                        className="flex-row items-center justify-between px-4 py-3"
+                    >
+                        <Text className="text-lg text-[#111827]">Starts</Text>
+                        <View className="flex-row items-center gap-2">
+                            <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
+                                <Text className="text-lg text-[#111827]">{formatDateFull(selectedDate)}</Text>
+                            </View>
+                            {!allDay && (
+                                <Pressable onPress={toggleStartTimePicker}>
+                                    <View className={`rounded-lg px-2 py-1 ${showStartTimePicker ? 'bg-[#E5E5EA]' : 'bg-[#E5E5EA]'}`}>
+                                        <Text className={`text-lg ${showStartTimePicker ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
+                                            {formatTime(startTime)}
+                                        </Text>
+                                    </View>
+                                </Pressable>
+                            )}
+                        </View>
+                    </Pressable>
+                    
+                    {/* Inline Date Picker */}
+                    {showDatePicker && (
+                        <View className="bg-white px-4 pb-4">
+                            <DateTimePicker
+                                value={selectedDate}
+                                mode="date"
+                                display="inline"
+                                onChange={onDateChange}
+                                themeVariant="light"
+                            />
+                        </View>
+                    )}
+
+                    {/* Inline Start Time Picker */}
+                    {showStartTimePicker && !allDay && (
+                        <View className="bg-white">
+                            <View className="h-[1px] bg-[#E5E5EA]" />
+                            <DateTimePicker
+                                value={startTime}
+                                mode="time"
+                                display="spinner"
+                                onChange={onStartTimeChange}
+                                themeVariant="light"
+                                style={{ height: 200 }}
+                            />
+                        </View>
+                    )}
+
+                    <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+
+                    {/* Ends Row */}
+                    {!allDay && (
+                        <>
+                            <Pressable 
+                                onPress={toggleEndTimePicker}
+                                className="flex-row items-center justify-between px-4 py-3"
+                            >
+                                <Text className="text-lg text-[#111827]">Ends</Text>
+                                <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
+                                    <Text className={`text-lg ${showEndTimePicker ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
+                                        {formatTime(endTime)}
+                                    </Text>
+                                </View>
+                            </Pressable>
+                            {showEndTimePicker && (
+                                <View className="bg-white">
+                                    <View className="h-[1px] bg-[#E5E5EA]" />
+                                    <DateTimePicker
+                                        value={endTime}
+                                        mode="time"
+                                        display="spinner"
+                                        onChange={onEndTimeChange}
+                                        themeVariant="light"
+                                        style={{ height: 200 }}
+                                    />
+                                </View>
+                            )}
+                        </>
+                    )}
+                </View>
+
+                {/* Big 3 Section */}
+                <View className="mt-8 mx-4 overflow-hidden rounded-xl bg-white">
+                    <Pressable 
+                        onPress={() => setIsBig3(!isBig3)}
+                        className="flex-row items-center justify-between px-4 py-3"
+                    >
+                        <View className="flex-row items-center gap-3">
+                            <Icon icon={Flag} size={20} color={isBig3 ? '#F59E0B' : '#8E8E93'} />
+                            <Text className="text-lg text-[#111827]">Mark as Big 3</Text>
+                        </View>
+                        <Switch
+                            value={isBig3}
+                            onValueChange={setIsBig3}
+                            trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                        />
+                    </Pressable>
+                </View>
                 
                 {/* Life Area */}
-                <View className="mt-8">
+                <View className="mt-8 px-6">
                     <Text className="text-xs font-semibold tracking-wider text-[#F97316]">
                         LIFE AREA
                     </Text>
@@ -199,7 +337,7 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
                 </View>
                 
                 {/* Align with Values */}
-                <View className="mt-8">
+                <View className="mt-8 px-6">
                     <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
                         ALIGN WITH VALUES
                     </Text>
@@ -232,7 +370,7 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
                 
                 {/* Goals (if any) */}
                 {allGoals.length > 0 && (
-                    <View className="mt-8">
+                    <View className="mt-8 px-6">
                         <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
                             LINKED GOAL
                         </Text>
@@ -251,54 +389,11 @@ export const AddEventTemplate = ({ initialDate, onClose, onSave }: AddEventTempl
                     </View>
                 )}
             </ScrollView>
-            
-            {/* Footer Actions */}
-            <View className="px-6 pt-4">
-                <Pressable 
-                    onPress={handleSave}
-                    className="items-center rounded-2xl bg-[#2563EB] py-4"
-                >
-                    <Text className="text-base font-bold text-white">Save Changes</Text>
-                </Pressable>
-                
-                <Pressable 
-                    onPress={handleClose}
-                    className="mt-3 items-center py-3"
-                >
-                    <Text className="text-sm font-semibold text-[#CBD5E1]">Cancel</Text>
-                </Pressable>
-            </View>
-            
-            {/* Date Picker Popup */}
-            <DatePickerPopup
-                visible={showDatePicker}
-                selectedDate={selectedDate}
-                onSelect={setSelectedDate}
-                onClose={() => setShowDatePicker(false)}
-            />
 
-            {/* Time Picker Modals */}
-            <TimePickerModal
-                visible={showStartTimePicker}
-                label="Start Time"
-                initialTime={startTime}
-                onConfirm={(time) => {
-                    setStartTime(time);
-                    setShowStartTimePicker(false);
-                    setTimeout(() => setShowEndTimePicker(true), 300);
-                }}
-                onClose={() => setShowStartTimePicker(false)}
-            />
-
-            <TimePickerModal
-                visible={showEndTimePicker}
-                label="End Time"
-                initialTime={endTime}
-                onConfirm={(time) => {
-                    setEndTime(time);
-                    setShowEndTimePicker(false);
-                }}
-                onClose={() => setShowEndTimePicker(false)}
+            <LocationSearchModal
+                visible={showLocationPicker}
+                onClose={() => setShowLocationPicker(false)}
+                onSelect={setLocation}
             />
         </View>
     );

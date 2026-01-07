@@ -88,6 +88,7 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
     id: row.id,
     title: row.title,
     description: row.description ?? '',
+    location: row.location ?? undefined,
     startMinutes,
     duration,
     category,
@@ -115,6 +116,7 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
     id: row.id,
     title: row.title,
     description: row.description ?? '',
+    location: row.location ?? undefined,
     startMinutes,
     duration,
     category,
@@ -184,6 +186,7 @@ export interface CreatePlannedCalendarEventInput {
   userId: string;
   title: string;
   description?: string;
+  location?: string;
   scheduledStartIso: string;
   scheduledEndIso: string;
   meta: PlannedCalendarMeta;
@@ -196,6 +199,7 @@ export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEve
       type: PLANNED_EVENT_TYPE,
       title: input.title.trim(),
       description: input.description?.trim() ?? '',
+      location: input.location?.trim() ?? null,
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
       meta: input.meta as unknown as Json,
@@ -223,6 +227,7 @@ export async function createActualCalendarEvent(input: CreateActualCalendarEvent
       type: ACTUAL_EVENT_TYPE,
       title: input.title.trim(),
       description: input.description?.trim() ?? '',
+      location: input.location?.trim() ?? null,
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
       meta: input.meta as unknown as Json,
@@ -353,6 +358,7 @@ export interface UpdatePlannedCalendarEventInput {
   eventId: string;
   title?: string;
   description?: string;
+  location?: string;
   scheduledStartIso?: string;
   scheduledEndIso?: string;
   meta?: PlannedCalendarMeta;
@@ -363,6 +369,7 @@ export async function updatePlannedCalendarEvent(input: UpdatePlannedCalendarEve
     const updates: TmEventUpdate = {};
     if (typeof input.title === 'string') updates.title = input.title.trim();
     if (typeof input.description === 'string') updates.description = input.description.trim();
+    if (typeof input.location === 'string') updates.location = input.location.trim();
     if (typeof input.scheduledStartIso === 'string') updates.scheduled_start = input.scheduledStartIso;
     if (typeof input.scheduledEndIso === 'string') updates.scheduled_end = input.scheduledEndIso;
     if (input.meta) updates.meta = input.meta as unknown as Json;

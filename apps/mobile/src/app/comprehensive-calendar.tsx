@@ -171,8 +171,15 @@ export default function ComprehensiveCalendarScreen() {
   // Actual events are Supabase-backed (no mock defaults). Screen Time derivation remains separate.
   const displayActualEvents = actualEvents;
 
-  const openAddEventPicker = useCallback(() => {
-    router.push({ pathname: '/add-event', params: { date: selectedDateYmd, column: 'planned' } });
+  const openAddEventPicker = useCallback((column?: 'planned' | 'actual', startMinutes?: number) => {
+    router.push({
+      pathname: '/add-event',
+      params: {
+        date: selectedDateYmd,
+        column: column ?? 'planned',
+        startMinutes: startMinutes !== undefined ? String(startMinutes) : undefined,
+      }
+    });
   }, [router, selectedDateYmd]);
 
   return (
@@ -195,21 +202,37 @@ export default function ComprehensiveCalendarScreen() {
         const existing = plannedEvents.find((e) => e.id === eventId);
         if (!existing) return;
 
+        const startMinutes = updates.startMinutes ?? existing.startMinutes;
+        const duration = updates.duration ?? existing.duration;
+        const location = updates.location ?? existing.location;
+
         if (USE_MOCK_CALENDAR) {
           updateScheduledEvent(
             {
               ...existing,
               title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              location,
               category: updates.category ?? existing.category,
               isBig3: updates.isBig3 ?? existing.isBig3,
+              startMinutes,
+              duration,
             },
             selectedDateYmd
           );
           return;
         }
 
+        const newStart = new Date(selectedDate);
+        newStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+        const newEnd = new Date(newStart);
+        newEnd.setMinutes(newEnd.getMinutes() + duration);
+
         const updated = await updatePlanned(eventId, {
           title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          description: existing.description,
+          location,
+          scheduledStartIso: newStart.toISOString(),
+          scheduledEndIso: newEnd.toISOString(),
           meta: {
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
@@ -231,21 +254,37 @@ export default function ComprehensiveCalendarScreen() {
         const existing = displayActualEvents.find((e) => e.id === eventId);
         if (!existing) return;
 
+        const startMinutes = updates.startMinutes ?? existing.startMinutes;
+        const duration = updates.duration ?? existing.duration;
+        const location = updates.location ?? existing.location;
+
         if (USE_MOCK_CALENDAR) {
           updateActualEvent(
             {
               ...existing,
               title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              location,
               category: updates.category ?? existing.category,
               isBig3: updates.isBig3 ?? existing.isBig3,
+              startMinutes,
+              duration,
             },
             selectedDateYmd
           );
           return;
         }
 
+        const newStart = new Date(selectedDate);
+        newStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+        const newEnd = new Date(newStart);
+        newEnd.setMinutes(newEnd.getMinutes() + duration);
+
         const updated = await updateActual(eventId, {
           title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          description: existing.description,
+          location,
+          scheduledStartIso: newStart.toISOString(),
+          scheduledEndIso: newEnd.toISOString(),
           meta: {
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
