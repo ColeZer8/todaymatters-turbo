@@ -212,9 +212,9 @@ interface ComprehensiveCalendarTemplateProps {
     onPrevDay: () => void;
     onNextDay: () => void;
     onAddEvent: (column?: 'planned' | 'actual', startMinutes?: number) => void;
-    onUpdatePlannedEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
+    onUpdatePlannedEvent: (eventId: string, updates: { title?: string; location?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
     onDeletePlannedEvent: (eventId: string) => void | Promise<void>;
-    onUpdateActualEvent: (eventId: string, updates: { title?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
+    onUpdateActualEvent: (eventId: string, updates: { title?: string; location?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
     onDeleteActualEvent: (eventId: string) => void | Promise<void>;
 }
 

@@ -1,0 +1,25 @@
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+
+group = "expo.modules.androidinsights"
+version = "0.0.1"
+
+android {
+  namespace "expo.modules.androidinsights"
+
+  // Expo/RN sets these at the app level; keep this module aligned but minimal.
+  compileSdkVersion rootProject.ext.compileSdkVersion
+
+  defaultConfig {
+    // Health Connect requires minSdk 26
+    minSdkVersion Math.max(rootProject.ext.minSdkVersion ?: 24, 26)
+    targetSdkVersion rootProject.ext.targetSdkVersion
+  }
+}
+
+dependencies {
+  implementation project(":expo-modules-core")
+  implementation "androidx.health.connect:connect-client:1.1.0"
+}
+
+

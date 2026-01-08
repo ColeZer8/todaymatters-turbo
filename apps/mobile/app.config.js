@@ -9,6 +9,7 @@
  */
 
 import withIosInsights from './plugins/with-ios-insights';
+import withAndroidInsights from './plugins/with-android-insights';
 
 // Environment-specific configuration
 const ENV = {
@@ -113,6 +114,7 @@ export default {
         },
       ],
       withIosInsights,
+      withAndroidInsights,
     ],
     extra: {
       // Preserve existing extra config

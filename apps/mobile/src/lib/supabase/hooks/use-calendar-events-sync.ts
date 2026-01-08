@@ -84,7 +84,17 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
   );
 
   const updatePlanned = useCallback(
-    async (eventId: string, updates: { title?: string; description?: string; meta?: PlannedCalendarMeta }): Promise<ScheduledEvent> => {
+    async (
+      eventId: string,
+      updates: {
+        title?: string;
+        description?: string;
+        location?: string;
+        scheduledStartIso?: string;
+        scheduledEndIso?: string;
+        meta?: PlannedCalendarMeta;
+      }
+    ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
         throw new Error('User not authenticated');
       }
@@ -100,7 +110,17 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
   );
 
   const updateActual = useCallback(
-    async (eventId: string, updates: { title?: string; description?: string; meta?: PlannedCalendarMeta }): Promise<ScheduledEvent> => {
+    async (
+      eventId: string,
+      updates: {
+        title?: string;
+        description?: string;
+        location?: string;
+        scheduledStartIso?: string;
+        scheduledEndIso?: string;
+        meta?: PlannedCalendarMeta;
+      }
+    ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
         throw new Error('User not authenticated');
       }

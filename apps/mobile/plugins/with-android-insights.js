@@ -1,0 +1,38 @@
+const { AndroidConfig, withAndroidManifest } = require('@expo/config-plugins');
+
+/**
+ * Adds required Android permissions + manifest tweaks for:
+ * - UsageStatsManager ("screen time-ish")
+ *
+ * Official refs:
+ * - UsageStatsManager: https://developer.android.com/reference/kotlin/android/app/usage/UsageStatsManager
+ * - Usage access settings intent: https://developer.android.com/reference/android/provider/Settings#ACTION_USAGE_ACCESS_SETTINGS
+ */
+const withAndroidInsights = (config) => {
+  return withAndroidManifest(config, (config) => {
+    const manifest = config.modResults;
+    const ensureUsesPermission = (name) => {
+      const uses = manifest.manifest['uses-permission'] ?? [];
+      const already = uses.some((p) => p?.$?.['android:name'] === name);
+      if (already) return;
+      uses.push({ $: { 'android:name': name } });
+      manifest.manifest['uses-permission'] = uses;
+    };
+
+    // This is a protected permission. The user still needs to grant "Usage access" in Settings.
+    ensureUsesPermission('android.permission.PACKAGE_USAGE_STATS');
+
+    // Health Connect (steps only for now; expand as we add more record types).
+    // Docs: https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started
+    ensureUsesPermission('android.permission.health.READ_STEPS');
+
+    // Ensure we have android namespace set (Expo typically does, but keep it safe).
+    AndroidConfig.Manifest.ensureNamespace(manifest);
+
+    return config;
+  });
+};
+
+module.exports = withAndroidInsights;
+
+

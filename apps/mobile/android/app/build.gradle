@@ -90,7 +90,8 @@ android {
     namespace 'com.todaymatters.mobile'
     defaultConfig {
         applicationId 'com.todaymatters.mobile'
-        minSdkVersion rootProject.ext.minSdkVersion
+        // Health Connect requires minSdk 26
+        minSdkVersion Math.max(rootProject.ext.minSdkVersion ?: 24, 26)
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"

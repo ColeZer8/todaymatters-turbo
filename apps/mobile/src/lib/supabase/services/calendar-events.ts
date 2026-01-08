@@ -13,6 +13,7 @@ type TmEventUpdate = Database['tm']['Tables']['events']['Update'];
 export interface PlannedCalendarMeta extends Record<string, Json> {
   category: EventCategory;
   isBig3?: boolean;
+  location?: string | null;
   source?: 'user' | 'system';
   plannedEventId?: string;
   kind?: 'sleep_schedule';
@@ -83,12 +84,13 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
   const meta = row.meta as Json;
   const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
   const category = (metaParsed?.category ?? 'work') as EventCategory;
+  const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
 
   return {
     id: row.id,
     title: row.title,
     description: row.description ?? '',
-    location: row.location ?? undefined,
+    location: locationFromMeta,
     startMinutes,
     duration,
     category,
@@ -111,12 +113,13 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
 
   const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
   const category = (metaParsed?.category ?? 'work') as EventCategory;
+  const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
 
   return {
     id: row.id,
     title: row.title,
     description: row.description ?? '',
-    location: row.location ?? undefined,
+    location: locationFromMeta,
     startMinutes,
     duration,
     category,
@@ -194,15 +197,19 @@ export interface CreatePlannedCalendarEventInput {
 
 export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEventInput): Promise<ScheduledEvent> {
   try {
+    const trimmedLocation = typeof input.location === 'string' ? input.location.trim() : '';
+    const metaWithLocation: PlannedCalendarMeta = {
+      ...input.meta,
+      ...(trimmedLocation ? { location: trimmedLocation } : {}),
+    };
     const insert: TmEventInsert = {
       user_id: input.userId,
       type: PLANNED_EVENT_TYPE,
       title: input.title.trim(),
       description: input.description?.trim() ?? '',
-      location: input.location?.trim() ?? null,
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
-      meta: input.meta as unknown as Json,
+      meta: metaWithLocation as unknown as Json,
     };
 
     const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
@@ -222,15 +229,19 @@ export interface CreateActualCalendarEventInput extends CreatePlannedCalendarEve
 
 export async function createActualCalendarEvent(input: CreateActualCalendarEventInput): Promise<ScheduledEvent> {
   try {
+    const trimmedLocation = typeof input.location === 'string' ? input.location.trim() : '';
+    const metaWithLocation: PlannedCalendarMeta = {
+      ...input.meta,
+      ...(trimmedLocation ? { location: trimmedLocation } : {}),
+    };
     const insert: TmEventInsert = {
       user_id: input.userId,
       type: ACTUAL_EVENT_TYPE,
       title: input.title.trim(),
       description: input.description?.trim() ?? '',
-      location: input.location?.trim() ?? null,
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
-      meta: input.meta as unknown as Json,
+      meta: metaWithLocation as unknown as Json,
     };
 
     const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
@@ -369,10 +380,35 @@ export async function updatePlannedCalendarEvent(input: UpdatePlannedCalendarEve
     const updates: TmEventUpdate = {};
     if (typeof input.title === 'string') updates.title = input.title.trim();
     if (typeof input.description === 'string') updates.description = input.description.trim();
-    if (typeof input.location === 'string') updates.location = input.location.trim();
     if (typeof input.scheduledStartIso === 'string') updates.scheduled_start = input.scheduledStartIso;
     if (typeof input.scheduledEndIso === 'string') updates.scheduled_end = input.scheduledEndIso;
-    if (input.meta) updates.meta = input.meta as unknown as Json;
+
+    const locationWasProvided = typeof input.location === 'string';
+    const trimmedLocation = locationWasProvided ? input.location.trim() : null;
+
+    if (input.meta && locationWasProvided) {
+      // If meta is provided, apply the location override into meta in the same update.
+      updates.meta = { ...input.meta, location: trimmedLocation || null } as unknown as Json;
+    } else if (input.meta) {
+      updates.meta = input.meta as unknown as Json;
+    } else if (locationWasProvided) {
+      // If only location was provided, merge it into existing meta so we don't wipe category/isBig3.
+      const { data: existing, error: existingError } = await supabase
+        .schema('tm')
+        .from('events')
+        .select('meta')
+        .eq('id', input.eventId)
+        .single();
+      if (existingError) throw handleSupabaseError(existingError);
+
+      const existingMeta = (existing?.meta ?? {}) as Json;
+      const nextMeta: Record<string, Json> =
+        existingMeta && typeof existingMeta === 'object' && !Array.isArray(existingMeta)
+          ? (existingMeta as Record<string, Json>)
+          : {};
+      nextMeta.location = trimmedLocation && trimmedLocation.length > 0 ? trimmedLocation : null;
+      updates.meta = nextMeta as unknown as Json;
+    }
 
     const { data, error } = await supabase
       .schema('tm')
