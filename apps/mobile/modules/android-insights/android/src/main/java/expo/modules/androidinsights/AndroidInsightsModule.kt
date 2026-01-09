@@ -9,14 +9,21 @@ import android.os.Build
 import android.provider.Settings
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.request.AggregateRequest
+import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.Duration
 import java.time.Instant
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -44,6 +51,12 @@ class AndroidInsightsModule : Module() {
       }
     }
 
+    AsyncFunction("getHealthAuthorizationStatus") {
+      runBlocking {
+        getHealthAuthorizationStatus()
+      }
+    }
+
     AsyncFunction("getHealthSummaryJson") { options: Map<String, Any?> ->
       // Keep a consistent contract shape (mirrors iOS HealthSummary).
       // For now, implement only steps aggregation. Everything else remains null.
@@ -55,6 +68,12 @@ class AndroidInsightsModule : Module() {
     AsyncFunction("getStepCountSum") { options: Map<String, Any?> ->
       runBlocking {
         getStepCountSum(options)
+      }
+    }
+
+    AsyncFunction("getLatestWorkoutSummaryJson") { options: Map<String, Any?> ->
+      runBlocking {
+        getLatestWorkoutSummaryJson(options)
       }
     }
 
@@ -235,10 +254,239 @@ class AndroidInsightsModule : Module() {
     return false
   }
 
+  private suspend fun getHealthAuthorizationStatus(): String {
+    val reactContext = appContext.reactContext ?: return "denied"
+    if (!isHealthConnectAvailable()) return "denied"
+
+    val permissions = requiredHealthPermissions()
+    val client = HealthConnectClient.getOrCreate(reactContext)
+    val granted = client.permissionController.getGrantedPermissions()
+
+    if (granted.containsAll(permissions)) return "authorized"
+    if (granted.intersect(permissions).isEmpty()) return "notDetermined"
+    return "denied"
+  }
+
   private fun requiredHealthPermissions(): Set<String> {
     return setOf(
-      HealthPermission.getReadPermission(StepsRecord::class)
+      HealthPermission.getReadPermission(StepsRecord::class),
+      HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+      HealthPermission.getReadPermission(HeartRateRecord::class),
+      HealthPermission.getReadPermission(SleepSessionRecord::class),
+      HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+      HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
     )
+  }
+
+  private fun overlapSeconds(aStart: Instant, aEnd: Instant, bStart: Instant, bEnd: Instant): Long {
+    val start = if (aStart.isAfter(bStart)) aStart else bStart
+    val end = if (aEnd.isBefore(bEnd)) aEnd else bEnd
+    if (!end.isAfter(start)) return 0L
+    return Duration.between(start, end).seconds.coerceAtLeast(0L)
+  }
+
+  private fun energyToKilocalories(value: Any?): Double? {
+    if (value == null) return null
+    return try {
+      val method = value.javaClass.getMethod("getKilocalories")
+      val result = method.invoke(value)
+      (result as? Number)?.toDouble()
+    } catch (_: Throwable) {
+      null
+    }
+  }
+
+  private suspend fun getHeartRateAvgBpm(startMs: Long, endMs: Long): Double? {
+    val reactContext = appContext.reactContext ?: return null
+    if (!isHealthConnectAvailable()) return null
+    val client = HealthConnectClient.getOrCreate(reactContext)
+
+    val required = requiredHealthPermissions()
+    val granted = client.permissionController.getGrantedPermissions()
+    if (!granted.containsAll(required)) return null
+
+    val response = client.aggregate(
+      AggregateRequest(
+        metrics = setOf(HeartRateRecord.BPM_AVG),
+        timeRangeFilter = TimeRangeFilter.between(
+          Instant.ofEpochMilli(startMs),
+          Instant.ofEpochMilli(endMs)
+        )
+      )
+    )
+
+    val avg = response[HeartRateRecord.BPM_AVG]
+    return avg?.toDouble()
+  }
+
+  private suspend fun getSleepAsleepSeconds(startMs: Long, endMs: Long): Long? {
+    val reactContext = appContext.reactContext ?: return null
+    if (!isHealthConnectAvailable()) return null
+    val client = HealthConnectClient.getOrCreate(reactContext)
+
+    val required = requiredHealthPermissions()
+    val granted = client.permissionController.getGrantedPermissions()
+    if (!granted.containsAll(required)) return null
+
+    val rangeStart = Instant.ofEpochMilli(startMs)
+    val rangeEnd = Instant.ofEpochMilli(endMs)
+
+    val records = client.readRecords(
+      ReadRecordsRequest(
+        recordType = SleepSessionRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(rangeStart, rangeEnd)
+      )
+    ).records
+
+    var total = 0L
+    for (r in records) {
+      total += overlapSeconds(r.startTime, r.endTime, rangeStart, rangeEnd)
+    }
+    return total
+  }
+
+  private suspend fun getActiveEnergyKcal(startMs: Long, endMs: Long): Double? {
+    val reactContext = appContext.reactContext ?: return null
+    if (!isHealthConnectAvailable()) return null
+    val client = HealthConnectClient.getOrCreate(reactContext)
+
+    val required = requiredHealthPermissions()
+    val granted = client.permissionController.getGrantedPermissions()
+    if (!granted.containsAll(required)) return null
+
+    val response = client.aggregate(
+      AggregateRequest(
+        metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+        timeRangeFilter = TimeRangeFilter.between(
+          Instant.ofEpochMilli(startMs),
+          Instant.ofEpochMilli(endMs)
+        )
+      )
+    )
+
+    val energy = response[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]
+    return energyToKilocalories(energy)
+  }
+
+  private suspend fun getWorkoutsSummary(startMs: Long, endMs: Long): Pair<Int, Long>? {
+    val reactContext = appContext.reactContext ?: return null
+    if (!isHealthConnectAvailable()) return null
+    val client = HealthConnectClient.getOrCreate(reactContext)
+
+    val required = requiredHealthPermissions()
+    val granted = client.permissionController.getGrantedPermissions()
+    if (!granted.containsAll(required)) return null
+
+    val rangeStart = Instant.ofEpochMilli(startMs)
+    val rangeEnd = Instant.ofEpochMilli(endMs)
+
+    val records = client.readRecords(
+      ReadRecordsRequest(
+        recordType = ExerciseSessionRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(rangeStart, rangeEnd)
+      )
+    ).records
+
+    var count = 0
+    var seconds = 0L
+    for (r in records) {
+      count += 1
+      seconds += overlapSeconds(r.startTime, r.endTime, rangeStart, rangeEnd)
+    }
+    return Pair(count, seconds)
+  }
+
+  private suspend fun getLatestWorkoutSummaryJson(options: Map<String, Any?>): String? {
+    val startMs = (options["startDateMs"] as? Number)?.toLong()
+    val endMs = (options["endDateMs"] as? Number)?.toLong()
+    if (startMs == null || endMs == null || endMs <= startMs) return null
+
+    val reactContext = appContext.reactContext ?: return null
+    if (!isHealthConnectAvailable()) return null
+
+    val client = HealthConnectClient.getOrCreate(reactContext)
+    val required = requiredHealthPermissions()
+    val granted = client.permissionController.getGrantedPermissions()
+    if (!granted.containsAll(required)) return null
+
+    val rangeStart = Instant.ofEpochMilli(startMs)
+    val rangeEnd = Instant.ofEpochMilli(endMs)
+
+    val sessions = client.readRecords(
+      ReadRecordsRequest(
+        recordType = ExerciseSessionRecord::class,
+        timeRangeFilter = TimeRangeFilter.between(rangeStart, rangeEnd)
+      )
+    ).records
+
+    if (sessions.isEmpty()) return null
+
+    val latest = sessions.maxByOrNull { it.endTime } ?: return null
+
+    val workoutStart = latest.startTime
+    val workoutEnd = latest.endTime
+    val durationSeconds = overlapSeconds(workoutStart, workoutEnd, workoutStart, workoutEnd)
+
+    val errors = mutableListOf<String>()
+
+    val aggregate = try {
+      client.aggregate(
+        AggregateRequest(
+          metrics = setOf(
+            TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+            HeartRateRecord.BPM_AVG,
+            HeartRateRecord.BPM_MAX,
+          ),
+          timeRangeFilter = TimeRangeFilter.between(workoutStart, workoutEnd),
+        )
+      )
+    } catch (t: Throwable) {
+      errors.add("aggregate: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val totalEnergyKcal: Double? = try {
+      val energy = if (aggregate == null) null else aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]
+      energyToKilocalories(energy)
+    } catch (t: Throwable) {
+      errors.add("totalEnergyBurnedKcal: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val avgHr: Double? = try {
+      val avg = aggregate?.get(HeartRateRecord.BPM_AVG)
+      avg?.toDouble()
+    } catch (t: Throwable) {
+      errors.add("avgHeartRateBpm: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val maxHr: Double? = try {
+      val max = aggregate?.get(HeartRateRecord.BPM_MAX)
+      max?.toDouble()
+    } catch (t: Throwable) {
+      errors.add("maxHeartRateBpm: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val out = JSONObject()
+    out.put("workoutStartIso", workoutStart.toString())
+    out.put("workoutEndIso", workoutEnd.toString())
+    out.put("durationSeconds", durationSeconds)
+
+    if (totalEnergyKcal == null) out.put("totalEnergyBurnedKcal", JSONObject.NULL) else out.put("totalEnergyBurnedKcal", totalEnergyKcal)
+    if (avgHr == null) out.put("avgHeartRateBpm", JSONObject.NULL) else out.put("avgHeartRateBpm", avgHr)
+    if (maxHr == null) out.put("maxHeartRateBpm", JSONObject.NULL) else out.put("maxHeartRateBpm", maxHr)
+
+    if (errors.isNotEmpty()) {
+      val arr = JSONArray()
+      errors.forEach { arr.put(it) }
+      out.put("errors", arr)
+    } else {
+      out.put("errors", JSONObject.NULL)
+    }
+
+    return out.toString()
   }
 
   private suspend fun getStepCountSum(options: Map<String, Any?>): Long {
@@ -281,20 +529,71 @@ class AndroidInsightsModule : Module() {
       null
     }
 
+    val activeEnergyKcal: Double? = try {
+      getActiveEnergyKcal(startMs, endMs)
+    } catch (t: Throwable) {
+      errors.add("activeEnergyKcal: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val heartRateAvgBpm: Double? = try {
+      getHeartRateAvgBpm(startMs, endMs)
+    } catch (t: Throwable) {
+      errors.add("heartRateAvgBpm: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val sleepAsleepSeconds: Long? = try {
+      getSleepAsleepSeconds(startMs, endMs)
+    } catch (t: Throwable) {
+      errors.add("sleepAsleepSeconds: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
+    val workouts: Pair<Int, Long>? = try {
+      getWorkoutsSummary(startMs, endMs)
+    } catch (t: Throwable) {
+      errors.add("workouts: ${t.message ?: t.javaClass.simpleName}")
+      null
+    }
+
     val out = JSONObject()
     out.put("generatedAtIso", isoNow())
     out.put("startIso", isoFromMillis(startMs))
     out.put("endIso", isoFromMillis(endMs))
 
     out.put("steps", steps)
-    out.put("activeEnergyKcal", JSONObject.NULL)
+
+    if (activeEnergyKcal == null) {
+      out.put("activeEnergyKcal", JSONObject.NULL)
+    } else {
+      out.put("activeEnergyKcal", activeEnergyKcal)
+    }
+
     out.put("distanceWalkingRunningMeters", JSONObject.NULL)
-    out.put("heartRateAvgBpm", JSONObject.NULL)
+
+    if (heartRateAvgBpm == null) {
+      out.put("heartRateAvgBpm", JSONObject.NULL)
+    } else {
+      out.put("heartRateAvgBpm", heartRateAvgBpm)
+    }
+
     out.put("restingHeartRateAvgBpm", JSONObject.NULL)
     out.put("hrvSdnnAvgSeconds", JSONObject.NULL)
-    out.put("sleepAsleepSeconds", JSONObject.NULL)
-    out.put("workoutsCount", JSONObject.NULL)
-    out.put("workoutsDurationSeconds", JSONObject.NULL)
+
+    if (sleepAsleepSeconds == null) {
+      out.put("sleepAsleepSeconds", JSONObject.NULL)
+    } else {
+      out.put("sleepAsleepSeconds", sleepAsleepSeconds)
+    }
+
+    if (workouts == null) {
+      out.put("workoutsCount", JSONObject.NULL)
+      out.put("workoutsDurationSeconds", JSONObject.NULL)
+    } else {
+      out.put("workoutsCount", workouts.first)
+      out.put("workoutsDurationSeconds", workouts.second)
+    }
 
     if (errors.isNotEmpty()) {
       val arr = JSONArray()

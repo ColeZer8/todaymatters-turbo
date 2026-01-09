@@ -2,8 +2,9 @@ import { ReactNode } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView as RNScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SetupStepLayoutProps {
   step?: number;
@@ -29,6 +30,10 @@ export const SetupStepLayout = ({
 }: SetupStepLayoutProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
   const isSettings = mode === 'settings';
+  const insets = useSafeAreaInsets();
+  const isAndroid = Platform.OS === 'android';
+  const ScrollView = RNScrollView;
+  const shouldPinFooter = isAndroid && !!footer;
 
   return (
     <LinearGradient
@@ -45,14 +50,19 @@ export const SetupStepLayout = ({
           enabled={Platform.OS === 'ios'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            automaticallyAdjustKeyboardInsets
-          >
+          <View style={styles.container}>
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={[
+                styles.scrollContent,
+                // Android: reserve space for the pinned footer so content doesn't sit underneath it.
+                shouldPinFooter ? { paddingBottom: 32 + ANDROID_FOOTER_SPACE + insets.bottom } : null,
+              ]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              automaticallyAdjustKeyboardInsets
+            >
             {/* Settings mode header */}
             {isSettings ? (
               <View style={styles.settingsHeader}>
@@ -115,19 +125,33 @@ export const SetupStepLayout = ({
 
             <View style={styles.flexSpacer} />
 
-            {footer ? <View style={[styles.contentWidth, styles.footer]}>{footer}</View> : null}
-          </ScrollView>
+              {/* iOS keeps footer inside ScrollView (existing behavior) */}
+              {!shouldPinFooter && footer ? <View style={[styles.contentWidth, styles.footer]}>{footer}</View> : null}
+            </ScrollView>
+
+            {/* Android: pin footer to bottom so it doesn't bounce/scroll ("ping pong") */}
+            {shouldPinFooter ? (
+              <View style={[styles.androidFooter, { paddingBottom: 12 + insets.bottom }]}>
+                <View style={styles.contentWidth}>{footer}</View>
+              </View>
+            ) : null}
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
 };
 
+const ANDROID_FOOTER_SPACE = 176;
+
 const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  container: {
     flex: 1,
   },
   keyboardAvoid: {
@@ -190,5 +214,14 @@ const styles = StyleSheet.create({
   },
   footer: {
     // paddingBottom: 8, // Removed to match SetupQuestionsTemplate
+  },
+  androidFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 26,
+    paddingTop: 12,
+    backgroundColor: 'rgba(245, 249, 255, 0.92)',
   },
 });

@@ -43,12 +43,17 @@ Keep **iOS behavior unchanged** while we add Android support.
   - Added dev screen `/dev/android-insights` for on-device validation.
   - Verified: `pnpm --filter mobile check-types` and `pnpm --filter mobile lint` pass.
 
+- 2026-01-08:
+  - Fixed Android dev build by setting Android `minSdkVersion` to 26 via `expo-build-properties` (required by Health Connect), then re-running `expo prebuild`.
+  - Fixed autolinking by using the fully-qualified module class name in `apps/mobile/modules/android-insights/expo-module.config.json` and regenerating Android native files.
+  - Expanded Health Connect reads: heart rate avg, sleep duration, and workouts count/duration are now included in `getHealthSummaryJson` and shown on `/dev/android-insights`.
+
 ## Verification
 
 - (pending) `pnpm --filter mobile lint`
 - (pending) `pnpm --filter mobile check-types`
-- (pending) `pnpm --filter mobile android:dev`
-- (pending) Manual QA on Android device: permissions + data reads
+- (done) `pnpm --filter mobile android:dev`
+- (pending) Manual QA on Android device: grant Health Connect permissions for steps/sleep/heart rate/exercise + validate data reads
 
 ## Outcomes
 

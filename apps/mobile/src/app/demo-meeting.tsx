@@ -1,4 +1,5 @@
 import { DemoMeetingReminder } from '@/components/organisms';
+import { useUserFirstName } from '@/hooks/use-user-first-name';
 
 /**
  * Demo Meeting Reminder Screen
@@ -7,7 +8,8 @@ import { DemoMeetingReminder } from '@/components/organisms';
  * Only accessible in demo mode.
  */
 export default function DemoMeetingScreen() {
-  return <DemoMeetingReminder />;
+  const userFirstName = useUserFirstName();
+  return <DemoMeetingReminder userName={userFirstName} />;
 }
 
 

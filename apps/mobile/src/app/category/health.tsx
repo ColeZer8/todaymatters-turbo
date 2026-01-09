@@ -4,11 +4,12 @@ import { Platform } from 'react-native';
 import { CategoryHealthTemplate } from '@/components/templates';
 import {
   getHealthSummarySafeAsync,
-  getIosInsightsSupportStatus,
-  requestHealthKitAuthorizationAsync,
+  requestHealthAuthorizationSafeAsync,
   type HealthRangeKey,
   type HealthSummary,
-} from '@/lib/ios-insights';
+} from '@/lib/insights';
+import { getIosInsightsSupportStatus } from '@/lib/ios-insights';
+import { getAndroidInsightsSupportStatus } from '@/lib/android-insights';
 
 export default function HealthHealthScreen() {
   const [range, setRange] = useState<HealthRangeKey>('today');
@@ -16,8 +17,10 @@ export default function HealthHealthScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const support = useMemo(() => getIosInsightsSupportStatus(), []);
-  const canUseNative = Platform.OS === 'ios' && support === 'available';
+  const iosSupport = useMemo(() => getIosInsightsSupportStatus(), []);
+  const androidSupport = useMemo(() => getAndroidInsightsSupportStatus(), []);
+  const canUseNative =
+    (Platform.OS === 'ios' && iosSupport === 'available') || (Platform.OS === 'android' && androidSupport === 'available');
 
   const refresh = useCallback(async () => {
     if (!canUseNative) return;
@@ -41,7 +44,7 @@ export default function HealthHealthScreen() {
     if (!canUseNative) return;
     setErrorMessage(null);
     try {
-      await requestHealthKitAuthorizationAsync();
+      await requestHealthAuthorizationSafeAsync();
       await refresh();
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e));

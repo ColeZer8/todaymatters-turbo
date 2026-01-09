@@ -9,12 +9,16 @@ import {
   type UsageRangeKey,
   type UsageSummary,
   // Health Connect (stubbed for now)
+  getHealthAuthorizationStatusAsync,
   getHealthSummaryAsync,
+  getLatestWorkoutSummaryAsync,
   getStepCountSumAsync,
   isHealthConnectAvailableAsync,
   openHealthConnectSettingsAsync,
   requestHealthAuthorizationAsync,
   type HealthSummary,
+  type HealthAuthorizationStatus,
+  type WorkoutSummary,
   type StepCountSumOptions,
 } from 'android-insights';
 
@@ -23,6 +27,8 @@ export {
   type UsageRangeKey,
   type UsageSummary,
   type HealthSummary,
+  type HealthAuthorizationStatus,
+  type WorkoutSummary,
   type StepCountSumOptions,
 };
 
@@ -84,6 +90,12 @@ export async function requestHealthConnectAuthorizationSafeAsync(): Promise<bool
   return await requestHealthAuthorizationAsync();
 }
 
+export async function getHealthAuthorizationStatusSafeAsync(): Promise<HealthAuthorizationStatus> {
+  const support = getAndroidInsightsSupportStatus();
+  if (support !== 'available') return 'denied';
+  return await getHealthAuthorizationStatusAsync();
+}
+
 export async function getHealthSummarySafeAsync(range: HealthRangeKey): Promise<HealthSummary | null> {
   const support = getAndroidInsightsSupportStatus();
   if (support !== 'available') return null;
@@ -95,6 +107,19 @@ export async function getHealthSummarySafeAsync(range: HealthRangeKey): Promise<
   };
 
   return await getHealthSummaryAsync(options);
+}
+
+export async function getLatestWorkoutSummarySafeAsync(range: HealthRangeKey): Promise<WorkoutSummary | null> {
+  const support = getAndroidInsightsSupportStatus();
+  if (support !== 'available') return null;
+
+  const { start, end } = getRangeDates(range);
+  const options: StepCountSumOptions = {
+    startDateMs: start.getTime(),
+    endDateMs: end.getTime(),
+  };
+
+  return await getLatestWorkoutSummaryAsync(options);
 }
 
 export async function getTodayStepCountAsync(): Promise<number> {

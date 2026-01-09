@@ -12,7 +12,7 @@ import { BottomToolbar } from './BottomToolbar';
  * 
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoMorningRoutine = () => {
+export const DemoMorningRoutine = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -27,7 +27,7 @@ export const DemoMorningRoutine = () => {
             Good morning,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

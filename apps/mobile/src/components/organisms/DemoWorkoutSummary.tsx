@@ -45,6 +45,8 @@ export interface DemoWorkoutSummaryData {
 interface DemoWorkoutSummaryProps {
   data?: DemoWorkoutSummaryData;
   statusLabel?: string;
+  healthProviderLabel?: string;
+  fallbackUserName?: string;
   isHealthConnected?: boolean;
   canConnectHealth?: boolean;
   canRefresh?: boolean;
@@ -392,6 +394,8 @@ const AchievementsList = ({ onClose }: { onClose: () => void }) => {
 export const DemoWorkoutSummary = ({
   data: incomingData,
   statusLabel,
+  healthProviderLabel = 'Apple Health',
+  fallbackUserName = 'Paul',
   isHealthConnected,
   canConnectHealth,
   canRefresh,
@@ -413,7 +417,7 @@ export const DemoWorkoutSummary = ({
 
   // Default demo values (used if no HealthKit data is passed).
   const fallbackData: DemoWorkoutSummaryData = {
-    userName: 'Paul',
+    userName: fallbackUserName,
     move: { currentKcal: 487, goalKcal: 600 },
     exercise: { currentMinutes: 52, goalMinutes: 45 },
     stand: { currentHours: 9, goalHours: 12 },
@@ -463,7 +467,7 @@ export const DemoWorkoutSummary = ({
 
         {statusLabel && !isHealthConnected ? (
           <View className="mb-5 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-            <Text className="text-[13px] font-semibold text-[#111827]">Apple Health</Text>
+            <Text className="text-[13px] font-semibold text-[#111827]">{healthProviderLabel}</Text>
             <Text className="mt-2 text-[12px] text-[#6B7280]">{statusLabel}</Text>
 
             {onConnectHealth || onRefresh ? (

@@ -9,6 +9,8 @@ import * as AndroidInsights from '@/lib/android-insights';
 export type HealthRangeKey = IosInsights.HealthRangeKey;
 
 export type HealthSummary = IosInsights.HealthSummary;
+export type WorkoutSummary = IosInsights.WorkoutSummary;
+export type HealthAuthorizationStatus = IosInsights.HealthAuthorizationStatus;
 
 export async function getHealthSummarySafeAsync(range: HealthRangeKey): Promise<HealthSummary | null> {
   if (Platform.OS === 'ios') return await IosInsights.getHealthSummarySafeAsync(range);
@@ -16,10 +18,22 @@ export async function getHealthSummarySafeAsync(range: HealthRangeKey): Promise<
   return null;
 }
 
+export async function getHealthAuthorizationStatusSafeAsync(): Promise<HealthAuthorizationStatus> {
+  if (Platform.OS === 'ios') return await IosInsights.getHealthAuthorizationStatusSafeAsync();
+  if (Platform.OS === 'android') return await AndroidInsights.getHealthAuthorizationStatusSafeAsync();
+  return 'denied';
+}
+
 export async function requestHealthAuthorizationSafeAsync(): Promise<boolean> {
   if (Platform.OS === 'ios') return await IosInsights.requestHealthKitAuthorizationAsync();
   if (Platform.OS === 'android') return await AndroidInsights.requestHealthConnectAuthorizationSafeAsync();
   return false;
+}
+
+export async function getLatestWorkoutSummarySafeAsync(range: HealthRangeKey): Promise<WorkoutSummary | null> {
+  if (Platform.OS === 'ios') return await IosInsights.getLatestWorkoutSummarySafeAsync(range);
+  if (Platform.OS === 'android') return await AndroidInsights.getLatestWorkoutSummarySafeAsync(range);
+  return null;
 }
 
 // Screen time / usage (normalized)

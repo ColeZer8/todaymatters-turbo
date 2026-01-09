@@ -138,7 +138,7 @@ export default function AndroidInsightsDevScreen() {
             </View>
 
             <View className="mt-6 rounded-2xl bg-slate-950/60 p-4">
-              <Text className="text-sm font-semibold text-white">Health Summary (steps only for now)</Text>
+              <Text className="text-sm font-semibold text-white">Health Summary</Text>
               <Text className="mt-1 text-xs text-slate-400">Range: {healthRange}</Text>
               <View className="mt-3 gap-2">
                 <GradientButton label="Range: today" onPress={() => setHealthRange('today')} />
@@ -149,6 +149,13 @@ export default function AndroidInsightsDevScreen() {
               </View>
               <View className="mt-4">
                 <Text className="text-xs text-slate-400">Steps: {healthSummary?.steps ?? '—'}</Text>
+                <Text className="mt-1 text-xs text-slate-400">Avg HR (bpm): {healthSummary?.heartRateAvgBpm ?? '—'}</Text>
+                <Text className="mt-1 text-xs text-slate-400">
+                  Sleep (seconds): {healthSummary?.sleepAsleepSeconds ?? '—'}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-400">
+                  Workouts: {healthSummary?.workoutsCount ?? '—'} · Workout duration (seconds): {healthSummary?.workoutsDurationSeconds ?? '—'}
+                </Text>
                 {healthSummary?.errors?.length ? (
                   <Text className="mt-2 text-xs text-amber-200">Errors: {healthSummary.errors.join(' · ')}</Text>
                 ) : null}

@@ -15,6 +15,14 @@ import {
   type ScreenTimeRangeKey,
   type ScreenTimeSummary,
 } from '@/lib/ios-insights';
+import {
+  getUsageAuthorizationStatusSafeAsync,
+  getUsageSummarySafeAsync,
+  openUsageSettingsSafeAsync,
+  type UsageAccessAuthorizationStatus,
+  type UsageSummary,
+} from '@/lib/insights';
+import { getAndroidInsightsSupportStatus } from '@/lib/android-insights';
 
 const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
@@ -33,6 +41,8 @@ const isStale = (generatedAtIso: string | undefined, maxAgeMinutes: number): boo
 export default function DemoScreenTimeScreen() {
   const isDemoActive = useDemoStore((s) => s.isActive);
   const router = useRouter();
+
+  // Keep iOS state and logic intact (Screen Time / FamilyControls)
   const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -44,6 +54,17 @@ export default function DemoScreenTimeScreen() {
   const { supportsRange } = useMemo(() => getScreenTimeReportSupportStatus(), []);
   const nativeMethods = useMemo(() => getScreenTimeNativeMethodAvailabilityStatus(), []);
   const showAuthorizationCta = canUseNative && (status === 'notDetermined' || status === 'denied');
+
+  // Android state (UsageStatsManager)
+  const androidSupportStatus = useMemo(() => getAndroidInsightsSupportStatus(), []);
+  const [androidStatus, setAndroidStatus] = useState<UsageAccessAuthorizationStatus>('unsupported');
+  const [androidSummary, setAndroidSummary] = useState<UsageSummary | null>(null);
+  const [androidIsSyncing, setAndroidIsSyncing] = useState(false);
+  const [androidErrorMessage, setAndroidErrorMessage] = useState<string | null>(null);
+
+  const isAndroid = Platform.OS === 'android';
+  const canUseAndroidNative = isAndroid && androidSupportStatus === 'available';
+  const showAndroidAuthorizationCta = canUseAndroidNative && androidStatus !== 'authorized';
 
   const statusLabel = useMemo(() => {
     if (Platform.OS !== 'ios') return 'iOS only.';
@@ -67,21 +88,62 @@ export default function DemoScreenTimeScreen() {
     return 'Screen Time unavailable.';
   }, [errorMessage, nativeMethods, status, supportStatus]);
 
+  const androidStatusLabel = useMemo(() => {
+    if (Platform.OS !== 'android') return 'Android only.';
+    if (androidSupportStatus === 'expoGo') {
+      return 'You are running in Expo Go. Usage Stats requires a custom Android dev client. Build it (pnpm --filter mobile android) and open the installed “mobile” app (not Expo Go).';
+    }
+    if (androidSupportStatus === 'missingNativeModule') {
+      return 'AndroidInsights native module is not present in this build. Rebuild the Android dev client.';
+    }
+    if (androidErrorMessage) return `Error: ${androidErrorMessage}`;
+    if (androidStatus === 'authorized') return 'Usage Stats connected. Tap Refresh to pull the latest totals.';
+    if (androidStatus === 'denied') return 'Usage access is off. Enable “Usage Access” once to see today’s totals here.';
+    if (androidStatus === 'notDetermined') return 'Enable “Usage Access” once to see today’s totals here.';
+    if (androidStatus === 'unsupported') return 'Usage Stats is not available.';
+    return 'Usage Stats unavailable.';
+  }, [androidErrorMessage, androidStatus, androidSupportStatus]);
+
+  const resolvedSummary: { totalSeconds: number; topApps: Array<{ id: string; name: string; durationSeconds: number; pickups?: number }> } | null =
+    Platform.OS === 'ios'
+      ? summary
+        ? {
+            totalSeconds: summary.totalSeconds,
+            topApps: summary.topApps.map((app) => ({
+              id: app.bundleIdentifier,
+              name: app.displayName,
+              durationSeconds: app.durationSeconds,
+              pickups: app.pickups,
+            })),
+          }
+        : null
+      : androidSummary
+        ? {
+            totalSeconds: androidSummary.totalSeconds,
+            topApps: androidSummary.topApps.map((app) => ({
+              id: app.packageName,
+              name: app.displayName,
+              durationSeconds: app.durationSeconds,
+              pickups: 0,
+            })),
+          }
+        : null;
+
   const totalLabel = useMemo(() => {
-    if (!summary) return '—';
-    return formatDuration(summary.totalSeconds);
-  }, [summary]);
+    if (!resolvedSummary) return '—';
+    return formatDuration(resolvedSummary.totalSeconds);
+  }, [resolvedSummary]);
 
   const score = useMemo(() => {
-    if (!summary) return null;
-    const minutes = Math.round(summary.totalSeconds / 60);
-    const pickups = summary.topApps.reduce((acc, app) => acc + app.pickups, 0);
+    if (!resolvedSummary) return null;
+    const minutes = Math.round(resolvedSummary.totalSeconds / 60);
+    const pickups = resolvedSummary.topApps.reduce((acc, app) => acc + (app.pickups ?? 0), 0);
     // Heuristic score: lower minutes and lower pickups => higher score.
     // Keeps this "real" (derived from actual data) without claiming to be Apple’s metric.
     const minutesPenalty = Math.min(70, Math.round(minutes / 6));
     const pickupsPenalty = Math.min(30, Math.round(pickups / 8));
     return Math.max(0, Math.min(100, 100 - minutesPenalty - pickupsPenalty));
-  }, [summary]);
+  }, [resolvedSummary]);
 
   const scoreLabel = useMemo(() => {
     if (score === null) return '—';
@@ -101,35 +163,55 @@ export default function DemoScreenTimeScreen() {
   }, []);
 
   const insightBody = useMemo(() => {
-    if (!summary) return null;
-    const minutes = Math.round(summary.totalSeconds / 60);
+    if (!resolvedSummary) return null;
+    const minutes = Math.round(resolvedSummary.totalSeconds / 60);
     if (minutes === 0) return "No usage yet today. You’re set up for a focused day.";
     if (minutes <= 90) return 'Your screen time is light today—great control. Keep momentum by batching check-ins.';
     if (minutes <= 180) return 'You’re in a solid range. Try compressing social check-ins into one window to protect deep work.';
     return 'Screen time is trending high today. A small boundary (like a 15-minute cap) can protect your evening routine.';
-  }, [summary]);
+  }, [resolvedSummary]);
 
   const suggestionBody = useMemo(() => {
-    if (!summary) return null;
-    const top = summary.topApps[0]?.displayName;
+    if (!resolvedSummary) return null;
+    const top = resolvedSummary.topApps[0]?.name;
     if (!top) return 'Try a 15-minute limit for social apps this evening to protect your wind-down routine.';
     return `Try setting a 15-minute limit for ${top} this evening to protect your wind-down routine.`;
-  }, [summary]);
+  }, [resolvedSummary]);
 
   const topApps = useMemo(() => {
-    if (!summary) return [];
-    return summary.topApps.map((app) => {
-      const category = categorizeApp(app.displayName);
+    if (!resolvedSummary) return [];
+    return resolvedSummary.topApps.map((app) => {
+      const category = categorizeApp(app.name);
       return {
-        id: app.bundleIdentifier,
-        name: app.displayName,
+        id: app.id,
+        name: app.name,
         durationLabel: formatDuration(app.durationSeconds),
         durationSeconds: app.durationSeconds,
         categoryLabel: category.label,
         categoryAccent: category.accent,
       };
     });
-  }, [summary]);
+  }, [resolvedSummary]);
+
+  const refreshAndroid = useCallback(async () => {
+    if (!canUseAndroidNative) return;
+    setAndroidIsSyncing(true);
+    setAndroidErrorMessage(null);
+    try {
+      const [nextStatus, nextSummary] = await Promise.all([
+        getUsageAuthorizationStatusSafeAsync(),
+        getUsageSummarySafeAsync(range),
+      ]);
+      setAndroidStatus(nextStatus);
+      setAndroidSummary(nextSummary);
+    } catch (e) {
+      setAndroidStatus('unknown');
+      setAndroidSummary(null);
+      setAndroidErrorMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAndroidIsSyncing(false);
+    }
+  }, [canUseAndroidNative, range]);
 
   const refreshStatusAndCache = useCallback(async (): Promise<{
     nextStatus: ScreenTimeAuthorizationStatus;
@@ -162,7 +244,8 @@ export default function DemoScreenTimeScreen() {
 
   useEffect(() => {
     if (!isDemoActive) return;
-    void refreshStatusAndCache();
+    if (Platform.OS === 'ios') void refreshStatusAndCache();
+    if (Platform.OS === 'android') void refreshAndroid();
   }, [isDemoActive, refreshStatusAndCache]);
 
   const onRequestAuthorization = useCallback(async () => {
@@ -191,6 +274,18 @@ export default function DemoScreenTimeScreen() {
       setStatus('unknown');
     }
   }, [isDemoActive, refreshStatusAndCache]);
+
+  const onRequestAndroidAuthorization = useCallback(async () => {
+    if (!isDemoActive) return;
+    setAndroidErrorMessage(null);
+    try {
+      await openUsageSettingsSafeAsync();
+      // User must grant access in Settings; we re-check when they return.
+      await refreshAndroid();
+    } catch (e) {
+      setAndroidErrorMessage(e instanceof Error ? e.message : String(e));
+    }
+  }, [isDemoActive, refreshAndroid]);
 
   const maybeAutoSync = useCallback(async () => {
     if (!isDemoActive) return;
@@ -231,7 +326,7 @@ export default function DemoScreenTimeScreen() {
 
   useEffect(() => {
     if (!isDemoActive) return;
-    void maybeAutoSync();
+    if (Platform.OS === 'ios') void maybeAutoSync();
   }, [isDemoActive, maybeAutoSync]);
 
   if (!isDemoActive) {
@@ -244,7 +339,7 @@ export default function DemoScreenTimeScreen() {
       <ScreenTimeAnalyticsTemplate
         range={range}
         onChangeRange={setRange}
-        canChangeRange={supportsRange}
+        canChangeRange={Platform.OS === 'ios' ? supportsRange : true}
         totalLabel={totalLabel}
         deltaLabel={deltaLabel}
         score={score}
@@ -252,14 +347,22 @@ export default function DemoScreenTimeScreen() {
         scoreTrendLabel={scoreTrendLabel}
         insightBody={insightBody}
         suggestionBody={suggestionBody}
-        hourlyBuckets={summary?.hourlyBucketsSeconds ?? null}
+        hourlyBuckets={Platform.OS === 'ios' ? summary?.hourlyBucketsSeconds ?? null : null}
         topApps={topApps}
         onPressBack={() => router.back()}
         onPressSettings={undefined}
-        isSyncing={isSyncing}
-        statusLabel={showAuthorizationCta || !!errorMessage ? statusLabel : null}
-        onRequestAuthorization={onRequestAuthorization}
-        showAuthorizationCta={showAuthorizationCta}
+        isSyncing={Platform.OS === 'ios' ? isSyncing : androidIsSyncing}
+        statusLabel={
+          Platform.OS === 'ios'
+            ? showAuthorizationCta || !!errorMessage
+              ? statusLabel
+              : null
+            : showAndroidAuthorizationCta || !!androidErrorMessage
+              ? androidStatusLabel
+              : null
+        }
+        onRequestAuthorization={Platform.OS === 'ios' ? onRequestAuthorization : onRequestAndroidAuthorization}
+        showAuthorizationCta={Platform.OS === 'ios' ? showAuthorizationCta : showAndroidAuthorizationCta}
       />
     </>
   );

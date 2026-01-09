@@ -11,7 +11,7 @@ import { BottomToolbar } from './BottomToolbar';
  * for their workout. Displays a stop icon, countdown timer, and upcoming event preview.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoWorkoutInterruption = () => {
+export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -26,7 +26,7 @@ export const DemoWorkoutInterruption = () => {
             Hold on,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

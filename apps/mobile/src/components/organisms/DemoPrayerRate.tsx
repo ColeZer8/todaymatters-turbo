@@ -11,7 +11,7 @@ import { BottomToolbar } from './BottomToolbar';
  * Shows completion state after prayer session with star rating and journal.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoPrayerRate = () => {
+export const DemoPrayerRate = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(4);
   const [journalText, setJournalText] = useState('');
@@ -28,7 +28,7 @@ export const DemoPrayerRate = () => {
             Well done,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

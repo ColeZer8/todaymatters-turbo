@@ -26,6 +26,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { useDemoStore, TIME_PRESETS, type TimeOfDay } from '@/stores';
 import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
+import { useUserFirstName } from '@/hooks/use-user-first-name';
 
 // Import templates for the demo
 import { HomeTemplate } from './HomeTemplate';
@@ -81,64 +82,67 @@ function DemoCalendarSlide() {
   );
 }
 
-// Demo slides configuration
-const DEMO_SLIDES: DemoSlide[] = [
-  {
-    id: 'home',
-    title: 'Home Dashboard',
-    description: 'Daily brief with personalized greeting and schedule overview',
-    component: (
-      <HomeTemplate
-        dailyBrief={{
-          name: 'Paul',
-          date: 'Friday, Dec 19',
-          unassignedCount: 3,
-          line1: 'This is your day.',
-          line2: 'What matters most right now?',
-          line3: 'You have time to move one thing forward.',
-        }}
-      />
-    ),
-  },
-  {
-    id: 'calendar',
-    title: 'Planned vs Actual',
-    description: 'Side-by-side view comparing your plan to what actually happened',
-    component: <DemoCalendarSlide />,
-  },
-  {
-    id: 'analytics',
-    title: 'Life Analytics',
-    description: 'Track time across Faith, Family, Work, and Health categories',
-    component: <AnalyticsTemplate />,
-  },
-  {
-    id: 'review-time',
-    title: 'Review Time',
-    description: 'Categorize unassigned time blocks with AI suggestions',
-    component: <ReviewTimeTemplate />,
-  },
-  {
-    id: 'profile',
-    title: 'Profile & Goals',
-    description: 'Core values, goals, and work initiatives at a glance',
-    component: (
-      <ProfileTemplate
-        name="Paul"
-        role="Professional"
-        badgeLabel="Pro Member"
-        coreValues={['Family', 'Integrity', 'Creativity']}
-        goals={[]}
-        initiatives={[]}
-        menuItems={[]}
-      />
-    ),
-  },
-];
+function buildDemoSlides(userFirstName: string): DemoSlide[] {
+  return [
+    {
+      id: 'home',
+      title: 'Home Dashboard',
+      description: 'Daily brief with personalized greeting and schedule overview',
+      component: (
+        <HomeTemplate
+          dailyBrief={{
+            name: userFirstName,
+            date: 'Friday, Dec 19',
+            unassignedCount: 3,
+            line1: 'This is your day.',
+            line2: 'What matters most right now?',
+            line3: 'You have time to move one thing forward.',
+          }}
+        />
+      ),
+    },
+    {
+      id: 'calendar',
+      title: 'Planned vs Actual',
+      description: 'Side-by-side view comparing your plan to what actually happened',
+      component: <DemoCalendarSlide />,
+    },
+    {
+      id: 'analytics',
+      title: 'Life Analytics',
+      description: 'Track time across Faith, Family, Work, and Health categories',
+      component: <AnalyticsTemplate />,
+    },
+    {
+      id: 'review-time',
+      title: 'Review Time',
+      description: 'Categorize unassigned time blocks with AI suggestions',
+      component: <ReviewTimeTemplate />,
+    },
+    {
+      id: 'profile',
+      title: 'Profile & Goals',
+      description: 'Core values, goals, and work initiatives at a glance',
+      component: (
+        <ProfileTemplate
+          name={userFirstName}
+          role="Professional"
+          badgeLabel="Pro Member"
+          coreValues={['Family', 'Integrity', 'Creativity']}
+          goals={[]}
+          initiatives={[]}
+          menuItems={[]}
+        />
+      ),
+    },
+  ];
+}
 
 export const DemoCarouselTemplate = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const userFirstName = useUserFirstName();
+  const slides = buildDemoSlides(userFirstName);
   const flatListRef = useRef<FlatList<DemoSlide>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showControls, setShowControls] = useState(false);
@@ -169,10 +173,10 @@ export const DemoCarouselTemplate = () => {
   }).current;
 
   const goToSlide = useCallback((index: number) => {
-    if (index >= 0 && index < DEMO_SLIDES.length) {
+    if (index >= 0 && index < slides.length) {
       flatListRef.current?.scrollToIndex({ index, animated: true });
     }
-  }, []);
+  }, [slides.length]);
 
   const goToPrevious = useCallback(() => {
     goToSlide(currentIndex - 1);
@@ -214,7 +218,7 @@ export const DemoCarouselTemplate = () => {
     []
   );
 
-  const currentSlide = DEMO_SLIDES[currentIndex];
+  const currentSlide = slides[currentIndex];
   const currentIcon = TIME_ICONS[timeOfDay];
   const currentColor = TIME_COLORS[timeOfDay];
 
@@ -223,7 +227,7 @@ export const DemoCarouselTemplate = () => {
       {/* Full Screen Carousel */}
       <FlatList
         ref={flatListRef}
-        data={DEMO_SLIDES}
+        data={slides}
         renderItem={renderSlide}
         keyExtractor={(item) => item.id}
         horizontal
@@ -262,7 +266,7 @@ export const DemoCarouselTemplate = () => {
         style={{ bottom: insets.bottom + 8 }}
         pointerEvents="none"
       >
-        {DEMO_SLIDES.map((slide, index) => (
+        {slides.map((slide, index) => (
           <View
             key={slide.id}
             className="rounded-full"
@@ -320,7 +324,7 @@ export const DemoCarouselTemplate = () => {
             {/* Center - Slide Info */}
             <View className="flex-1 justify-center items-center px-8">
               <Text className="text-white/60 text-[13px] font-semibold uppercase tracking-wider mb-2">
-                {currentIndex + 1} of {DEMO_SLIDES.length}
+            {currentIndex + 1} of {slides.length}
               </Text>
               <Text className="text-white text-[28px] font-bold text-center mb-2">
                 {currentSlide?.title}
@@ -350,11 +354,11 @@ export const DemoCarouselTemplate = () => {
                     e.stopPropagation();
                     goToNext();
                   }}
-                  disabled={currentIndex === DEMO_SLIDES.length - 1}
+                  disabled={currentIndex === slides.length - 1}
                   className="h-14 w-14 items-center justify-center rounded-full bg-white/20"
                   style={({ pressed }) => ({
                     opacity:
-                      currentIndex === DEMO_SLIDES.length - 1
+                      currentIndex === slides.length - 1
                         ? 0.3
                         : pressed
                           ? 0.7

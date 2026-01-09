@@ -1,4 +1,5 @@
 import { DemoTrafficAccident } from '@/components/organisms';
+import { useUserFirstName } from '@/hooks/use-user-first-name';
 
 /**
  * Demo Traffic Accident Screen
@@ -7,7 +8,8 @@ import { DemoTrafficAccident } from '@/components/organisms';
  * Only accessible in demo mode.
  */
 export default function DemoTrafficAccidentScreen() {
-  return <DemoTrafficAccident />;
+  const userFirstName = useUserFirstName();
+  return <DemoTrafficAccident userName={userFirstName} />;
 }
 
 

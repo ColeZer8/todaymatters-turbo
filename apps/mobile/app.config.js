@@ -76,6 +76,14 @@ export default {
     },
     plugins: [
       [
+        'expo-build-properties',
+        {
+          android: {
+            minSdkVersion: 26, // Required for Health Connect
+          },
+        },
+      ],
+      [
         'expo-router',
         {
           origin: false,

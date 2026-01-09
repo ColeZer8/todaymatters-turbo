@@ -10,7 +10,7 @@ import { BottomToolbar } from './BottomToolbar';
  * Shows the interruption flow when a meeting is about to start.
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoMeetingReminder = () => {
+export const DemoMeetingReminder = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -25,7 +25,7 @@ export const DemoMeetingReminder = () => {
             Excuse me,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

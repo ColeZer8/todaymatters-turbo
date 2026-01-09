@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, type ViewStyle } from 'react-native';
-import { Minus, Plus } from 'lucide-react-native';
+import { Platform, Pressable, Text, TextInput, View, type ViewStyle } from 'react-native';
+import { GripVertical, Minus, Plus } from 'lucide-react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -215,8 +215,7 @@ const RoutineItemWithDrag = ({
   const dragTranslateY = useSharedValue(0);
   const displaceY = useSharedValue(0);
   const scale = useSharedValue(1);
-  
-  const itemHeightRef = useRef(88);
+  const itemHeight = useSharedValue(88);
 
   // Calculate displacement for non-dragged items when target changes
   useEffect(() => {
@@ -261,9 +260,12 @@ const RoutineItemWithDrag = ({
   const gesture = Gesture.Pan()
     .activateAfterLongPress(200)
     .enabled(!expanded)
+    .minPointers(1)
+    .maxPointers(1)
+    .activeOffsetY(Platform.OS === 'android' ? 10 : 0)
     .onStart(() => {
       scale.value = withTiming(1.03, { duration: 100 });
-      runOnJS(onDragStart)(index, itemHeightRef.current);
+      runOnJS(onDragStart)(index, itemHeight.value);
     })
     .onUpdate((event) => {
       dragTranslateY.value = event.translationY;
@@ -293,22 +295,36 @@ const RoutineItemWithDrag = ({
     };
   });
 
+  const androidDragHandle =
+    Platform.OS === 'android' ? (
+      <GestureDetector gesture={gesture}>
+        <View
+          accessibilityRole="button"
+          accessibilityLabel="Drag to reorder"
+          className="h-9 w-9 items-center justify-center rounded-full bg-[#EEF5FF]"
+        >
+          <GripVertical size={18} color="#2563EB" />
+        </View>
+      </GestureDetector>
+    ) : null;
+
   return (
     <View
       style={{ marginBottom: ITEM_SPACING }}
       onLayout={(e) => {
         const height = e.nativeEvent.layout.height;
-        itemHeightRef.current = height;
+        itemHeight.value = height;
         onMeasure(index, height);
       }}
     >
-      <GestureDetector gesture={gesture}>
+      {Platform.OS === 'android' ? (
         <Animated.View
           style={[
             {
               shadowColor: '#0f172a',
               shadowRadius: 12,
               shadowOffset: { width: 0, height: 3 },
+              elevation: isDragged ? 12 : 3,
             },
             animatedStyle,
           ]}
@@ -321,6 +337,7 @@ const RoutineItemWithDrag = ({
             onDelete={() => onDelete(item.id)}
             minutesLabel={`${item.minutes}m`}
             expanded={expanded}
+            dragHandle={androidDragHandle}
           />
 
           {expanded ? (
@@ -332,7 +349,39 @@ const RoutineItemWithDrag = ({
             />
           ) : null}
         </Animated.View>
-      </GestureDetector>
+      ) : (
+        <GestureDetector gesture={gesture}>
+          <Animated.View
+            style={[
+              {
+                shadowColor: '#0f172a',
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 3 },
+              },
+              animatedStyle,
+            ]}
+          >
+            <RoutineItemCard
+              title={item.title}
+              minutes={item.minutes}
+              icon={item.icon}
+              onPress={() => onToggleExpand(item.id)}
+              onDelete={() => onDelete(item.id)}
+              minutesLabel={`${item.minutes}m`}
+              expanded={expanded}
+            />
+
+            {expanded ? (
+              <TimeEditPanel
+                item={item}
+                getStartEnd={getStartEnd}
+                onChangeMinutes={onChangeMinutes}
+                onToggleExpand={onToggleExpand}
+              />
+            ) : null}
+          </Animated.View>
+        </GestureDetector>
+      )}
     </View>
   );
 };

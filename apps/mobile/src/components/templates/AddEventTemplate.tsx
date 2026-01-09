@@ -108,6 +108,12 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
     };
 
     const onDateChange = (event: DateTimePickerEvent, date?: Date) => {
+        // Android shows DateTimePicker as a modal dialog. If we keep it mounted, it will immediately re-open
+        // after "OK" or "Cancel", causing a stuck loop. iOS uses inline rendering, so we only auto-close on Android.
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            if (event.type === 'dismissed') return;
+        }
         if (date) {
             setSelectedDate(date);
             // Also update start/end times to keep them on the same day if needed
@@ -121,10 +127,18 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
     };
 
     const onStartTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+        if (Platform.OS === 'android') {
+            setShowStartTimePicker(false);
+            if (event.type === 'dismissed') return;
+        }
         if (date) setStartTime(date);
     };
 
     const onEndTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+        if (Platform.OS === 'android') {
+            setShowEndTimePicker(false);
+            if (event.type === 'dismissed') return;
+        }
         if (date) setEndTime(date);
     };
 
@@ -229,7 +243,7 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
                             <DateTimePicker
                                 value={selectedDate}
                                 mode="date"
-                                display="inline"
+                                display={Platform.OS === 'ios' ? 'inline' : 'default'}
                                 onChange={onDateChange}
                                 themeVariant="light"
                             />

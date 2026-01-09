@@ -25,9 +25,11 @@ const withAndroidInsights = (config) => {
     // Health Connect (steps only for now; expand as we add more record types).
     // Docs: https://developer.android.com/health-and-fitness/guides/health-connect/develop/get-started
     ensureUsesPermission('android.permission.health.READ_STEPS');
-
-    // Ensure we have android namespace set (Expo typically does, but keep it safe).
-    AndroidConfig.Manifest.ensureNamespace(manifest);
+    ensureUsesPermission('android.permission.health.READ_SLEEP');
+    ensureUsesPermission('android.permission.health.READ_HEART_RATE');
+    ensureUsesPermission('android.permission.health.READ_EXERCISE');
+    ensureUsesPermission('android.permission.health.READ_ACTIVE_CALORIES_BURNED');
+    ensureUsesPermission('android.permission.health.READ_TOTAL_CALORIES_BURNED');
 
     return config;
   });

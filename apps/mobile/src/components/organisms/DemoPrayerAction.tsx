@@ -10,7 +10,7 @@ import { BottomToolbar } from './BottomToolbar';
  * Shows the proactive prayer reminder with verse of the day.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoPrayerAction = () => {
+export const DemoPrayerAction = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   // Use serif font for scripture quote

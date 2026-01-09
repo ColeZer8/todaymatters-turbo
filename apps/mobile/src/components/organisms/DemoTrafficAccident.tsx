@@ -12,7 +12,7 @@ import { BottomToolbar } from './BottomToolbar';
  * Includes map visualization with accident marker and new route.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoTrafficAccident = () => {
+export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   // Use monospace font for timer
@@ -34,7 +34,7 @@ export const DemoTrafficAccident = () => {
             Wrap up,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

@@ -1,4 +1,5 @@
 import { DemoPrayerRate } from '@/components/organisms';
+import { useUserFirstName } from '@/hooks/use-user-first-name';
 
 /**
  * Demo Prayer Rate Screen
@@ -7,7 +8,8 @@ import { DemoPrayerRate } from '@/components/organisms';
  * Only accessible in demo mode.
  */
 export default function DemoPrayerRateScreen() {
-  return <DemoPrayerRate />;
+  const userFirstName = useUserFirstName();
+  return <DemoPrayerRate userName={userFirstName} />;
 }
 
 

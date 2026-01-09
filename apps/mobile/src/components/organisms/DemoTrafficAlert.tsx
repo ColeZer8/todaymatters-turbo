@@ -11,7 +11,7 @@ import { BottomToolbar } from './BottomToolbar';
  * Shows the proactive traffic alert when user needs to leave for an event.
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoTrafficAlert = () => {
+export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) => {
   const insets = useSafeAreaInsets();
 
   // Use monospace font with slashed zeros
@@ -39,7 +39,7 @@ export const DemoTrafficAlert = () => {
             Head's up,
           </Text>
           <Text className="text-[38px] leading-[42px] font-extrabold text-[#2563EB]">
-            Paul.
+            {userName}.
           </Text>
         </View>
 

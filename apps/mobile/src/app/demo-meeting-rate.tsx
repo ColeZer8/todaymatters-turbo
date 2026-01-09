@@ -1,4 +1,5 @@
 import { DemoMeetingRate } from '@/components/organisms';
+import { useUserFirstName } from '@/hooks/use-user-first-name';
 
 /**
  * Demo Meeting Rate Screen
@@ -7,7 +8,8 @@ import { DemoMeetingRate } from '@/components/organisms';
  * Only accessible in demo mode.
  */
 export default function DemoMeetingRateScreen() {
-  return <DemoMeetingRate />;
+  const userFirstName = useUserFirstName();
+  return <DemoMeetingRate userName={userFirstName} />;
 }
 
 

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { AnalyticsRangeToggle } from '@/components/molecules';
-import type { HealthSummary } from '@/lib/ios-insights';
+import type { HealthSummary } from '@/lib/insights';
 
 type CategoryId = 'faith' | 'family' | 'work' | 'health';
 type RangeKey = 'today' | 'week' | 'month' | 'year';

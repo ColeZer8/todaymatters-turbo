@@ -50,13 +50,27 @@ export interface HealthSummary {
   errors?: string[] | null;
 }
 
+export interface WorkoutSummary {
+  workoutStartIso: string;
+  workoutEndIso: string;
+  durationSeconds: number;
+  totalEnergyBurnedKcal: number | null;
+  avgHeartRateBpm: number | null;
+  maxHeartRateBpm: number | null;
+  errors?: string[] | null;
+}
+
+export type HealthAuthorizationStatus = 'notDetermined' | 'denied' | 'authorized';
+
 interface AndroidInsightsNativeModule {
   // Health Connect (scaffolded; implemented in follow-up)
   isHealthConnectAvailable(): Promise<boolean>;
   openHealthConnectSettings(): Promise<void>;
   requestHealthAuthorization(): Promise<boolean>;
+  getHealthAuthorizationStatus(): Promise<HealthAuthorizationStatus>;
   getHealthSummaryJson(options: StepCountSumOptions): Promise<string | null>;
   getStepCountSum(options: StepCountSumOptions): Promise<number>;
+  getLatestWorkoutSummaryJson(options: StepCountSumOptions): Promise<string | null>;
 
   // Usage stats ("Screen Time"-ish)
   getUsageAccessAuthorizationStatus(): Promise<UsageAccessAuthorizationStatus>;
@@ -103,6 +117,11 @@ export async function requestHealthAuthorizationAsync(): Promise<boolean> {
   return await requireAndroidInsightsMethod('requestHealthAuthorization')();
 }
 
+export async function getHealthAuthorizationStatusAsync(): Promise<HealthAuthorizationStatus> {
+  if (!NativeModule) return 'denied';
+  return await requireAndroidInsightsMethod('getHealthAuthorizationStatus')();
+}
+
 export async function getStepCountSumAsync(options: StepCountSumOptions): Promise<number> {
   if (!NativeModule) return 0;
   return await requireAndroidInsightsMethod('getStepCountSum')(options);
@@ -113,6 +132,13 @@ export async function getHealthSummaryAsync(options: StepCountSumOptions): Promi
   const json = await requireAndroidInsightsMethod('getHealthSummaryJson')(options);
   if (!json) return null;
   return JSON.parse(json) as HealthSummary;
+}
+
+export async function getLatestWorkoutSummaryAsync(options: StepCountSumOptions): Promise<WorkoutSummary | null> {
+  if (!NativeModule) return null;
+  const json = await requireAndroidInsightsMethod('getLatestWorkoutSummaryJson')(options);
+  if (!json) return null;
+  return JSON.parse(json) as WorkoutSummary;
 }
 
 export async function getUsageAccessAuthorizationStatusAsync(): Promise<UsageAccessAuthorizationStatus> {
