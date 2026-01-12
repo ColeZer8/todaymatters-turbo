@@ -10,6 +10,17 @@
 
 import withIosInsights from './plugins/with-ios-insights';
 import withAndroidInsights from './plugins/with-android-insights';
+import path from 'node:path';
+import dotenv from 'dotenv';
+
+// Ensure env vars are loaded for app.config evaluation in monorepo setups.
+// Expo often loads env automatically, but in Turborepos it’s easy to put `.env` at the workspace root.
+const projectRoot = __dirname;
+const workspaceRoot = path.resolve(projectRoot, '..', '..');
+
+dotenv.config({ path: path.resolve(workspaceRoot, '.env') });
+dotenv.config({ path: path.resolve(projectRoot, '.env') });
+dotenv.config({ path: path.resolve(projectRoot, '.env.local') });
 
 // Environment-specific configuration
 const ENV = {

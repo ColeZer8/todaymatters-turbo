@@ -12,6 +12,7 @@ export default function ConnectGoogleServicesScreen() {
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const accessToken = useAuthStore((state) => state.session?.access_token ?? null);
 
   const isProcessingOAuth = useGoogleServicesOAuthStore((state) => state.isProcessing);
   const oauthResult = useGoogleServicesOAuthStore((state) => state.result);
@@ -73,13 +74,16 @@ export default function ConnectGoogleServicesScreen() {
     setErrorMessage(null);
     setIsConnecting(true);
     try {
-      await startGoogleServicesOAuth(selectedServices);
+      if (!accessToken) {
+        throw new Error('Missing access token. Please sign in again and retry.');
+      }
+      await startGoogleServicesOAuth(selectedServices, accessToken);
       // We intentionally do not navigate here; the deep-link callback will drive state updates.
     } catch (error) {
       setIsConnecting(false);
       setErrorMessage(error instanceof Error ? error.message : 'Unable to open Google connection.');
     }
-  }, [selectedServices]);
+  }, [selectedServices, accessToken]);
 
   const handleSkip = useCallback(() => {
     clearOAuthResult();

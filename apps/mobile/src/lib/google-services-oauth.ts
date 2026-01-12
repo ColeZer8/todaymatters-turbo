@@ -58,19 +58,92 @@ export const buildGoogleServicesOAuthUrl = (services: GoogleService[]): string =
   )}`;
 };
 
+const looksLikeGoogleOAuthUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    // The consent screen should be on accounts.google.com (or occasionally other google hosts).
+    // counts.google.com is NOT a valid OAuth start target; opening it produces confusing errors.
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'counts.google.com') return false;
+    if (host.endsWith('.google.com') || host === 'accounts.google.com') {
+      return parsed.pathname.includes('/o/oauth2') || parsed.pathname.includes('/oauth2') || parsed.pathname.includes('/signin');
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
+const getRedirectUrlFromOAuthStartResponse = (response: Response): string | null => {
+  // Prefer explicit redirect location (what the backend should return).
+  const location = response.headers.get('location') ?? response.headers.get('Location');
+  if (location) return location;
+
+  // Some runtimes follow redirects and hide Location. If so, only accept URLs that look like Google OAuth.
+  const url = typeof response.url === 'string' ? response.url : '';
+  if (url && looksLikeGoogleOAuthUrl(url)) return url;
+
+  return null;
+};
+
 export const startGoogleServicesOAuth = async (
-  services: GoogleService[]
+  services: GoogleService[],
+  accessToken: string
 ): Promise<void> => {
+  if (!accessToken) {
+    throw new Error('Missing access token. Please sign in again and retry.');
+  }
+
   const oauthUrl = buildGoogleServicesOAuthUrl(services);
 
-  const canOpen = await Linking.canOpenURL(oauthUrl);
+  // Backend requires Authorization header; we must request the redirect URL first.
+  const response = await fetch(oauthUrl, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    // In RN this may still follow redirects; we handle both cases.
+    redirect: 'manual',
+  } as RequestInit);
+
+  if (__DEV__) {
+    const location = response.headers.get('location') ?? response.headers.get('Location');
+    console.log('🔗 Google Services OAuth start response:', {
+      status: response.status,
+      url: response.url,
+      location,
+    });
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('Not authorized to connect Google services. Please sign in again and retry.');
+  }
+
+  if (!response.ok && (response.status < 300 || response.status >= 400)) {
+    throw new Error(`Failed to start Google connection (HTTP ${response.status}).`);
+  }
+
+  const redirectUrl = getRedirectUrlFromOAuthStartResponse(response);
+  if (!redirectUrl) {
+    throw new Error(
+      'Failed to start Google connection (missing redirect URL). The backend must return a 302 with a Google OAuth Location header.'
+    );
+  }
+
+  if (!looksLikeGoogleOAuthUrl(redirectUrl)) {
+    throw new Error(
+      'Failed to start Google connection (unexpected redirect URL). Please contact the backend team to verify the Google OAuth URL generation.'
+    );
+  }
+
+  const canOpen = await Linking.canOpenURL(redirectUrl);
   if (!canOpen) {
     throw new Error(
       'Cannot open OAuth URL. Please check your network connection.'
     );
   }
 
-  await Linking.openURL(oauthUrl);
+  await Linking.openURL(redirectUrl);
 };
 
 export const isGoogleServicesOAuthCallback = (url: string): boolean => {

@@ -12,6 +12,15 @@
 
 import Constants from 'expo-constants';
 
+function readPublicEnv(key: string): string | undefined {
+  try {
+    // eslint-disable-next-line no-undef
+    return typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>)[key] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 interface AppConfig {
   supabase: {
     url: string;
@@ -48,7 +57,8 @@ const appConfig: AppConfig = {
     anonKey: config.supabaseAnonKey || '',
   },
   oauth: {
-    apiBaseUrl: config.oauthApiBaseUrl || '',
+    // Prefer Expo `extra`, but fall back to EXPO_PUBLIC_* (useful when `.env` is loaded but `extra` is stale).
+    apiBaseUrl: config.oauthApiBaseUrl || readPublicEnv('EXPO_PUBLIC_OAUTH_API_BASE_URL') || '',
     googleWebClientId: config.googleWebClientId || '',
   },
   env: {
