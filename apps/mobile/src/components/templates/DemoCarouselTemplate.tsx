@@ -98,6 +98,10 @@ function buildDemoSlides(userFirstName: string): DemoSlide[] {
             line2: 'What matters most right now?',
             line3: 'You have time to move one thing forward.',
           }}
+          pendingActions={{
+            communicationsCount: 4,
+            communicationsDescription: 'Connor, Grady, and 2 others need attention.',
+          }}
         />
       ),
     },

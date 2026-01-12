@@ -10,7 +10,7 @@ import {
   getNextTimeOfDayBoundary,
   type HomeBriefDraft,
 } from '@/lib/home-brief';
-import { fetchProfile, generateHomeBriefLlm } from '@/lib/supabase/services';
+import { fetchGmailEmailEvents, fetchProfile, generateHomeBriefLlm } from '@/lib/supabase/services';
 import {
   useAuthStore,
   useCurrentMinutes,
@@ -84,6 +84,10 @@ function HomeScreenInner() {
   const setLastLlmAt = useHomeBriefStore((s) => s.setLastLlmAt);
 
   const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
+  const [pendingCommunicationsCount, setPendingCommunicationsCount] = useState(0);
+  const [pendingCommunicationsDescription, setPendingCommunicationsDescription] = useState(
+    'No new Gmail to review.'
+  );
 
   const timersRef = useRef<{ debounce?: ReturnType<typeof setTimeout>; boundary?: ReturnType<typeof setTimeout> }>({});
   const llmRequestIdRef = useRef(0);
@@ -146,6 +150,56 @@ function HomeScreenInner() {
       cancelled = true;
     };
   }, [isAuthenticated, user?.id]);
+
+  // Load pending Gmail communications count + preview for the Pending Actions tile.
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    if (isDemoActive) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await fetchGmailEmailEvents(user.id, { includeRead: false, limit: 30 });
+        if (cancelled) return;
+
+        const count = rows.length;
+        const subjects = rows
+          .map((row) => row.title?.trim())
+          .filter((t): t is string => typeof t === 'string' && t.length > 0)
+          .slice(0, 2);
+
+        setPendingCommunicationsCount(count);
+
+        if (count === 0) {
+          setPendingCommunicationsDescription('No new Gmail to review.');
+          return;
+        }
+
+        if (subjects.length === 0) {
+          setPendingCommunicationsDescription(`${count} email${count === 1 ? '' : 's'} need attention.`);
+          return;
+        }
+
+        if (subjects.length === 1) {
+          setPendingCommunicationsDescription(`“${subjects[0]}” needs attention.`);
+          return;
+        }
+
+        const remaining = Math.max(0, count - 2);
+        setPendingCommunicationsDescription(
+          remaining > 0
+            ? `“${subjects[0]}”, “${subjects[1]}”, and ${remaining} other${remaining === 1 ? '' : 's'} need attention.`
+            : `“${subjects[0]}” and “${subjects[1]}” need attention.`
+        );
+      } catch {
+        // Non-blocking: keep default copy.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isDemoActive, user?.id]);
 
   const evaluateBrief = useMemo(() => {
     return (trigger: string) => {
@@ -381,6 +435,10 @@ function HomeScreenInner() {
           line1: displayBrief.line1,
           line2: displayBrief.line2,
           line3: displayBrief.line3,
+        }}
+        pendingActions={{
+          communicationsCount: pendingCommunicationsCount,
+          communicationsDescription: pendingCommunicationsDescription,
         }}
         onPressGreeting={isVoiceAvailable ? handlePressGreeting : undefined}
       />

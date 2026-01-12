@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
@@ -9,7 +9,6 @@ import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
-  presentScreenTimeReportSafeAsync,
   type ScreenTimeAuthorizationStatus,
   type ScreenTimeSummary,
 } from '@/lib/ios-insights';
@@ -23,6 +22,7 @@ export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
   const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
+  const isMountedRef = useRef(true);
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
   const setDerivedActualEvents = useEventsStore((state) => state.setDerivedActualEvents);
@@ -125,30 +125,32 @@ export default function ComprehensiveCalendarScreen() {
     }
 
     const cached = await getCachedScreenTimeSummarySafeAsync('today');
-    const shouldSync = !cached || isStale(cached.generatedAtIso, 15);
-    if (!shouldSync) {
+    // Important UX choice: Do NOT automatically present the iOS Screen Time report UI when the user
+    // opens the calendar. The system report view is intrusive and feels like a modal “pop up”.
+    //
+    // Instead:
+    // - Read cached data if present (non-intrusive).
+    // - A future explicit “Sync Screen Time” action can call `presentScreenTimeReportSafeAsync`.
+    //
+    // Keep the same staleness logic for future explicit sync; for now, just display cached if available.
+    if (cached && !isStale(cached.generatedAtIso, 60)) {
       setSummary(cached);
       return;
     }
 
-    // Sync via the report extension, then re-read cache with small retries.
-    await presentScreenTimeReportSafeAsync('today');
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const refreshed = await getCachedScreenTimeSummarySafeAsync('today');
-      if (refreshed) {
-        setSummary(refreshed);
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    }
-
-    // If we couldn't read a refreshed cache, keep whatever we had.
     setSummary(cached ?? null);
   }, [isStale, supportStatus]);
 
   useEffect(() => {
     void maybeAutoSync();
   }, [maybeAutoSync]);
+
+  const refreshActualEventsForSelectedDay = useCallback(async (): Promise<void> => {
+    if (!userId) return;
+    const events = await loadActualForDay(selectedDateYmd);
+    if (!isMountedRef.current) return;
+    setActualEventsForDate(selectedDateYmd, events);
+  }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, userId]);
 
   useEffect(() => {
     // Derive “display actual” events when Screen Time is present; otherwise clear derivation.
@@ -170,6 +172,29 @@ export default function ComprehensiveCalendarScreen() {
 
   // Actual events are Supabase-backed (no mock defaults). Screen Time derivation remains separate.
   const displayActualEvents = actualEvents;
+
+  // Refresh actual events when the app returns to foreground while this screen is mounted.
+  useEffect(() => {
+    isMountedRef.current = true;
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState !== 'active') return;
+      void refreshActualEventsForSelectedDay();
+    });
+    return () => {
+      isMountedRef.current = false;
+      subscription.remove();
+    };
+  }, [refreshActualEventsForSelectedDay]);
+
+  // While the calendar screen is visible, periodically refresh actual events.
+  // This allows backend ingested Google events (e.g. every ~4h) to appear without requiring navigation.
+  useEffect(() => {
+    if (!userId) return;
+    const interval = setInterval(() => {
+      void refreshActualEventsForSelectedDay();
+    }, 5 * 60_000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [refreshActualEventsForSelectedDay, userId]);
 
   const openAddEventPicker = useCallback((column?: 'planned' | 'actual', startMinutes?: number) => {
     router.push({

@@ -1125,6 +1125,57 @@ export type Database = {
         }
         Relationships: []
       }
+      location_samples: {
+        Row: {
+          id: string
+          user_id: string
+          recorded_at: string
+          latitude: number
+          longitude: number
+          accuracy_m: number | null
+          altitude_m: number | null
+          speed_mps: number | null
+          heading_deg: number | null
+          is_mocked: boolean | null
+          source: string
+          dedupe_key: string
+          raw: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          recorded_at: string
+          latitude: number
+          longitude: number
+          accuracy_m?: number | null
+          altitude_m?: number | null
+          speed_mps?: number | null
+          heading_deg?: number | null
+          is_mocked?: boolean | null
+          source: string
+          dedupe_key: string
+          raw?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          recorded_at?: string
+          latitude?: number
+          longitude?: number
+          accuracy_m?: number | null
+          altitude_m?: number | null
+          speed_mps?: number | null
+          heading_deg?: number | null
+          is_mocked?: boolean | null
+          source?: string
+          dedupe_key?: string
+          raw?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

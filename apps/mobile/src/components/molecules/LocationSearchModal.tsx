@@ -17,12 +17,13 @@ import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import { useOnboardingSync } from '@/lib/supabase/hooks/use-onboarding-sync';
 
-// Surgical fix: Use a guarded require for expo-location 
-let Location: any = null;
-try {
-    Location = require('expo-location');
-} catch (e) {
-    // handled via check below
+async function loadExpoLocationAsync(): Promise<typeof import('expo-location') | null> {
+    try {
+        // Lazy-load to avoid hard-crashing the app when the native module isn't compiled into the dev client.
+        return await import('expo-location');
+    } catch {
+        return null;
+    }
 }
 
 interface LocationResult {
@@ -112,6 +113,7 @@ export const LocationSearchModal = ({ visible, onClose, onSelect, currentLocatio
     }, [searchQuery]);
 
     const handleGetCurrentLocation = async () => {
+        const Location = await loadExpoLocationAsync();
         if (!Location || !Location.requestForegroundPermissionsAsync) {
             alert('Location services are not available in this build yet. Please rebuild the app.');
             return;

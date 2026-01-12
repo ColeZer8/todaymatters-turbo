@@ -7,3 +7,5 @@ export * from './home-brief';
 export * from './routines';
 export * from './ideal-day';
 export * from './links';
+export * from './location-samples';
+export * from './communications';

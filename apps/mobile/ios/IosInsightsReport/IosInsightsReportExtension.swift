@@ -790,18 +790,16 @@ private enum ScreenTimeAggregator {
                   
                   if overlapDuration > 0 {
                     let hourSeconds = Int((overlapDuration / segmentDuration) * Double(durationSeconds))
-                    if hourlyByApp[bundleId] == nil {
-                      hourlyByApp[bundleId] = [:]
-                    }
-                    hourlyByApp[bundleId]?[hour] = (hourlyByApp[bundleId]?[hour] ?? 0) + hourSeconds
+                    var hoursForApp = hourlyByApp[bundleId] ?? [:]
+                    hoursForApp[hour] = (hoursForApp[hour] ?? 0) + hourSeconds
+                    hourlyByApp[bundleId] = hoursForApp
                   }
                 }
               } else {
                 // Single hour case
-                if hourlyByApp[bundleId] == nil {
-                  hourlyByApp[bundleId] = [:]
-                }
-                hourlyByApp[bundleId]?[startHour] = (hourlyByApp[bundleId]?[startHour] ?? 0) + durationSeconds
+                var hoursForApp = hourlyByApp[bundleId] ?? [:]
+                hoursForApp[startHour] = (hoursForApp[startHour] ?? 0) + durationSeconds
+                hourlyByApp[bundleId] = hoursForApp
               }
             }
 

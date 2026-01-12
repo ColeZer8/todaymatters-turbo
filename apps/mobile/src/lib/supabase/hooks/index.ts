@@ -3,6 +3,8 @@ export * from './use-events-sync';
 export * from './use-onboarding-sync';
 export * from './use-routine-sync';
 export * from './use-ideal-day-sync';
+export * from './use-location-samples-sync';
+
 
 
 

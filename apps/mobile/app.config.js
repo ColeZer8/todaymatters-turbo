@@ -63,7 +63,14 @@ export default {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSMicrophoneUsageDescription: 'TodayMatters uses your microphone to have voice conversations with your AI coach.',
-        UIBackgroundModes: ['audio'],
+        // Location tracking (iOS only) for “planned day vs actual day” analysis.
+        // Requires explicit user consent; we request When In Use first, then Always (background) if enabled.
+        NSLocationWhenInUseUsageDescription:
+          'TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).',
+        NSLocationAlwaysAndWhenInUseUsageDescription:
+          'TodayMatters uses your location in the background to build an hour-by-hour view of your day for schedule comparison.',
+        // Background modes must include location for background updates.
+        UIBackgroundModes: ['audio', 'location'],
       },
     },
     android: {
@@ -76,6 +83,13 @@ export default {
         'android.permission.MODIFY_AUDIO_SETTINGS',
         'android.permission.WAKE_LOCK',
         'android.permission.BLUETOOTH',
+        // Location tracking (Android) for “planned day vs actual day” analysis.
+        // Foreground + background location + foreground service (required for background reliability).
+        'android.permission.ACCESS_COARSE_LOCATION',
+        'android.permission.ACCESS_FINE_LOCATION',
+        'android.permission.ACCESS_BACKGROUND_LOCATION',
+        'android.permission.FOREGROUND_SERVICE',
+        'android.permission.FOREGROUND_SERVICE_LOCATION',
       ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',

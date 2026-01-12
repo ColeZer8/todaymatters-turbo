@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { ConnectGoogleServicesTemplate } from '@/components/templates/ConnectGoogleServicesTemplate';
-import { startGoogleServicesOAuth, type GoogleService } from '@/lib/google-services-oauth';
+import { startGoogleServicesOAuth, fetchConnectedGoogleServices, type GoogleService } from '@/lib/google-services-oauth';
 import { useAuthStore, useGoogleServicesOAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
@@ -22,8 +22,16 @@ export default function ConnectGoogleServicesScreen() {
   const [expandedService, setExpandedService] = useState<GoogleService | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fetchedConnectedServices, setFetchedConnectedServices] = useState<GoogleService[]>([]);
+  const [isLoadingConnected, setIsLoadingConnected] = useState(false);
 
-  const connectedServices = useMemo(() => oauthResult?.success ? oauthResult.services ?? [] : [], [oauthResult]);
+  // Combine OAuth result (from recent connection) with fetched services (from backend)
+  const connectedServices = useMemo(() => {
+    const fromOAuth = oauthResult?.success ? oauthResult.services ?? [] : [];
+    // Merge and deduplicate
+    const all = [...new Set([...fromOAuth, ...fetchedConnectedServices])];
+    return all;
+  }, [oauthResult, fetchedConnectedServices]);
   const connectedServicesKey = connectedServices.join(',');
 
   useEffect(() => {
@@ -34,6 +42,35 @@ export default function ConnectGoogleServicesScreen() {
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  // Fetch currently connected services from backend on mount and after successful OAuth
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+
+    let cancelled = false;
+    setIsLoadingConnected(true);
+    (async () => {
+      try {
+        const services = await fetchConnectedGoogleServices(accessToken);
+        if (!cancelled) {
+          setFetchedConnectedServices(services);
+        }
+      } catch (error) {
+        if (__DEV__ && !cancelled) {
+          console.warn('⚠️ Could not fetch connected Google services:', error);
+        }
+        // Don't show error to user - graceful degradation
+      } finally {
+        if (!cancelled) {
+          setIsLoadingConnected(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, accessToken, oauthResult?.success]);
 
   useEffect(() => {
     if (!oauthResult) return;
@@ -80,8 +117,9 @@ export default function ConnectGoogleServicesScreen() {
       await startGoogleServicesOAuth(selectedServices, accessToken);
       // We intentionally do not navigate here; the deep-link callback will drive state updates.
     } catch (error) {
-      setIsConnecting(false);
       setErrorMessage(error instanceof Error ? error.message : 'Unable to open Google connection.');
+    } finally {
+      setIsConnecting(false);
     }
   }, [selectedServices, accessToken]);
 

@@ -18,10 +18,14 @@ export interface HomeTemplateProps {
         line2: string;
         line3?: string;
     };
+    pendingActions: {
+        communicationsCount: number;
+        communicationsDescription: string;
+    };
     onPressGreeting?: () => void;
 }
 
-export const HomeTemplate = ({ dailyBrief, onPressGreeting }: HomeTemplateProps) => {
+export const HomeTemplate = ({ dailyBrief, pendingActions, onPressGreeting }: HomeTemplateProps) => {
     const insets = useSafeAreaInsets();
     
     // Demo mode - show morning routine when "Wake Up" time is selected
@@ -49,7 +53,10 @@ export const HomeTemplate = ({ dailyBrief, onPressGreeting }: HomeTemplateProps)
                     onPressGreeting={onPressGreeting}
                 />
                 <ScheduleList />
-                <PendingActions />
+                <PendingActions
+                    communicationsCount={pendingActions.communicationsCount}
+                    communicationsDescription={pendingActions.communicationsDescription}
+                />
             </View>
             <BottomToolbar />
             {/* TODO: Re-enable ElevenLabs voice coach integration */}

@@ -3,7 +3,12 @@ import { useRouter } from 'expo-router';
 import { ActionItem } from '../molecules/ActionItem';
 import { MessageSquare } from 'lucide-react-native';
 
-export const PendingActions = () => {
+export interface PendingActionsProps {
+    communicationsCount: number;
+    communicationsDescription: string;
+}
+
+export const PendingActions = ({ communicationsCount, communicationsDescription }: PendingActionsProps) => {
     const router = useRouter();
     return (
         <View style={styles.container}>
@@ -11,8 +16,8 @@ export const PendingActions = () => {
             <View style={styles.row}>
                 <ActionItem
                     icon={MessageSquare}
-                    title="4 Communications"
-                    description="Connor, Grady, and 2 others need attention."
+                    title={`${communicationsCount} Communications`}
+                    description={communicationsDescription}
                     onPress={() => router.push('/communication')}
                 />
             </View>

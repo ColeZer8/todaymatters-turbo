@@ -10,7 +10,13 @@ import { handleGoogleServicesOAuthCallback } from "@/lib/google-services-oauth";
 import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
-import { useOnboardingSync } from "@/lib/supabase/hooks";
+import { useLocationSamplesSync, useOnboardingSync } from "@/lib/supabase/hooks";
+import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
+import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
+
+// Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
+void registerIosLocationBackgroundTaskAsync();
+void registerAndroidLocationBackgroundTaskAsync();
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -20,6 +26,9 @@ export default function Layout() {
   const didLoadOnboardingForUserRef = useRef<string | null>(null);
   const setGoogleOAuthProcessing = useGoogleServicesOAuthStore((state) => state.setProcessing);
   const setGoogleOAuthResult = useGoogleServicesOAuthStore((state) => state.setResult);
+
+  // iOS-only: start background location collection when authenticated, and periodically flush queued samples.
+  useLocationSamplesSync();
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;
