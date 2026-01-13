@@ -18,6 +18,66 @@ interface LocationSampleLike {
   raw: LocationSamplesInsert['raw'];
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeNonNegative(value: number | null): number | null {
+  if (!isFiniteNumber(value)) return null;
+  return value >= 0 ? value : null;
+}
+
+function normalizeHeadingDeg(value: number | null): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value < 0) return null;
+  const normalized = value % 360;
+  return normalized >= 360 ? 0 : normalized;
+}
+
+function hasValidTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value));
+}
+
+export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]): {
+  validSamples: LocationSampleLike[];
+  droppedKeys: string[];
+} {
+  const validSamples: LocationSampleLike[] = [];
+  const droppedKeys: string[] = [];
+
+  for (const sample of samples) {
+    if (!hasValidTimestamp(sample.recorded_at)) {
+      droppedKeys.push(sample.dedupe_key);
+      continue;
+    }
+
+    if (!isFiniteNumber(sample.latitude) || sample.latitude < -90 || sample.latitude > 90) {
+      droppedKeys.push(sample.dedupe_key);
+      continue;
+    }
+
+    if (!isFiniteNumber(sample.longitude) || sample.longitude < -180 || sample.longitude > 180) {
+      droppedKeys.push(sample.dedupe_key);
+      continue;
+    }
+
+    if (sample.source !== 'background') {
+      droppedKeys.push(sample.dedupe_key);
+      continue;
+    }
+
+    validSamples.push({
+      ...sample,
+      accuracy_m: normalizeNonNegative(sample.accuracy_m),
+      altitude_m: isFiniteNumber(sample.altitude_m) ? sample.altitude_m : null,
+      speed_mps: normalizeNonNegative(sample.speed_mps),
+      heading_deg: normalizeHeadingDeg(sample.heading_deg),
+    });
+  }
+
+  return { validSamples, droppedKeys };
+}
+
 export async function upsertLocationSamples(userId: string, samples: LocationSampleLike[]): Promise<void> {
   if (samples.length === 0) return;
 
@@ -45,5 +105,4 @@ export async function upsertLocationSamples(userId: string, samples: LocationSam
     throw handleSupabaseError(error);
   }
 }
-
 

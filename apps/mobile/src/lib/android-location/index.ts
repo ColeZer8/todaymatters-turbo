@@ -8,7 +8,7 @@ import {
   removePendingAndroidLocationSamplesByKeyAsync,
 } from './queue';
 import type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
-import { upsertLocationSamples } from '@/lib/supabase/services/location-samples';
+import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
@@ -102,17 +102,28 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: 
     const batch = await peekPendingAndroidLocationSamplesAsync(userId, BATCH_SIZE);
     if (batch.length === 0) break;
 
-    await upsertLocationSamples(userId, batch);
+    const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
+    if (droppedKeys.length > 0) {
+      if (__DEV__) {
+        console.warn(`📍 Dropped ${droppedKeys.length} Android location samples with invalid fields.`);
+      }
+      await removePendingAndroidLocationSamplesByKeyAsync(userId, droppedKeys);
+    }
+
+    if (validSamples.length === 0) {
+      continue;
+    }
+
+    await upsertLocationSamples(userId, validSamples);
     await removePendingAndroidLocationSamplesByKeyAsync(
       userId,
-      batch.map((s) => s.dedupe_key)
+      validSamples.map((s) => s.dedupe_key)
     );
 
-    uploaded += batch.length;
+    uploaded += validSamples.length;
   }
 
   const remaining = (await peekPendingAndroidLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;
   return { uploaded, remaining };
 }
-
 

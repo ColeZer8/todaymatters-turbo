@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowRight, Plus, X, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { GradientButton } from '@/components/atoms';
@@ -11,6 +11,8 @@ interface SubCategoriesTemplateProps {
   totalSteps?: number;
   categories: CoreCategory[];
   subCategories: SubCategory[];
+  suggestionsByCategoryId?: Record<string, string[]>;
+  isLoadingSuggestions?: boolean;
   onAddSubCategory: (categoryId: string, label: string) => void;
   onRemoveSubCategory: (subId: string) => void;
   onContinue: () => void;
@@ -31,6 +33,8 @@ export const SubCategoriesTemplate = ({
   totalSteps = ONBOARDING_TOTAL_STEPS,
   categories,
   subCategories,
+  suggestionsByCategoryId,
+  isLoadingSuggestions,
   onAddSubCategory,
   onRemoveSubCategory,
   onContinue,
@@ -110,6 +114,11 @@ export const SubCategoriesTemplate = ({
         {categories.map((category) => {
           const isExpanded = expandedCategories.has(category.id);
           const categorySubs = subCategoriesByCategory[category.id] || [];
+          const rawSuggestions = suggestionsByCategoryId?.[category.id] ?? [];
+          const existingLabels = new Set(categorySubs.map((s) => s.label.trim().toLowerCase()));
+          const filteredSuggestions = rawSuggestions.filter(
+            (s) => !existingLabels.has(s.trim().toLowerCase())
+          );
 
           return (
             <View
@@ -172,6 +181,36 @@ export const SubCategoriesTemplate = ({
                           </Pressable>
                         </View>
                       ))}
+                    </View>
+                  )}
+
+                  {/* Suggested Sub-Categories */}
+                  {(isLoadingSuggestions || filteredSuggestions.length > 0) && (
+                    <View className="mt-2 gap-2">
+                      <Text className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">
+                        Suggested
+                      </Text>
+                      {isLoadingSuggestions ? (
+                        <Text className="text-sm text-[#94A3B8]">Generating suggestions…</Text>
+                      ) : (
+                        <View className="flex-row flex-wrap gap-2">
+                          {filteredSuggestions.slice(0, 10).map((suggestion) => (
+                            <Pressable
+                              key={suggestion}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Add ${suggestion}`}
+                              onPress={() => onAddSubCategory(category.id, suggestion)}
+                              className="flex-row items-center gap-2 rounded-full bg-[#F8FAFF] px-3 py-2"
+                              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                            >
+                              <Plus size={14} color="#2563EB" />
+                              <Text className="text-sm font-semibold text-brand-primary">
+                                {suggestion}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   )}
 

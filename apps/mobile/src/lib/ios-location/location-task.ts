@@ -7,8 +7,28 @@ import type { IosLocationSample } from './types';
 
 export const IOS_BACKGROUND_LOCATION_TASK_NAME = 'tm-ios-background-location-task';
 
+const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
+let lastTaskErrorLogAtMs = 0;
+
 function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeNonNegative(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  return value >= 0 ? value : null;
+}
+
+function normalizeHeadingDeg(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value < 0) return null; // iOS commonly uses -1 for "unknown"
+  const normalized = value % 360;
+  // Ensure result is strictly < 360 (handle edge cases where modulo might return exactly 360)
+  return normalized >= 360 ? 0 : normalized;
 }
 
 function normalizeRaw(value: unknown): Json | null {
@@ -34,7 +54,18 @@ type RawLocationObject = {
   mocked?: boolean;
 };
 
-function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_key'> {
+function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_key'> | null {
+  if (!isFiniteNumber(location.timestamp)) return null;
+  if (!isFiniteNumber(location.coords.latitude)) return null;
+  if (!isFiniteNumber(location.coords.longitude)) return null;
+
+  const lat = location.coords.latitude;
+  const lng = location.coords.longitude;
+
+  // Hard-drop invalid coordinates so we don't poison the upload queue.
+  if (lat < -90 || lat > 90) return null;
+  if (lng < -180 || lng > 180) return null;
+
   const recorded_at = new Date(location.timestamp).toISOString();
   const coords = location.coords;
 
@@ -43,12 +74,12 @@ function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_
 
   return {
     recorded_at,
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-    accuracy_m: coords.accuracy ?? null,
-    altitude_m: coords.altitude ?? null,
-    speed_mps: coords.speed ?? null,
-    heading_deg: coords.heading ?? null,
+    latitude: lat,
+    longitude: lng,
+    accuracy_m: normalizeNonNegative(coords.accuracy),
+    altitude_m: isFiniteNumber(coords.altitude) ? coords.altitude : null,
+    speed_mps: normalizeNonNegative(coords.speed),
+    heading_deg: normalizeHeadingDeg(coords.heading),
     is_mocked,
     source: 'background',
     raw: normalizeRaw({
@@ -64,7 +95,13 @@ if (Platform.OS === 'ios') {
   TaskManager.defineTask(IOS_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
     try {
       if (error) {
-        if (__DEV__) console.error('📍 iOS background location task error:', error);
+        if (__DEV__) {
+          const now = Date.now();
+          if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
+            lastTaskErrorLogAtMs = now;
+            console.warn('📍 iOS background location task warning:', error);
+          }
+        }
         return;
       }
 
@@ -77,7 +114,8 @@ if (Platform.OS === 'ios') {
       const userId = sessionResult.data.session?.user?.id ?? null;
       if (!userId) return;
 
-      const samples = locations.map(toSample);
+      const samples = locations.map(toSample).filter((s): s is Omit<IosLocationSample, 'dedupe_key'> => s != null);
+      if (samples.length === 0) return;
       const { pendingCount } = await enqueueLocationSamplesForUserAsync(userId, samples);
 
       if (__DEV__) {

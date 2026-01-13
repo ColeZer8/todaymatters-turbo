@@ -3,7 +3,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { IOS_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
 import { peekPendingLocationSamplesAsync, removePendingLocationSamplesByKeyAsync } from './queue';
 import type { IosLocationSupportStatus, IosLocationSample } from './types';
-import { upsertLocationSamples } from '@/lib/supabase/services/location-samples';
+import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 export type { IosLocationSupportStatus, IosLocationSample } from './types';
@@ -101,17 +101,28 @@ export async function flushPendingLocationSamplesToSupabaseAsync(userId: string)
     const batch = await peekPendingLocationSamplesAsync(userId, BATCH_SIZE);
     if (batch.length === 0) break;
 
-    await upsertLocationSamples(userId, batch);
+    const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
+    if (droppedKeys.length > 0) {
+      if (__DEV__) {
+        console.warn(`📍 Dropped ${droppedKeys.length} iOS location samples with invalid fields.`);
+      }
+      await removePendingLocationSamplesByKeyAsync(userId, droppedKeys);
+    }
+
+    if (validSamples.length === 0) {
+      continue;
+    }
+
+    await upsertLocationSamples(userId, validSamples);
     await removePendingLocationSamplesByKeyAsync(
       userId,
-      batch.map((s) => s.dedupe_key)
+      validSamples.map((s) => s.dedupe_key)
     );
 
-    uploaded += batch.length;
+    uploaded += validSamples.length;
   }
 
   const remaining = (await peekPendingLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;
   return { uploaded, remaining };
 }
-
 

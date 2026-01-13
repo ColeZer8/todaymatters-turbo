@@ -53,6 +53,7 @@ export function handleSupabaseError(error: unknown): Error {
   const err = asSupabaseErrorLike(error);
   const code = err?.code ?? 'UNKNOWN';
   const message = err?.message ?? (error instanceof Error ? error.message : 'An error occurred');
+  const messageLower = message.toLowerCase();
   const details = err?.details ?? '';
   const hint = err?.hint ?? '';
 
@@ -111,7 +112,7 @@ export function handleSupabaseError(error: unknown): Error {
   }
 
   // Network/connection errors
-  if (message.includes('fetch') || message.includes('network') || message.includes('Failed to fetch')) {
+  if (messageLower.includes('fetch') || messageLower.includes('network') || messageLower.includes('failed to fetch')) {
     return new Error(
       `Network error: Unable to connect to Supabase. ` +
       `Please check your internet connection and try again.`
@@ -149,10 +150,8 @@ export function isSchemaAccessError(error: unknown): boolean {
  * Check if error is a network/connection issue
  */
 export function isNetworkError(error: unknown): boolean {
-  const message = asSupabaseErrorLike(error)?.message ?? '';
-  return message.includes('fetch') || 
-         message.includes('network') || 
-         message.includes('Failed to fetch');
+  const message = (asSupabaseErrorLike(error)?.message ?? '').toLowerCase();
+  return message.includes('fetch') || message.includes('network') || message.includes('failed to fetch');
 }
 
 /**

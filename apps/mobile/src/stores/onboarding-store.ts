@@ -382,26 +382,47 @@ export const useOnboardingStore = create<OnboardingState>()(
       // Actions - Core Categories
       setCoreCategories: (categories) => set({ coreCategories: categories }),
       addCoreCategory: (valueId, label, color) =>
-        set((state) => ({
-          coreCategories: [
-            ...state.coreCategories,
-            { id: generateId(), valueId, label, color, isCustom: true },
-          ],
-        })),
+        set((state) => {
+          const normalized = label.trim();
+          if (!normalized) return state;
+          const exists = state.coreCategories.some(
+            (c) =>
+              c.valueId === valueId &&
+              c.label.trim().toLowerCase() === normalized.toLowerCase()
+          );
+          if (exists) return state;
+          return {
+            coreCategories: [
+              ...state.coreCategories,
+              { id: generateId(), valueId, label: normalized, color, isCustom: true },
+            ],
+          };
+        }),
       removeCoreCategory: (id) =>
         set((state) => ({
           coreCategories: state.coreCategories.filter((c) => c.id !== id),
+          subCategories: state.subCategories.filter((s) => s.categoryId !== id),
         })),
 
       // Actions - Sub-Categories
       setSubCategories: (subCategories) => set({ subCategories }),
       addSubCategory: (categoryId, label) =>
-        set((state) => ({
-          subCategories: [
-            ...state.subCategories,
-            { id: generateId(), categoryId, label },
-          ],
-        })),
+        set((state) => {
+          const normalized = label.trim();
+          if (!normalized) return state;
+          const exists = state.subCategories.some(
+            (s) =>
+              s.categoryId === categoryId &&
+              s.label.trim().toLowerCase() === normalized.toLowerCase()
+          );
+          if (exists) return state;
+          return {
+            subCategories: [
+              ...state.subCategories,
+              { id: generateId(), categoryId, label: normalized },
+            ],
+          };
+        }),
       removeSubCategory: (id) =>
         set((state) => ({
           subCategories: state.subCategories.filter((s) => s.id !== id),

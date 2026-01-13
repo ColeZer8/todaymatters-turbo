@@ -1,5 +1,20 @@
-import { useState, useMemo } from 'react';
-import { ArrowRight, Plus, X, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  Briefcase,
+  ChevronDown,
+  ChevronUp,
+  Cross,
+  Heart,
+  Home,
+  Moon,
+  Palette,
+  Plus,
+  Star,
+  TrendingUp,
+  Users,
+  X,
+} from 'lucide-react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { GradientButton } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
@@ -11,6 +26,8 @@ interface CoreCategoriesTemplateProps {
   totalSteps?: number;
   coreValues: CoreValue[];
   categories: CoreCategory[];
+  suggestionsByValueId?: Record<string, string[]>;
+  isLoadingSuggestions?: boolean;
   onAddCategory: (valueId: string, label: string, color: string) => void;
   onRemoveCategory: (categoryId: string) => void;
   onContinue: () => void;
@@ -21,6 +38,18 @@ interface CoreCategoriesTemplateProps {
 const CATEGORY_COLORS = [
   '#F33C83', '#F59E0B', '#1FA56E', '#4F8BFF', '#8B5CF6', '#F95C2E', '#10B981', '#EC4899',
 ];
+
+const ICON_MAP: Record<string, typeof Cross> = {
+  cross: Cross,
+  users: Users,
+  briefcase: Briefcase,
+  moon: Moon,
+  'trending-up': TrendingUp,
+  heart: Heart,
+  home: Home,
+  palette: Palette,
+  star: Star,
+};
 
 const cardShadowStyle = {
   shadowColor: '#0f172a',
@@ -35,6 +64,8 @@ export const CoreCategoriesTemplate = ({
   totalSteps = ONBOARDING_TOTAL_STEPS,
   coreValues,
   categories,
+  suggestionsByValueId,
+  isLoadingSuggestions,
   onAddCategory,
   onRemoveCategory,
   onContinue,
@@ -122,6 +153,15 @@ export const CoreCategoriesTemplate = ({
         {selectedValues.map((value) => {
           const isExpanded = expandedValues.has(value.id);
           const valueCategories = categoriesByValue[value.id] || [];
+          const IconComponent = ICON_MAP[value.icon] || Star;
+          const accentColor = valueCategories[0]?.color ?? '#2563EB';
+          const rawSuggestions = suggestionsByValueId?.[value.id] ?? [];
+          const existingLabels = new Set(
+            valueCategories.map((c) => c.label.trim().toLowerCase())
+          );
+          const filteredSuggestions = rawSuggestions.filter(
+            (s) => !existingLabels.has(s.trim().toLowerCase())
+          );
 
           return (
             <View
@@ -139,11 +179,9 @@ export const CoreCategoriesTemplate = ({
                 <View className="flex-row items-center gap-3">
                   <View
                     className="h-10 w-10 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: valueCategories[0]?.color || '#2563EB' + '20' }}
+                    style={{ backgroundColor: accentColor }}
                   >
-                    <Text className="text-lg font-bold text-white">
-                      {value.label.charAt(0)}
-                    </Text>
+                    <IconComponent size={18} color="#fff" />
                   </View>
                   <View>
                     <Text className="text-base font-semibold text-text-primary">
@@ -169,33 +207,64 @@ export const CoreCategoriesTemplate = ({
                     {valueCategories.map((category) => (
                       <View
                         key={category.id}
-                        className="flex-row items-center gap-2 rounded-full px-3 py-2"
-                        style={{ backgroundColor: category.color + '15' }}
+                        className="flex-row items-center gap-2 rounded-2xl border px-3 py-2.5"
+                        style={{
+                          backgroundColor: `${category.color}10`,
+                          borderColor: `${category.color}40`,
+                        }}
                       >
-                        <View
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: category.color }}
-                        />
+                        <View className="h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: category.color }}>
+                          <IconComponent size={16} color="#fff" />
+                        </View>
                         <Text
-                          className="text-sm font-semibold"
-                          style={{ color: category.color }}
+                          className="text-sm font-semibold text-text-primary"
                         >
                           {category.label}
                         </Text>
-                        {category.isCustom && (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={`Remove ${category.label}`}
-                            onPress={() => onRemoveCategory(category.id)}
-                            className="h-5 w-5 items-center justify-center rounded-full"
-                            style={{ backgroundColor: category.color + '30' }}
-                          >
-                            <X size={10} color={category.color} />
-                          </Pressable>
-                        )}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${category.label}`}
+                          onPress={() => onRemoveCategory(category.id)}
+                          className="ml-1 h-6 w-6 items-center justify-center rounded-full bg-[#E2E8F0]"
+                          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                        >
+                          <X size={12} color="#64748B" />
+                        </Pressable>
                       </View>
                     ))}
                   </View>
+
+                  {/* Suggested Categories */}
+                  {(isLoadingSuggestions || filteredSuggestions.length > 0) && (
+                    <View className="mt-2 gap-2">
+                      <Text className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">
+                        Suggested
+                      </Text>
+                      {isLoadingSuggestions ? (
+                        <Text className="text-sm text-[#94A3B8]">Generating suggestions…</Text>
+                      ) : (
+                        <View className="flex-row flex-wrap gap-2">
+                          {filteredSuggestions.slice(0, 10).map((suggestion) => (
+                            <Pressable
+                              key={suggestion}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Add ${suggestion}`}
+                              onPress={() => onAddCategory(value.id, suggestion, accentColor)}
+                              className="flex-row items-center gap-2 rounded-2xl border border-[#E4E8F0] bg-white px-3 py-2.5"
+                              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                            >
+                              <View className="h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: accentColor }}>
+                                <Plus size={14} color="#fff" />
+                              </View>
+                              <Text className="text-sm font-semibold text-text-primary">
+                                {suggestion}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  )}
 
                   {/* Add Category */}
                   {addingForValue === value.id ? (

@@ -79,7 +79,7 @@ export default function MorningMindsetScreen() {
       options={MORNING_MINDSET_OPTIONS}
       selectedId={selected}
       onSelect={setSelected}
-      onContinue={() => router.replace('/goals')}
+      onContinue={() => router.replace('/build-routine')}
       onBack={() => router.replace('/coach-persona')}
     />
   );

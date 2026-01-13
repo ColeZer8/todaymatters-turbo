@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { CoreCategoriesTemplate } from '@/components/templates/CoreCategoriesTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { generateOnboardingCategorySuggestionsLlm } from '@/lib/supabase/services';
 
 export default function CoreCategoriesScreen() {
   const router = useRouter();
@@ -18,12 +19,50 @@ export default function CoreCategoriesScreen() {
   const addCoreCategory = useOnboardingStore((state) => state.addCoreCategory);
   const removeCoreCategory = useOnboardingStore((state) => state.removeCoreCategory);
 
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [suggestionsByValueId, setSuggestionsByValueId] = useState<Record<string, string[]>>({});
+
+  const selectedValues = useMemo(
+    () => coreValues.filter((v) => v.isSelected).map((v) => ({ id: v.id, label: v.label })),
+    [coreValues]
+  );
+
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       router.replace('/');
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  useEffect(() => {
+    if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
+    if (selectedValues.length === 0) return;
+
+    let cancelled = false;
+    setIsLoadingSuggestions(true);
+    generateOnboardingCategorySuggestionsLlm({
+      values: selectedValues,
+      categories: coreCategories.map((c) => ({ id: c.id, valueId: c.valueId, label: c.label })),
+    })
+      .then((suggestions) => {
+        if (cancelled) return;
+        setSuggestionsByValueId(suggestions);
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          // eslint-disable-next-line no-console
+          console.warn('[onboarding] category suggestions failed', error);
+        }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingSuggestions(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, selectedValues]);
 
   const handleContinue = () => {
     router.replace('/sub-categories');
@@ -51,6 +90,8 @@ export default function CoreCategoriesScreen() {
       totalSteps={ONBOARDING_TOTAL_STEPS}
       coreValues={coreValues}
       categories={coreCategories}
+      suggestionsByValueId={suggestionsByValueId}
+      isLoadingSuggestions={isLoadingSuggestions}
       onAddCategory={addCoreCategory}
       onRemoveCategory={removeCoreCategory}
       onContinue={handleContinue}

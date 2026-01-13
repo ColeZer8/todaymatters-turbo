@@ -5,7 +5,6 @@ import { IdealDayTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import { useIdealDayStore } from '@/stores/ideal-day-store';
-import { useOnboardingStore } from '@/stores/onboarding-store';
 import { useIdealDaySync } from '@/lib/supabase/hooks';
 
 export default function IdealDayScreen() {
@@ -13,9 +12,6 @@ export default function IdealDayScreen() {
   const navigationState = useRootNavigationState();
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
-  // Mark onboarding as completed when user finishes
-  const setHasCompletedOnboarding = useOnboardingStore((s) => s.setHasCompletedOnboarding);
 
   // Wait for store to hydrate from AsyncStorage
   const hasHydrated = useIdealDayStore((state) => state._hasHydrated);

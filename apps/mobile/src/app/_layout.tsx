@@ -124,6 +124,9 @@ export default function Layout() {
         <Stack.Screen name="core-values" options={{ headerShown: false }} />
         <Stack.Screen name="core-categories" options={{ headerShown: false }} />
         <Stack.Screen name="sub-categories" options={{ headerShown: false }} />
+        <Stack.Screen name="values-scores" options={{ headerShown: false }} />
+        <Stack.Screen name="vip-contacts" options={{ headerShown: false }} />
+        <Stack.Screen name="my-church" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
         <Stack.Screen name="name" options={{ headerShown: false }} />
         <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />
@@ -134,8 +137,11 @@ export default function Layout() {
         <Stack.Screen name="coach-persona" options={{ headerShown: false }} />
         <Stack.Screen name="morning-mindset" options={{ headerShown: false }} />
         <Stack.Screen name="goals" options={{ headerShown: false }} />
+        <Stack.Screen name="goal-whys" options={{ headerShown: false }} />
         <Stack.Screen name="build-routine" options={{ headerShown: false }} />
         <Stack.Screen name="ideal-day" options={{ headerShown: false }} />
+        <Stack.Screen name="ai-summary" options={{ headerShown: false }} />
+        <Stack.Screen name="explainer-video" options={{ headerShown: false }} />
         <Stack.Screen name="home" options={{ headerShown: false }} />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
         <Stack.Screen name="comprehensive-calendar" options={{ headerShown: false }} />
