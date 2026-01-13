@@ -76,11 +76,10 @@ export default function IdealDayScreen() {
       onDeleteCategory={deleteCategory}
       onContinue={() => {
         void saveIdealDay();
-        setHasCompletedOnboarding(true);
-        router.replace('/home');
+        router.replace('/values-scores');
       }}
-      onSkip={() => router.replace('/build-routine')}
-      onBack={() => router.replace('/build-routine')}
+      onSkip={() => router.replace('/values-scores')}
+      onBack={() => router.replace('/goal-whys')}
     />
   );
 }

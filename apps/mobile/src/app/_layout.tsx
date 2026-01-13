@@ -121,6 +121,9 @@ export default function Layout() {
         <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
         <Stack.Screen name="permissions" options={{ headerShown: false }} />
         <Stack.Screen name="connect-google-services" options={{ headerShown: false }} />
+        <Stack.Screen name="core-values" options={{ headerShown: false }} />
+        <Stack.Screen name="core-categories" options={{ headerShown: false }} />
+        <Stack.Screen name="sub-categories" options={{ headerShown: false }} />
         <Stack.Screen name="setup-questions" options={{ headerShown: false }} />
         <Stack.Screen name="name" options={{ headerShown: false }} />
         <Stack.Screen name="daily-rhythm" options={{ headerShown: false }} />

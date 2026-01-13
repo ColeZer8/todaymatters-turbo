@@ -61,7 +61,7 @@ export default function DailyRhythmScreen() {
       onSelectWakeTime={setWakeTime}
       onSelectSleepTime={setSleepTime}
       onContinue={() => router.replace('/joy')}
-      onBack={() => router.replace('/name')}
+      onBack={() => router.replace('/setup-questions')}
     />
   );
 }

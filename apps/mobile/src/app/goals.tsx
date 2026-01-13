@@ -101,8 +101,8 @@ export default function GoalsScreen() {
       onAddInitiative={addInitiative}
       onRemoveInitiative={removeInitiative}
       onChangeInitiative={changeInitiative}
-      onContinue={() => router.replace('/build-routine')}
-      onBack={() => router.replace('/morning-mindset')}
+      onContinue={() => router.replace('/goal-whys')}
+      onBack={() => router.replace('/sub-categories')}
     />
   );
 }

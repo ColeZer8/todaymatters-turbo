@@ -82,7 +82,7 @@ export default function ConnectGoogleServicesScreen() {
       if ((oauthResult.services?.length ?? 0) > 0) {
         const timeoutId = setTimeout(() => {
           clearOAuthResult();
-          router.replace('/setup-questions');
+          router.replace('/core-values');
         }, 350);
         return () => clearTimeout(timeoutId);
       }
@@ -125,7 +125,7 @@ export default function ConnectGoogleServicesScreen() {
 
   const handleSkip = useCallback(() => {
     clearOAuthResult();
-    router.replace('/setup-questions');
+    router.replace('/core-values');
   }, [clearOAuthResult, router]);
 
   if (!isNavigationReady) {

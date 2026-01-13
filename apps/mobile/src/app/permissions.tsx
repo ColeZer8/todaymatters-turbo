@@ -113,7 +113,7 @@ export default function PermissionsScreen() {
       permissions={permissions}
       onTogglePermission={handleTogglePermission}
       onContinue={handleContinue}
-      onBack={() => router.replace('/signup')}
+      onBack={() => router.replace('/explainer-video')}
       step={ONBOARDING_STEPS.permissions}
       totalSteps={ONBOARDING_TOTAL_STEPS}
     />

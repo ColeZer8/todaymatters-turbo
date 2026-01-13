@@ -61,9 +61,9 @@ export default function SetupQuestionsScreen() {
       options={OPTIONS}
       selectedOption={role}
       onSelect={setRole}
-      onContinue={() => router.replace('/name')}
-      onBack={() => router.replace('/connect-google-services')}
-      onSkip={() => router.replace('/name')}
+      onContinue={() => router.replace('/daily-rhythm')}
+      onBack={() => router.replace('/my-church')}
+      onSkip={() => router.replace('/daily-rhythm')}
     />
   );
 }

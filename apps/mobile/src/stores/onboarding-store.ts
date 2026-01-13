@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Step 1: Permissions
+// Step 2: Permissions
 export interface PermissionsData extends Record<string, boolean> {
   calendar: boolean;
   notifications: boolean;
@@ -16,45 +16,119 @@ export interface PermissionsData extends Record<string, boolean> {
 
 export type PermissionKey = keyof PermissionsData;
 
+// Step 4: Core Values
+export interface CoreValue {
+  id: string;
+  label: string;
+  icon: string;
+  isSelected: boolean;
+  isCustom: boolean;
+}
+
+// Step 5: Core Categories
+export interface CoreCategory {
+  id: string;
+  valueId: string;
+  label: string;
+  color: string;
+  isCustom: boolean;
+}
+
+// Step 6: Sub-Categories
+export interface SubCategory {
+  id: string;
+  categoryId: string;
+  label: string;
+}
+
+// Step 8: Goal Whys
+export interface GoalWhy {
+  goalIndex: number;
+  why: string;
+}
+
+// Step 10: Value Scores
+export interface ValueScore {
+  valueId: string;
+  score: number; // 1-10
+}
+
+// Step 13: VIP Contacts
+export type VIPRelationship = 'spouse' | 'child' | 'parent' | 'friend' | 'colleague' | 'other';
+
+export interface VIPContact {
+  id: string;
+  name: string;
+  relationship: VIPRelationship;
+  phone?: string;
+  email?: string;
+}
+
 interface OnboardingState {
-  // Step 1: Permissions
+  // Step 1: Explainer Video
+  hasWatchedExplainerVideo: boolean;
+
+  // Step 2: Permissions
   permissions: PermissionsData;
 
-  // Step 2: Setup Questions
-  role: string | null;
+  // Step 4: Core Values
+  coreValues: CoreValue[];
 
-  // Step 3: Name
+  // Step 5: Core Categories
+  coreCategories: CoreCategory[];
+
+  // Step 6: Sub-Categories
+  subCategories: SubCategory[];
+
+  // Step 7: Goals
+  goals: string[];
+  initiatives: string[];
+
+  // Step 8: Goal Whys
+  goalWhys: GoalWhy[];
+
+  // Step 10: Values Scores
+  valuesScores: ValueScore[];
+
+  // Step 12: Name
   fullName: string;
 
-  // Step 3: Daily Rhythm
-  wakeTime: string; // Store as ISO string for serialization
+  // Step 13: VIP Contacts
+  vipContacts: VIPContact[];
+
+  // Step 14: My Church
+  churchName: string;
+  churchAddress: string;
+  churchWebsite: string;
+
+  // Step 15: Setup Questions
+  role: string | null;
+
+  // Step 16: Daily Rhythm
+  wakeTime: string;
   sleepTime: string;
 
-  // Step 4: Joy
+  // Step 17: Joy
   joySelections: string[];
   joyCustomOptions: string[];
 
-  // Step 5: Drains
+  // Step 18: Drains
   drainSelections: string[];
   drainCustomOptions: string[];
 
-  // Step 6: Your Why
+  // Step 19: Your Why
   purpose: string | null;
 
-  // Step 7: Focus Style
+  // Step 20: Focus Style
   focusStyle: string | null;
 
-  // Step 8: Coach Persona
+  // Step 21: Coach Persona
   coachPersona: string | null;
 
-  // Step 9: Morning Mindset
+  // Step 22: Morning Mindset
   morningMindset: string | null;
   homeAddress: string | null;
   workAddress: string | null;
-
-  // Step 10: Goals
-  goals: string[];
-  initiatives: string[];
 
   // Completion state
   hasCompletedOnboarding: boolean;
@@ -62,28 +136,31 @@ interface OnboardingState {
   // Hydration state
   _hasHydrated: boolean;
 
-  // Actions
+  // Actions - Explainer Video
+  setHasWatchedExplainerVideo: (value: boolean) => void;
+
+  // Actions - Permissions
   setPermissions: (permissions: PermissionsData) => void;
   togglePermission: (key: PermissionKey) => void;
   setAllPermissions: (value: boolean) => void;
-  setRole: (role: string | null) => void;
-  setFullName: (fullName: string) => void;
-  setWakeTime: (time: Date) => void;
-  setSleepTime: (time: Date) => void;
-  setJoySelections: (selections: string[]) => void;
-  setJoyCustomOptions: (options: string[]) => void;
-  toggleJoySelection: (value: string) => void;
-  addJoyCustomOption: (value: string) => void;
-  setDrainSelections: (selections: string[]) => void;
-  setDrainCustomOptions: (options: string[]) => void;
-  toggleDrainSelection: (value: string) => void;
-  addDrainCustomOption: (value: string) => void;
-  setPurpose: (purpose: string | null) => void;
-  setFocusStyle: (style: string | null) => void;
-  setCoachPersona: (persona: string | null) => void;
-  setMorningMindset: (mindset: string | null) => void;
-  setHomeAddress: (address: string | null) => void;
-  setWorkAddress: (address: string | null) => void;
+
+  // Actions - Core Values
+  setCoreValues: (values: CoreValue[]) => void;
+  toggleCoreValue: (id: string) => void;
+  addCoreValue: (label: string) => void;
+  removeCoreValue: (id: string) => void;
+
+  // Actions - Core Categories
+  setCoreCategories: (categories: CoreCategory[]) => void;
+  addCoreCategory: (valueId: string, label: string, color: string) => void;
+  removeCoreCategory: (id: string) => void;
+
+  // Actions - Sub-Categories
+  setSubCategories: (subCategories: SubCategory[]) => void;
+  addSubCategory: (categoryId: string, label: string) => void;
+  removeSubCategory: (id: string) => void;
+
+  // Actions - Goals
   setGoals: (goals: string[]) => void;
   addGoal: () => void;
   removeGoal: (index: number) => void;
@@ -93,6 +170,61 @@ interface OnboardingState {
   removeInitiative: (index: number) => void;
   changeInitiative: (index: number, value: string) => void;
 
+  // Actions - Goal Whys
+  setGoalWhys: (whys: GoalWhy[]) => void;
+  updateGoalWhy: (goalIndex: number, why: string) => void;
+
+  // Actions - Values Scores
+  setValuesScores: (scores: ValueScore[]) => void;
+  updateValueScore: (valueId: string, score: number) => void;
+
+  // Actions - Name
+  setFullName: (fullName: string) => void;
+
+  // Actions - VIP Contacts
+  setVIPContacts: (contacts: VIPContact[]) => void;
+  addVIPContact: (contact: Omit<VIPContact, 'id'>) => void;
+  removeVIPContact: (id: string) => void;
+
+  // Actions - My Church
+  setChurchName: (name: string) => void;
+  setChurchAddress: (address: string) => void;
+  setChurchWebsite: (website: string) => void;
+
+  // Actions - Setup Questions
+  setRole: (role: string | null) => void;
+
+  // Actions - Daily Rhythm
+  setWakeTime: (time: Date) => void;
+  setSleepTime: (time: Date) => void;
+
+  // Actions - Joy
+  setJoySelections: (selections: string[]) => void;
+  setJoyCustomOptions: (options: string[]) => void;
+  toggleJoySelection: (value: string) => void;
+  addJoyCustomOption: (value: string) => void;
+
+  // Actions - Drains
+  setDrainSelections: (selections: string[]) => void;
+  setDrainCustomOptions: (options: string[]) => void;
+  toggleDrainSelection: (value: string) => void;
+  addDrainCustomOption: (value: string) => void;
+
+  // Actions - Your Why
+  setPurpose: (purpose: string | null) => void;
+
+  // Actions - Focus Style
+  setFocusStyle: (style: string | null) => void;
+
+  // Actions - Coach Persona
+  setCoachPersona: (persona: string | null) => void;
+
+  // Actions - Morning Mindset
+  setMorningMindset: (mindset: string | null) => void;
+  setHomeAddress: (address: string | null) => void;
+  setWorkAddress: (address: string | null) => void;
+
+  // Actions - Completion
   setHasCompletedOnboarding: (value: boolean) => void;
 }
 
@@ -114,6 +246,42 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   appUsage: true,
 };
 
+// Predefined Core Values
+const DEFAULT_CORE_VALUES: CoreValue[] = [
+  { id: 'faith', label: 'Faith', icon: 'cross', isSelected: true, isCustom: false },
+  { id: 'family', label: 'Family', icon: 'users', isSelected: true, isCustom: false },
+  { id: 'work', label: 'Work', icon: 'briefcase', isSelected: true, isCustom: false },
+  { id: 'rest', label: 'Rest', icon: 'moon', isSelected: true, isCustom: false },
+  { id: 'personal-growth', label: 'Personal Growth', icon: 'trending-up', isSelected: true, isCustom: false },
+  { id: 'fitness', label: 'Fitness', icon: 'heart', isSelected: true, isCustom: false },
+  { id: 'community', label: 'Community', icon: 'home', isSelected: false, isCustom: false },
+  { id: 'creativity', label: 'Creativity', icon: 'palette', isSelected: false, isCustom: false },
+];
+
+// Predefined Core Categories mapped to values
+const DEFAULT_CORE_CATEGORIES: CoreCategory[] = [
+  { id: 'prayer', valueId: 'faith', label: 'Prayer', color: '#F33C83', isCustom: false },
+  { id: 'bible-study', valueId: 'faith', label: 'Bible Study', color: '#F33C83', isCustom: false },
+  { id: 'church', valueId: 'faith', label: 'Church', color: '#F33C83', isCustom: false },
+  { id: 'quality-time', valueId: 'family', label: 'Quality Time', color: '#F59E0B', isCustom: false },
+  { id: 'date-night', valueId: 'family', label: 'Date Night', color: '#F59E0B', isCustom: false },
+  { id: 'kids-activities', valueId: 'family', label: 'Kids Activities', color: '#F59E0B', isCustom: false },
+  { id: 'deep-work', valueId: 'work', label: 'Deep Work', color: '#1FA56E', isCustom: false },
+  { id: 'meetings', valueId: 'work', label: 'Meetings', color: '#1FA56E', isCustom: false },
+  { id: 'admin', valueId: 'work', label: 'Admin', color: '#1FA56E', isCustom: false },
+  { id: 'sleep', valueId: 'rest', label: 'Sleep', color: '#4F8BFF', isCustom: false },
+  { id: 'relaxation', valueId: 'rest', label: 'Relaxation', color: '#4F8BFF', isCustom: false },
+  { id: 'reading', valueId: 'personal-growth', label: 'Reading', color: '#8B5CF6', isCustom: false },
+  { id: 'studying', valueId: 'personal-growth', label: 'Studying', color: '#8B5CF6', isCustom: false },
+  { id: 'courses', valueId: 'personal-growth', label: 'Courses', color: '#8B5CF6', isCustom: false },
+  { id: 'exercise', valueId: 'fitness', label: 'Exercise', color: '#F95C2E', isCustom: false },
+  { id: 'sports', valueId: 'fitness', label: 'Sports', color: '#F95C2E', isCustom: false },
+  { id: 'outdoor', valueId: 'fitness', label: 'Outdoor Activities', color: '#F95C2E', isCustom: false },
+];
+
+// Helper to generate unique ID
+const generateId = () => Math.random().toString(36).substring(2, 11);
+
 function dedupeStringList(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -132,9 +300,21 @@ export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set, get) => ({
       // Initial state
+      hasWatchedExplainerVideo: false,
       permissions: DEFAULT_PERMISSIONS,
-      role: null,
+      coreValues: DEFAULT_CORE_VALUES,
+      coreCategories: DEFAULT_CORE_CATEGORIES,
+      subCategories: [],
+      goals: ['Launch MVP', 'Run 5k'],
+      initiatives: ['Q4 Strategy', 'Team Hiring'],
+      goalWhys: [],
+      valuesScores: [],
       fullName: '',
+      vipContacts: [],
+      churchName: '',
+      churchAddress: '',
+      churchWebsite: '',
+      role: null,
       wakeTime: createTimeString(6, 30),
       sleepTime: createTimeString(22, 30),
       joySelections: [],
@@ -147,12 +327,13 @@ export const useOnboardingStore = create<OnboardingState>()(
       morningMindset: 'slow',
       homeAddress: null,
       workAddress: null,
-      goals: ['Launch MVP', 'Run 5k'],
-      initiatives: ['Q4 Strategy', 'Team Hiring'],
       hasCompletedOnboarding: false,
       _hasHydrated: false,
 
-      // Actions
+      // Actions - Explainer Video
+      setHasWatchedExplainerVideo: (value) => set({ hasWatchedExplainerVideo: value }),
+
+      // Actions - Permissions
       setPermissions: (permissions) => set({ permissions }),
       togglePermission: (key) =>
         set((state) => ({
@@ -171,47 +352,62 @@ export const useOnboardingStore = create<OnboardingState>()(
             appUsage: value,
           },
         }),
-      setRole: (role) => set({ role }),
-      setFullName: (fullName) => set({ fullName }),
 
-      setWakeTime: (time) => set({ wakeTime: time.toISOString() }),
-      setSleepTime: (time) => set({ sleepTime: time.toISOString() }),
-
-      setJoySelections: (selections) => set({ joySelections: selections }),
-      setJoyCustomOptions: (options) => set({ joyCustomOptions: options }),
-      toggleJoySelection: (value) =>
+      // Actions - Core Values
+      setCoreValues: (values) => set({ coreValues: values }),
+      toggleCoreValue: (id) =>
         set((state) => ({
-          joySelections: state.joySelections.includes(value)
-            ? state.joySelections.filter((v) => v !== value)
-            : [...state.joySelections, value],
+          coreValues: state.coreValues.map((v) =>
+            v.id === id ? { ...v, isSelected: !v.isSelected } : v
+          ),
         })),
-      addJoyCustomOption: (value) =>
+      addCoreValue: (label) =>
         set((state) => ({
-          joyCustomOptions: [...state.joyCustomOptions, value],
-          joySelections: [...state.joySelections, value],
+          coreValues: [
+            ...state.coreValues,
+            {
+              id: generateId(),
+              label,
+              icon: 'star',
+              isSelected: true,
+              isCustom: true,
+            },
+          ],
         })),
-
-      setDrainSelections: (selections) => set({ drainSelections: selections }),
-      setDrainCustomOptions: (options) => set({ drainCustomOptions: options }),
-      toggleDrainSelection: (value) =>
+      removeCoreValue: (id) =>
         set((state) => ({
-          drainSelections: state.drainSelections.includes(value)
-            ? state.drainSelections.filter((v) => v !== value)
-            : [...state.drainSelections, value],
-        })),
-      addDrainCustomOption: (value) =>
-        set((state) => ({
-          drainCustomOptions: [...state.drainCustomOptions, value],
-          drainSelections: [...state.drainSelections, value],
+          coreValues: state.coreValues.filter((v) => v.id !== id),
         })),
 
-      setPurpose: (purpose) => set({ purpose }),
-      setFocusStyle: (style) => set({ focusStyle: style }),
-      setCoachPersona: (persona) => set({ coachPersona: persona }),
-      setMorningMindset: (mindset) => set({ morningMindset: mindset }),
-      setHomeAddress: (address) => set({ homeAddress: address }),
-      setWorkAddress: (address) => set({ workAddress: address }),
+      // Actions - Core Categories
+      setCoreCategories: (categories) => set({ coreCategories: categories }),
+      addCoreCategory: (valueId, label, color) =>
+        set((state) => ({
+          coreCategories: [
+            ...state.coreCategories,
+            { id: generateId(), valueId, label, color, isCustom: true },
+          ],
+        })),
+      removeCoreCategory: (id) =>
+        set((state) => ({
+          coreCategories: state.coreCategories.filter((c) => c.id !== id),
+        })),
 
+      // Actions - Sub-Categories
+      setSubCategories: (subCategories) => set({ subCategories }),
+      addSubCategory: (categoryId, label) =>
+        set((state) => ({
+          subCategories: [
+            ...state.subCategories,
+            { id: generateId(), categoryId, label },
+          ],
+        })),
+      removeSubCategory: (id) =>
+        set((state) => ({
+          subCategories: state.subCategories.filter((s) => s.id !== id),
+        })),
+
+      // Actions - Goals
       setGoals: (goals) => set({ goals }),
       addGoal: () => set((state) => ({ goals: [...state.goals, ''] })),
       removeGoal: (index) =>
@@ -220,7 +416,6 @@ export const useOnboardingStore = create<OnboardingState>()(
         set((state) => ({
           goals: state.goals.map((g, i) => (i === index ? value : g)),
         })),
-
       setInitiatives: (initiatives) => set({ initiatives }),
       addInitiative: () =>
         set((state) => ({ initiatives: [...state.initiatives, ''] })),
@@ -235,6 +430,107 @@ export const useOnboardingStore = create<OnboardingState>()(
           ),
         })),
 
+      // Actions - Goal Whys
+      setGoalWhys: (whys) => set({ goalWhys: whys }),
+      updateGoalWhy: (goalIndex, why) =>
+        set((state) => {
+          const existing = state.goalWhys.find((w) => w.goalIndex === goalIndex);
+          if (existing) {
+            return {
+              goalWhys: state.goalWhys.map((w) =>
+                w.goalIndex === goalIndex ? { ...w, why } : w
+              ),
+            };
+          }
+          return { goalWhys: [...state.goalWhys, { goalIndex, why }] };
+        }),
+
+      // Actions - Values Scores
+      setValuesScores: (scores) => set({ valuesScores: scores }),
+      updateValueScore: (valueId, score) =>
+        set((state) => {
+          const existing = state.valuesScores.find((s) => s.valueId === valueId);
+          if (existing) {
+            return {
+              valuesScores: state.valuesScores.map((s) =>
+                s.valueId === valueId ? { ...s, score } : s
+              ),
+            };
+          }
+          return { valuesScores: [...state.valuesScores, { valueId, score }] };
+        }),
+
+      // Actions - Name
+      setFullName: (fullName) => set({ fullName }),
+
+      // Actions - VIP Contacts
+      setVIPContacts: (contacts) => set({ vipContacts: contacts }),
+      addVIPContact: (contact) =>
+        set((state) => ({
+          vipContacts: [...state.vipContacts, { ...contact, id: generateId() }],
+        })),
+      removeVIPContact: (id) =>
+        set((state) => ({
+          vipContacts: state.vipContacts.filter((c) => c.id !== id),
+        })),
+
+      // Actions - My Church
+      setChurchName: (name) => set({ churchName: name }),
+      setChurchAddress: (address) => set({ churchAddress: address }),
+      setChurchWebsite: (website) => set({ churchWebsite: website }),
+
+      // Actions - Setup Questions
+      setRole: (role) => set({ role }),
+
+      // Actions - Daily Rhythm
+      setWakeTime: (time) => set({ wakeTime: time.toISOString() }),
+      setSleepTime: (time) => set({ sleepTime: time.toISOString() }),
+
+      // Actions - Joy
+      setJoySelections: (selections) => set({ joySelections: selections }),
+      setJoyCustomOptions: (options) => set({ joyCustomOptions: options }),
+      toggleJoySelection: (value) =>
+        set((state) => ({
+          joySelections: state.joySelections.includes(value)
+            ? state.joySelections.filter((v) => v !== value)
+            : [...state.joySelections, value],
+        })),
+      addJoyCustomOption: (value) =>
+        set((state) => ({
+          joyCustomOptions: [...state.joyCustomOptions, value],
+          joySelections: [...state.joySelections, value],
+        })),
+
+      // Actions - Drains
+      setDrainSelections: (selections) => set({ drainSelections: selections }),
+      setDrainCustomOptions: (options) => set({ drainCustomOptions: options }),
+      toggleDrainSelection: (value) =>
+        set((state) => ({
+          drainSelections: state.drainSelections.includes(value)
+            ? state.drainSelections.filter((v) => v !== value)
+            : [...state.drainSelections, value],
+        })),
+      addDrainCustomOption: (value) =>
+        set((state) => ({
+          drainCustomOptions: [...state.drainCustomOptions, value],
+          drainSelections: [...state.drainSelections, value],
+        })),
+
+      // Actions - Your Why
+      setPurpose: (purpose) => set({ purpose }),
+
+      // Actions - Focus Style
+      setFocusStyle: (style) => set({ focusStyle: style }),
+
+      // Actions - Coach Persona
+      setCoachPersona: (persona) => set({ coachPersona: persona }),
+
+      // Actions - Morning Mindset
+      setMorningMindset: (mindset) => set({ morningMindset: mindset }),
+      setHomeAddress: (address) => set({ homeAddress: address }),
+      setWorkAddress: (address) => set({ workAddress: address }),
+
+      // Actions - Completion
       setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
     }),
     {

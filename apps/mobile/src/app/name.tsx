@@ -72,8 +72,8 @@ export default function NameScreen() {
       fullName={fullName}
       onChangeFullName={setFullName}
       isContinueDisabled={isContinueDisabled}
-      onContinue={() => router.replace('/daily-rhythm')}
-      onBack={() => router.replace('/setup-questions')}
+      onContinue={() => router.replace('/vip-contacts')}
+      onBack={() => router.replace('/ai-summary')}
     />
   );
 }
