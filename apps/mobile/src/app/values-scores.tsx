@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { ValuesScoresTemplate } from '@/components/templates/ValuesScoresTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function ValuesScoresScreen() {
   const router = useRouter();
@@ -25,11 +25,11 @@ export default function ValuesScoresScreen() {
   }, [isAuthenticated, isNavigationReady, router]);
 
   const handleContinue = () => {
-    router.replace('/ai-summary');
+    router.replace('/goals');
   };
 
   const handleBack = () => {
-    router.replace('/ideal-day');
+    router.replace('/core-categories');
   };
 
   if (!isNavigationReady || !hasHydrated) {
@@ -42,8 +42,8 @@ export default function ValuesScoresScreen() {
 
   return (
     <ValuesScoresTemplate
-      step={ONBOARDING_STEPS.valuesScores}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.valuesScores}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       coreValues={coreValues}
       valuesScores={valuesScores}
       onUpdateScore={updateValueScore}

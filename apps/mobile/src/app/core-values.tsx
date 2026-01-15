@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { CoreValuesTemplate } from '@/components/templates/CoreValuesTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function CoreValuesScreen() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function CoreValuesScreen() {
   };
 
   const handleBack = () => {
-    router.replace('/connect-google-services');
+    router.replace('/permissions');
   };
 
   if (!isNavigationReady || !hasHydrated) {
@@ -43,8 +43,8 @@ export default function CoreValuesScreen() {
 
   return (
     <CoreValuesTemplate
-      step={ONBOARDING_STEPS.coreValues}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.coreValues}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       coreValues={coreValues}
       onToggleValue={toggleCoreValue}
       onAddValue={addCoreValue}

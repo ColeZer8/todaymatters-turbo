@@ -1,8 +1,10 @@
-import { ArrowRight, Church, MapPin, Globe } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { ArrowRight, Check, ChevronDown, Church, Globe, MapPin, Plus } from 'lucide-react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { GradientButton } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { formatChurchOptionLabel, type ChurchOption } from '@/constants/churches';
 
 interface MyChurchTemplateProps {
   step?: number;
@@ -13,6 +15,7 @@ interface MyChurchTemplateProps {
   onChangeChurchName: (value: string) => void;
   onChangeChurchAddress: (value: string) => void;
   onChangeChurchWebsite: (value: string) => void;
+  churchOptions?: ChurchOption[];
   onContinue: () => void;
   onSkip?: () => void;
   onBack?: () => void;
@@ -35,10 +38,32 @@ export const MyChurchTemplate = ({
   onChangeChurchName,
   onChangeChurchAddress,
   onChangeChurchWebsite,
+  churchOptions = [],
   onContinue,
   onSkip,
   onBack,
 }: MyChurchTemplateProps) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isManualEntry, setIsManualEntry] = useState(false);
+
+  const trimmedQuery = churchName.trim();
+  const normalizedQuery = trimmedQuery.toLowerCase();
+
+  const filteredOptions = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const results = churchOptions.filter((c) => {
+      const label = formatChurchOptionLabel(c).toLowerCase();
+      return label.includes(normalizedQuery);
+    });
+    return results.slice(0, 12);
+  }, [churchOptions, normalizedQuery]);
+
+  const showDropdown =
+    !isManualEntry && isDropdownOpen && normalizedQuery.length > 0 && filteredOptions.length > 0;
+
+  const showNoResults =
+    !isManualEntry && isDropdownOpen && normalizedQuery.length >= 2 && filteredOptions.length === 0;
+
   return (
     <SetupStepLayout
       step={step}
@@ -81,17 +106,102 @@ export const MyChurchTemplate = ({
         >
           {/* Church Name */}
           <View className="mb-4">
-            <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">CHURCH NAME</Text>
-            <View className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View className="flex-row items-center justify-between mb-1.5">
+              <Text className="text-xs font-semibold text-[#94A3B8]">CHURCH</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setIsManualEntry((prev) => !prev);
+                  setIsDropdownOpen(false);
+                }}
+                className="rounded-full bg-[#F1F5F9] px-3 py-1"
+                style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Text className="text-[12px] font-semibold text-text-secondary">
+                  {isManualEntry ? 'Use dropdown' : "Can't find it?"}
+                </Text>
+              </Pressable>
+            </View>
+            <View
+              className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
+              style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
+            >
               <Church size={18} color="#94A3B8" />
               <TextInput
                 value={churchName}
-                onChangeText={onChangeChurchName}
-                placeholder="e.g., First Baptist Church"
+                onChangeText={(value) => {
+                  onChangeChurchName(value);
+                  if (!isManualEntry) setIsDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  if (!isManualEntry) setIsDropdownOpen(true);
+                }}
+                onBlur={() => {
+                  // Let taps on results register before closing.
+                  setTimeout(() => setIsDropdownOpen(false), 150);
+                }}
+                placeholder={isManualEntry ? "Enter your church name" : 'Search churches…'}
                 placeholderTextColor="#94A3B8"
                 className="flex-1 py-3 ml-3 text-[15px] text-text-primary"
               />
+              {!isManualEntry ? (
+                <ChevronDown size={18} color="#94A3B8" />
+              ) : (
+                <View className="h-4 w-4" />
+              )}
             </View>
+
+            {/* Dropdown results */}
+            {showDropdown ? (
+              <View
+                className="mt-2 overflow-hidden rounded-xl border border-[#E4E8F0] bg-white"
+                style={cardShadowStyle}
+              >
+                {filteredOptions.map((item, index) => {
+                  const label = formatChurchOptionLabel(item);
+                  const isSelected = label === churchName;
+                  return (
+                    <View key={item.id}>
+                      {index > 0 ? <View className="h-px bg-[#E2E8F0]" /> : null}
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          onChangeChurchName(label);
+                          setIsDropdownOpen(false);
+                        }}
+                        className="flex-row items-center justify-between px-4 py-3"
+                        style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                      >
+                        <Text className="text-[15px] font-semibold text-text-primary">
+                          {label}
+                        </Text>
+                        {isSelected ? <Check size={18} color="#2563EB" /> : <View className="h-4 w-4" />}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {showNoResults ? (
+              <View className="mt-2 flex-row items-center justify-between rounded-xl bg-[#F8FAFF] px-4 py-3">
+                <Text className="text-sm text-text-secondary">
+                  No matches. You can add it manually.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setIsManualEntry(true);
+                    setIsDropdownOpen(false);
+                  }}
+                  className="flex-row items-center gap-1 rounded-full bg-white px-3 py-1"
+                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <Text className="text-[12px] font-semibold text-brand-primary">Add</Text>
+                  <Plus size={14} color="#2563EB" />
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           {/* Address */}

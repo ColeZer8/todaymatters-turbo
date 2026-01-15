@@ -1,8 +1,8 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, Play, SkipForward } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowRight, Info, LockKeyhole, Play, SkipForward, Target } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/atoms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 
@@ -24,6 +24,7 @@ export const ExplainerVideoTemplate = ({
   onContinue,
 }: ExplainerVideoTemplateProps) => {
   const progressPercent = Math.min(100, Math.max(0, (step / totalSteps) * 100));
+  const insets = useSafeAreaInsets();
 
   return (
     <LinearGradient
@@ -52,71 +53,95 @@ export const ExplainerVideoTemplate = ({
             </Pressable>
           </View>
 
-          <View style={styles.contentWidth}>
-            {/* Progress bar */}
-            <View className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#E4E8F0]">
-              <View
-                className="h-full rounded-full bg-brand-primary"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </View>
+          {/* Scrollable content (so smaller screens don't get covered by the pinned CTA) */}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: BOTTOM_CTA_HEIGHT + 24 + insets.bottom },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.contentWidth}>
+              {/* Progress bar */}
+              <View className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#E4E8F0]">
+                <View
+                  className="h-full rounded-full bg-brand-primary"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </View>
 
-            {/* Video Placeholder */}
-            <View style={styles.videoContainer}>
-              <LinearGradient
-                colors={['#1E3A8A', '#1E293B']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.videoPlaceholder}
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={onPlay}
-                  className="h-20 w-20 items-center justify-center rounded-full bg-white/20 active:opacity-80"
-                  style={styles.playButton}
+              {/* Video Placeholder */}
+              <View style={styles.videoContainer}>
+                <LinearGradient
+                  colors={['#1E3A8A', '#1E293B']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.videoPlaceholder}
                 >
-                  <Play size={36} color="#fff" fill="#fff" />
-                </Pressable>
-                <Text className="mt-4 text-center text-base font-semibold text-white">
-                  Video Coming Soon
-                </Text>
-              </LinearGradient>
-            </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onPlay}
+                    className="h-20 w-20 items-center justify-center rounded-full bg-white/20 active:opacity-80"
+                    style={styles.playButton}
+                  >
+                    <Play size={36} color="#fff" fill="#fff" />
+                  </Pressable>
+                  <Text className="mt-4 text-center text-base font-semibold text-white">
+                    Video Coming Soon
+                  </Text>
+                </LinearGradient>
+              </View>
 
-            {/* Quote Section */}
-            <View style={styles.quoteSection}>
-              <View style={styles.quoteCard}>
-                <Text className="text-center text-2xl font-extrabold leading-8 text-text-primary">
-                  "The truth shall set you free"
+              {/* Explainer copy */}
+              <View
+                className="mt-5 rounded-2xl border border-[#E4E8F0] bg-white px-5 py-4"
+                style={styles.copyCard}
+              >
+                <View className="flex-row items-center gap-2">
+                  <Info size={18} color="#2563EB" />
+                  <Text className="text-[17px] font-extrabold text-text-primary">
+                    Before you start
+                  </Text>
+                </View>
+
+                <Text className="mt-3 text-sm leading-5 text-text-secondary">
+                  Today Matters exists to help you replace lies with truth so you can live a better
+                  life.
                 </Text>
-                <Text className="mt-4 text-center text-base leading-6 text-text-secondary">
-                  This app is designed to help you replace lies with the truth and live a better life.
-                  We only use your data to help you understand yourself better and make meaningful
+                <Text className="mt-2 text-sm leading-5 text-text-secondary">
+                  We only use your data to help you understand your patterns and make meaningful
                   progress.
                 </Text>
-              </View>
 
-              <View style={styles.trustPoints}>
-                <TrustPoint
-                  emoji="🔒"
-                  title="Your data stays yours"
-                  description="We never sell or share your personal information"
-                />
-                <TrustPoint
-                  emoji="🎯"
-                  title="Personalized insights"
-                  description="We analyze patterns to help you live intentionally"
-                />
-                <TrustPoint
-                  emoji="💡"
-                  title="Truth-based guidance"
-                  description="Honest feedback to help you grow"
-                />
+                <View className="mt-4 gap-3">
+                  <InfoRow
+                    icon={LockKeyhole}
+                    title="Privacy matters"
+                    description="We do not sell your personal information."
+                  />
+                  <InfoRow
+                    icon={Target}
+                    title="Clear purpose"
+                    description="Your data is used only to generate insights and help you live intentionally."
+                  />
+                </View>
+
+                <Text className="mt-5 text-center text-base font-extrabold text-text-primary">
+                  "The truth shall set you free."
+                </Text>
               </View>
             </View>
+          </ScrollView>
 
-            {/* Continue Button */}
-            <View style={styles.footer}>
+          {/* Pinned CTA */}
+          <View
+            style={[
+              styles.bottomCta,
+              { paddingBottom: 14 + insets.bottom },
+            ]}
+          >
+            <View style={styles.contentWidth}>
               <GradientButton
                 label={hasWatched ? 'Continue' : 'Get Started'}
                 onPress={onContinue}
@@ -130,20 +155,22 @@ export const ExplainerVideoTemplate = ({
   );
 };
 
-const TrustPoint = ({
-  emoji,
+const InfoRow = ({
+  icon: Icon,
   title,
   description,
 }: {
-  emoji: string;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
   title: string;
   description: string;
 }) => (
-  <View className="flex-row items-start gap-3 py-2">
-    <Text className="text-xl">{emoji}</Text>
+  <View className="flex-row items-start gap-3">
+    <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-xl bg-[#EEF2FF]">
+      <Icon size={16} color="#2563EB" />
+    </View>
     <View className="flex-1">
-      <Text className="text-sm font-semibold text-slate-800">{title}</Text>
-      <Text className="text-xs text-slate-500 mt-0.5">{description}</Text>
+      <Text className="text-sm font-semibold text-text-primary">{title}</Text>
+      <Text className="mt-0.5 text-xs leading-4 text-text-secondary">{description}</Text>
     </View>
   </View>
 );
@@ -157,6 +184,12 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: 6,
   },
   header: {
     flexDirection: 'row',
@@ -172,7 +205,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
   },
   videoContainer: {
-    marginTop: 18,
+    marginTop: 16,
+    alignSelf: 'center',
+    width: '100%',
     aspectRatio: 16 / 9,
     borderRadius: 20,
     overflow: 'hidden',
@@ -194,28 +229,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  quoteSection: {
-    flex: 1,
-    paddingTop: 24,
-  },
-  quoteCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#E4E8F0',
+  copyCard: {
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
   },
-  trustPoints: {
-    marginTop: 20,
-    gap: 4,
-  },
-  footer: {
-    paddingTop: 6,
-    paddingBottom: 16,
+  bottomCta: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 12,
+    backgroundColor: 'rgba(245, 249, 255, 0.92)',
   },
 });
+
+const BOTTOM_CTA_HEIGHT = 74;

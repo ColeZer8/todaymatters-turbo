@@ -1,13 +1,13 @@
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { IOS_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
+import { IOS_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 import { peekPendingLocationSamplesAsync, removePendingLocationSamplesByKeyAsync } from './queue';
 import type { IosLocationSupportStatus, IosLocationSample } from './types';
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 export type { IosLocationSupportStatus, IosLocationSample } from './types';
-export { IOS_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
+export { IOS_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 export { clearPendingLocationSamplesAsync } from './queue';
 
 export function getIosLocationSupportStatus(): IosLocationSupportStatus {

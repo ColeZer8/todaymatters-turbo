@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { ActivityIndicator, Alert, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PermissionsTemplate } from '@/components/templates';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { useOnboardingStore, type PermissionKey } from '@/stores/onboarding-store';
 import { useOnboardingSync } from '@/lib/supabase/hooks';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
@@ -92,7 +92,7 @@ export default function PermissionsScreen() {
       }
 
       await savePermissions(permissions);
-      router.replace('/connect-google-services');
+      router.replace('/core-values');
     })();
   };
 
@@ -114,8 +114,8 @@ export default function PermissionsScreen() {
       onTogglePermission={handleTogglePermission}
       onContinue={handleContinue}
       onBack={() => router.replace('/explainer-video')}
-      step={ONBOARDING_STEPS.permissions}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.permissions}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
     />
   );
 }

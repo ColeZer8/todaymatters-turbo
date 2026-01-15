@@ -32,7 +32,7 @@ export default function SignUpScreen() {
     }
     if (isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace(hasCompletedOnboarding ? '/home' : '/permissions');
+        router.replace(hasCompletedOnboarding ? '/home' : '/explainer-video');
       });
     }
   }, [isAuthenticated, isNavigationReady, onboardingHydrated, hasCompletedOnboarding, router]);

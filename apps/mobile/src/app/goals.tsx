@@ -3,7 +3,7 @@ import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { GoalsTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { useEventsSync } from '@/lib/supabase/hooks';
 
@@ -91,8 +91,8 @@ export default function GoalsScreen() {
 
   return (
     <GoalsTemplate
-      step={ONBOARDING_STEPS.goals}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.goals}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       goals={goals}
       initiatives={initiatives}
       onAddGoal={addGoal}
@@ -102,7 +102,7 @@ export default function GoalsScreen() {
       onRemoveInitiative={removeInitiative}
       onChangeInitiative={changeInitiative}
       onContinue={() => router.replace('/goal-whys')}
-      onBack={() => router.replace('/sub-categories')}
+      onBack={() => router.replace('/values-scores')}
     />
   );
 }

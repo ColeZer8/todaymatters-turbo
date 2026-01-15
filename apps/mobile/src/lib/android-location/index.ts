@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
+import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 import {
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
@@ -11,7 +11,7 @@ import type { AndroidLocationSupportStatus, AndroidLocationSample } from './type
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
-export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './location-task';
+export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 export { clearPendingAndroidLocationSamplesAsync } from './queue';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {

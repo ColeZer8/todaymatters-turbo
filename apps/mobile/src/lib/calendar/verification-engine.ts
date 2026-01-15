@@ -1,0 +1,616 @@
+import type { ScheduledEvent, EventCategory } from '@/stores';
+import {
+  type EvidenceBundle,
+  type LocationHourlyRow,
+  type ScreenTimeSessionRow,
+  type HealthWorkoutRow,
+  findOverlappingLocations,
+  findOverlappingSessions,
+  findOverlappingWorkouts,
+  calculateOverlapMinutes,
+} from '@/lib/supabase/services/evidence-data';
+import {
+  type VerificationRule,
+  getVerificationRule,
+  appMatchesList,
+  DISTRACTION_APPS,
+} from './verification-rules';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export type VerificationStatus =
+  | 'verified' // Evidence strongly supports the planned event
+  | 'partial' // Some evidence, but gaps or minor contradictions
+  | 'unverified' // No relevant evidence available
+  | 'contradicted' // Evidence directly contradicts the planned event
+  | 'distracted'; // User was on phone when they shouldn't have been
+
+export interface EvidenceSummary {
+  /** Location evidence */
+  location?: {
+    placeLabel: string | null;
+    placeCategory: string | null;
+    sampleCount: number;
+    matchesExpected: boolean;
+  };
+
+  /** Screen time evidence */
+  screenTime?: {
+    totalMinutes: number;
+    distractionMinutes: number;
+    topApps: Array<{ app: string; minutes: number }>;
+    wasDistracted: boolean;
+  };
+
+  /** Health/workout evidence */
+  health?: {
+    hasWorkout: boolean;
+    workoutType: string | null;
+    workoutDurationMinutes: number;
+  };
+}
+
+export interface VerificationResult {
+  eventId: string;
+  status: VerificationStatus;
+  confidence: number; // 0-1, how confident we are in this verification
+  evidence: EvidenceSummary;
+  /** Human-readable reason for the status */
+  reason: string;
+  /** Suggestions for the user */
+  suggestions?: string[];
+}
+
+export interface ActualBlock {
+  id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  startMinutes: number;
+  endMinutes: number;
+  source: 'location' | 'screen_time' | 'workout' | 'derived';
+  linkedPlannedEventId?: string;
+  evidence: EvidenceSummary;
+}
+
+// ============================================================================
+// Verification Logic
+// ============================================================================
+
+/**
+ * Verify a single planned event against available evidence.
+ */
+export function verifyEvent(
+  event: ScheduledEvent,
+  evidence: EvidenceBundle,
+  ymd: string
+): VerificationResult {
+  const rule = getVerificationRule(event.category);
+  const eventEndMinutes = event.startMinutes + event.duration;
+
+  // Find overlapping evidence
+  const overlappingLocations = findOverlappingLocations(
+    event.startMinutes,
+    eventEndMinutes,
+    evidence.locationHourly
+  );
+  const overlappingSessions = findOverlappingSessions(
+    event.startMinutes,
+    eventEndMinutes,
+    ymd,
+    evidence.screenTimeSessions
+  );
+  const overlappingWorkouts = findOverlappingWorkouts(
+    event.startMinutes,
+    eventEndMinutes,
+    ymd,
+    evidence.healthWorkouts
+  );
+
+  // Build evidence summary
+  const evidenceSummary: EvidenceSummary = {};
+  let totalScore = 0;
+  let maxScore = 0;
+  const reasons: string[] = [];
+  const suggestions: string[] = [];
+
+  // ----- LOCATION VERIFICATION -----
+  if (rule.verifyWith.includes('location') && overlappingLocations.length > 0) {
+    const locationWeight = rule.evidenceWeights?.location ?? 0.5;
+    maxScore += locationWeight;
+
+    // Aggregate location data
+    const primaryLocation = overlappingLocations[0];
+    const totalSamples = overlappingLocations.reduce((sum, l) => sum + l.sample_count, 0);
+    const placeCategory = primaryLocation?.place_category?.toLowerCase() ?? null;
+    const placeLabel = primaryLocation?.place_label ?? null;
+
+    // Check if location matches expected
+    const matchesExpected =
+      rule.locationExpected.includes(null) ||
+      (placeCategory !== null &&
+        rule.locationExpected.some((exp) => exp === placeCategory));
+
+    evidenceSummary.location = {
+      placeLabel,
+      placeCategory,
+      sampleCount: totalSamples,
+      matchesExpected,
+    };
+
+    if (matchesExpected) {
+      totalScore += locationWeight;
+      reasons.push(
+        `At ${placeLabel || placeCategory || 'expected location'}`
+      );
+    } else if (rule.locationRequired) {
+      reasons.push(
+        `Expected ${rule.locationExpected.filter(Boolean).join('/')} but was at ${placeLabel || placeCategory || 'unknown'}`
+      );
+    } else {
+      // Partial credit for having location data even if not expected place
+      totalScore += locationWeight * 0.3;
+      reasons.push(`At ${placeLabel || placeCategory || 'unknown location'}`);
+    }
+  } else if (rule.verifyWith.includes('location')) {
+    maxScore += rule.evidenceWeights?.location ?? 0.5;
+    reasons.push('No location data available');
+  }
+
+  // ----- SCREEN TIME VERIFICATION -----
+  if (rule.verifyWith.includes('screen_time') && overlappingSessions.length > 0) {
+    const screenWeight = rule.evidenceWeights?.screen_time ?? 0.5;
+    maxScore += screenWeight;
+
+    // Calculate screen time
+    const dayStart = ymdToDate(ymd);
+    const appUsage = new Map<string, number>();
+    let distractionMinutes = 0;
+    let totalMinutes = 0;
+
+    for (const session of overlappingSessions) {
+      const sessionStart = new Date(session.started_at);
+      const sessionEnd = new Date(session.ended_at);
+      const sessionStartMins = (sessionStart.getTime() - dayStart.getTime()) / (60 * 1000);
+      const sessionEndMins = (sessionEnd.getTime() - dayStart.getTime()) / (60 * 1000);
+
+      const overlap = calculateOverlapMinutes(
+        event.startMinutes,
+        eventEndMinutes,
+        sessionStartMins,
+        sessionEndMins
+      );
+
+      const appName = session.display_name || session.app_id;
+      const currentUsage = appUsage.get(appName) ?? 0;
+      appUsage.set(appName, currentUsage + overlap);
+      totalMinutes += overlap;
+
+      // Check if this is a distraction app
+      const isDistraction =
+        rule.distractionApps &&
+        appMatchesList(appName, rule.distractionApps) &&
+        !(rule.allowedApps && appMatchesList(appName, rule.allowedApps));
+
+      if (isDistraction) {
+        distractionMinutes += overlap;
+      }
+    }
+
+    // Top apps
+    const topApps = Array.from(appUsage.entries())
+      .map(([app, minutes]) => ({ app, minutes }))
+      .sort((a, b) => b.minutes - a.minutes)
+      .slice(0, 5);
+
+    const wasDistracted =
+      distractionMinutes > (rule.maxDistractionMinutes ?? 30);
+
+    evidenceSummary.screenTime = {
+      totalMinutes,
+      distractionMinutes,
+      topApps,
+      wasDistracted,
+    };
+
+    if (rule.requiresScreenTime) {
+      // Screen time is expected
+      if (totalMinutes > 0) {
+        totalScore += screenWeight;
+        reasons.push(`${Math.round(totalMinutes)} min screen time`);
+      } else {
+        reasons.push('Expected screen time but none detected');
+      }
+    } else {
+      // Screen time = potential distraction
+      if (wasDistracted) {
+        reasons.push(
+          `${Math.round(distractionMinutes)} min on distracting apps`
+        );
+        suggestions.push(
+          `Consider putting phone away during ${event.category} time`
+        );
+      } else if (totalMinutes <= (rule.maxScreenTimeMinutes ?? 30)) {
+        totalScore += screenWeight;
+        reasons.push('Minimal phone usage');
+      } else {
+        totalScore += screenWeight * 0.5;
+        reasons.push(`${Math.round(totalMinutes)} min phone usage`);
+      }
+    }
+  } else if (rule.verifyWith.includes('screen_time')) {
+    maxScore += rule.evidenceWeights?.screen_time ?? 0.5;
+    if (rule.requiresScreenTime) {
+      reasons.push('No screen time data available');
+    } else {
+      // No screen time is actually good for most activities
+      totalScore += (rule.evidenceWeights?.screen_time ?? 0.5) * 0.8;
+      reasons.push('No phone usage detected');
+    }
+  }
+
+  // ----- HEALTH/WORKOUT VERIFICATION -----
+  if (rule.verifyWith.includes('health_workout')) {
+    const healthWeight = rule.evidenceWeights?.health_workout ?? 0.5;
+    maxScore += healthWeight;
+
+    if (overlappingWorkouts.length > 0) {
+      const workout = overlappingWorkouts[0];
+      const durationMinutes = Math.round(workout.duration_seconds / 60);
+
+      evidenceSummary.health = {
+        hasWorkout: true,
+        workoutType: workout.activity_type,
+        workoutDurationMinutes: durationMinutes,
+      };
+
+      if (rule.requiresWorkout) {
+        totalScore += healthWeight;
+        reasons.push(
+          `${workout.activity_type || 'Workout'} for ${durationMinutes} min`
+        );
+      } else if (rule.workoutContradictsIfDuring) {
+        reasons.push(`Working out during ${event.category}?`);
+      } else {
+        totalScore += healthWeight * 0.5;
+        reasons.push(`Also did a ${workout.activity_type || 'workout'}`);
+      }
+    } else if (rule.requiresWorkout) {
+      evidenceSummary.health = {
+        hasWorkout: false,
+        workoutType: null,
+        workoutDurationMinutes: 0,
+      };
+      reasons.push('No workout detected');
+      suggestions.push('Track your workout in the Health app for verification');
+    }
+  }
+
+  // ----- DETERMINE STATUS -----
+  let status: VerificationStatus;
+  const confidence = maxScore > 0 ? totalScore / maxScore : 0;
+
+  // Check for explicit contradictions
+  const locationContradicted =
+    evidenceSummary.location &&
+    rule.locationRequired &&
+    !evidenceSummary.location.matchesExpected;
+
+  const wasDistracted = evidenceSummary.screenTime?.wasDistracted ?? false;
+
+  if (locationContradicted) {
+    status = 'contradicted';
+  } else if (wasDistracted) {
+    status = 'distracted';
+  } else if (confidence >= 0.7) {
+    status = 'verified';
+  } else if (confidence >= 0.3) {
+    status = 'partial';
+  } else if (maxScore === 0 || rule.verifyWith.length === 0) {
+    // Can't verify categories with no evidence requirements
+    status = 'unverified';
+  } else {
+    status = 'unverified';
+  }
+
+  return {
+    eventId: event.id,
+    status,
+    confidence,
+    evidence: evidenceSummary,
+    reason: reasons.join('. ') || 'No evidence available',
+    suggestions: suggestions.length > 0 ? suggestions : undefined,
+  };
+}
+
+/**
+ * Verify all planned events for a day.
+ */
+export function verifyPlannedEvents(
+  plannedEvents: ScheduledEvent[],
+  evidence: EvidenceBundle,
+  ymd: string
+): Map<string, VerificationResult> {
+  const results = new Map<string, VerificationResult>();
+
+  for (const event of plannedEvents) {
+    const result = verifyEvent(event, evidence, ymd);
+    results.set(event.id, result);
+  }
+
+  return results;
+}
+
+// ============================================================================
+// Actual Block Generation
+// ============================================================================
+
+/**
+ * Generate actual calendar blocks from evidence data.
+ * This creates standalone blocks for activities detected but not planned.
+ */
+export function generateActualBlocks(
+  evidence: EvidenceBundle,
+  ymd: string,
+  plannedEvents: ScheduledEvent[]
+): ActualBlock[] {
+  const blocks: ActualBlock[] = [];
+  const dayStart = ymdToDate(ymd);
+
+  // ----- LOCATION-BASED BLOCKS -----
+  for (const loc of evidence.locationHourly) {
+    const hourStart = new Date(loc.hour_start);
+    const startMinutes = hourStart.getHours() * 60;
+    const endMinutes = startMinutes + 60;
+
+    // Check if this hour is covered by a planned event
+    const isPlanned = plannedEvents.some(
+      (e) => e.startMinutes < endMinutes && (e.startMinutes + e.duration) > startMinutes
+    );
+
+    if (!isPlanned && loc.place_label) {
+      const category = placeToCategory(loc.place_category);
+      blocks.push({
+        id: `loc_${loc.hour_start}`,
+        title: loc.place_label,
+        description: loc.place_category || '',
+        category,
+        startMinutes,
+        endMinutes,
+        source: 'location',
+        evidence: {
+          location: {
+            placeLabel: loc.place_label,
+            placeCategory: loc.place_category,
+            sampleCount: loc.sample_count,
+            matchesExpected: true,
+          },
+        },
+      });
+    }
+  }
+
+  // ----- WORKOUT-BASED BLOCKS -----
+  for (const workout of evidence.healthWorkouts) {
+    const workoutStart = new Date(workout.started_at);
+    const workoutEnd = new Date(workout.ended_at);
+    const startMinutes = Math.floor(
+      (workoutStart.getTime() - dayStart.getTime()) / (60 * 1000)
+    );
+    const endMinutes = Math.floor(
+      (workoutEnd.getTime() - dayStart.getTime()) / (60 * 1000)
+    );
+
+    // Check if this workout is during a planned health event
+    const coveredByHealth = plannedEvents.some(
+      (e) =>
+        e.category === 'health' &&
+        e.startMinutes <= startMinutes &&
+        (e.startMinutes + e.duration) >= endMinutes
+    );
+
+    if (!coveredByHealth) {
+      blocks.push({
+        id: `workout_${workout.id}`,
+        title: workout.activity_type || 'Workout',
+        description: `${Math.round(workout.duration_seconds / 60)} min`,
+        category: 'health',
+        startMinutes: Math.max(0, startMinutes),
+        endMinutes: Math.min(1440, endMinutes),
+        source: 'workout',
+        evidence: {
+          health: {
+            hasWorkout: true,
+            workoutType: workout.activity_type,
+            workoutDurationMinutes: Math.round(workout.duration_seconds / 60),
+          },
+        },
+      });
+    }
+  }
+
+  // ----- SCREEN TIME BLOCKS (unplanned digital time) -----
+  // Group consecutive screen time into blocks
+  const screenTimeBlocks = groupScreenTimeSessions(
+    evidence.screenTimeSessions,
+    dayStart,
+    plannedEvents
+  );
+
+  for (const block of screenTimeBlocks) {
+    if (block.durationMinutes >= 15) {
+      // Only show blocks >= 15 min
+      blocks.push({
+        id: `screen_${block.startMinutes}`,
+        title: 'Screen Time',
+        description: block.topApp || 'Phone usage',
+        category: 'digital',
+        startMinutes: block.startMinutes,
+        endMinutes: block.endMinutes,
+        source: 'screen_time',
+        evidence: {
+          screenTime: {
+            totalMinutes: block.durationMinutes,
+            distractionMinutes: block.distractionMinutes,
+            topApps: block.topApps,
+            wasDistracted: block.distractionMinutes > 10,
+          },
+        },
+      });
+    }
+  }
+
+  // Merge overlapping blocks
+  return mergeOverlappingBlocks(blocks);
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function ymdToDate(ymd: string): Date {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return new Date(year, month, day, 0, 0, 0, 0);
+}
+
+function placeToCategory(placeCategory: string | null): EventCategory {
+  switch (placeCategory?.toLowerCase()) {
+    case 'home':
+      return 'routine';
+    case 'office':
+      return 'work';
+    case 'gym':
+      return 'health';
+    case 'restaurant':
+    case 'cafe':
+      return 'meal';
+    default:
+      return 'unknown';
+  }
+}
+
+interface ScreenTimeBlock {
+  startMinutes: number;
+  endMinutes: number;
+  durationMinutes: number;
+  distractionMinutes: number;
+  topApp: string | null;
+  topApps: Array<{ app: string; minutes: number }>;
+}
+
+function groupScreenTimeSessions(
+  sessions: ScreenTimeSessionRow[],
+  dayStart: Date,
+  plannedEvents: ScheduledEvent[]
+): ScreenTimeBlock[] {
+  const blocks: ScreenTimeBlock[] = [];
+  const GAP_THRESHOLD = 15; // Merge sessions within 15 minutes
+
+  let currentBlock: ScreenTimeBlock | null = null;
+  const appUsage = new Map<string, number>();
+
+  for (const session of sessions) {
+    const sessionStart = new Date(session.started_at);
+    const sessionEnd = new Date(session.ended_at);
+    const startMinutes = Math.floor(
+      (sessionStart.getTime() - dayStart.getTime()) / (60 * 1000)
+    );
+    const endMinutes = Math.floor(
+      (sessionEnd.getTime() - dayStart.getTime()) / (60 * 1000)
+    );
+
+    // Skip if covered by planned digital/comm time
+    const isPlannedDigital = plannedEvents.some(
+      (e) =>
+        (e.category === 'digital' || e.category === 'comm') &&
+        e.startMinutes <= startMinutes &&
+        (e.startMinutes + e.duration) >= endMinutes
+    );
+
+    if (isPlannedDigital) continue;
+
+    const durationMinutes = session.duration_seconds / 60;
+    const appName = session.display_name || session.app_id;
+    const isDistraction = appMatchesList(appName, DISTRACTION_APPS);
+
+    if (currentBlock && startMinutes - currentBlock.endMinutes <= GAP_THRESHOLD) {
+      // Extend current block
+      currentBlock.endMinutes = Math.max(currentBlock.endMinutes, endMinutes);
+      currentBlock.durationMinutes += durationMinutes;
+      if (isDistraction) {
+        currentBlock.distractionMinutes += durationMinutes;
+      }
+      const existing = appUsage.get(appName) ?? 0;
+      appUsage.set(appName, existing + durationMinutes);
+    } else {
+      // Start new block
+      if (currentBlock) {
+        currentBlock.topApps = Array.from(appUsage.entries())
+          .map(([app, minutes]) => ({ app, minutes }))
+          .sort((a, b) => b.minutes - a.minutes)
+          .slice(0, 3);
+        currentBlock.topApp = currentBlock.topApps[0]?.app ?? null;
+        blocks.push(currentBlock);
+        appUsage.clear();
+      }
+
+      currentBlock = {
+        startMinutes: Math.max(0, startMinutes),
+        endMinutes: Math.min(1440, endMinutes),
+        durationMinutes,
+        distractionMinutes: isDistraction ? durationMinutes : 0,
+        topApp: appName,
+        topApps: [],
+      };
+      appUsage.set(appName, durationMinutes);
+    }
+  }
+
+  // Don't forget the last block
+  if (currentBlock) {
+    currentBlock.topApps = Array.from(appUsage.entries())
+      .map(([app, minutes]) => ({ app, minutes }))
+      .sort((a, b) => b.minutes - a.minutes)
+      .slice(0, 3);
+    currentBlock.topApp = currentBlock.topApps[0]?.app ?? null;
+    blocks.push(currentBlock);
+  }
+
+  return blocks;
+}
+
+function mergeOverlappingBlocks(blocks: ActualBlock[]): ActualBlock[] {
+  if (blocks.length === 0) return [];
+
+  // Sort by start time
+  const sorted = [...blocks].sort((a, b) => a.startMinutes - b.startMinutes);
+  const merged: ActualBlock[] = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+
+    // If overlapping and same source/category, merge
+    if (
+      current.startMinutes < last.endMinutes &&
+      current.source === last.source &&
+      current.category === last.category
+    ) {
+      last.endMinutes = Math.max(last.endMinutes, current.endMinutes);
+      // Combine descriptions
+      if (current.description && !last.description.includes(current.description)) {
+        last.description = `${last.description}, ${current.description}`;
+      }
+    } else {
+      merged.push(current);
+    }
+  }
+
+  return merged;
+}

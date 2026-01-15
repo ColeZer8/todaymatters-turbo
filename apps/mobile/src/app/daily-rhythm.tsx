@@ -3,7 +3,7 @@ import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { DailyRhythmTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { useOnboardingSync } from '@/lib/supabase/hooks';
 
@@ -54,14 +54,14 @@ export default function DailyRhythmScreen() {
 
   return (
     <DailyRhythmTemplate
-      step={ONBOARDING_STEPS.dailyRhythm}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.dailyRhythm}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       wakeTime={wakeTime}
       sleepTime={sleepTime}
       onSelectWakeTime={setWakeTime}
       onSelectSleepTime={setSleepTime}
-      onContinue={() => router.replace('/joy')}
-      onBack={() => router.replace('/setup-questions')}
+      onContinue={() => router.replace('/my-church')}
+      onBack={() => router.replace('/ideal-day')}
     />
   );
 }

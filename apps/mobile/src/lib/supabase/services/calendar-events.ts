@@ -212,8 +212,27 @@ export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEve
       meta: metaWithLocation as unknown as Json,
     };
 
+    if (__DEV__) {
+      console.log('[Supabase] Inserting planned calendar event:', {
+        userId: input.userId,
+        title: insert.title,
+        scheduled_start: insert.scheduled_start,
+        scheduled_end: insert.scheduled_end,
+        type: insert.type,
+      });
+    }
+
     const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      if (__DEV__) {
+        console.error('[Supabase] ❌ Error inserting planned event:', error);
+      }
+      throw handleSupabaseError(error);
+    }
+
+    if (__DEV__) {
+      console.log('[Supabase] ✅ Successfully inserted planned event:', data.id);
+    }
 
     const mapped = rowToScheduledEvent(data as TmEventRow);
     if (!mapped) {
@@ -244,8 +263,27 @@ export async function createActualCalendarEvent(input: CreateActualCalendarEvent
       meta: metaWithLocation as unknown as Json,
     };
 
+    if (__DEV__) {
+      console.log('[Supabase] Inserting actual calendar event:', {
+        userId: input.userId,
+        title: insert.title,
+        scheduled_start: insert.scheduled_start,
+        scheduled_end: insert.scheduled_end,
+        type: insert.type,
+      });
+    }
+
     const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      if (__DEV__) {
+        console.error('[Supabase] ❌ Error inserting actual event:', error);
+      }
+      throw handleSupabaseError(error);
+    }
+
+    if (__DEV__) {
+      console.log('[Supabase] ✅ Successfully inserted actual event:', data.id);
+    }
 
     const mapped = rowToScheduledEvent(data as TmEventRow);
     if (!mapped) {

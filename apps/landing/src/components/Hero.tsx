@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 export const Hero = () => {
   return (
-    <section className="relative h-screen overflow-hidden">
+    <section className="relative min-h-[100svh] md:h-screen overflow-hidden">
       {/* Background Image - Bevel style landscape */}
       <div className="absolute inset-0 z-0">
         <div 
@@ -18,7 +18,7 @@ export const Hero = () => {
         <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/70 to-white/95" />
       </div>
 
-      <div className="relative z-10 h-full max-w-7xl mx-auto px-6 flex flex-col items-center justify-center">
+      <div className="relative z-10 min-h-[100svh] md:h-full max-w-7xl mx-auto px-6 flex flex-col items-center justify-center">
         <div className="flex flex-col items-center text-center">
           {/* Main headline - "Today Matters" in blue */}
           <motion.h1

@@ -123,7 +123,7 @@ export const ScrollShowcase = () => {
       className="relative bg-white z-20" 
       style={{ height: `${items.length * 100}vh` }}
     >
-      <div className="sticky top-0 h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden flex items-center justify-center">
+      <div className="sticky top-0 min-h-[100svh] md:h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden flex items-center justify-center">
         {/* Immersive Background Layer */}
         <div className="absolute inset-0 z-0">
           {items.map((item, idx) => (
@@ -188,7 +188,7 @@ export const ScrollShowcase = () => {
           })}
         </div>
 
-        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 h-full flex flex-col items-center justify-start pt-6 pb-0 md:justify-center md:pt-0 md:pb-0">
+        <div className="relative z-20 w-full max-w-7xl mx-auto px-6 min-h-[100svh] md:h-full flex flex-col items-center justify-start pt-10 pb-10 md:justify-center md:pt-0 md:pb-0">
           <div className="relative flex items-center justify-center w-full">
             <div className="relative w-full max-w-[360px] md:w-[400px]">
               {/* Mobile-only header (Bevel-style) - more compact */}
@@ -230,7 +230,7 @@ export const ScrollShowcase = () => {
               ))}
 
               {/* iPhone 16 Pro Mockup - smaller on mobile to ensure the full device is always visible */}
-              <div className="relative mx-auto w-[280px] aspect-[9/19.5] origin-center translate-y-8 scale-[0.56] max-[380px]:translate-y-6 max-[380px]:scale-[0.52] sm:translate-y-10 sm:scale-[0.6] md:translate-y-0 md:scale-100 bg-[#1a1a1a] rounded-[3.5rem] p-[10px] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] ring-[1.5px] ring-black/10">
+              <div className="relative mx-auto mt-6 w-[260px] sm:w-[280px] md:w-[400px] aspect-[9/19.5] bg-[#1a1a1a] rounded-[3.5rem] p-[10px] shadow-[0_60px_120px_-20px_rgba(0,0,0,0.4)] ring-[1.5px] ring-black/10">
                 {/* Modern Dynamic Island */}
                 <div className="absolute top-[1.1rem] left-1/2 -translate-x-1/2 w-[5.5rem] h-7 bg-black rounded-full z-50 flex items-center px-2 justify-between">
                   <div className="w-2 h-2 rounded-full bg-[#1a1a1a]" />
@@ -289,7 +289,7 @@ export const ScrollShowcase = () => {
         </div>
 
         {/* Section Transition Fade */}
-        <div className="absolute bottom-0 left-0 right-0 h-[45vh] bg-gradient-to-t from-white via-white/95 to-transparent md:h-48 md:from-white md:via-transparent md:to-transparent z-30 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-28 sm:h-32 bg-gradient-to-t from-white via-white/95 to-transparent md:h-48 md:from-white md:via-transparent md:to-transparent z-30 pointer-events-none" />
       </div>
 
     </section>

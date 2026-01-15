@@ -9,4 +9,4 @@ export * from './ideal-day';
 export * from './links';
 export * from './location-samples';
 export * from './communications';
-export * from './onboarding-suggestions';
+export * from './onboarding-suggestions';export * from "./evidence-data";

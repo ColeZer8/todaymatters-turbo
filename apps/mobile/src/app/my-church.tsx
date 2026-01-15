@@ -4,7 +4,8 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { MyChurchTemplate } from '@/components/templates/MyChurchTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { CHURCH_OPTIONS_US_SAMPLE } from '@/constants/churches';
 
 export default function MyChurchScreen() {
   const router = useRouter();
@@ -28,15 +29,15 @@ export default function MyChurchScreen() {
   }, [isAuthenticated, isNavigationReady, router]);
 
   const handleContinue = () => {
-    router.replace('/setup-questions');
+    router.replace('/ai-summary');
   };
 
   const handleSkip = () => {
-    router.replace('/setup-questions');
+    router.replace('/ai-summary');
   };
 
   const handleBack = () => {
-    router.replace('/vip-contacts');
+    router.replace('/daily-rhythm');
   };
 
   if (!isNavigationReady || !hasHydrated) {
@@ -49,14 +50,15 @@ export default function MyChurchScreen() {
 
   return (
     <MyChurchTemplate
-      step={ONBOARDING_STEPS.myChurch}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.myChurch}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       churchName={churchName}
       churchAddress={churchAddress}
       churchWebsite={churchWebsite}
       onChangeChurchName={setChurchName}
       onChangeChurchAddress={setChurchAddress}
       onChangeChurchWebsite={setChurchWebsite}
+      churchOptions={CHURCH_OPTIONS_US_SAMPLE}
       onContinue={handleContinue}
       onSkip={handleSkip}
       onBack={handleBack}

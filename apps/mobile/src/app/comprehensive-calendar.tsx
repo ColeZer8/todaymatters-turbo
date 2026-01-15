@@ -17,6 +17,7 @@ import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-
 import { useAuthStore } from '@/stores';
 import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
 import { useOnboardingStore } from '@/stores';
+import { useVerification } from '@/lib/calendar/use-verification';
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -55,6 +56,16 @@ export default function ComprehensiveCalendarScreen() {
     useCalendarEventsSync({
       onError: handleCalendarSyncError,
     });
+
+  // Verification: cross-reference planned events with evidence (location, screen time, health)
+  const { actualEventsForDisplay: verifiedActualEvents } = useVerification(plannedEvents, selectedDateYmd, {
+    autoFetch: true,
+    onError: (err) => {
+      if (__DEV__) {
+        console.warn('[Calendar] Verification error:', err.message);
+      }
+    },
+  });
 
   const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
 
@@ -207,11 +218,21 @@ export default function ComprehensiveCalendarScreen() {
     });
   }, [router, selectedDateYmd]);
 
+  // Combine Supabase actual events with verified/derived actual blocks
+  const combinedActualEvents = useMemo(() => {
+    // Start with Supabase-backed actual events
+    const supabaseActual = displayActualEvents;
+    // Add any verified actual blocks that aren't already in Supabase
+    const existingIds = new Set(supabaseActual.map((e) => e.id));
+    const newVerified = verifiedActualEvents.filter((e) => !existingIds.has(e.id));
+    return [...supabaseActual, ...newVerified];
+  }, [displayActualEvents, verifiedActualEvents]);
+
   return (
     <ComprehensiveCalendarTemplate
       selectedDate={selectedDate}
       plannedEvents={plannedEvents}
-      actualEvents={displayActualEvents}
+      actualEvents={combinedActualEvents}
       onPrevDay={() => {
         const prev = new Date(selectedDate);
         prev.setDate(prev.getDate() - 1);

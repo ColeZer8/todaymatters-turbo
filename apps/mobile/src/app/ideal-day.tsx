@@ -3,7 +3,7 @@ import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { IdealDayTemplate } from '@/components/templates';
 import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { useIdealDayStore } from '@/stores/ideal-day-store';
 import { useIdealDaySync } from '@/lib/supabase/hooks';
 
@@ -57,8 +57,8 @@ export default function IdealDayScreen() {
 
   return (
     <IdealDayTemplate
-      step={ONBOARDING_STEPS.idealDay}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.idealDay}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       categories={categories}
       categoriesByType={categoriesByType}
       dayType={dayType}
@@ -72,9 +72,9 @@ export default function IdealDayScreen() {
       onDeleteCategory={deleteCategory}
       onContinue={() => {
         void saveIdealDay();
-        router.replace('/values-scores');
+        router.replace('/daily-rhythm');
       }}
-      onSkip={() => router.replace('/values-scores')}
+      onSkip={() => router.replace('/daily-rhythm')}
       onBack={() => router.replace('/goal-whys')}
     />
   );

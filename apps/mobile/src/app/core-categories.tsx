@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { CoreCategoriesTemplate } from '@/components/templates/CoreCategoriesTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { generateOnboardingCategorySuggestionsLlm } from '@/lib/supabase/services';
 
 export default function CoreCategoriesScreen() {
@@ -65,11 +65,11 @@ export default function CoreCategoriesScreen() {
   }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, selectedValues]);
 
   const handleContinue = () => {
-    router.replace('/sub-categories');
+    router.replace('/values-scores');
   };
 
   const handleSkip = () => {
-    router.replace('/sub-categories');
+    router.replace('/values-scores');
   };
 
   const handleBack = () => {
@@ -86,8 +86,8 @@ export default function CoreCategoriesScreen() {
 
   return (
     <CoreCategoriesTemplate
-      step={ONBOARDING_STEPS.coreCategories}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.coreCategories}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       coreValues={coreValues}
       categories={coreCategories}
       suggestionsByValueId={suggestionsByValueId}

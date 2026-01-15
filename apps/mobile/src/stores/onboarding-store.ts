@@ -246,16 +246,40 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   appUsage: true,
 };
 
-// Predefined Core Values
+// Predefined Core Values (curated starter list)
 const DEFAULT_CORE_VALUES: CoreValue[] = [
+  // Defaults selected (match the “starter 6” in the notes)
   { id: 'faith', label: 'Faith', icon: 'cross', isSelected: true, isCustom: false },
   { id: 'family', label: 'Family', icon: 'users', isSelected: true, isCustom: false },
   { id: 'work', label: 'Work', icon: 'briefcase', isSelected: true, isCustom: false },
   { id: 'rest', label: 'Rest', icon: 'moon', isSelected: true, isCustom: false },
   { id: 'personal-growth', label: 'Personal Growth', icon: 'trending-up', isSelected: true, isCustom: false },
   { id: 'fitness', label: 'Fitness', icon: 'heart', isSelected: true, isCustom: false },
+
+  // Common additions
+  { id: 'friendship', label: 'Friendship', icon: 'users', isSelected: false, isCustom: false },
+  { id: 'marriage', label: 'Marriage', icon: 'users', isSelected: false, isCustom: false },
+  { id: 'parenting', label: 'Parenting', icon: 'users', isSelected: false, isCustom: false },
   { id: 'community', label: 'Community', icon: 'home', isSelected: false, isCustom: false },
+  { id: 'service', label: 'Service', icon: 'home', isSelected: false, isCustom: false },
+  { id: 'generosity', label: 'Generosity', icon: 'heart', isSelected: false, isCustom: false },
+  { id: 'gratitude', label: 'Gratitude', icon: 'heart', isSelected: false, isCustom: false },
+  { id: 'health', label: 'Health', icon: 'heart', isSelected: false, isCustom: false },
+  { id: 'learning', label: 'Learning', icon: 'trending-up', isSelected: false, isCustom: false },
+  { id: 'discipline', label: 'Discipline', icon: 'trending-up', isSelected: false, isCustom: false },
+  { id: 'leadership', label: 'Leadership', icon: 'star', isSelected: false, isCustom: false },
+  { id: 'integrity', label: 'Integrity', icon: 'star', isSelected: false, isCustom: false },
+  { id: 'humility', label: 'Humility', icon: 'star', isSelected: false, isCustom: false },
+  { id: 'simplicity', label: 'Simplicity', icon: 'moon', isSelected: false, isCustom: false },
+  { id: 'adventure', label: 'Adventure', icon: 'star', isSelected: false, isCustom: false },
   { id: 'creativity', label: 'Creativity', icon: 'palette', isSelected: false, isCustom: false },
+  { id: 'spirituality', label: 'Spirituality', icon: 'cross', isSelected: false, isCustom: false },
+  { id: 'prayer', label: 'Prayer', icon: 'cross', isSelected: false, isCustom: false },
+  { id: 'purpose', label: 'Purpose', icon: 'star', isSelected: false, isCustom: false },
+  { id: 'stewardship', label: 'Stewardship', icon: 'briefcase', isSelected: false, isCustom: false },
+  { id: 'finances', label: 'Finances', icon: 'briefcase', isSelected: false, isCustom: false },
+  { id: 'home', label: 'Home', icon: 'home', isSelected: false, isCustom: false },
+  { id: 'nature', label: 'Nature', icon: 'home', isSelected: false, isCustom: false },
 ];
 
 // Predefined Core Categories mapped to values

@@ -33,7 +33,7 @@ export default function SignInScreen() {
     }
     if (isAuthenticated && !isAuthBypassed) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace(hasCompletedOnboarding ? '/home' : '/permissions');
+        router.replace(hasCompletedOnboarding ? '/home' : '/explainer-video');
       });
     }
   }, [isAuthenticated, isNavigationReady, isAuthBypassed, onboardingHydrated, hasCompletedOnboarding, router]);

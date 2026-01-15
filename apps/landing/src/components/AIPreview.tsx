@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { clsx } from "clsx";
 
 const panels = [
@@ -147,13 +147,41 @@ export const AIPreview = () => {
     offset: ["start start", "end end"],
   });
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const node = containerRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        if (entry.isIntersecting) {
+          root.setAttribute("data-page-bg", "dark");
+        } else {
+          root.removeAttribute("data-page-bg");
+        }
+      },
+      // Trigger when the sticky section meaningfully enters/leaves the viewport.
+      { threshold: 0.15 }
+    );
+
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+      root.removeAttribute("data-page-bg");
+    };
+  }, []);
+
   return (
     <section 
       ref={containerRef} 
       className="relative bg-[#0a0a0a]"
       style={{ height: `${panels.length * 100}vh` }}
     >
-      <div className="sticky top-0 h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden">
+      <div className="sticky top-0 min-h-[100svh] md:h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden">
         {/* Dynamic Panels */}
         {panels.map((panel, index) => (
           <Panel 

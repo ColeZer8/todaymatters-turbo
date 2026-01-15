@@ -1,11 +1,10 @@
 import { Platform } from 'react-native';
-import * as TaskManager from 'expo-task-manager';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 import { supabase } from '@/lib/supabase/client';
 import type { Json } from '@/lib/supabase/database.types';
 import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
+import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 import type { AndroidLocationSample } from './types';
-
-export const ANDROID_BACKGROUND_LOCATION_TASK_NAME = 'tm-android-background-location-task';
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
@@ -79,7 +78,9 @@ function toSample(location: RawLocationObject): Omit<AndroidLocationSample, 'ded
 }
 
 // IMPORTANT: Task definitions must live at module scope (per Expo docs).
-if (Platform.OS === 'android') {
+if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager')) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
   TaskManager.defineTask(ANDROID_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
     try {
       if (error) {

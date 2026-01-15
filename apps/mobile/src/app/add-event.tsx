@@ -62,28 +62,51 @@ export default function AddEventScreen() {
                     return;
                 }
 
-                const created =
-                    column === 'actual'
-                        ? await createActual({
-                              title,
-                              description: '',
-                              location: draft.location,
-                              scheduledStartIso: start.toISOString(),
-                              scheduledEndIso: end.toISOString(),
-                              meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
-                          })
-                        : await createPlanned({
-                              title,
-                              description: '',
-                              location: draft.location,
-                              scheduledStartIso: start.toISOString(),
-                              scheduledEndIso: end.toISOString(),
-                              meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
-                          });
+                try {
+                    if (__DEV__) {
+                        console.log(`[AddEvent] Creating ${column} event:`, {
+                            title,
+                            start: start.toISOString(),
+                            end: end.toISOString(),
+                            category: draft.category,
+                            isBig3: draft.isBig3,
+                        });
+                    }
 
-                if (column === 'actual') addActualEvent(created, targetYmd);
-                else addScheduledEvent(created, targetYmd);
-                router.back();
+                    const created =
+                        column === 'actual'
+                            ? await createActual({
+                                  title,
+                                  description: '',
+                                  location: draft.location,
+                                  scheduledStartIso: start.toISOString(),
+                                  scheduledEndIso: end.toISOString(),
+                                  meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
+                              })
+                            : await createPlanned({
+                                  title,
+                                  description: '',
+                                  location: draft.location,
+                                  scheduledStartIso: start.toISOString(),
+                                  scheduledEndIso: end.toISOString(),
+                                  meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
+                              });
+
+                    if (__DEV__) {
+                        console.log(`[AddEvent] ✅ Successfully saved ${column} event to Supabase:`, created.id);
+                    }
+
+                    if (column === 'actual') addActualEvent(created, targetYmd);
+                    else addScheduledEvent(created, targetYmd);
+                    router.back();
+                } catch (error) {
+                    // Error is already handled by onError callback in useCalendarEventsSync
+                    // But we need to catch it here to prevent unhandled promise rejection
+                    if (__DEV__) {
+                        console.error(`[AddEvent] ❌ Failed to save ${column} event:`, error);
+                    }
+                    // Don't navigate back on error - let user see the error alert and retry
+                }
             }}
         />
     );

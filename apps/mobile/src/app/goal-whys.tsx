@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { GoalWhysTemplate } from '@/components/templates/GoalWhysTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function GoalWhysScreen() {
   const router = useRouter();
@@ -42,8 +42,8 @@ export default function GoalWhysScreen() {
 
   return (
     <GoalWhysTemplate
-      step={ONBOARDING_STEPS.goalWhys}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.goalWhys}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       goals={goals}
       goalWhys={goalWhys}
       onUpdateWhy={updateGoalWhy}

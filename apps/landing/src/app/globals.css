@@ -19,6 +19,26 @@ html[data-scroll-snap="on"] section {
   scroll-snap-align: start;
 }
 
+/* Allow sections to control the "page background" visible behind iOS Safari UI / overscroll */
+html[data-page-bg="dark"],
+html[data-page-bg="dark"] body {
+  background: #0a0a0a;
+}
+
+/*
+  Mobile Safari + mandatory scroll snapping can feel "stuck" (especially with full-viewport sections).
+  Keep the desktop experience unchanged, but disable scroll snapping on mobile widths.
+*/
+@media (max-width: 768px) {
+  html[data-scroll-snap="on"] {
+    scroll-snap-type: none;
+  }
+
+  html[data-scroll-snap="on"] section {
+    scroll-snap-align: none;
+  }
+}
+
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));

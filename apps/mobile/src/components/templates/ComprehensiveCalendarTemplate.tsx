@@ -70,6 +70,16 @@ const getCurrentMinutes = () => {
     return new Date().getHours() * 60 + new Date().getMinutes();
 };
 
+// Helper to check if a date is today
+const isToday = (date: Date): boolean => {
+    const today = new Date();
+    return (
+        date.getFullYear() === today.getFullYear() &&
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate()
+    );
+};
+
 const formatMinutesLabel = (minutes: number) => {
     'worklet';
     const hrs = Math.floor(minutes / 60);
@@ -130,7 +140,7 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
     
     const isSmall = event.duration < 30;
     const isTiny = event.duration < 20;
-
+    
     const handlePress = () => {
         if (isUnknown) {
             // Set which block to highlight before navigating
@@ -358,7 +368,8 @@ export const ComprehensiveCalendarTemplate = ({
 
     // Calculate current time indicator position
     const currentIndicatorTop = getPosition(currentMinutes, 0).top;
-    const shouldShowCurrentIndicator = currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
+    const isSelectedDateToday = isToday(selectedDate);
+    const shouldShowCurrentIndicator = isSelectedDateToday && currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
     const clampedIndicatorTop = Math.min(Math.max(currentIndicatorTop, 0), GRID_HEIGHT);
     const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
     const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;

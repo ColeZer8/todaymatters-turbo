@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { AISummaryTemplate } from '@/components/templates/AISummaryTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function AISummaryScreen() {
   const router = useRouter();
@@ -17,6 +17,7 @@ export default function AISummaryScreen() {
   const coreValues = useOnboardingStore((state) => state.coreValues);
   const goals = useOnboardingStore((state) => state.goals);
   const valuesScores = useOnboardingStore((state) => state.valuesScores);
+  const setHasCompletedOnboarding = useOnboardingStore((state) => state.setHasCompletedOnboarding);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -26,7 +27,8 @@ export default function AISummaryScreen() {
   }, [isAuthenticated, isNavigationReady, router]);
 
   const handleConfirm = () => {
-    router.replace('/name');
+    setHasCompletedOnboarding(true);
+    router.replace('/home');
   };
 
   const handleEdit = () => {
@@ -35,7 +37,7 @@ export default function AISummaryScreen() {
   };
 
   const handleBack = () => {
-    router.replace('/values-scores');
+    router.replace('/my-church');
   };
 
   if (!isNavigationReady || !hasHydrated) {
@@ -51,8 +53,8 @@ export default function AISummaryScreen() {
 
   return (
     <AISummaryTemplate
-      step={ONBOARDING_STEPS.aiSummary}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.aiSummary}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       userName={firstName}
       coreValues={coreValues}
       goals={goals}
