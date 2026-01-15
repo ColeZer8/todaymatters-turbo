@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { ExplainerVideoTemplate } from '@/components/templates/ExplainerVideoTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function ExplainerVideoScreen() {
   const router = useRouter();
@@ -48,8 +48,8 @@ export default function ExplainerVideoScreen() {
 
   return (
     <ExplainerVideoTemplate
-      step={ONBOARDING_STEPS.explainerVideo}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.explainerVideo}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       hasWatched={hasWatched}
       onPlay={handlePlay}
       onSkip={handleSkip}

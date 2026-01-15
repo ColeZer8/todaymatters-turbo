@@ -48,6 +48,7 @@ const ScoreSlider = ({ label, score, onScoreChange }: ScoreSliderProps) => {
   const [width, setWidth] = useState(0);
   const trackRef = useRef<View>(null);
   const onChangeRef = useRef(onScoreChange);
+  const dragStartXRef = useRef(0);
   onChangeRef.current = onScoreChange;
 
   const handleLayout = (e: LayoutChangeEvent) => {
@@ -62,13 +63,13 @@ const ScoreSlider = ({ label, score, onScoreChange }: ScoreSliderProps) => {
           if (!width) return;
           const { locationX } = evt.nativeEvent;
           const clampedPx = clamp(locationX, 0, width);
+          dragStartXRef.current = clampedPx;
           const newScore = Math.round((clampedPx / width) * 9) + 1; // 1-10 scale
           onChangeRef.current(clamp(newScore, 1, 10));
         },
-        onPanResponderMove: (evt) => {
+        onPanResponderMove: (_evt, gestureState) => {
           if (!width) return;
-          const { locationX } = evt.nativeEvent;
-          const clampedPx = clamp(locationX, 0, width);
+          const clampedPx = clamp(dragStartXRef.current + gestureState.dx, 0, width);
           const newScore = Math.round((clampedPx / width) * 9) + 1;
           onChangeRef.current(clamp(newScore, 1, 10));
         },

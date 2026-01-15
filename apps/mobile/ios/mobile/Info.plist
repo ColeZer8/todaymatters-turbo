@@ -55,18 +55,22 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your camera</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSFamilyControlsUsageDescription</key>
+    <string>TodayMatters uses Screen Time data to help you understand and improve your digital wellbeing.</string>
     <key>NSHealthShareUsageDescription</key>
     <string>TodayMatters uses Apple Health data to help you understand and improve your wellbeing.</string>
     <key>NSHealthUpdateUsageDescription</key>
     <string>TodayMatters may write limited health data to Apple Health when you choose to sync.</string>
-    <key>NSFamilyControlsUsageDescription</key>
-    <string>TodayMatters uses Screen Time data to help you understand and improve your digital wellbeing.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>TodayMatters uses your microphone to have voice conversations with your AI coach.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>TodayMatters uses your location in the background to build an hour-by-hour view of your day for schedule comparison.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>TodayMatters uses your microphone to have voice conversations with your AI coach.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
@@ -77,6 +81,7 @@
     <array>
       <string>audio</string>
       <string>location</string>
+      <string>fetch</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>

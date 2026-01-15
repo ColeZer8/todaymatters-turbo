@@ -9,43 +9,24 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		827BE7D3027269364423AFE1 /* libPods-mobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3FF446EAF505E0A47059E722 /* libPods-mobile.a */; };
-		A55A55A55A55A55A55A55A55 /* IosInsightsReportExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */; };
-		A66A66A66A66A66A66A66A66 /* IosInsightsReport.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		B823EBE0FDDB0F36181B3FAE /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F244C8AC5D1CBBFEEDDF4C /* ExpoModulesProvider.swift */; };
+		986A44480F45D32A71323298 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6130A2E786430D13FD2EA153 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		BD1C7EB13F7CEB5E4DB0C717 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 000402BB851527E878EAB409 /* PrivacyInfo.xcprivacy */; };
+		EF96629917106A4E865297B3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 595756F2BFF1E5E9F25EA424 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F2D65C3378653C1637346C8D /* libPods-mobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E7245B3888FD4F157E7A2C4A /* libPods-mobile.a */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		ABABABABABABABABABABABAB /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				A66A66A66A66A66A66A66A66 /* IosInsightsReport.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXFileReference section */
-		000402BB851527E878EAB409 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = mobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		0C5FD685E9F11C3FB9C99DC7 /* Pods-mobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mobile.release.xcconfig"; path = "Target Support Files/Pods-mobile/Pods-mobile.release.xcconfig"; sourceTree = "<group>"; };
+		02656B51F384DF0BA225F60C /* Pods-mobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mobile.debug.xcconfig"; path = "Target Support Files/Pods-mobile/Pods-mobile.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = mobile/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = mobile/Info.plist; sourceTree = "<group>"; };
-		3FF446EAF505E0A47059E722 /* libPods-mobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-mobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInsightsReportExtension.swift; sourceTree = "<group>"; };
-		A22A22A22A22A22A22A22A22 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IosInsightsReport.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A8F244C8AC5D1CBBFEEDDF4C /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-mobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		595756F2BFF1E5E9F25EA424 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = mobile/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		6130A2E786430D13FD2EA153 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-mobile/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		740EC3A4099CA8C8B89CC57F /* Pods-mobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mobile.release.xcconfig"; path = "Target Support Files/Pods-mobile/Pods-mobile.release.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = mobile/SplashScreen.storyboard; sourceTree = "<group>"; };
-		AB6475A6266BE0C77255C08B /* Pods-mobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-mobile.debug.xcconfig"; path = "Target Support Files/Pods-mobile/Pods-mobile.debug.xcconfig"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		E7245B3888FD4F157E7A2C4A /* libPods-mobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-mobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = mobile/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* mobile-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "mobile-Bridging-Header.h"; path = "mobile/mobile-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -56,29 +37,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				827BE7D3027269364423AFE1 /* libPods-mobile.a in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A99A99A99A99A99A99A99A99 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				F2D65C3378653C1637346C8D /* libPods-mobile.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		07DDC5CB4F20044D00261DCC /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				AB6475A6266BE0C77255C08B /* Pods-mobile.debug.xcconfig */,
-				0C5FD685E9F11C3FB9C99DC7 /* Pods-mobile.release.xcconfig */,
-			);
-			path = Pods;
-			sourceTree = "<group>";
-		};
 		13B07FAE1A68108700A75B9A /* mobile */ = {
 			isa = PBXGroup;
 			children = (
@@ -88,15 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				000402BB851527E878EAB409 /* PrivacyInfo.xcprivacy */,
-			);
-			name = mobile;
-			sourceTree = "<group>";
-		};
-		1FED9880A909DC0CB0025A79 /* mobile */ = {
-			isa = PBXGroup;
-			children = (
-				A8F244C8AC5D1CBBFEEDDF4C /* ExpoModulesProvider.swift */,
+				595756F2BFF1E5E9F25EA424 /* PrivacyInfo.xcprivacy */,
 			);
 			name = mobile;
 			sourceTree = "<group>";
@@ -105,9 +62,17 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				3FF446EAF505E0A47059E722 /* libPods-mobile.a */,
+				E7245B3888FD4F157E7A2C4A /* libPods-mobile.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		3B9B8A0D487889C4692B394C /* mobile */ = {
+			isa = PBXGroup;
+			children = (
+				6130A2E786430D13FD2EA153 /* ExpoModulesProvider.swift */,
+			);
+			name = mobile;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -121,12 +86,11 @@
 			isa = PBXGroup;
 			children = (
 				13B07FAE1A68108700A75B9A /* mobile */,
-				A44A44A44A44A44A44A44A44 /* IosInsightsReport */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				07DDC5CB4F20044D00261DCC /* Pods */,
-				8B6411AE2B257CAF0999CB9D /* ExpoModulesProviders */,
+				CDDD77E4903DBFEA6805D6D9 /* Pods */,
+				966189711CB9D1EEB06D191F /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -137,26 +101,16 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* mobile.app */,
-				A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		8B6411AE2B257CAF0999CB9D /* ExpoModulesProviders */ = {
+		966189711CB9D1EEB06D191F /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				1FED9880A909DC0CB0025A79 /* mobile */,
+				3B9B8A0D487889C4692B394C /* mobile */,
 			);
 			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		A44A44A44A44A44A44A44A44 /* IosInsightsReport */ = {
-			isa = PBXGroup;
-			children = (
-				A11A11A11A11A11A11A11A11 /* IosInsightsReportExtension.swift */,
-				A22A22A22A22A22A22A22A22 /* Info.plist */,
-			);
-			path = IosInsightsReport;
 			sourceTree = "<group>";
 		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
@@ -168,6 +122,15 @@
 			path = mobile/Supporting;
 			sourceTree = "<group>";
 		};
+		CDDD77E4903DBFEA6805D6D9 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				02656B51F384DF0BA225F60C /* Pods-mobile.debug.xcconfig */,
+				740EC3A4099CA8C8B89CC57F /* Pods-mobile.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -176,14 +139,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "mobile" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				B65D4BBE7C1EFDF3DC3530CF /* [Expo] Configure project */,
+				5C9505C222BBD7DF06E7ECA7 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				C9B087EA01B5D394601DED0B /* [CP] Embed Pods Frameworks */,
-				ABABABABABABABABABABABAB /* Embed App Extensions */,
+				5DF345E3850457EDFFD127DD /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -193,23 +155,6 @@
 			productName = mobile;
 			productReference = 13B07F961A680F5B00A75B9A /* mobile.app */;
 			productType = "com.apple.product-type.application";
-		};
-		ACACACACACACACACACACACAC /* IosInsightsReport */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = ADADADADADADADADADADADAD /* Build configuration list for PBXNativeTarget "IosInsightsReport" */;
-			buildPhases = (
-				A77A77A77A77A77A77A77A77 /* Sources */,
-				A99A99A99A99A99A99A99A99 /* Frameworks */,
-				A88A88A88A88A88A88A88A88 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = IosInsightsReport;
-			productName = IosInsightsReport;
-			productReference = A33A33A33A33A33A33A33A33 /* IosInsightsReport.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -221,7 +166,6 @@
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
-						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -239,7 +183,6 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* mobile */,
-				ACACACACACACACACACACACAC /* IosInsightsReport */,
 			);
 		};
 /* End PBXProject section */
@@ -252,14 +195,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				BD1C7EB13F7CEB5E4DB0C717 /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A88A88A88A88A88A88A88A88 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				EF96629917106A4E865297B3 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,6 +241,54 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		5C9505C222BBD7DF06E7ECA7 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/mobile/mobile.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-mobile/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-mobile/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-mobile/expo-configure-project.sh\"\n";
+		};
+		5DF345E3850457EDFFD127DD /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-mobile/Pods-mobile-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/WebRTC-SDK/WebRTC.framework/WebRTC",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/WebRTC.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-mobile/Pods-mobile-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -343,54 +327,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-mobile/Pods-mobile-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		B65D4BBE7C1EFDF3DC3530CF /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/mobile/mobile.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-mobile/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-mobile/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-mobile/expo-configure-project.sh\"\n";
-		};
-		C9B087EA01B5D394601DED0B /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-mobile/Pods-mobile-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/WebRTC-SDK/WebRTC.framework/WebRTC",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/WebRTC.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-mobile/Pods-mobile-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -399,15 +335,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				B823EBE0FDDB0F36181B3FAE /* ExpoModulesProvider.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A77A77A77A77A77A77A77A77 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				A55A55A55A55A55A55A55A55 /* IosInsightsReportExtension.swift in Sources */,
+				986A44480F45D32A71323298 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -416,13 +344,11 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = AB6475A6266BE0C77255C08B /* Pods-mobile.debug.xcconfig */;
+			baseConfigurationReference = 02656B51F384DF0BA225F60C /* Pods-mobile.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mobile/mobile.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XUF36G5828;
 				ENABLE_BITCODE = NO;
@@ -455,13 +381,11 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 0C5FD685E9F11C3FB9C99DC7 /* Pods-mobile.release.xcconfig */;
+			baseConfigurationReference = 740EC3A4099CA8C8B89CC57F /* Pods-mobile.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mobile/mobile.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = XUF36G5828;
 				ENABLE_BITCODE = NO;
@@ -607,58 +531,6 @@
 			};
 			name = Release;
 		};
-		AEAEAEAEAEAEAEAEAEAEAEAE /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
-				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XUF36G5828;
-				INFOPLIST_FILE = IosInsightsReport/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.todaymatters.mobile.IosInsightsReport;
-				PRODUCT_NAME = IosInsightsReport;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		AFAFAFAFAFAFAFAFAFAFAFAF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
-				CODE_SIGN_ENTITLEMENTS = IosInsightsReport/IosInsightsReport.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XUF36G5828;
-				INFOPLIST_FILE = IosInsightsReport/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.todaymatters.mobile.IosInsightsReport;
-				PRODUCT_NAME = IosInsightsReport;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -676,15 +548,6 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		ADADADADADADADADADADADAD /* Build configuration list for PBXNativeTarget "IosInsightsReport" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AEAEAEAEAEAEAEAEAEAEAEAE /* Debug */,
-				AFAFAFAFAFAFAFAFAFAFAFAF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

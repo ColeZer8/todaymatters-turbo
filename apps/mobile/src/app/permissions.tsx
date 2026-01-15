@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { ActivityIndicator, Alert, Platform, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PermissionsTemplate } from '@/components/templates';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
@@ -27,11 +27,34 @@ export default function PermissionsScreen() {
 
     if (result.foreground === 'granted' && result.background === 'granted') return true;
 
+    if (!result.hasNativeModule) {
+      Alert.alert(
+        'Location not available in this build',
+        Platform.OS === 'android'
+          ? 'This Android build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/emulator\n- Run: pnpm --filter mobile android:dev\n- Then run: pnpm dev -- --filter=mobile'
+          : 'This iOS dev build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/simulator\n- Run: pnpm --filter mobile ios:dev\n- Then run: pnpm dev -- --filter=mobile'
+      );
+      return false;
+    }
+
+    const canAskAgain = result.canAskAgainForeground || result.canAskAgainBackground;
+
     Alert.alert(
       'Location permission needed',
       Platform.OS === 'android'
         ? 'To compare your planned day to your actual day, please allow Location (including background). On some Android versions you may need to enable background location in Settings after granting while-in-use.'
-        : 'To compare your planned day to your actual day, please allow Location (Always). If you are in a dev build, you may need to rebuild the iOS app first.'
+        : 'To compare your planned day to your actual day, please allow Location (Always). If iOS won’t re-prompt, open Settings and set Location to “Always”.',
+      canAskAgain
+        ? [{ text: 'OK' }]
+        : [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                void Linking.openSettings();
+              },
+            },
+          ]
     );
     return false;
   }, []);

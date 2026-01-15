@@ -32,18 +32,50 @@ async function loadExpoLocationAsync(): Promise<typeof import('expo-location') |
 export async function requestAndroidLocationPermissionsAsync(): Promise<{
   foreground: 'granted' | 'denied' | 'undetermined';
   background: 'granted' | 'denied' | 'undetermined';
+  canAskAgainForeground: boolean;
+  canAskAgainBackground: boolean;
+  hasNativeModule: boolean;
 }> {
-  if (Platform.OS !== 'android') return { foreground: 'denied', background: 'denied' };
+  if (Platform.OS !== 'android') {
+    return {
+      foreground: 'denied',
+      background: 'denied',
+      canAskAgainForeground: false,
+      canAskAgainBackground: false,
+      hasNativeModule: false,
+    };
+  }
   const Location = await loadExpoLocationAsync();
-  if (!Location) return { foreground: 'denied', background: 'denied' };
+  if (!Location) {
+    return {
+      foreground: 'denied',
+      background: 'denied',
+      canAskAgainForeground: false,
+      canAskAgainBackground: false,
+      hasNativeModule: false,
+    };
+  }
 
-  const foreground = await Location.requestForegroundPermissionsAsync();
-  const background =
-    foreground.status === 'granted'
-      ? await Location.requestBackgroundPermissionsAsync()
-      : { status: 'denied' as const };
+  const fgBefore = await Location.getForegroundPermissionsAsync();
+  const bgBefore = await Location.getBackgroundPermissionsAsync();
 
-  return { foreground: foreground.status, background: background.status };
+  let foreground = fgBefore;
+  if (foreground.status !== 'granted') {
+    foreground = await Location.requestForegroundPermissionsAsync();
+  }
+
+  let background = bgBefore;
+  if (foreground.status === 'granted' && background.status !== 'granted') {
+    background = await Location.requestBackgroundPermissionsAsync();
+  }
+
+  return {
+    foreground: foreground.status,
+    background: background.status,
+    canAskAgainForeground: typeof foreground.canAskAgain === 'boolean' ? foreground.canAskAgain : true,
+    canAskAgainBackground: typeof background.canAskAgain === 'boolean' ? background.canAskAgain : true,
+    hasNativeModule: true,
+  };
 }
 
 export async function startAndroidBackgroundLocationAsync(): Promise<void> {
