@@ -169,6 +169,17 @@ end $$;
 -- PART 2: Health + Screen Time base tables (with security fixes)
 -- =============================================================================
 
+-- 1.8) Onboarding fields added after initial rollout (additive only)
+alter table if exists tm.profiles add column if not exists has_watched_explainer_video boolean null;
+alter table if exists tm.profiles add column if not exists has_completed_onboarding boolean null;
+alter table if exists tm.profiles add column if not exists core_values jsonb null;
+alter table if exists tm.profiles add column if not exists core_categories jsonb null;
+alter table if exists tm.profiles add column if not exists values_scores jsonb null;
+alter table if exists tm.profiles add column if not exists goal_whys jsonb null;
+alter table if exists tm.profiles add column if not exists church_name text null;
+alter table if exists tm.profiles add column if not exists church_address text null;
+alter table if exists tm.profiles add column if not exists church_website text null;
+
 -- 2.1) tm.data_sync_state
 create table if not exists tm.data_sync_state (
   user_id uuid not null references auth.users(id) on delete cascade,

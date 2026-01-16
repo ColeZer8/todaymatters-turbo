@@ -5,7 +5,7 @@ export type { TimeBlock } from './review-time-store';
 export { useOnboardingStore } from './onboarding-store';
 export { useRoutineBuilderStore } from './routine-builder-store';
 export { useIdealDayStore } from './ideal-day-store';
-export { useEventsStore, getCurrentMinutes, formatMinutesToDisplay } from './events-store';
+export { useEventsStore, getCurrentMinutes, formatMinutesToDisplay, getTodayYmd } from './events-store';
 export type { ScheduledEvent, EventCategory } from './events-store';
 export { useDemoStore, useGreeting, useCurrentHour, useCurrentMinutes, TIME_PRESETS } from './demo-store';
 export type { TimeOfDay } from './demo-store';

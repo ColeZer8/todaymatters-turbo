@@ -32,8 +32,19 @@ interface ScreenTimeAnalyticsTemplateProps {
   suggestionBody: string | null;
 
   hourlyBuckets: number[] | null;
+  hourlyAppBreakdown?: Array<{
+    hour: number;
+    apps: Array<{
+      id: string;
+      name: string;
+      durationLabel: string;
+      durationSeconds: number;
+    }>;
+  }> | null;
+  showHourlyChart?: boolean;
 
   topApps: TopAppRow[];
+  showTopApps?: boolean;
 
   onPressBack?: () => void;
   onPressSettings?: () => void;
@@ -42,6 +53,8 @@ interface ScreenTimeAnalyticsTemplateProps {
   onRequestAuthorization: () => void;
   showAuthorizationCta: boolean;
   isSyncing: boolean;
+  bannerText?: string | null;
+  bannerTone?: 'info' | 'warning';
 }
 
 export const ScreenTimeAnalyticsTemplate = ({
@@ -56,11 +69,16 @@ export const ScreenTimeAnalyticsTemplate = ({
   insightBody,
   suggestionBody,
   hourlyBuckets,
+  hourlyAppBreakdown = null,
+  showHourlyChart = true,
   topApps,
+  showTopApps = true,
   statusLabel,
   onRequestAuthorization,
   showAuthorizationCta,
   isSyncing,
+  bannerText,
+  bannerTone = 'info',
   onPressBack,
   onPressSettings,
 }: ScreenTimeAnalyticsTemplateProps) => {
@@ -142,6 +160,25 @@ export const ScreenTimeAnalyticsTemplate = ({
               })}
             </View>
           </View>
+
+          {bannerText ? (
+            <View
+              className={`mt-4 rounded-2xl border px-4 py-3 ${
+                bannerTone === 'warning'
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-blue-200 bg-blue-50'
+              }`}
+            >
+              <Text
+                className={`text-[12px] font-semibold uppercase tracking-[0.12em] ${
+                  bannerTone === 'warning' ? 'text-amber-700' : 'text-blue-700'
+                }`}
+              >
+                Notice
+              </Text>
+              <Text className="mt-1 text-[14px] leading-[20px] text-text-secondary">{bannerText}</Text>
+            </View>
+          ) : null}
 
           <View className="mt-5">
             <Card className="border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
@@ -228,81 +265,116 @@ export const ScreenTimeAnalyticsTemplate = ({
             </View>
           ) : null}
 
-          {/* Hourly Activity */}
-          <View className="mt-5">
-            <Text className="px-1 text-[16px] font-bold text-text-primary">Hourly Activity</Text>
-            <View className="mt-3 flex-row items-end justify-between px-1">
-              {(hourlyBuckets ?? Array.from({ length: 24 }, () => 0)).slice(0, 24).map((value, idx) => {
-                const height = maxHourly <= 0 ? 4 : Math.max(4, Math.round((value / maxHourly) * 56));
-                // Show labels every 3 hours: 12am, 3am, 6am, 9am, 12pm, 3pm, 6pm, 9pm
-                const showLabel = idx % 3 === 0;
-                const formatHourLabel = (hour: number): string => {
-                  if (hour === 0) return '12am';
-                  if (hour < 12) return `${hour}am`;
-                  if (hour === 12) return '12pm';
-                  return `${hour - 12}pm`;
-                };
-                const label = showLabel ? formatHourLabel(idx) : '';
+          {showHourlyChart && (
+            <View className="mt-5">
+              <Text className="px-1 text-[16px] font-bold text-text-primary">Hourly Activity</Text>
+              <View className="mt-3 flex-row items-end justify-between px-1">
+                {(hourlyBuckets ?? Array.from({ length: 24 }, () => 0)).slice(0, 24).map((value, idx) => {
+                  const height = maxHourly <= 0 ? 4 : Math.max(4, Math.round((value / maxHourly) * 56));
+                  // Show labels every 3 hours: 12am, 3am, 6am, 9am, 12pm, 3pm, 6pm, 9pm
+                  const showLabel = idx % 3 === 0;
+                  const formatHourLabel = (hour: number): string => {
+                    if (hour === 0) return '12am';
+                    if (hour < 12) return `${hour}am`;
+                    if (hour === 12) return '12pm';
+                    return `${hour - 12}pm`;
+                  };
+                  const label = showLabel ? formatHourLabel(idx) : '';
 
-                return (
-                  <View key={String(idx)} className="items-center" style={{ width: 10 }}>
-                    <View
-                      className="w-full overflow-hidden rounded-md bg-[#E5E7EB]"
-                      style={{ height: 56 }}
-                    >
-                      <View className="w-full rounded-md bg-[#2F7BFF]" style={{ height, marginTop: 56 - height }} />
-                    </View>
-                    {showLabel ? (
-                      <Text
-                        numberOfLines={1}
-                        className="mt-2 text-[10px] font-semibold text-text-tertiary"
-                        style={{ width: 30, textAlign: 'center' }}
+                  return (
+                    <View key={String(idx)} className="items-center" style={{ width: 10 }}>
+                      <View
+                        className="w-full overflow-hidden rounded-md bg-[#E5E7EB]"
+                        style={{ height: 56 }}
                       >
-                        {label}
-                      </Text>
+                        <View className="w-full rounded-md bg-[#2F7BFF]" style={{ height, marginTop: 56 - height }} />
+                      </View>
+                      {showLabel ? (
+                        <Text
+                          numberOfLines={1}
+                          className="mt-2 text-[10px] font-semibold text-text-tertiary"
+                          style={{ width: 30, textAlign: 'center' }}
+                        >
+                          {label}
+                        </Text>
+                      ) : (
+                        <View className="mt-2" style={{ height: 12 }} />
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {hourlyAppBreakdown && (
+            <View className="mt-5">
+              <Text className="px-1 text-[16px] font-bold text-text-primary">Hourly App Breakdown</Text>
+              <View className="mt-3 gap-3">
+                {hourlyAppBreakdown.map((bucket) => (
+                  <View key={`hour-${bucket.hour}`} className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]">
+                    <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-text-secondary">
+                      {bucket.hour === 0
+                        ? '12am'
+                        : bucket.hour < 12
+                        ? `${bucket.hour}am`
+                        : bucket.hour === 12
+                        ? '12pm'
+                        : `${bucket.hour - 12}pm`}
+                    </Text>
+                    {bucket.apps.length === 0 ? (
+                      <Text className="mt-2 text-[13px] text-text-tertiary">No app usage.</Text>
                     ) : (
-                      <View className="mt-2" style={{ height: 12 }} />
+                      <View className="mt-2 gap-2">
+                        {bucket.apps.map((app) => (
+                          <View key={app.id} className="flex-row items-center justify-between">
+                            <Text className="text-[14px] font-semibold text-text-primary">{app.name}</Text>
+                            <Text className="text-[13px] font-semibold text-text-secondary">{app.durationLabel}</Text>
+                          </View>
+                        ))}
+                      </View>
                     )}
                   </View>
-                );
-              })}
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
-          {/* Top Apps */}
-          <View className="mt-5">
-            <Text className="px-1 text-[16px] font-bold text-text-primary">Top Apps</Text>
-            <View className="mt-3 gap-3">
-              {topApps.map((app) => {
-                const percent = Math.min(1, app.durationSeconds / maxSeconds);
-                return (
-                  <View key={app.id} className="overflow-hidden rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]">
-                    <View className="flex-row items-center justify-between gap-3">
-                      <View className="flex-row items-center gap-3">
-                        <View className="h-10 w-10 items-center justify-center rounded-2xl" style={{ backgroundColor: `${app.categoryAccent}22` }}>
-                          <Text className="text-[16px] font-bold" style={{ color: app.categoryAccent }}>
-                            {app.name.slice(0, 1).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View className="gap-1">
-                          <Text className="text-[14px] font-bold text-text-primary">{app.name}</Text>
-                          <View className="self-start rounded-full px-2 py-0.5" style={{ backgroundColor: `${app.categoryAccent}22` }}>
-                            <Text className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: app.categoryAccent }}>
-                              {app.categoryLabel}
+          {showTopApps && (
+            <View className="mt-5">
+              <Text className="px-1 text-[16px] font-bold text-text-primary">Top Apps</Text>
+              <View className="mt-3 gap-3">
+                {topApps.map((app) => {
+                  const percent = Math.min(1, app.durationSeconds / maxSeconds);
+                  return (
+                    <View key={app.id} className="overflow-hidden rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]">
+                      <View className="flex-row items-center justify-between gap-3">
+                        <View className="flex-row items-center gap-3">
+                          <View className="h-10 w-10 items-center justify-center rounded-2xl" style={{ backgroundColor: `${app.categoryAccent}22` }}>
+                            <Text className="text-[16px] font-bold" style={{ color: app.categoryAccent }}>
+                              {app.name.slice(0, 1).toUpperCase()}
                             </Text>
                           </View>
+                          <View className="gap-1">
+                            <Text className="text-[14px] font-bold text-text-primary">{app.name}</Text>
+                            <View className="self-start rounded-full px-2 py-0.5" style={{ backgroundColor: `${app.categoryAccent}22` }}>
+                              <Text className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: app.categoryAccent }}>
+                                {app.categoryLabel}
+                              </Text>
+                            </View>
+                          </View>
                         </View>
+                        <Text className="text-[13px] font-semibold text-text-primary">{app.durationLabel}</Text>
                       </View>
-                      <Text className="text-[13px] font-semibold text-text-primary">{app.durationLabel}</Text>
+                      <View className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#E5E7EB]">
+                        <View className="h-2 rounded-full" style={{ width: `${percent * 100}%`, backgroundColor: app.categoryAccent }} />
+                      </View>
                     </View>
-                    <View className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#E5E7EB]">
-                      <View className="h-2 rounded-full" style={{ width: `${percent * 100}%`, backgroundColor: app.categoryAccent }} />
-                    </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
         </ScrollView>
         <BottomToolbar />
       </SafeAreaView>

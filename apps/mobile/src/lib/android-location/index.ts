@@ -29,6 +29,24 @@ async function loadExpoLocationAsync(): Promise<typeof import('expo-location') |
   }
 }
 
+async function getBackgroundPermissionsSafeAsync(
+  Location: typeof import('expo-location')
+): Promise<import('expo-location').PermissionResponse> {
+  try {
+    return await Location.getBackgroundPermissionsAsync();
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('📍 Android background permission check failed:', error);
+    }
+    return {
+      status: 'denied',
+      granted: false,
+      canAskAgain: false,
+      expires: 'never',
+    };
+  }
+}
+
 export async function requestAndroidLocationPermissionsAsync(): Promise<{
   foreground: 'granted' | 'denied' | 'undetermined';
   background: 'granted' | 'denied' | 'undetermined';
@@ -57,7 +75,7 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   }
 
   const fgBefore = await Location.getForegroundPermissionsAsync();
-  const bgBefore = await Location.getBackgroundPermissionsAsync();
+  const bgBefore = await getBackgroundPermissionsSafeAsync(Location);
 
   let foreground = fgBefore;
   if (foreground.status !== 'granted') {
@@ -66,7 +84,19 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
 
   let background = bgBefore;
   if (foreground.status === 'granted' && background.status !== 'granted') {
-    background = await Location.requestBackgroundPermissionsAsync();
+    try {
+      background = await Location.requestBackgroundPermissionsAsync();
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('📍 Android background permission request failed:', error);
+      }
+      background = {
+        status: 'denied',
+        granted: false,
+        canAskAgain: false,
+        expires: 'never',
+      };
+    }
   }
 
   return {
@@ -90,7 +120,7 @@ export async function startAndroidBackgroundLocationAsync(): Promise<void> {
 
   // IMPORTANT: Do not auto-request permissions here; onboarding should drive prompts.
   const fg = await Location.getForegroundPermissionsAsync();
-  const bg = await Location.getBackgroundPermissionsAsync();
+  const bg = await getBackgroundPermissionsSafeAsync(Location);
   if (fg.status !== 'granted') return;
   if (bg.status !== 'granted') return;
 

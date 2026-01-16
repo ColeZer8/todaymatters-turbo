@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { generateOnboardingCategorySuggestionsLlm } from '@/lib/supabase/services';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function CoreCategoriesScreen() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function CoreCategoriesScreen() {
   const coreCategories = useOnboardingStore((state) => state.coreCategories);
   const addCoreCategory = useOnboardingStore((state) => state.addCoreCategory);
   const removeCoreCategory = useOnboardingStore((state) => state.removeCoreCategory);
+  const { saveCoreCategories } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestionsByValueId, setSuggestionsByValueId] = useState<Record<string, string[]>>({});
@@ -33,6 +35,14 @@ export default function CoreCategoriesScreen() {
       router.replace('/');
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  useEffect(() => {
+    if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      saveCoreCategories(coreCategories);
+    }, 800);
+    return () => clearTimeout(timeoutId);
+  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, saveCoreCategories]);
 
   useEffect(() => {
     if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
@@ -65,10 +75,12 @@ export default function CoreCategoriesScreen() {
   }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, selectedValues]);
 
   const handleContinue = () => {
+    saveCoreCategories(coreCategories);
     router.replace('/values-scores');
   };
 
   const handleSkip = () => {
+    saveCoreCategories(coreCategories);
     router.replace('/values-scores');
   };
 

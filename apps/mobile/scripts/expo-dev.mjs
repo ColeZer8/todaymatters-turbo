@@ -24,6 +24,7 @@ for (let i = 0; i < rawArgs.length; i += 1) {
 }
 
 const hasHostFlag = forwardedArgs.some((arg) => arg === "--host" || arg.startsWith("--host="));
+const hasTunnelFlag = forwardedArgs.includes("--tunnel");
 const finalArgs = [...forwardedArgs];
 
 // Default to Dev Client so we don't accidentally open Expo Go (which won't have custom native modules like ios-insights).
@@ -35,7 +36,7 @@ if (!hasDevClientFlag && !hasGoFlag) {
   finalArgs.push("--dev-client");
 }
 
-if (!hasHostFlag) {
+if (!hasHostFlag && !hasTunnelFlag) {
   finalArgs.push("--host", "localhost");
 }
 

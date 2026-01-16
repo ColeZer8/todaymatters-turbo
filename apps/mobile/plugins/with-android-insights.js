@@ -18,6 +18,13 @@ const withAndroidInsights = (config) => {
       uses.push({ $: { 'android:name': name } });
       manifest.manifest['uses-permission'] = uses;
     };
+    const ensureQueriesPackage = (name) => {
+      const queries = Array.isArray(manifest.manifest.queries) ? manifest.manifest.queries : [];
+      const already = queries.some((q) => Array.isArray(q?.package) && q.package.some((p) => p?.$?.['android:name'] === name));
+      if (already) return;
+      queries.push({ package: [{ $: { 'android:name': name } }] });
+      manifest.manifest.queries = queries;
+    };
 
     // This is a protected permission. The user still needs to grant "Usage access" in Settings.
     ensureUsesPermission('android.permission.PACKAGE_USAGE_STATS');
@@ -30,6 +37,8 @@ const withAndroidInsights = (config) => {
     ensureUsesPermission('android.permission.health.READ_EXERCISE');
     ensureUsesPermission('android.permission.health.READ_ACTIVE_CALORIES_BURNED');
     ensureUsesPermission('android.permission.health.READ_TOTAL_CALORIES_BURNED');
+    // Package visibility for Health Connect on API 30+ (Android 11+).
+    ensureQueriesPackage('com.google.android.apps.healthdata');
 
     return config;
   });

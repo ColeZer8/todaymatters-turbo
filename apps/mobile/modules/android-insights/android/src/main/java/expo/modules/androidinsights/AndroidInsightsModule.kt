@@ -1,6 +1,7 @@
 package expo.modules.androidinsights
 
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
@@ -133,10 +134,14 @@ class AndroidInsightsModule : Module() {
     val pm = reactContext.packageManager
     val appArray = JSONArray()
 
-    var totalSeconds = 0L
     val byPackage = stats
       .filter { it.totalTimeInForeground > 0 }
       .associateBy { it.packageName }
+
+    var totalSeconds = 0L
+    for (u in byPackage.values) {
+      totalSeconds += (u.totalTimeInForeground / 1000L).coerceAtLeast(0L)
+    }
 
     // Sort by foreground time desc, take top 10
     val top = byPackage.values
@@ -145,7 +150,6 @@ class AndroidInsightsModule : Module() {
 
     for (u in top) {
       val seconds = (u.totalTimeInForeground / 1000L).coerceAtLeast(0L)
-      totalSeconds += seconds
       val label = try {
         val appInfo = pm.getApplicationInfo(u.packageName, 0)
         pm.getApplicationLabel(appInfo)?.toString() ?: u.packageName
@@ -160,13 +164,176 @@ class AndroidInsightsModule : Module() {
       appArray.put(obj)
     }
 
+    val hourlyByApp = mutableMapOf<String, LongArray>()
+    var hourlyBuckets = buildUsageHourlyBucketsSeconds(usageStatsManager, startMs, endMs, hourlyByApp)
+    if (hourlyBuckets.sum() == 0L && totalSeconds > 0L) {
+      hourlyBuckets = buildUsageHourlyBucketsFromStats(byPackage.values.toList())
+      if (hourlyByApp.isEmpty()) {
+        buildUsageHourlyByAppFromStats(byPackage.values.toList(), hourlyByApp)
+      }
+    }
+    val hourlyArray = JSONArray()
+    for (i in 0 until hourlyBuckets.size) {
+      hourlyArray.put(hourlyBuckets[i])
+    }
+
+    val hourlyByAppJson = JSONObject()
+    for ((packageName, hourData) in hourlyByApp) {
+      val hourJson = JSONObject()
+      for (hour in 0 until hourData.size) {
+        val seconds = hourData[hour]
+        if (seconds > 0L) {
+          hourJson.put(hour.toString(), seconds)
+        }
+      }
+      if (hourJson.length() > 0) {
+        hourlyByAppJson.put(packageName, hourJson)
+      }
+    }
+
     val out = JSONObject()
     out.put("generatedAtIso", isoNow())
     out.put("startIso", isoFromMillis(startMs))
     out.put("endIso", isoFromMillis(endMs))
     out.put("totalSeconds", totalSeconds)
     out.put("topApps", appArray)
+    out.put("hourlyBucketsSeconds", hourlyArray)
+    out.put("hourlyByApp", hourlyByAppJson)
     return out.toString()
+  }
+
+  private fun buildUsageHourlyBucketsSeconds(
+    usageStatsManager: UsageStatsManager,
+    startMs: Long,
+    endMs: Long,
+    hourlyByApp: MutableMap<String, LongArray>
+  ): LongArray {
+    val buckets = LongArray(24) { 0L }
+    val events = usageStatsManager.queryEvents(startMs, endMs)
+    val event = UsageEvents.Event()
+
+    var currentStart: Long? = null
+    var currentPackage: String? = null
+
+    while (events.hasNextEvent()) {
+      events.getNextEvent(event)
+      val ts = event.timeStamp
+      when (event.eventType) {
+        UsageEvents.Event.MOVE_TO_FOREGROUND,
+        UsageEvents.Event.ACTIVITY_RESUMED -> {
+          if (currentStart != null) {
+            addIntervalToBuckets(currentStart!!, ts, buckets)
+            if (currentPackage != null) {
+              addIntervalToHourlyByApp(currentStart!!, ts, currentPackage!!, hourlyByApp)
+            }
+          }
+          currentStart = ts
+          currentPackage = event.packageName
+        }
+        UsageEvents.Event.MOVE_TO_BACKGROUND,
+        UsageEvents.Event.ACTIVITY_PAUSED -> {
+          if (currentStart != null) {
+            addIntervalToBuckets(currentStart!!, ts, buckets)
+            if (currentPackage != null) {
+              addIntervalToHourlyByApp(currentStart!!, ts, currentPackage!!, hourlyByApp)
+            }
+            currentStart = null
+            currentPackage = null
+          }
+        }
+      }
+    }
+
+    if (currentStart != null) {
+      addIntervalToBuckets(currentStart!!, endMs, buckets)
+      if (currentPackage != null) {
+        addIntervalToHourlyByApp(currentStart!!, endMs, currentPackage!!, hourlyByApp)
+      }
+    }
+
+    return buckets
+  }
+
+  private fun buildUsageHourlyBucketsFromStats(stats: List<UsageStats>): LongArray {
+    val buckets = LongArray(24) { 0L }
+    val cal = Calendar.getInstance()
+
+    for (u in stats) {
+      val seconds = (u.totalTimeInForeground / 1000L).coerceAtLeast(0L)
+      if (seconds <= 0L) continue
+      cal.timeInMillis = u.lastTimeUsed
+      val hour = cal.get(Calendar.HOUR_OF_DAY)
+      if (hour in 0..23) {
+        buckets[hour] += seconds
+      }
+    }
+
+    return buckets
+  }
+
+  private fun buildUsageHourlyByAppFromStats(stats: List<UsageStats>, hourlyByApp: MutableMap<String, LongArray>) {
+    val cal = Calendar.getInstance()
+    for (u in stats) {
+      val seconds = (u.totalTimeInForeground / 1000L).coerceAtLeast(0L)
+      if (seconds <= 0L) continue
+      cal.timeInMillis = u.lastTimeUsed
+      val hour = cal.get(Calendar.HOUR_OF_DAY)
+      if (hour !in 0..23) continue
+      val buckets = hourlyByApp.getOrPut(u.packageName) { LongArray(24) { 0L } }
+      buckets[hour] += seconds
+    }
+  }
+
+  private fun addIntervalToBuckets(startMs: Long, endMs: Long, buckets: LongArray) {
+    if (endMs <= startMs) return
+    var current = startMs
+    val cal = Calendar.getInstance()
+
+    while (current < endMs) {
+      cal.timeInMillis = current
+      val hour = cal.get(Calendar.HOUR_OF_DAY)
+      cal.set(Calendar.MINUTE, 0)
+      cal.set(Calendar.SECOND, 0)
+      cal.set(Calendar.MILLISECOND, 0)
+      cal.add(Calendar.HOUR_OF_DAY, 1)
+
+      val nextBoundary = cal.timeInMillis
+      val segmentEnd = if (nextBoundary < endMs) nextBoundary else endMs
+      val seconds = ((segmentEnd - current) / 1000L).coerceAtLeast(0L)
+      if (hour in 0..23) {
+        buckets[hour] += seconds
+      }
+      current = segmentEnd
+    }
+  }
+
+  private fun addIntervalToHourlyByApp(
+    startMs: Long,
+    endMs: Long,
+    packageName: String,
+    hourlyByApp: MutableMap<String, LongArray>
+  ) {
+    if (endMs <= startMs) return
+    val buckets = hourlyByApp.getOrPut(packageName) { LongArray(24) { 0L } }
+    var current = startMs
+    val cal = Calendar.getInstance()
+
+    while (current < endMs) {
+      cal.timeInMillis = current
+      val hour = cal.get(Calendar.HOUR_OF_DAY)
+      cal.set(Calendar.MINUTE, 0)
+      cal.set(Calendar.SECOND, 0)
+      cal.set(Calendar.MILLISECOND, 0)
+      cal.add(Calendar.HOUR_OF_DAY, 1)
+
+      val nextBoundary = cal.timeInMillis
+      val segmentEnd = if (nextBoundary < endMs) nextBoundary else endMs
+      val seconds = ((segmentEnd - current) / 1000L).coerceAtLeast(0L)
+      if (hour in 0..23) {
+        buckets[hour] += seconds
+      }
+      current = segmentEnd
+    }
   }
 
   private fun getRangeMillis(range: String): Pair<Long, Long> {

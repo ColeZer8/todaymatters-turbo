@@ -1,10 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
 import { ScheduleItem } from '../molecules/ScheduleItem';
-import { useEventsStore, formatMinutesToDisplay, useCurrentMinutes } from '@/stores';
+import { formatMinutesToDisplay } from '@/stores';
 import { Sun, Target, Coffee, Users, Video, Smile, Heart, Moon, Briefcase, Car } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import type { EventCategory } from '@/stores';
+import type { EventCategory, ScheduledEvent } from '@/stores';
 
 // Map categories to icons
 const CATEGORY_ICONS: Record<EventCategory, LucideIcon> = {
@@ -24,12 +23,14 @@ const CATEGORY_ICONS: Record<EventCategory, LucideIcon> = {
     free: Smile,
 };
 
-export const ScheduleList = () => {
-    const router = useRouter();
-    const scheduledEvents = useEventsStore((state) => state.scheduledEvents);
+interface ScheduleListProps {
+    events: ScheduledEvent[];
+    nowMinutes: number;
+    onPressViewAll?: () => void;
+}
 
-    // Get current time in minutes from midnight (uses simulated time in demo mode)
-    const nowMinutes = useCurrentMinutes();
+export const ScheduleList = ({ events, nowMinutes, onPressViewAll }: ScheduleListProps) => {
+    const scheduledEvents = events;
     
     // Get events that are current or upcoming (not yet ended), sorted chronologically
     const relevantEvents = scheduledEvents
@@ -82,7 +83,7 @@ export const ScheduleList = () => {
         <View style={styles.container}>
             <View style={styles.big3HeaderRow}>
                 <Text style={styles.big3Label}>{headerLabel}</Text>
-                <TouchableOpacity onPress={() => router.replace('/comprehensive-calendar')}>
+                <TouchableOpacity onPress={onPressViewAll} disabled={!onPressViewAll}>
                     <Text style={styles.big3ViewAll}>View All</Text>
                 </TouchableOpacity>
             </View>

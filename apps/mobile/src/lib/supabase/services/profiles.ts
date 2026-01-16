@@ -42,6 +42,15 @@ export interface ProfileData {
   ideal_sabbath?: string | null; // Sleep time as "HH:MM" format
   mission?: string | null; // Purpose/Why selection
   role?: string | null; // Setup questions role (needs column in DB)
+  has_watched_explainer_video?: boolean | null;
+  has_completed_onboarding?: boolean | null;
+  core_values?: Json | null;
+  core_categories?: Json | null;
+  values_scores?: Json | null;
+  goal_whys?: Json | null;
+  church_name?: string | null;
+  church_address?: string | null;
+  church_website?: string | null;
   timezone?: string | null;
   meta?: ProfilePreferences | null; // JSONB for preferences
   created_at?: string;

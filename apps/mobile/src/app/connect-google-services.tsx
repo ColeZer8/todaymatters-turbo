@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from 'expo-router';
 import { ConnectGoogleServicesTemplate } from '@/components/templates/ConnectGoogleServicesTemplate';
 import { startGoogleServicesOAuth, fetchConnectedGoogleServices, type GoogleService } from '@/lib/google-services-oauth';
 import { useAuthStore, useGoogleServicesOAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 
 export default function ConnectGoogleServicesScreen() {
   const router = useRouter();
@@ -138,8 +138,8 @@ export default function ConnectGoogleServicesScreen() {
 
   return (
     <ConnectGoogleServicesTemplate
-      step={ONBOARDING_STEPS.connectGoogleServices}
-      totalSteps={ONBOARDING_TOTAL_STEPS}
+      step={SETUP_SCREENS_STEPS.connectGoogleServices}
+      totalSteps={SETUP_SCREENS_TOTAL_STEPS}
       selectedServices={selectedServices}
       expandedService={expandedService}
       connectedServices={connectedServices}

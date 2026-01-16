@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/stores';
 import {
   flushPendingLocationSamplesToSupabaseAsync,
@@ -103,10 +103,15 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
     // Immediate flush on mount, then interval.
     tick();
     const id = setInterval(tick, flushIntervalMs);
+    const appStateListener = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      tick();
+    });
 
     return () => {
       isCancelled = true;
       clearInterval(id);
+      appStateListener.remove();
     };
   }, [flushIntervalMs, isAuthenticated, userId]);
 }

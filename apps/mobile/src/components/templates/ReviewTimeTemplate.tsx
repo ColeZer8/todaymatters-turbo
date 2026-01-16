@@ -1,4 +1,4 @@
-import { Platform, Pressable, ScrollView, Text, TextInput, View, LayoutChangeEvent } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Text, TextInput, View, LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
@@ -22,7 +22,8 @@ import { fetchAllEvidenceForDay } from '@/lib/supabase/services/evidence-data';
 import { buildReviewTimeBlocks } from '@/lib/calendar/review-time-blocks';
 import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
 import { fetchLocationSamplesForRange, upsertUserPlaceFromSamples } from '@/lib/supabase/services/user-places';
-import { getIosInsightsSupportStatus, presentScreenTimeReportSafeAsync } from '@/lib/ios-insights';
+import { getIosInsightsSupportStatus } from '@/lib/ios-insights';
+import { syncIosScreenTimeSummary } from '@/lib/supabase/services';
 
 const CATEGORIES = [
   { id: 'faith', label: 'Faith', icon: SunMedium, color: '#F79A3B', bgColor: '#FFF5E8', selectedBg: '#FEF3E2' },
@@ -59,7 +60,7 @@ export const ReviewTimeTemplate = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [aiLoadingBlockId, setAiLoadingBlockId] = useState<string | null>(null);
   const [placeSavingBlockId, setPlaceSavingBlockId] = useState<string | null>(null);
-  const [isScreenTimeSyncing, setIsScreenTimeSyncing] = useState(false);
+  const [isAutoAssigning, setIsAutoAssigning] = useState(false);
 
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
@@ -72,10 +73,13 @@ export const ReviewTimeTemplate = () => {
     assignments,
     notes,
     aiSuggestions,
+    autoAssignRequestedAt,
     assignCategory,
     clearAssignment,
     setNote,
     setAiSuggestion,
+    markReviewComplete,
+    clearAutoAssignRequest,
     highlightedBlockId,
     setHighlightedBlockId,
     splitTimeBlock,
@@ -118,6 +122,67 @@ export const ReviewTimeTemplate = () => {
   useEffect(() => {
     void refreshBlocks();
   }, [refreshBlocks]);
+
+  useEffect(() => {
+    if (!autoAssignRequestedAt) return;
+    if (isLoadingBlocks || isAutoAssigning) return;
+    if (!userId) return;
+
+    let cancelled = false;
+    const run = async () => {
+      setIsAutoAssigning(true);
+      try {
+        for (const block of timeBlocks) {
+          if (cancelled) return;
+          if (assignments[block.id]) continue;
+          const note = notes[block.id] ?? '';
+          const suggestion = await requestReviewTimeSuggestion({
+            block: {
+              id: block.id,
+              title: block.title,
+              description: block.description,
+              source: block.source,
+              startTime: block.startTime,
+              endTime: block.endTime,
+              durationMinutes: block.duration,
+              activityDetected: block.activityDetected ?? null,
+              location: block.location ?? null,
+              note,
+            },
+            date: selectedDateYmd,
+          });
+          if (cancelled) return;
+          setAiSuggestion(block.id, suggestion);
+          assignCategory(block.id, suggestion.category);
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.error('[ReviewTime] Auto-assign failed:', error);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAutoAssigning(false);
+          clearAutoAssignRequest();
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    assignCategory,
+    autoAssignRequestedAt,
+    clearAutoAssignRequest,
+    isAutoAssigning,
+    isLoadingBlocks,
+    notes,
+    selectedDateYmd,
+    setAiSuggestion,
+    timeBlocks,
+    userId,
+  ]);
 
   useEffect(() => {
     if (highlightedBlockKey && blockPositions.current[highlightedBlockKey] !== undefined) {
@@ -281,6 +346,10 @@ export const ReviewTimeTemplate = () => {
         }
       }
 
+      const allAssigned = timeBlocks.every((block) => Boolean(assignments[block.id]));
+      if (allAssigned) {
+        markReviewComplete(selectedDateYmd);
+      }
       await refreshBlocks();
     } catch (error) {
       if (__DEV__) {
@@ -296,20 +365,10 @@ export const ReviewTimeTemplate = () => {
     return getIosInsightsSupportStatus() === 'available';
   }, []);
 
-  const handleSyncScreenTime = useCallback(async () => {
-    if (!canSyncScreenTime || isScreenTimeSyncing) return;
-    setIsScreenTimeSyncing(true);
-    try {
-      await presentScreenTimeReportSafeAsync('today');
-      await refreshBlocks();
-    } catch (error) {
-      if (__DEV__) {
-        console.error('[ReviewTime] Screen Time sync failed:', error);
-      }
-    } finally {
-      setIsScreenTimeSyncing(false);
-    }
-  }, [canSyncScreenTime, isScreenTimeSyncing, refreshBlocks]);
+  const handleSyncScreenTime = useCallback(() => {
+    if (!canSyncScreenTime) return;
+    router.push('/dev/screen-time');
+  }, [canSyncScreenTime, router]);
 
   return (
     <View className="flex-1 bg-[#F8FAFC]">
@@ -349,13 +408,11 @@ export const ReviewTimeTemplate = () => {
             {canSyncScreenTime && (
               <Pressable
                 onPress={handleSyncScreenTime}
-                disabled={isScreenTimeSyncing}
+                disabled={!canSyncScreenTime}
                 className="mt-4 items-center justify-center h-10 rounded-full bg-[#EEF2FF]"
                 style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
               >
-                <Text className="text-[13px] font-semibold text-[#4F46E5]">
-                  {isScreenTimeSyncing ? 'Syncing Screen Time…' : 'Sync Screen Time'}
-                </Text>
+                <Text className="text-[13px] font-semibold text-[#4F46E5]">Sync Screen Time</Text>
               </Pressable>
             )}
 

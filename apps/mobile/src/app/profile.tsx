@@ -13,10 +13,11 @@ import {
   Settings,
   Target,
 } from 'lucide-react-native';
+import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ProfileTemplate } from '@/components/templates';
 import { DatePickerPopup } from '@/components/molecules';
-import { useDemoStore, useAuthStore, useOnboardingStore } from '@/stores';
+import { useDemoStore, useAuthStore, useOnboardingStore, useReviewTimeStore } from '@/stores';
 import {
   addProfileValue,
   fetchProfile,
@@ -25,8 +26,30 @@ import {
   saveProfileValues,
   updateBirthday,
   updateFullName,
+  syncAndroidUsageSummary,
+  syncIosScreenTimeSummary,
+  syncIosHealthSummary,
 } from '@/lib/supabase/services';
 import { deriveFullNameFromEmail } from '@/lib/user-name';
+import {
+  getCachedScreenTimeSummarySafeAsync,
+  getScreenTimeAuthorizationStatusSafeAsync,
+  presentScreenTimeReportSafeAsync,
+  requestScreenTimeAuthorizationSafeAsync,
+  getHealthSummarySafeAsync,
+  getTodayActivityRingsSummarySafeAsync,
+  getLatestWorkoutSummarySafeAsync,
+} from '@/lib/ios-insights';
+import {
+  getAndroidInsightsSupportStatus,
+  getUsageAccessAuthorizationStatusSafeAsync,
+  getUsageSummarySafeAsync,
+  openUsageAccessSettingsSafeAsync,
+} from '@/lib/android-insights';
+import { flushPendingLocationSamplesToSupabaseAsync } from '@/lib/ios-location';
+import { flushPendingAndroidLocationSamplesToSupabaseAsync } from '@/lib/android-location';
+import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
+import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
 
 // Start with empty values - will load from Supabase if authenticated
 const CORE_VALUES: string[] = [];
@@ -52,11 +75,133 @@ export default function ProfileScreen() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const fullName = useOnboardingStore((s) => s.fullName);
   const setFullName = useOnboardingStore((s) => s.setFullName);
+  const requestAutoAssignAll = useReviewTimeStore((s) => s.requestAutoAssignAll);
 
   const handleStartDemo = () => {
     setDemoActive(true);
     router.push('/home');
   };
+
+  const handleDevReviewTime = () => {
+    router.push('/review-time');
+  };
+
+  const handleDevSyncScreenTime = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      if (Platform.OS === 'ios') {
+        const status = await getScreenTimeAuthorizationStatusSafeAsync();
+        if (status !== 'approved') {
+          const next = await requestScreenTimeAuthorizationSafeAsync();
+          if (next !== 'approved') {
+            return;
+          }
+        }
+        await presentScreenTimeReportSafeAsync('today');
+        const summary = await getCachedScreenTimeSummarySafeAsync('today');
+        if (summary) {
+          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+          await syncIosScreenTimeSummary(user.id, summary, timezone);
+        }
+        router.push('/review-time');
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        const support = getAndroidInsightsSupportStatus();
+        if (support !== 'available') {
+          Alert.alert('Screen time', 'Android usage access requires the custom dev client.');
+          return;
+        }
+        const status = await getUsageAccessAuthorizationStatusSafeAsync();
+        if (status !== 'authorized') {
+          await openUsageAccessSettingsSafeAsync();
+          Alert.alert('Screen time', 'Enable Usage Access for TodayMatters, then retry.');
+          return;
+        }
+        const summary = await getUsageSummarySafeAsync('today');
+        if (summary) {
+          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+          try {
+            await syncAndroidUsageSummary(user.id, summary, timezone);
+          } catch (error) {
+            Alert.alert(
+              'Screen Time sync',
+              'Usage data is available locally, but Supabase tables are missing. Open the dashboard to view without syncing.'
+            );
+            router.push('/dev/screen-time');
+            return;
+          }
+        }
+        router.push('/review-time');
+      }
+    } catch (error) {
+      Alert.alert('Screen Time sync failed', error instanceof Error ? error.message : 'Unknown error');
+    }
+  }, [router, user?.id]);
+
+  const handleDevSyncHealth = useCallback(async () => {
+    if (!user?.id) return;
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Health', 'Health sync is currently iOS-only.');
+      return;
+    }
+    try {
+      const [summary, rings, workout] = await Promise.all([
+        getHealthSummarySafeAsync('today'),
+        getTodayActivityRingsSummarySafeAsync(),
+        getLatestWorkoutSummarySafeAsync('today'),
+      ]);
+      if (summary) {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+        await syncIosHealthSummary(user.id, summary, timezone, rings, workout);
+      }
+      Alert.alert('Health sync', 'Health data synced.');
+    } catch (error) {
+      Alert.alert('Health sync failed', error instanceof Error ? error.message : 'Unknown error');
+    }
+  }, [user?.id]);
+
+  const handleDevFlushLocation = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      if (Platform.OS === 'ios') {
+        await flushPendingLocationSamplesToSupabaseAsync(user.id);
+      } else if (Platform.OS === 'android') {
+        await flushPendingAndroidLocationSamplesToSupabaseAsync(user.id);
+      }
+      Alert.alert('Location sync', 'Location samples flushed.');
+    } catch (error) {
+      Alert.alert('Location sync failed', error instanceof Error ? error.message : 'Unknown error');
+    }
+  }, [user?.id]);
+
+  const handleDevRequestLocation = useCallback(async () => {
+    try {
+      if (Platform.OS === 'ios') {
+        const result = await requestIosLocationPermissionsAsync();
+        Alert.alert(
+          'Location permission',
+          `Foreground: ${result.foreground}\nBackground: ${result.background}`,
+        );
+      } else if (Platform.OS === 'android') {
+        const result = await requestAndroidLocationPermissionsAsync();
+        Alert.alert(
+          'Location permission',
+          `Foreground: ${result.foreground}\nBackground: ${result.background}`,
+        );
+      } else {
+        Alert.alert('Location permission', 'Unsupported platform.');
+      }
+    } catch (error) {
+      Alert.alert('Location permission failed', error instanceof Error ? error.message : 'Unknown error');
+    }
+  }, []);
+
+  const handleDevAutoAssignReview = useCallback(() => {
+    requestAutoAssignAll();
+    router.push('/review-time');
+  }, [requestAutoAssignAll, router]);
 
   // Personalization settings - edit onboarding preferences
   const personalizationItems = [
@@ -99,6 +244,54 @@ export default function ProfileScreen() {
             label: '🎬 Demo Mode',
             icon: Play,
             onPress: handleStartDemo,
+          },
+          {
+            id: 'dev-review-time',
+            label: '🧪 Review Time (dev)',
+            icon: Calendar,
+            onPress: handleDevReviewTime,
+          },
+          {
+            id: 'dev-sync-screen-time',
+            label: '🧪 Sync Screen Time (dev)',
+            icon: Calendar,
+            onPress: handleDevSyncScreenTime,
+          },
+          {
+            id: 'dev-screen-time-dashboard',
+            label: '🧪 Screen Time Dashboard (dev)',
+            icon: Calendar,
+            onPress: () => router.push('/dev/screen-time'),
+          },
+          {
+            id: 'dev-location-dashboard',
+            label: '🧪 Location Samples (dev)',
+            icon: Calendar,
+            onPress: () => router.push('/dev/location'),
+          },
+          {
+            id: 'dev-sync-health',
+            label: '🧪 Sync Health (dev)',
+            icon: Calendar,
+            onPress: handleDevSyncHealth,
+          },
+          {
+            id: 'dev-flush-location',
+            label: '🧪 Flush Location (dev)',
+            icon: Calendar,
+            onPress: handleDevFlushLocation,
+          },
+          {
+            id: 'dev-request-location',
+            label: '🧪 Request Location (dev)',
+            icon: Calendar,
+            onPress: handleDevRequestLocation,
+          },
+          {
+            id: 'dev-auto-assign-review',
+            label: '🧪 Auto-Assign Review (AI)',
+            icon: Calendar,
+            onPress: handleDevAutoAssignReview,
           },
         ]
       : []),

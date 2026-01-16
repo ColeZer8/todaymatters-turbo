@@ -57,6 +57,15 @@ function rowToDataSyncState(row: Record<string, unknown>): DataSyncState {
   };
 }
 
+function isMissingDataSyncStateError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('data_sync_state') &&
+    (message.includes('schema cache') || message.includes('relation') || message.includes('does not exist'))
+  );
+}
+
 export async function fetchDataSyncState(
   userId: string,
   dataset: DataSyncDataset,
@@ -77,11 +86,12 @@ export async function fetchDataSyncState(
     if (!data) return null;
     return rowToDataSyncState(data as Record<string, unknown>);
   } catch (error) {
+    if (isMissingDataSyncStateError(error)) return null;
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
 
-export async function upsertDataSyncState(update: DataSyncStateUpdate): Promise<DataSyncState> {
+export async function upsertDataSyncState(update: DataSyncStateUpdate): Promise<DataSyncState | null> {
   try {
     const payload: Record<string, unknown> = {
       user_id: update.userId,
@@ -107,6 +117,7 @@ export async function upsertDataSyncState(update: DataSyncStateUpdate): Promise<
     if (error) throw handleSupabaseError(error);
     return rowToDataSyncState(data as Record<string, unknown>);
   } catch (error) {
+    if (isMissingDataSyncStateError(error)) return null;
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }

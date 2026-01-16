@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/stores';
 import {
   getIosInsightsSupportStatus,
@@ -23,7 +23,7 @@ import { fetchDataSyncState, upsertDataSyncState } from '@/lib/supabase/services
 import { syncIosScreenTimeSummary, syncAndroidUsageSummary } from '@/lib/supabase/services/screen-time-sync';
 import { syncIosHealthSummary, syncAndroidHealthSummary } from '@/lib/supabase/services/health-sync';
 
-const DEFAULT_SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 function getDeviceTimezone(): string {
   try {
@@ -171,9 +171,14 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
 
     tick();
     const id = setInterval(tick, intervalMs);
+    const appStateListener = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      tick();
+    });
     return () => {
       isCancelled = true;
       clearInterval(id);
+      appStateListener.remove();
     };
   }, [intervalMs, isAuthenticated, userId]);
 }

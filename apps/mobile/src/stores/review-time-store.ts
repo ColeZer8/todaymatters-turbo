@@ -33,6 +33,8 @@ interface ReviewTimeState {
   assignments: Record<string, ReviewCategoryId>;
   notes: Record<string, string>;
   aiSuggestions: Record<string, AiSuggestion>;
+  completedByDate: Record<string, string>;
+  autoAssignRequestedAt: string | null;
   highlightedBlockId: string | null; // Block to highlight/scroll to
   // Computed
   unassignedCount: number;
@@ -43,6 +45,10 @@ interface ReviewTimeState {
   setNote: (blockId: string, value: string) => void;
   setAiSuggestion: (blockId: string, suggestion: AiSuggestion) => void;
   clearAiSuggestion: (blockId: string) => void;
+  markReviewComplete: (ymd: string) => void;
+  clearReviewComplete: (ymd: string) => void;
+  requestAutoAssignAll: () => void;
+  clearAutoAssignRequest: () => void;
   setHighlightedBlockId: (id: string | null) => void;
   getUnassignedCount: () => number;
   splitTimeBlock: (blockId: string, splitMinutes: number) => void;
@@ -71,6 +77,8 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       assignments: {},
       notes: {},
       aiSuggestions: {},
+      completedByDate: {},
+      autoAssignRequestedAt: null,
       highlightedBlockId: null,
       unassignedCount: INITIAL_TIME_BLOCKS.length,
 
@@ -221,6 +229,8 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
           assignments: {},
           notes: {},
           aiSuggestions: {},
+          completedByDate: {},
+          autoAssignRequestedAt: null,
           highlightedBlockId: null,
           unassignedCount: 0,
         });
@@ -232,6 +242,8 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       partialize: (state) => ({
         assignments: state.assignments,
         notes: state.notes,
+        completedByDate: state.completedByDate,
+        autoAssignRequestedAt: state.autoAssignRequestedAt,
       }),
     }
   )

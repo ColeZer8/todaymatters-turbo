@@ -5,6 +5,7 @@ import { ValuesScoresTemplate } from '@/components/templates/ValuesScoresTemplat
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function ValuesScoresScreen() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function ValuesScoresScreen() {
   const coreValues = useOnboardingStore((state) => state.coreValues);
   const valuesScores = useOnboardingStore((state) => state.valuesScores);
   const updateValueScore = useOnboardingStore((state) => state.updateValueScore);
+  const { saveValuesScores } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -24,7 +26,16 @@ export default function ValuesScoresScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      saveValuesScores(valuesScores);
+    }, 800);
+    return () => clearTimeout(timeoutId);
+  }, [valuesScores, hasHydrated, isAuthenticated, saveValuesScores]);
+
   const handleContinue = () => {
+    saveValuesScores(valuesScores);
     router.replace('/goals');
   };
 

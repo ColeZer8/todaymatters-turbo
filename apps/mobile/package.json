@@ -5,7 +5,7 @@
   "scripts": {
     "build": "expo export -p web",
     "dev": "node ./scripts/expo-dev.mjs",
-    "start": "expo start",
+    "start": "node ./scripts/expo-dev.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",

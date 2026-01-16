@@ -6,6 +6,7 @@ import { PendingActions } from '../organisms/PendingActions';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { DemoMorningRoutine } from '../organisms/DemoMorningRoutine';
 import { useDemoStore } from '@/stores';
+import type { ScheduledEvent } from '@/stores';
 // TODO: Re-enable ElevenLabs voice coach integration
 // import { VoiceCoachButton } from '../organisms/VoiceCoachButton';
 
@@ -18,6 +19,11 @@ export interface HomeTemplateProps {
         line2: string;
         line3?: string;
     };
+    schedule: {
+        events: ScheduledEvent[];
+        nowMinutes: number;
+        onPressViewAll?: () => void;
+    };
     pendingActions: {
         communicationsCount: number;
         communicationsDescription: string;
@@ -25,7 +31,7 @@ export interface HomeTemplateProps {
     onPressGreeting?: () => void;
 }
 
-export const HomeTemplate = ({ dailyBrief, pendingActions, onPressGreeting }: HomeTemplateProps) => {
+export const HomeTemplate = ({ dailyBrief, schedule, pendingActions, onPressGreeting }: HomeTemplateProps) => {
     const insets = useSafeAreaInsets();
     
     // Demo mode - show morning routine when "Wake Up" time is selected
@@ -52,7 +58,7 @@ export const HomeTemplate = ({ dailyBrief, pendingActions, onPressGreeting }: Ho
                     line3={dailyBrief.line3}
                     onPressGreeting={onPressGreeting}
                 />
-                <ScheduleList />
+                <ScheduleList events={schedule.events} nowMinutes={schedule.nowMinutes} onPressViewAll={schedule.onPressViewAll} />
                 <PendingActions
                     communicationsCount={pendingActions.communicationsCount}
                     communicationsDescription={pendingActions.communicationsDescription}

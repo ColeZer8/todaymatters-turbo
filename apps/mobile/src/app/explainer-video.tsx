@@ -5,6 +5,7 @@ import { ExplainerVideoTemplate } from '@/components/templates/ExplainerVideoTem
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function ExplainerVideoScreen() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function ExplainerVideoScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const hasWatched = useOnboardingStore((state) => state.hasWatchedExplainerVideo);
   const setHasWatched = useOnboardingStore((state) => state.setHasWatchedExplainerVideo);
+  const { saveExplainerVideoWatched } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -27,6 +29,7 @@ export default function ExplainerVideoScreen() {
     // In the future, this could trigger video playback
     // For now, just mark as watched
     setHasWatched(true);
+    saveExplainerVideoWatched(true);
   };
 
   const handleSkip = () => {
@@ -35,6 +38,7 @@ export default function ExplainerVideoScreen() {
 
   const handleContinue = () => {
     setHasWatched(true);
+    saveExplainerVideoWatched(true);
     router.replace('/permissions');
   };
 

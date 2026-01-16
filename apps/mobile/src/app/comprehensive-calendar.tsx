@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
 import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
-import { useEventsStore } from '@/stores';
+import { getTodayYmd, useEventsStore } from '@/stores';
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -69,6 +69,10 @@ export default function ComprehensiveCalendarScreen() {
   });
 
   const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
+
+  useEffect(() => {
+    setSelectedDateYmd(getTodayYmd());
+  }, [setSelectedDateYmd]);
 
   const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
 

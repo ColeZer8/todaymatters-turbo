@@ -76,7 +76,7 @@ interface EventsState {
 // Default ACTUAL events - source of truth is Supabase. No mock defaults.
 const DEFAULT_ACTUAL_EVENTS: ScheduledEvent[] = [];
 
-function getTodayYmd(): string {
+export function getTodayYmd(): string {
   const now = new Date();
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -289,7 +289,6 @@ export const formatMinutesToDisplay = (minutes: number): string => {
   const hours12 = hours24 % 12 || 12;
   return mins === 0 ? `${hours12}:00 ${period}` : `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
 };
-
 
 
 

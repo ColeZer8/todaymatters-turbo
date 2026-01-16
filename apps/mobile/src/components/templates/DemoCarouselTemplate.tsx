@@ -83,6 +83,10 @@ function DemoCalendarSlide() {
 }
 
 function buildDemoSlides(userFirstName: string): DemoSlide[] {
+  const today = new Date();
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const demoSchedule = getMockPlannedEventsForDay(ymd);
+
   return [
     {
       id: 'home',
@@ -97,6 +101,10 @@ function buildDemoSlides(userFirstName: string): DemoSlide[] {
             line1: 'This is your day.',
             line2: 'What matters most right now?',
             line3: 'You have time to move one thing forward.',
+          }}
+          schedule={{
+            events: demoSchedule,
+            nowMinutes: 9 * 60,
           }}
           pendingActions={{
             communicationsCount: 4,
@@ -427,7 +435,6 @@ export const DemoCarouselTemplate = () => {
     </View>
   );
 };
-
 
 
 

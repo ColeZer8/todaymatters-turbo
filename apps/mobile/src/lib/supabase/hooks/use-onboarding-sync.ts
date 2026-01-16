@@ -8,6 +8,7 @@ import { useAuthStore, useOnboardingStore } from '@/stores';
 import type { PermissionsData } from '@/stores/onboarding-store';
 import {
   fetchProfile,
+  updateProfile,
   updateDailyRhythm,
   updateFullName,
   updateMission,
@@ -47,6 +48,11 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const permissions = useOnboardingStore((s) => s.permissions);
   const role = useOnboardingStore((s) => s.role);
   const fullName = useOnboardingStore((s) => s.fullName);
+  const hasWatchedExplainerVideo = useOnboardingStore((s) => s.hasWatchedExplainerVideo);
+  const hasCompletedOnboarding = useOnboardingStore((s) => s.hasCompletedOnboarding);
+  const coreValues = useOnboardingStore((s) => s.coreValues);
+  const coreCategories = useOnboardingStore((s) => s.coreCategories);
+  const valuesScores = useOnboardingStore((s) => s.valuesScores);
   const wakeTime = useOnboardingStore((s) => s.wakeTime);
   const sleepTime = useOnboardingStore((s) => s.sleepTime);
   const purpose = useOnboardingStore((s) => s.purpose);
@@ -61,12 +67,21 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const workAddress = useOnboardingStore((s) => s.workAddress);
   const goals = useOnboardingStore((s) => s.goals);
   const initiatives = useOnboardingStore((s) => s.initiatives);
+  const goalWhys = useOnboardingStore((s) => s.goalWhys);
+  const churchName = useOnboardingStore((s) => s.churchName);
+  const churchAddress = useOnboardingStore((s) => s.churchAddress);
+  const churchWebsite = useOnboardingStore((s) => s.churchWebsite);
 
   const setWakeTime = useOnboardingStore((s) => s.setWakeTime);
   const setSleepTime = useOnboardingStore((s) => s.setSleepTime);
   const setPurpose = useOnboardingStore((s) => s.setPurpose);
   const setRole = useOnboardingStore((s) => s.setRole);
   const setFullName = useOnboardingStore((s) => s.setFullName);
+  const setHasWatchedExplainerVideo = useOnboardingStore((s) => s.setHasWatchedExplainerVideo);
+  const setHasCompletedOnboarding = useOnboardingStore((s) => s.setHasCompletedOnboarding);
+  const setCoreValues = useOnboardingStore((s) => s.setCoreValues);
+  const setCoreCategories = useOnboardingStore((s) => s.setCoreCategories);
+  const setValuesScores = useOnboardingStore((s) => s.setValuesScores);
   const setPermissions = useOnboardingStore((s) => s.setPermissions);
   const setJoySelections = useOnboardingStore((s) => s.setJoySelections);
   const setJoyCustomOptions = useOnboardingStore((s) => s.setJoyCustomOptions);
@@ -79,6 +94,10 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setWorkAddress = useOnboardingStore((s) => s.setWorkAddress);
   const setGoals = useOnboardingStore((s) => s.setGoals);
   const setInitiatives = useOnboardingStore((s) => s.setInitiatives);
+  const setGoalWhys = useOnboardingStore((s) => s.setGoalWhys);
+  const setChurchName = useOnboardingStore((s) => s.setChurchName);
+  const setChurchAddress = useOnboardingStore((s) => s.setChurchAddress);
+  const setChurchWebsite = useOnboardingStore((s) => s.setChurchWebsite);
 
   // Load all onboarding data from Supabase
   const loadOnboardingData = useCallback(async (): Promise<void> => {
@@ -108,12 +127,39 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
           sleepDate.setHours(hours, minutes, 0, 0);
           setSleepTime(sleepDate);
         }
-        if (profile.mission) {
+      if (profile.mission) {
           setPurpose(profile.mission);
         }
         if (profile.role) {
           setRole(profile.role);
         }
+      if (typeof profile.has_watched_explainer_video === 'boolean') {
+        setHasWatchedExplainerVideo(profile.has_watched_explainer_video);
+      }
+      if (typeof profile.has_completed_onboarding === 'boolean') {
+        setHasCompletedOnboarding(profile.has_completed_onboarding);
+      }
+      if (Array.isArray(profile.core_values)) {
+        setCoreValues(profile.core_values as ProfileData['core_values'] as Parameters<typeof setCoreValues>[0]);
+      }
+      if (Array.isArray(profile.core_categories)) {
+        setCoreCategories(profile.core_categories as ProfileData['core_categories'] as Parameters<typeof setCoreCategories>[0]);
+      }
+      if (Array.isArray(profile.values_scores)) {
+        setValuesScores(profile.values_scores as ProfileData['values_scores'] as Parameters<typeof setValuesScores>[0]);
+      }
+      if (Array.isArray(profile.goal_whys)) {
+        setGoalWhys(profile.goal_whys as ProfileData['goal_whys'] as Parameters<typeof setGoalWhys>[0]);
+      }
+      if (profile.church_name) {
+        setChurchName(profile.church_name);
+      }
+      if (profile.church_address) {
+        setChurchAddress(profile.church_address);
+      }
+      if (profile.church_website) {
+        setChurchWebsite(profile.church_website);
+      }
 
         // Load preferences from meta
         const preferences = getProfilePreferences(profile);
@@ -199,6 +245,15 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     setMorningMindset,
     setGoals,
     setInitiatives,
+    setHasWatchedExplainerVideo,
+    setHasCompletedOnboarding,
+    setCoreValues,
+    setCoreCategories,
+    setValuesScores,
+    setGoalWhys,
+    setChurchName,
+    setChurchAddress,
+    setChurchWebsite,
   ]);
 
   // Save all onboarding data to Supabase
@@ -219,6 +274,18 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         purpose && updateMission(user.id, purpose),
         role && updateRole(user.id, role),
       ]);
+
+      await updateProfile(user.id, {
+        has_watched_explainer_video: hasWatchedExplainerVideo,
+        has_completed_onboarding: hasCompletedOnboarding,
+        core_values: coreValues,
+        core_categories: coreCategories,
+        values_scores: valuesScores,
+        goal_whys: goalWhys,
+        church_name: churchName || null,
+        church_address: churchAddress || null,
+        church_website: churchWebsite || null,
+      });
 
       // Save preferences
       await updateProfilePreferences(user.id, {
@@ -267,6 +334,15 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     morningMindset,
     goals,
     initiatives,
+    hasWatchedExplainerVideo,
+    hasCompletedOnboarding,
+    coreValues,
+    coreCategories,
+    valuesScores,
+    goalWhys,
+    churchName,
+    churchAddress,
+    churchWebsite,
   ]);
 
   // Individual save functions for auto-save
@@ -438,6 +514,94 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     [isAuthenticated, user?.id, onError]
   );
 
+  const saveCoreValues = useCallback(
+    async (values: ProfileData['core_values']) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { core_values: values });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save core values'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveCoreCategories = useCallback(
+    async (categories: ProfileData['core_categories']) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { core_categories: categories });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save core categories'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveValuesScores = useCallback(
+    async (scores: ProfileData['values_scores']) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { values_scores: scores });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save value scores'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveGoalWhys = useCallback(
+    async (whys: ProfileData['goal_whys']) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { goal_whys: whys });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save goal whys'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveChurchInfo = useCallback(
+    async (input: { name: string; address: string; website: string }) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, {
+          church_name: input.name.trim() || null,
+          church_address: input.address.trim() || null,
+          church_website: input.website.trim() || null,
+        });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save church info'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveExplainerVideoWatched = useCallback(
+    async (watched: boolean) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { has_watched_explainer_video: watched });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save explainer video status'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
+  const saveOnboardingCompleted = useCallback(
+    async (completed: boolean) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfile(user.id, { has_completed_onboarding: completed });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save onboarding completion'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
   // Auto-load on mount if enabled
   useEffect(() => {
     if (autoLoad && isAuthenticated && user?.id) {
@@ -463,6 +627,13 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     savePurpose,
     saveHomeAddress,
     saveWorkAddress,
+    saveCoreValues,
+    saveCoreCategories,
+    saveValuesScores,
+    saveGoalWhys,
+    saveChurchInfo,
+    saveExplainerVideoWatched,
+    saveOnboardingCompleted,
   };
 }
 

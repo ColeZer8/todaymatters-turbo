@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { CHURCH_OPTIONS_US_SAMPLE } from '@/constants/churches';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function MyChurchScreen() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function MyChurchScreen() {
   const setChurchName = useOnboardingStore((state) => state.setChurchName);
   const setChurchAddress = useOnboardingStore((state) => state.setChurchAddress);
   const setChurchWebsite = useOnboardingStore((state) => state.setChurchWebsite);
+  const { saveChurchInfo } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -28,11 +30,21 @@ export default function MyChurchScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const timeoutId = setTimeout(() => {
+      saveChurchInfo({ name: churchName, address: churchAddress, website: churchWebsite });
+    }, 800);
+    return () => clearTimeout(timeoutId);
+  }, [churchAddress, churchName, churchWebsite, hasHydrated, isAuthenticated, saveChurchInfo]);
+
   const handleContinue = () => {
+    saveChurchInfo({ name: churchName, address: churchAddress, website: churchWebsite });
     router.replace('/ai-summary');
   };
 
   const handleSkip = () => {
+    saveChurchInfo({ name: churchName, address: churchAddress, website: churchWebsite });
     router.replace('/ai-summary');
   };
 

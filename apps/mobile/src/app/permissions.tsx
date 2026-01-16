@@ -7,6 +7,13 @@ import { useOnboardingStore, type PermissionKey } from '@/stores/onboarding-stor
 import { useOnboardingSync } from '@/lib/supabase/hooks';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
 import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
+import {
+  getAndroidInsightsSupportStatus,
+  getHealthAuthorizationStatusSafeAsync as getAndroidHealthAuthorizationStatusSafeAsync,
+  getUsageAccessAuthorizationStatusSafeAsync,
+  openUsageAccessSettingsSafeAsync,
+  requestHealthConnectAuthorizationSafeAsync,
+} from '@/lib/android-insights';
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -59,6 +66,52 @@ export default function PermissionsScreen() {
     return false;
   }, []);
 
+  const ensureAndroidHealthPermissionIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const support = getAndroidInsightsSupportStatus();
+    if (support !== 'available') {
+      Alert.alert(
+        'Health data not available in this build',
+        'Health Connect requires the custom Android dev client. Rebuild the app, then try again.'
+      );
+      return false;
+    }
+
+    const status = await getAndroidHealthAuthorizationStatusSafeAsync();
+    if (status === 'authorized') return true;
+
+    const ok = await requestHealthConnectAuthorizationSafeAsync();
+    if (ok) return true;
+
+    Alert.alert(
+      'Health Connect permission needed',
+      'Please enable TodayMatters in Health Connect, then return and try again.'
+    );
+    return false;
+  }, []);
+
+  const ensureAndroidUsageAccessIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const support = getAndroidInsightsSupportStatus();
+    if (support !== 'available') {
+      Alert.alert(
+        'App usage not available in this build',
+        'Usage access requires the custom Android dev client. Rebuild the app, then try again.'
+      );
+      return false;
+    }
+
+    const status = await getUsageAccessAuthorizationStatusSafeAsync();
+    if (status === 'authorized') return true;
+
+    await openUsageAccessSettingsSafeAsync();
+    Alert.alert(
+      'Usage access required',
+      'Enable TodayMatters in Usage Access settings, then return and try again.'
+    );
+    return false;
+  }, []);
+
   // Derived: all permissions enabled = allowAll is on
   const allEnabled = useMemo(
     () => Object.values(permissions).every(Boolean),
@@ -77,9 +130,28 @@ export default function PermissionsScreen() {
           // Revert just the location toggle (others can remain enabled).
           togglePermission('location');
         }
+
+        if (Platform.OS === 'android') {
+          const healthOk = await ensureAndroidHealthPermissionIfNeeded();
+          if (!healthOk) {
+            togglePermission('health');
+          }
+
+          const usageOk = await ensureAndroidUsageAccessIfNeeded();
+          if (!usageOk) {
+            togglePermission('appUsage');
+          }
+        }
       }
     })();
-  }, [allEnabled, ensureLocationPermissionIfNeeded, setAllPermissions, togglePermission]);
+  }, [
+    allEnabled,
+    ensureAndroidHealthPermissionIfNeeded,
+    ensureAndroidUsageAccessIfNeeded,
+    ensureLocationPermissionIfNeeded,
+    setAllPermissions,
+    togglePermission,
+  ]);
 
   const handleTogglePermission = useCallback(
     (key: PermissionKey) => {
@@ -92,10 +164,26 @@ export default function PermissionsScreen() {
           if (!ok) return;
         }
 
+        if (key === 'health' && nextEnabled) {
+          const ok = await ensureAndroidHealthPermissionIfNeeded();
+          if (!ok) return;
+        }
+
+        if (key === 'appUsage' && nextEnabled) {
+          const ok = await ensureAndroidUsageAccessIfNeeded();
+          if (!ok) return;
+        }
+
         togglePermission(key);
       })();
     },
-    [ensureLocationPermissionIfNeeded, permissions, togglePermission]
+    [
+      ensureAndroidHealthPermissionIfNeeded,
+      ensureAndroidUsageAccessIfNeeded,
+      ensureLocationPermissionIfNeeded,
+      permissions,
+      togglePermission,
+    ]
   );
 
   const handleToggleShowIndividual = useCallback(() => {
@@ -114,8 +202,24 @@ export default function PermissionsScreen() {
         }
       }
 
+      if (Platform.OS === 'android' && permissions.health) {
+        const ok = await ensureAndroidHealthPermissionIfNeeded();
+        if (!ok) {
+          togglePermission('health');
+          return;
+        }
+      }
+
+      if (Platform.OS === 'android' && permissions.appUsage) {
+        const ok = await ensureAndroidUsageAccessIfNeeded();
+        if (!ok) {
+          togglePermission('appUsage');
+          return;
+        }
+      }
+
       await savePermissions(permissions);
-      router.replace('/core-values');
+      router.replace('/connect-google-services');
     })();
   };
 

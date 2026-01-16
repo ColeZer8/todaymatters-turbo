@@ -5,6 +5,7 @@ import { AISummaryTemplate } from '@/components/templates/AISummaryTemplate';
 import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { useOnboardingSync } from '@/lib/supabase/hooks';
 
 export default function AISummaryScreen() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function AISummaryScreen() {
   const goals = useOnboardingStore((state) => state.goals);
   const valuesScores = useOnboardingStore((state) => state.valuesScores);
   const setHasCompletedOnboarding = useOnboardingStore((state) => state.setHasCompletedOnboarding);
+  const { saveOnboardingCompleted } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -28,6 +30,7 @@ export default function AISummaryScreen() {
 
   const handleConfirm = () => {
     setHasCompletedOnboarding(true);
+    saveOnboardingCompleted(true);
     router.replace('/home');
   };
 

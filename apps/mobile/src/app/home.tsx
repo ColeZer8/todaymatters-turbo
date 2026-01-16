@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
+import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { HomeTemplate } from '@/components/templates';
 import type { ConversationStatus, StartConversationOptions } from '@/lib/elevenlabs/types';
@@ -15,11 +16,13 @@ import {
   useAuthStore,
   useCurrentMinutes,
   useDemoStore,
+  getTodayYmd,
   useEventsStore,
   useGoalsStore,
   useHomeBriefStore,
   useOnboardingStore,
   useReviewTimeStore,
+  type ScheduledEvent,
 } from '@/stores';
 import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
 
@@ -57,7 +60,9 @@ interface VoiceCoachApi {
 }
 
 function HomeScreenInner() {
-  const scheduledEvents = useEventsStore((s) => s.scheduledEvents);
+  const router = useRouter();
+  const plannedEventsByDate = useEventsStore((s) => s.plannedEventsByDate);
+  const setSelectedDateYmd = useEventsStore((s) => s.setSelectedDateYmd);
   const unassignedCount = useReviewTimeStore((s) => s.unassignedCount);
   const goals = useGoalsStore((s) => s.goals);
 
@@ -109,6 +114,17 @@ function HomeScreenInner() {
   const nowDate = useMemo(() => {
     return isDemoActive ? getSimulatedDate() : new Date();
   }, [getSimulatedDate, isDemoActive, nowMinutesFromMidnight]);
+
+  const todayYmd = useMemo(() => dateToYmdLocal(nowDate), [nowDate]);
+  const todayPlannedEvents = useMemo(() => plannedEventsByDate[todayYmd] ?? [], [plannedEventsByDate, todayYmd]);
+  const scheduleEvents = useMemo(
+    () => collapseSleepScheduleEvents(todayPlannedEvents, nowMinutesFromMidnight),
+    [nowMinutesFromMidnight, todayPlannedEvents]
+  );
+
+  useEffect(() => {
+    setSelectedDateYmd(getTodayYmd());
+  }, [setSelectedDateYmd]);
 
   const goalsSummary = useMemo(() => {
     let completedTasksCount = 0;
@@ -209,7 +225,7 @@ function HomeScreenInner() {
         rhythm: { wakeTimeIso, sleepTimeIso },
         profile: { fullName, birthday: profileBirthday },
         persona: { coachPersona, morningMindset, focusStyle },
-        scheduledEvents,
+        scheduledEvents: scheduleEvents,
         goals: goalsSummary,
         reviewTime: { unassignedCount },
       });
@@ -290,7 +306,7 @@ function HomeScreenInner() {
       if (timersRef.current.boundary) clearTimeout(timersRef.current.boundary);
 
       const timeBoundary = getNextTimeOfDayBoundary(nowDate);
-      const scheduleBoundary = getNextScheduleBoundary(nowDate, nowMinutesFromMidnight, scheduledEvents);
+      const scheduleBoundary = getNextScheduleBoundary(nowDate, nowMinutesFromMidnight, scheduleEvents);
 
       const candidates = [timeBoundary, scheduleBoundary].filter(Boolean) as Array<{
         at: Date;
@@ -318,7 +334,7 @@ function HomeScreenInner() {
     nowMinutesFromMidnight,
     profileBirthday,
     fullName,
-    scheduledEvents,
+    scheduleEvents,
     setBrief,
     setLastEvaluatedAt,
     lastLlmAt,
@@ -410,6 +426,10 @@ function HomeScreenInner() {
     void run();
   }, []); // Empty deps = stable reference
 
+  const handleViewAllSchedule = useCallback(() => {
+    router.replace('/comprehensive-calendar');
+  }, [router]);
+
   // Safety: if the user leaves Home, end the session so the mic isn't running "invisibly".
   useEffect(() => {
     return () => {
@@ -439,6 +459,11 @@ function HomeScreenInner() {
         pendingActions={{
           communicationsCount: pendingCommunicationsCount,
           communicationsDescription: pendingCommunicationsDescription,
+        }}
+        schedule={{
+          events: scheduleEvents,
+          nowMinutes: nowMinutesFromMidnight,
+          onPressViewAll: handleViewAllSchedule,
         }}
         onPressGreeting={isVoiceAvailable ? handlePressGreeting : undefined}
       />
@@ -481,4 +506,30 @@ function formatHomeDate(d: Date): string {
     month: 'short',
     day: 'numeric',
   }).format(d);
+}
+
+function dateToYmdLocal(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function collapseSleepScheduleEvents(events: ScheduledEvent[], nowMinutes: number): ScheduledEvent[] {
+  const isSleepSchedule = (event: ScheduledEvent) =>
+    event.title === 'Sleep' && event.description === 'Sleep schedule' && event.category === 'sleep';
+
+  const sleepEvents = events.filter(isSleepSchedule);
+  if (sleepEvents.length <= 1) return events;
+
+  const active = sleepEvents.find(
+    (event) => event.startMinutes <= nowMinutes && event.startMinutes + event.duration > nowMinutes
+  );
+  const upcoming = sleepEvents
+    .filter((event) => event.startMinutes > nowMinutes)
+    .sort((a, b) => a.startMinutes - b.startMinutes)[0];
+  const chosen = active ?? upcoming ?? [...sleepEvents].sort((a, b) => a.startMinutes - b.startMinutes)[0];
+  if (!chosen) return events;
+
+  return events.filter((event) => !isSleepSchedule(event) || event.id === chosen.id);
 }
