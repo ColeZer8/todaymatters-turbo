@@ -13,11 +13,13 @@ interface CommunicationItemProps {
     name: string;
     message: string;
     time: string;
+    receivedAt?: string;
     unread?: boolean;
     initials: string;
     source: CommunicationSource;
     channel?: string; // For Slack channel name
     onPress?: () => void;
+    onMarkRead?: () => void;
 }
 
 // Source configuration for icons and colors
@@ -62,11 +64,13 @@ export const CommunicationItem = ({
     name,
     message,
     time,
+    receivedAt,
     unread = false,
     initials,
     source,
     channel,
-    onPress
+    onPress,
+    onMarkRead,
 }: CommunicationItemProps) => {
     const config = SOURCE_CONFIG[source];
 
@@ -108,6 +112,22 @@ export const CommunicationItem = ({
                 <Text style={[styles.message, unread && styles.messageUnread]} numberOfLines={2}>
                     {message}
                 </Text>
+                <View style={styles.metaRow}>
+                    <Text style={styles.receivedAt} numberOfLines={1}>
+                        {receivedAt}
+                    </Text>
+                    {unread && onMarkRead && (
+                        <TouchableOpacity
+                            onPress={onMarkRead}
+                            style={styles.markReadButton}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Mark as read"
+                        >
+                            <Text style={styles.markReadText}>Mark read</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
         </TouchableOpacity>
     );
@@ -209,5 +229,30 @@ const styles = StyleSheet.create({
     },
     messageUnread: {
         color: '#4B5563',
+    },
+    metaRow: {
+        marginTop: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    receivedAt: {
+        fontSize: 12,
+        color: '#94A3B8',
+        flex: 1,
+    },
+    markReadButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#CBD5F5',
+        backgroundColor: '#EEF2FF',
+    },
+    markReadText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#3730A3',
     },
 });

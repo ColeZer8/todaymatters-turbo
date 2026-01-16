@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { ScreenTimeAnalyticsTemplate } from '@/components/templates';
 import {
   getCachedScreenTimeSummarySafeAsync,
@@ -318,6 +318,33 @@ function AndroidScreenTimeDashboard() {
     });
   }, [summary]);
 
+  const timeRangeItems = useMemo(() => {
+    if (!summary?.sessions || summary.sessions.length === 0) return [];
+    const nameLookup = new Map(summary.topApps.map((app) => [app.packageName, app.displayName]));
+    return summary.sessions
+      .map((session) => ({
+        id: `${session.packageName}-${session.startIso}-${session.endIso}`,
+        name: nameLookup.get(session.packageName) ?? session.packageName,
+        startIso: session.startIso,
+        endIso: session.endIso,
+        durationSeconds: session.durationSeconds,
+      }))
+      .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
+  }, [summary]);
+
+  const timeRangeByHour = useMemo(() => {
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, sessions: [] as typeof timeRangeItems }));
+    for (const session of timeRangeItems) {
+      const startDate = new Date(session.startIso);
+      if (Number.isNaN(startDate.getTime())) continue;
+      const hour = startDate.getHours();
+      if (hour >= 0 && hour <= 23) {
+        hours[hour].sessions.push(session);
+      }
+    }
+    return hours;
+  }, [timeRangeItems]);
+
   const hourlyStatus = useMemo(() => {
     if (!summary) return null;
     const hasHourlyApps = hourlyAppBreakdown.some((bucket) => bucket.apps.length > 0);
@@ -413,6 +440,50 @@ function AndroidScreenTimeDashboard() {
         isSyncing={isSyncing}
         bannerText={hourlyStatus ?? supabaseWarning}
         bannerTone={hourlyStatus ? 'info' : 'warning'}
+        extraContent={
+          timeRangeByHour.length > 0 ? (
+            <View className="mt-5">
+              <Text className="px-1 text-[16px] font-bold text-text-primary">App Time Ranges</Text>
+              <View className="mt-3 gap-3">
+                {timeRangeByHour.map((bucket) => (
+                  <View
+                    key={`sessions-${bucket.hour}`}
+                    className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]"
+                  >
+                    <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-text-secondary">
+                      {bucket.hour === 0
+                        ? '12am'
+                        : bucket.hour < 12
+                        ? `${bucket.hour}am`
+                        : bucket.hour === 12
+                        ? '12pm'
+                        : `${bucket.hour - 12}pm`}
+                    </Text>
+                    {bucket.sessions.length === 0 ? (
+                      <Text className="mt-2 text-[13px] text-text-tertiary">No app usage.</Text>
+                    ) : (
+                      <View className="mt-2 gap-2">
+                        {bucket.sessions.map((session) => (
+                          <View key={session.id} className="flex-row items-center justify-between gap-3">
+                            <View className="flex-1">
+                              <Text className="text-[14px] font-semibold text-text-primary">{session.name}</Text>
+                              <Text className="text-[12px] text-text-secondary">
+                                {new Date(session.startIso).toLocaleTimeString()} - {new Date(session.endIso).toLocaleTimeString()}
+                              </Text>
+                            </View>
+                            <Text className="text-[13px] font-semibold text-text-secondary">
+                              {formatDuration(session.durationSeconds)}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null
+        }
       />
     </>
   );

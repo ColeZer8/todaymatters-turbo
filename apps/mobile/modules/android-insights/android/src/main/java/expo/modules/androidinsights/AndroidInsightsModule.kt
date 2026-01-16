@@ -165,7 +165,8 @@ class AndroidInsightsModule : Module() {
     }
 
     val hourlyByApp = mutableMapOf<String, LongArray>()
-    var hourlyBuckets = buildUsageHourlyBucketsSeconds(usageStatsManager, startMs, endMs, hourlyByApp)
+    val sessions = JSONArray()
+    var hourlyBuckets = buildUsageHourlyBucketsSeconds(usageStatsManager, startMs, endMs, hourlyByApp, sessions)
     if (hourlyBuckets.sum() == 0L && totalSeconds > 0L) {
       hourlyBuckets = buildUsageHourlyBucketsFromStats(byPackage.values.toList())
       if (hourlyByApp.isEmpty()) {
@@ -199,6 +200,7 @@ class AndroidInsightsModule : Module() {
     out.put("topApps", appArray)
     out.put("hourlyBucketsSeconds", hourlyArray)
     out.put("hourlyByApp", hourlyByAppJson)
+    out.put("sessions", sessions)
     return out.toString()
   }
 
@@ -206,7 +208,8 @@ class AndroidInsightsModule : Module() {
     usageStatsManager: UsageStatsManager,
     startMs: Long,
     endMs: Long,
-    hourlyByApp: MutableMap<String, LongArray>
+    hourlyByApp: MutableMap<String, LongArray>,
+    sessions: JSONArray
   ): LongArray {
     val buckets = LongArray(24) { 0L }
     val events = usageStatsManager.queryEvents(startMs, endMs)
@@ -225,6 +228,15 @@ class AndroidInsightsModule : Module() {
             addIntervalToBuckets(currentStart!!, ts, buckets)
             if (currentPackage != null) {
               addIntervalToHourlyByApp(currentStart!!, ts, currentPackage!!, hourlyByApp)
+              val durationSeconds = ((ts - currentStart!!) / 1000L).coerceAtLeast(0L)
+              if (durationSeconds > 0) {
+                val session = JSONObject()
+                session.put("packageName", currentPackage!!)
+                session.put("startIso", isoFromMillis(currentStart!!))
+                session.put("endIso", isoFromMillis(ts))
+                session.put("durationSeconds", durationSeconds)
+                sessions.put(session)
+              }
             }
           }
           currentStart = ts
@@ -236,6 +248,15 @@ class AndroidInsightsModule : Module() {
             addIntervalToBuckets(currentStart!!, ts, buckets)
             if (currentPackage != null) {
               addIntervalToHourlyByApp(currentStart!!, ts, currentPackage!!, hourlyByApp)
+              val durationSeconds = ((ts - currentStart!!) / 1000L).coerceAtLeast(0L)
+              if (durationSeconds > 0) {
+                val session = JSONObject()
+                session.put("packageName", currentPackage!!)
+                session.put("startIso", isoFromMillis(currentStart!!))
+                session.put("endIso", isoFromMillis(ts))
+                session.put("durationSeconds", durationSeconds)
+                sessions.put(session)
+              }
             }
             currentStart = null
             currentPackage = null
@@ -248,6 +269,15 @@ class AndroidInsightsModule : Module() {
       addIntervalToBuckets(currentStart!!, endMs, buckets)
       if (currentPackage != null) {
         addIntervalToHourlyByApp(currentStart!!, endMs, currentPackage!!, hourlyByApp)
+        val durationSeconds = ((endMs - currentStart!!) / 1000L).coerceAtLeast(0L)
+        if (durationSeconds > 0) {
+          val session = JSONObject()
+          session.put("packageName", currentPackage!!)
+          session.put("startIso", isoFromMillis(currentStart!!))
+          session.put("endIso", isoFromMillis(endMs))
+          session.put("durationSeconds", durationSeconds)
+          sessions.put(session)
+        }
       }
     }
 

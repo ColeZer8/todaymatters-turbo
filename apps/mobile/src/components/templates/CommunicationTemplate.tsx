@@ -10,6 +10,7 @@ export interface Communication {
     name: string;
     message: string;
     time: string;
+    receivedAt?: string;
     unread: boolean;
     initials: string;
     source: CommunicationSource;
@@ -20,6 +21,8 @@ export interface CommunicationTemplateProps {
     communications: Communication[];
     isLoading?: boolean;
     errorMessage?: string | null;
+    onMarkRead?: (id: string) => void;
+    onMarkAllRead?: () => void;
 }
 
 // Count unread by source
@@ -38,6 +41,8 @@ export const CommunicationTemplate = ({
     communications,
     isLoading = false,
     errorMessage = null,
+    onMarkRead,
+    onMarkAllRead,
 }: CommunicationTemplateProps) => {
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -94,9 +99,22 @@ export const CommunicationTemplate = ({
             {/* Section Header */}
             <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>ALL MESSAGES</Text>
-                <Text style={styles.sectionCount}>
-                    {unreadCounts.total} unread
-                </Text>
+                <View style={styles.sectionActions}>
+                    <Text style={styles.sectionCount}>
+                        {unreadCounts.total} unread
+                    </Text>
+                    {unreadCounts.total > 0 && onMarkAllRead && (
+                        <Pressable
+                            onPress={onMarkAllRead}
+                            style={({ pressed }) => [
+                                styles.clearAllButton,
+                                { opacity: pressed ? 0.7 : 1 }
+                            ]}
+                        >
+                            <Text style={styles.clearAllText}>Clear all</Text>
+                        </Pressable>
+                    )}
+                </View>
             </View>
 
             {/* Communications List */}
@@ -108,10 +126,12 @@ export const CommunicationTemplate = ({
                         name={item.name}
                         message={item.message}
                         time={item.time}
+                        receivedAt={item.receivedAt}
                         unread={item.unread}
                         initials={item.initials}
                         source={item.source}
                         channel={item.channel}
+                        onMarkRead={onMarkRead ? () => onMarkRead(item.id) : undefined}
                     />
                 )}
                 contentContainerStyle={[
@@ -218,6 +238,11 @@ const styles = StyleSheet.create({
         paddingTop: 20,
         paddingBottom: 8,
     },
+    sectionActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
     sectionTitle: {
         fontSize: 11.5,
         letterSpacing: 0.9,
@@ -228,6 +253,19 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         color: '#2563EB',
+    },
+    clearAllButton: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
+    },
+    clearAllText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#475569',
     },
     listContent: {
         paddingHorizontal: 20,

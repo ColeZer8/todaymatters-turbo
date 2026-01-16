@@ -66,4 +66,18 @@ export function formatCommunicationTime(iso: string | null): string {
   }).format(d);
 }
 
+export function formatCommunicationTimestamp(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d);
+}
+
 

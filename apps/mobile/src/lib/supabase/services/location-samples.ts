@@ -18,6 +18,20 @@ interface LocationSampleLike {
   raw: LocationSamplesInsert['raw'];
 }
 
+export interface LocationSampleRow {
+  recorded_at: string;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+  altitude_m: number | null;
+  speed_mps: number | null;
+  heading_deg: number | null;
+  is_mocked: boolean | null;
+  source: string;
+  dedupe_key: string;
+  raw: LocationSamplesInsert['raw'];
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -104,5 +118,27 @@ export async function upsertLocationSamples(userId: string, samples: LocationSam
   if (error) {
     throw handleSupabaseError(error);
   }
+}
+
+export async function fetchRecentLocationSamples(
+  userId: string,
+  options: { limit?: number; sinceIso?: string } = {}
+): Promise<LocationSampleRow[]> {
+  const limit = options.limit ?? 200;
+  let query = supabase
+    .schema('tm')
+    .from('location_samples')
+    .select('recorded_at, latitude, longitude, accuracy_m, altitude_m, speed_mps, heading_deg, is_mocked, source, dedupe_key, raw')
+    .eq('user_id', userId)
+    .order('recorded_at', { ascending: false })
+    .limit(limit);
+
+  if (options.sinceIso) {
+    query = query.gte('recorded_at', options.sinceIso);
+  }
+
+  const { data, error } = await query;
+  if (error) throw handleSupabaseError(error);
+  return (data ?? []) as LocationSampleRow[];
 }
 

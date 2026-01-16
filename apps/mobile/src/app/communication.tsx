@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores';
 import { fetchGmailEmailEvents } from '@/lib/supabase/services';
 import {
     formatCommunicationTime,
+    formatCommunicationTimestamp,
     getInitialsFromName,
 } from '@/lib/communication/communication-utils';
 
@@ -30,12 +31,14 @@ export default function CommunicationScreen() {
                     const subject = row.title?.trim() || '(No subject)';
                     const message = subject;
                     const time = formatCommunicationTime(row.created_at);
+                    const receivedAt = formatCommunicationTimestamp(row.created_at);
 
                     return {
                         id: row.id,
                         name: 'Gmail',
                         message,
                         time,
+                        receivedAt,
                         unread: isGmailUnreadFromMeta(row.meta),
                         initials: getInitialsFromName('Gmail'),
                         source: 'gmail',
@@ -58,7 +61,23 @@ export default function CommunicationScreen() {
         };
     }, [userId]);
 
-    return <CommunicationTemplate communications={communications} isLoading={isLoading} errorMessage={errorMessage} />;
+    const handleMarkRead = (id: string) => {
+        setCommunications((prev) => prev.filter((item) => item.id !== id));
+    };
+
+    const handleMarkAllRead = () => {
+        setCommunications((prev) => prev.filter((item) => !item.unread));
+    };
+
+    return (
+        <CommunicationTemplate
+            communications={communications}
+            isLoading={isLoading}
+            errorMessage={errorMessage}
+            onMarkRead={handleMarkRead}
+            onMarkAllRead={handleMarkAllRead}
+        />
+    );
 }
 
 function isGmailUnreadFromMeta(meta: unknown): boolean {

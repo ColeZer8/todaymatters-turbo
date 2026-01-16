@@ -129,9 +129,9 @@ export async function startAndroidBackgroundLocationAsync(): Promise<void> {
 
   await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
     accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 75,
+    distanceInterval: 40,
     // Android-specific: control update cadence.
-    timeInterval: 5 * 60 * 1000,
+    timeInterval: 2 * 60 * 1000,
     // Foreground service is required for background reliability.
     foregroundService: {
       notificationTitle: 'TodayMatters is tracking your day',

@@ -29,6 +29,12 @@ export interface UsageSummary {
   topApps: UsageAppUsage[];
   hourlyBucketsSeconds?: number[];
   hourlyByApp?: Record<string, Record<number, number>>;
+  sessions?: Array<{
+    packageName: string;
+    startIso: string;
+    endIso: string;
+    durationSeconds: number;
+  }>;
 }
 
 export interface HealthSummary {

@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import type { ReactNode } from 'react';
 import { ArrowLeft, Settings2, Sparkles, Smartphone } from 'lucide-react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,6 +56,7 @@ interface ScreenTimeAnalyticsTemplateProps {
   isSyncing: boolean;
   bannerText?: string | null;
   bannerTone?: 'info' | 'warning';
+  extraContent?: ReactNode;
 }
 
 export const ScreenTimeAnalyticsTemplate = ({
@@ -79,6 +81,7 @@ export const ScreenTimeAnalyticsTemplate = ({
   isSyncing,
   bannerText,
   bannerTone = 'info',
+  extraContent,
   onPressBack,
   onPressSettings,
 }: ScreenTimeAnalyticsTemplateProps) => {
@@ -375,6 +378,8 @@ export const ScreenTimeAnalyticsTemplate = ({
               </View>
             </View>
           )}
+
+          {extraContent}
         </ScrollView>
         <BottomToolbar />
       </SafeAreaView>
