@@ -10,7 +10,7 @@ import { handleGoogleServicesOAuthCallback } from "@/lib/google-services-oauth";
 import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
-import { useLocationSamplesSync, useOnboardingSync } from "@/lib/supabase/hooks";
+import { useInsightsSync, useLocationSamplesSync, useOnboardingSync } from "@/lib/supabase/hooks";
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
 
@@ -29,6 +29,7 @@ export default function Layout() {
 
   // iOS-only: start background location collection when authenticated, and periodically flush queued samples.
   useLocationSamplesSync();
+  useInsightsSync();
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;

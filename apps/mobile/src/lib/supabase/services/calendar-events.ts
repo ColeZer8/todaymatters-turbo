@@ -18,6 +18,14 @@ export interface PlannedCalendarMeta extends Record<string, Json> {
   plannedEventId?: string;
   kind?: 'sleep_schedule';
   startYmd?: string;
+  actual?: boolean;
+  tags?: string[];
+  source_id?: string;
+  suggested_category?: EventCategory;
+  ai?: {
+    confidence?: number;
+    reason?: string;
+  };
 }
 
 function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {

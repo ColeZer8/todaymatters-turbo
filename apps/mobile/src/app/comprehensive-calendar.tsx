@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores';
 import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
 import { useOnboardingStore } from '@/stores';
 import { useVerification } from '@/lib/calendar/use-verification';
+import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function ComprehensiveCalendarScreen() {
     });
 
   // Verification: cross-reference planned events with evidence (location, screen time, health)
-  const { actualEventsForDisplay: verifiedActualEvents } = useVerification(plannedEvents, selectedDateYmd, {
+  const { actualBlocks } = useVerification(plannedEvents, selectedDateYmd, {
     autoFetch: true,
     onError: (err) => {
       if (__DEV__) {
@@ -68,6 +69,8 @@ export default function ComprehensiveCalendarScreen() {
   });
 
   const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
+
+  const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
 
   const isStale = useCallback((generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
     if (!generatedAtIso) return true;
@@ -220,13 +223,35 @@ export default function ComprehensiveCalendarScreen() {
 
   // Combine Supabase actual events with verified/derived actual blocks
   const combinedActualEvents = useMemo(() => {
-    // Start with Supabase-backed actual events
-    const supabaseActual = displayActualEvents;
-    // Add any verified actual blocks that aren't already in Supabase
-    const existingIds = new Set(supabaseActual.map((e) => e.id));
-    const newVerified = verifiedActualEvents.filter((e) => !existingIds.has(e.id));
-    return [...supabaseActual, ...newVerified];
-  }, [displayActualEvents, verifiedActualEvents]);
+    return displayActualEvents;
+  }, [displayActualEvents]);
+
+  useEffect(() => {
+    if (!userId) return;
+    if (!actualBlocks || actualBlocks.length === 0) return;
+    const fingerprint = actualBlocks
+      .map((block) => `${block.source}:${block.startMinutes}:${block.endMinutes}`)
+      .join('|');
+    if (evidenceSyncRef.current?.ymd === selectedDateYmd && evidenceSyncRef.current?.fingerprint === fingerprint) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        await syncActualEvidenceBlocks({ userId, ymd: selectedDateYmd, blocks: actualBlocks });
+        if (cancelled) return;
+        evidenceSyncRef.current = { ymd: selectedDateYmd, fingerprint };
+        await refreshActualEventsForSelectedDay();
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[Calendar] Failed to sync actual evidence blocks:', error);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actualBlocks, refreshActualEventsForSelectedDay, selectedDateYmd, userId]);
 
   return (
     <ComprehensiveCalendarTemplate

@@ -1,69 +1,58 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+export type ReviewCategoryId = 'faith' | 'family' | 'work' | 'health' | 'other';
+
+export type ReviewBlockSource = 'screen_time' | 'location' | 'workout' | 'unknown';
+
+export interface AiSuggestion {
+  category: ReviewCategoryId;
+  confidence: number;
+  reason?: string;
+  title?: string;
+  description?: string;
+}
 
 export interface TimeBlock {
   id: string;
+  sourceId: string;
+  source: ReviewBlockSource;
+  eventId?: string | null;
+  title: string;
+  description: string;
   duration: number; // minutes
+  startMinutes: number;
   startTime: string;
   endTime: string;
   activityDetected?: string;
   location?: string;
-  aiSuggestion?: string;
 }
 
 interface ReviewTimeState {
   timeBlocks: TimeBlock[];
-  assignments: Record<string, string>; // blockId -> categoryId
+  assignments: Record<string, ReviewCategoryId>;
+  notes: Record<string, string>;
+  aiSuggestions: Record<string, AiSuggestion>;
   highlightedBlockId: string | null; // Block to highlight/scroll to
   // Computed
   unassignedCount: number;
   // Actions
   setTimeBlocks: (blocks: TimeBlock[]) => void;
-  assignCategory: (blockId: string, categoryId: string) => void;
+  assignCategory: (blockId: string, categoryId: ReviewCategoryId) => void;
   clearAssignment: (blockId: string) => void;
+  setNote: (blockId: string, value: string) => void;
+  setAiSuggestion: (blockId: string, suggestion: AiSuggestion) => void;
+  clearAiSuggestion: (blockId: string) => void;
   setHighlightedBlockId: (id: string | null) => void;
   getUnassignedCount: () => number;
   splitTimeBlock: (blockId: string, splitMinutes: number) => void;
+  clearAll: () => void;
 }
 
-// Mock data - matches the Unknown blocks from the calendar view
-// These represent gaps in the day where we don't know what happened
-const INITIAL_TIME_BLOCKS: TimeBlock[] = [
-  {
-    id: 'a_unknown_1',
-    duration: 30,
-    startTime: '11:30 AM',
-    endTime: '12:00 PM',
-    activityDetected: 'Phone unlocked 12 times',
-  },
-  {
-    id: 'a_unknown_2',
-    duration: 45,
-    startTime: '2:15 PM',
-    endTime: '3:00 PM',
-    location: 'Office - Break Room',
-    aiSuggestion: 'other',
-  },
-];
+const INITIAL_TIME_BLOCKS: TimeBlock[] = [];
 
-const computeUnassignedCount = (
-  timeBlocks: TimeBlock[],
-  assignments: Record<string, string>
-): number => {
+const computeUnassignedCount = (timeBlocks: TimeBlock[], assignments: Record<string, ReviewCategoryId>): number => {
   return timeBlocks.filter((block) => !assignments[block.id]).length;
-};
-
-// Helper to parse time string "11:30 AM" -> minutes from midnight
-const parseTimeToMinutes = (timeStr: string): number => {
-  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (!match) return 0;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const period = match[3].toUpperCase();
-  if (period === 'PM' && hours !== 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  return hours * 60 + minutes;
 };
 
 // Helper to format minutes from midnight -> "11:30 AM"
@@ -80,13 +69,33 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
     (set, get) => ({
       timeBlocks: INITIAL_TIME_BLOCKS,
       assignments: {},
+      notes: {},
+      aiSuggestions: {},
       highlightedBlockId: null,
       unassignedCount: INITIAL_TIME_BLOCKS.length,
 
       setTimeBlocks: (blocks) => {
+        const ids = new Set(blocks.map((b) => b.id));
+        const filteredAssignments: Record<string, ReviewCategoryId> = {};
+        const filteredNotes: Record<string, string> = {};
+        const filteredSuggestions: Record<string, AiSuggestion> = {};
+
+        for (const [blockId, value] of Object.entries(get().assignments)) {
+          if (ids.has(blockId)) filteredAssignments[blockId] = value as ReviewCategoryId;
+        }
+        for (const [blockId, value] of Object.entries(get().notes)) {
+          if (ids.has(blockId)) filteredNotes[blockId] = value;
+        }
+        for (const [blockId, value] of Object.entries(get().aiSuggestions)) {
+          if (ids.has(blockId)) filteredSuggestions[blockId] = value as AiSuggestion;
+        }
+
         set({
           timeBlocks: blocks,
-          unassignedCount: computeUnassignedCount(blocks, get().assignments),
+          assignments: filteredAssignments,
+          notes: filteredNotes,
+          aiSuggestions: filteredSuggestions,
+          unassignedCount: computeUnassignedCount(blocks, filteredAssignments),
         });
       },
 
@@ -110,6 +119,26 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
         });
       },
 
+      setNote: (blockId, value) => {
+        set((state) => ({
+          notes: { ...state.notes, [blockId]: value },
+        }));
+      },
+
+      setAiSuggestion: (blockId, suggestion) => {
+        set((state) => ({
+          aiSuggestions: { ...state.aiSuggestions, [blockId]: suggestion },
+        }));
+      },
+
+      clearAiSuggestion: (blockId) => {
+        set((state) => {
+          const next = { ...state.aiSuggestions };
+          delete next[blockId];
+          return { aiSuggestions: next };
+        });
+      },
+
       setHighlightedBlockId: (id) => {
         set({ highlightedBlockId: id });
       },
@@ -119,36 +148,34 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       },
 
       splitTimeBlock: (blockId, splitMinutes) => {
-        const { timeBlocks, assignments } = get();
+        const { timeBlocks, assignments, notes, aiSuggestions } = get();
         const blockIndex = timeBlocks.findIndex((b) => b.id === blockId);
-        if (blockIndex === -1) return;
+        if (blockIndex == -1) return;
 
         const block = timeBlocks[blockIndex];
         if (splitMinutes <= 0 || splitMinutes >= block.duration) return;
 
-        const startMinutes = parseTimeToMinutes(block.startTime);
+        const startMinutes = block.startMinutes;
         const splitPoint = startMinutes + splitMinutes;
 
-        // Create two new blocks
         const firstBlock: TimeBlock = {
+          ...block,
           id: `${block.id}_split_a`,
           duration: splitMinutes,
+          startMinutes,
           startTime: block.startTime,
           endTime: formatMinutesToTime(splitPoint),
-          activityDetected: block.activityDetected,
-          location: block.location,
         };
 
         const secondBlock: TimeBlock = {
+          ...block,
           id: `${block.id}_split_b`,
           duration: block.duration - splitMinutes,
+          startMinutes: splitPoint,
           startTime: formatMinutesToTime(splitPoint),
           endTime: block.endTime,
-          activityDetected: block.activityDetected,
-          location: block.location,
         };
 
-        // Replace original block with two new blocks
         const newTimeBlocks = [
           ...timeBlocks.slice(0, blockIndex),
           firstBlock,
@@ -156,14 +183,46 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
           ...timeBlocks.slice(blockIndex + 1),
         ];
 
-        // Remove assignment for old block
         const newAssignments = { ...assignments };
         delete newAssignments[blockId];
+        if (assignments[blockId]) {
+          newAssignments[firstBlock.id] = assignments[blockId];
+          newAssignments[secondBlock.id] = assignments[blockId];
+        }
+
+        const newNotes = { ...notes };
+        const noteValue = newNotes[blockId];
+        delete newNotes[blockId];
+        if (noteValue) {
+          newNotes[firstBlock.id] = noteValue;
+          newNotes[secondBlock.id] = noteValue;
+        }
+
+        const newSuggestions = { ...aiSuggestions };
+        const suggestionValue = newSuggestions[blockId];
+        delete newSuggestions[blockId];
+        if (suggestionValue) {
+          newSuggestions[firstBlock.id] = suggestionValue;
+          newSuggestions[secondBlock.id] = suggestionValue;
+        }
 
         set({
           timeBlocks: newTimeBlocks,
           assignments: newAssignments,
+          notes: newNotes,
+          aiSuggestions: newSuggestions,
           unassignedCount: computeUnassignedCount(newTimeBlocks, newAssignments),
+        });
+      },
+
+      clearAll: () => {
+        set({
+          timeBlocks: [],
+          assignments: {},
+          notes: {},
+          aiSuggestions: {},
+          highlightedBlockId: null,
+          unassignedCount: 0,
         });
       },
     }),
@@ -172,8 +231,8 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         assignments: state.assignments,
+        notes: state.notes,
       }),
     }
   )
 );
-

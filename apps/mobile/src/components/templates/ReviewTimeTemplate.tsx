@@ -1,7 +1,7 @@
-import { Pressable, ScrollView, Text, View, LayoutChangeEvent } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, TextInput, View, LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CircleHelp,
@@ -16,7 +16,13 @@ import {
 } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { TimeSplitControl } from '@/components/molecules';
-import { useReviewTimeStore } from '@/stores';
+import { useReviewTimeStore, useAuthStore, useEventsStore, type EventCategory } from '@/stores';
+import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+import { fetchAllEvidenceForDay } from '@/lib/supabase/services/evidence-data';
+import { buildReviewTimeBlocks } from '@/lib/calendar/review-time-blocks';
+import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
+import { fetchLocationSamplesForRange, upsertUserPlaceFromSamples } from '@/lib/supabase/services/user-places';
+import { getIosInsightsSupportStatus, presentScreenTimeReportSafeAsync } from '@/lib/ios-insights';
 
 const CATEGORIES = [
   { id: 'faith', label: 'Faith', icon: SunMedium, color: '#F79A3B', bgColor: '#FFF5E8', selectedBg: '#FEF3E2' },
@@ -24,7 +30,15 @@ const CATEGORIES = [
   { id: 'work', label: 'Work', icon: Gift, color: '#2F7BFF', bgColor: '#E9F2FF', selectedBg: '#DBEAFE' },
   { id: 'health', label: 'Health', icon: Dumbbell, color: '#1F9C66', bgColor: '#E8F7EF', selectedBg: '#D1FAE5' },
   { id: 'other', label: 'Other', icon: CircleHelp, color: '#6B7280', bgColor: '#F3F4F6', selectedBg: '#E5E7EB' },
-];
+] as const;
+
+const REVIEW_CATEGORY_TO_EVENT: Record<(typeof CATEGORIES)[number]['id'], EventCategory> = {
+  faith: 'routine',
+  family: 'family',
+  work: 'work',
+  health: 'health',
+  other: 'free',
+};
 
 const formatDuration = (minutes: number): string => {
   if (minutes >= 60) {
@@ -41,44 +55,90 @@ export const ReviewTimeTemplate = () => {
   const scrollViewRef = useRef<ScrollView>(null);
   const blockPositions = useRef<Record<string, number>>({});
   const [splittingBlockId, setSplittingBlockId] = useState<string | null>(null);
-  
-  const { 
-    timeBlocks, 
-    assignments, 
-    assignCategory, 
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [aiLoadingBlockId, setAiLoadingBlockId] = useState<string | null>(null);
+  const [placeSavingBlockId, setPlaceSavingBlockId] = useState<string | null>(null);
+  const [isScreenTimeSyncing, setIsScreenTimeSyncing] = useState(false);
+
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
+  const setActualEventsForDate = useEventsStore((s) => s.setActualEventsForDate);
+  const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
+  const addActualEvent = useEventsStore((s) => s.addActualEvent);
+
+  const {
+    timeBlocks,
+    assignments,
+    notes,
+    aiSuggestions,
+    assignCategory,
     clearAssignment,
+    setNote,
+    setAiSuggestion,
     highlightedBlockId,
     setHighlightedBlockId,
     splitTimeBlock,
+    setTimeBlocks,
   } = useReviewTimeStore();
+
+  const { loadActualForDay, createActual, updateActual } = useCalendarEventsSync();
 
   const totalUnassigned = timeBlocks.reduce((sum, block) => {
     if (!assignments[block.id]) return sum + block.duration;
     return sum;
   }, 0);
 
-  // Scroll to highlighted block on mount
+  const highlightedBlockKey = useMemo(() => {
+    if (!highlightedBlockId) return null;
+    const direct = timeBlocks.find((block) => block.id === highlightedBlockId);
+    if (direct) return direct.id;
+    const byEvent = timeBlocks.find((block) => block.eventId === highlightedBlockId);
+    return byEvent?.id ?? null;
+  }, [highlightedBlockId, timeBlocks]);
+
+  const refreshBlocks = useCallback(async () => {
+    if (!userId) return;
+    setIsLoadingBlocks(true);
+    try {
+      const events = await loadActualForDay(selectedDateYmd);
+      setActualEventsForDate(selectedDateYmd, events);
+      const evidence = await fetchAllEvidenceForDay(userId, selectedDateYmd);
+      const blocks = buildReviewTimeBlocks({ ymd: selectedDateYmd, evidence, actualEvents: events });
+      setTimeBlocks(blocks);
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[ReviewTime] Failed to load blocks:', error);
+      }
+    } finally {
+      setIsLoadingBlocks(false);
+    }
+  }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, setTimeBlocks, userId]);
+
   useEffect(() => {
-    if (highlightedBlockId && blockPositions.current[highlightedBlockId] !== undefined) {
+    void refreshBlocks();
+  }, [refreshBlocks]);
+
+  useEffect(() => {
+    if (highlightedBlockKey && blockPositions.current[highlightedBlockKey] !== undefined) {
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({
-          y: blockPositions.current[highlightedBlockId] - 100,
+          y: blockPositions.current[highlightedBlockKey] - 100,
           animated: true,
         });
       }, 100);
     }
-    
-    // Clear highlight when leaving
+
     return () => {
       setHighlightedBlockId(null);
     };
-  }, [highlightedBlockId, setHighlightedBlockId]);
+  }, [highlightedBlockKey, setHighlightedBlockId]);
 
   const handleBlockLayout = useCallback((blockId: string, event: LayoutChangeEvent) => {
     blockPositions.current[blockId] = event.nativeEvent.layout.y;
   }, []);
 
-  const handleCategorySelect = (blockId: string, categoryId: string) => {
+  const handleCategorySelect = (blockId: string, categoryId: (typeof CATEGORIES)[number]['id']) => {
     if (assignments[blockId] === categoryId) {
       clearAssignment(blockId);
     } else {
@@ -86,19 +146,174 @@ export const ReviewTimeTemplate = () => {
     }
   };
 
-  const handleSplitConfirm = useCallback((blockId: string, splitMinutes: number) => {
-    splitTimeBlock(blockId, splitMinutes);
-    setSplittingBlockId(null);
-  }, [splitTimeBlock]);
+  const handleSplitConfirm = useCallback(
+    (blockId: string, splitMinutes: number) => {
+      splitTimeBlock(blockId, splitMinutes);
+      setSplittingBlockId(null);
+    },
+    [splitTimeBlock]
+  );
 
   const handleSplitCancel = useCallback(() => {
     setSplittingBlockId(null);
   }, []);
 
+  const handleAiSuggest = useCallback(
+    async (blockId: string) => {
+      const block = timeBlocks.find((b) => b.id === blockId);
+      if (!block || !userId) return;
+      setAiLoadingBlockId(blockId);
+      try {
+        const note = notes[blockId] ?? '';
+        const suggestion = await requestReviewTimeSuggestion({
+          block: {
+            id: block.id,
+            title: block.title,
+            description: block.description,
+            source: block.source,
+            startTime: block.startTime,
+            endTime: block.endTime,
+            durationMinutes: block.duration,
+            activityDetected: block.activityDetected ?? null,
+            location: block.location ?? null,
+            note,
+          },
+          date: selectedDateYmd,
+        });
+        setAiSuggestion(blockId, suggestion);
+      } catch (error) {
+        if (__DEV__) {
+          console.error('[ReviewTime] AI suggestion failed:', error);
+        }
+      } finally {
+        setAiLoadingBlockId(null);
+      }
+    },
+    [notes, selectedDateYmd, setAiSuggestion, timeBlocks, userId]
+  );
+
+  const handleSavePlaceLabel = useCallback(
+    async (blockId: string, label: string, category: string) => {
+      const block = timeBlocks.find((b) => b.id === blockId);
+      if (!block || !userId) return;
+      setPlaceSavingBlockId(blockId);
+      try {
+        const start = ymdMinutesToDate(selectedDateYmd, block.startMinutes);
+        const end = new Date(start);
+        end.setMinutes(end.getMinutes() + block.duration);
+        const samples = await fetchLocationSamplesForRange(userId, start.toISOString(), end.toISOString());
+        if (samples.length === 0) return;
+        await upsertUserPlaceFromSamples({
+          userId,
+          label,
+          category,
+          samples,
+        });
+        await refreshBlocks();
+      } catch (error) {
+        if (__DEV__) {
+          console.error('[ReviewTime] Failed to save place label:', error);
+        }
+      } finally {
+        setPlaceSavingBlockId(null);
+      }
+    },
+    [refreshBlocks, selectedDateYmd, timeBlocks, userId]
+  );
+
+  const handleApplyAi = useCallback(
+    (blockId: string) => {
+      const suggestion = aiSuggestions[blockId];
+      if (!suggestion) return;
+      assignCategory(blockId, suggestion.category);
+    },
+    [aiSuggestions, assignCategory]
+  );
+
+  const handleSaveAssignments = useCallback(async () => {
+    if (isSaving || !userId) return;
+    setIsSaving(true);
+    try {
+      for (const block of timeBlocks) {
+        const assigned = assignments[block.id];
+        if (!assigned) continue;
+
+        const eventCategory = REVIEW_CATEGORY_TO_EVENT[assigned];
+        const note = notes[block.id]?.trim() ?? '';
+        const ai = aiSuggestions[block.id];
+        const title = ai?.title || block.title || 'Actual';
+        const description = note || ai?.description || block.description || '';
+        const location = block.location ?? undefined;
+
+        const start = ymdMinutesToDate(selectedDateYmd, block.startMinutes);
+        const end = new Date(start);
+        end.setMinutes(end.getMinutes() + block.duration);
+
+        const meta = {
+          category: eventCategory,
+          source: 'review_time',
+          source_id: block.sourceId,
+          actual: true,
+          tags: ['actual'],
+          ai: ai ? { confidence: ai.confidence, reason: ai.reason } : undefined,
+        };
+
+        if (block.eventId) {
+          const updated = await updateActual(block.eventId, {
+            title,
+            description,
+            location,
+            scheduledStartIso: start.toISOString(),
+            scheduledEndIso: end.toISOString(),
+            meta,
+          });
+          updateActualEvent(updated, selectedDateYmd);
+        } else {
+          const created = await createActual({
+            title,
+            description,
+            location,
+            scheduledStartIso: start.toISOString(),
+            scheduledEndIso: end.toISOString(),
+            meta,
+          });
+          addActualEvent(created, selectedDateYmd);
+        }
+      }
+
+      await refreshBlocks();
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[ReviewTime] Save failed:', error);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }, [addActualEvent, aiSuggestions, assignments, createActual, isSaving, notes, refreshBlocks, selectedDateYmd, timeBlocks, updateActual, updateActualEvent, userId]);
+
+  const canSyncScreenTime = useMemo(() => {
+    if (Platform.OS !== 'ios') return false;
+    return getIosInsightsSupportStatus() === 'available';
+  }, []);
+
+  const handleSyncScreenTime = useCallback(async () => {
+    if (!canSyncScreenTime || isScreenTimeSyncing) return;
+    setIsScreenTimeSyncing(true);
+    try {
+      await presentScreenTimeReportSafeAsync('today');
+      await refreshBlocks();
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[ReviewTime] Screen Time sync failed:', error);
+      }
+    } finally {
+      setIsScreenTimeSyncing(false);
+    }
+  }, [canSyncScreenTime, isScreenTimeSyncing, refreshBlocks]);
+
   return (
     <View className="flex-1 bg-[#F8FAFC]">
       <SafeAreaView className="flex-1">
-        {/* Header */}
         <View className="flex-row items-center justify-between px-5 py-4 bg-white border-b border-[#E5E7EB]">
           <Pressable
             onPress={() => router.back()}
@@ -108,9 +323,7 @@ export const ReviewTimeTemplate = () => {
           >
             <Icon icon={ArrowLeft} size={20} color="#374151" />
           </Pressable>
-          <Text className="text-[18px] font-bold text-text-primary">
-            Review Time
-          </Text>
+          <Text className="text-[18px] font-bold text-text-primary">Review Time</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -120,31 +333,54 @@ export const ReviewTimeTemplate = () => {
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingTop: 24,
-            paddingBottom: 40 + insets.bottom,
+            paddingBottom: 32 + insets.bottom,
           }}
         >
-          {/* Summary */}
           <View className="mb-6 bg-white rounded-2xl p-5 border border-[#E5E7EB]">
             <View className="flex-row items-baseline">
               <Text className="text-[40px] font-bold text-[#1F2937] tracking-tight">
                 {formatDuration(totalUnassigned)}
               </Text>
-              <Text className="text-[16px] text-[#6B7280] ml-2">
-                to assign
-              </Text>
+              <Text className="text-[16px] text-[#6B7280] ml-2">to assign</Text>
             </View>
             <Text className="text-[14px] text-[#9CA3AF] mt-1">
-              Tap a category below to assign each time block
+              Review each block, add context, and assign a category
             </Text>
+            {canSyncScreenTime && (
+              <Pressable
+                onPress={handleSyncScreenTime}
+                disabled={isScreenTimeSyncing}
+                className="mt-4 items-center justify-center h-10 rounded-full bg-[#EEF2FF]"
+                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+              >
+                <Text className="text-[13px] font-semibold text-[#4F46E5]">
+                  {isScreenTimeSyncing ? 'Syncing Screen Time…' : 'Sync Screen Time'}
+                </Text>
+              </Pressable>
+            )}
+
           </View>
 
-          {/* Time Blocks */}
+          {isLoadingBlocks && (
+            <View className="mb-6 bg-white rounded-2xl p-4 border border-[#E5E7EB]">
+              <Text className="text-[14px] text-[#6B7280]">Loading time blocks…</Text>
+            </View>
+          )}
+
+          {!isLoadingBlocks && timeBlocks.length === 0 && (
+            <View className="mb-6 bg-white rounded-2xl p-4 border border-[#E5E7EB]">
+              <Text className="text-[14px] text-[#6B7280]">No unassigned blocks right now.</Text>
+            </View>
+          )}
+
           <View className="gap-4">
             {timeBlocks.map((block) => {
               const selectedCategory = assignments[block.id];
-              const selectedCat = CATEGORIES.find(c => c.id === selectedCategory);
-              const isHighlighted = highlightedBlockId === block.id;
-              
+              const selectedCat = CATEGORIES.find((c) => c.id === selectedCategory);
+              const isHighlighted = highlightedBlockKey === block.id;
+              const aiSuggestion = aiSuggestions[block.id];
+              const isAiSuggested = aiSuggestion?.category;
+
               return (
                 <View
                   key={block.id}
@@ -152,10 +388,10 @@ export const ReviewTimeTemplate = () => {
                   className="bg-white rounded-2xl overflow-hidden"
                   style={{
                     borderWidth: isHighlighted ? 2 : 1,
-                    borderColor: isHighlighted 
-                      ? '#2563EB' 
-                      : selectedCat 
-                        ? selectedCat.color + '30' 
+                    borderColor: isHighlighted
+                      ? '#2563EB'
+                      : selectedCat
+                        ? selectedCat.color + '30'
                         : '#E5E7EB',
                     shadowColor: isHighlighted ? '#2563EB' : '#0f172a',
                     shadowOpacity: isHighlighted ? 0.15 : 0.05,
@@ -163,27 +399,22 @@ export const ReviewTimeTemplate = () => {
                     shadowOffset: { width: 0, height: isHighlighted ? 6 : 4 },
                   }}
                 >
-                  {/* Colored top accent when assigned or highlighted */}
                   {(selectedCat || isHighlighted) && (
-                    <View 
-                      className="h-1" 
-                      style={{ backgroundColor: isHighlighted ? '#2563EB' : selectedCat?.color }} 
+                    <View
+                      className="h-1"
+                      style={{ backgroundColor: isHighlighted ? '#2563EB' : selectedCat?.color }}
                     />
                   )}
-                  
+
                   <View className="p-5">
-                    {/* Header row */}
                     <View className="flex-row items-center justify-between mb-3">
                       <View className="flex-row items-baseline gap-2">
-                        <Text className="text-[28px] font-bold text-[#1F2937]">
-                          {formatDuration(block.duration)}
-                        </Text>
+                        <Text className="text-[28px] font-bold text-[#1F2937]">{formatDuration(block.duration)}</Text>
                         <Text className="text-[14px] text-[#9CA3AF]">
                           {block.startTime} - {block.endTime}
                         </Text>
                       </View>
                       <View className="flex-row items-center gap-2">
-                        {/* Split button - only show for blocks >= 10 minutes */}
                         {block.duration >= 10 && splittingBlockId !== block.id && (
                           <Pressable
                             onPress={() => setSplittingBlockId(block.id)}
@@ -195,23 +426,23 @@ export const ReviewTimeTemplate = () => {
                             <Text className="text-[12px] font-medium text-[#6B7280]">Split</Text>
                           </Pressable>
                         )}
-                        {block.aiSuggestion && (
-                          <View 
+                        {aiSuggestion && (
+                          <Pressable
+                            onPress={() => handleApplyAi(block.id)}
                             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full"
                             style={{ backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }}
                           >
                             <Icon icon={Sparkles} size={12} color="#6366F1" />
                             <Text className="text-[10px] font-bold text-[#6366F1] uppercase tracking-wider">
-                              AI Suggestion
+                              Use AI
                             </Text>
-                          </View>
+                          </Pressable>
                         )}
                       </View>
                     </View>
 
-                    {/* Activity or Location - hidden when splitting */}
                     {splittingBlockId !== block.id && (
-                      <View className="mb-5">
+                      <View className="mb-4">
                         {block.activityDetected ? (
                           <View className="flex-row items-center gap-2 bg-[#FEF3C7] px-3 py-2 rounded-lg self-start">
                             <Icon icon={Smartphone} size={16} color="#D97706" strokeWidth={1.5} />
@@ -231,7 +462,28 @@ export const ReviewTimeTemplate = () => {
                       </View>
                     )}
 
-                    {/* Split Control - shown when splitting this block */}
+                    {splittingBlockId !== block.id && block.source === 'location' && block.location && (
+                      <View className="flex-row flex-wrap gap-2 mb-4">
+                        {[
+                          { label: 'Set as Work', category: 'office' },
+                          { label: 'Set as Gym', category: 'gym' },
+                          { label: 'Set as Home', category: 'home' },
+                        ].map((item) => (
+                          <Pressable
+                            key={item.label}
+                            onPress={() => handleSavePlaceLabel(block.id, block.location || item.label, item.category)}
+                            disabled={placeSavingBlockId === block.id}
+                            className="px-3 py-2 rounded-full border border-[#E5E7EB] bg-white"
+                            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                          >
+                            <Text className="text-[12px] font-medium text-[#374151]">
+                              {placeSavingBlockId === block.id ? 'Saving…' : item.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+
                     {splittingBlockId === block.id ? (
                       <TimeSplitControl
                         duration={block.duration}
@@ -241,60 +493,105 @@ export const ReviewTimeTemplate = () => {
                         onCancel={handleSplitCancel}
                       />
                     ) : (
-                    /* Category Selection */
-                    <View className="flex-row justify-between">
-                      {CATEGORIES.map((cat) => {
-                        const isSelected = selectedCategory === cat.id;
-                        const isAiSuggested = block.aiSuggestion === cat.id;
-                        
-                        return (
-                          <Pressable
-                            key={cat.id}
-                            onPress={() => handleCategorySelect(block.id, cat.id)}
-                            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                          >
-                            <View className="items-center gap-2">
-                              <View
-                                className="h-[52px] w-[52px] items-center justify-center rounded-full"
-                                style={{
-                                  backgroundColor: isSelected ? cat.selectedBg : isAiSuggested ? cat.bgColor : '#F9FAFB',
-                                  borderWidth: 2,
-                                  borderColor: isSelected
-                                    ? cat.color
-                                    : isAiSuggested
-                                    ? cat.color + '60'
-                                    : '#E5E7EB',
-                                }}
-                              >
-                                <Icon
-                                  icon={cat.icon}
-                                  size={22}
-                                  color={isSelected ? cat.color : isAiSuggested ? cat.color : '#C4C9D0'}
-                                  strokeWidth={isSelected ? 2 : 1.6}
-                                />
-                              </View>
-                              <Text
-                                className="text-[11px]"
-                                style={{ 
-                                  color: isSelected ? cat.color : '#9CA3AF',
-                                  fontWeight: isSelected ? '700' : '500',
-                                }}
-                              >
-                              {cat.label}
-                            </Text>
+                      <>
+                        <View className="mb-4">
+                          <TextInput
+                            value={notes[block.id] ?? ''}
+                            onChangeText={(value) => setNote(block.id, value)}
+                            placeholder="Describe what you were doing…"
+                            placeholderTextColor="#9CA3AF"
+                            multiline
+                            className="min-h-[48px] px-4 py-3 rounded-xl border border-[#E5E7EB] text-[14px] text-[#1F2937]"
+                          />
+                          <View className="flex-row items-center justify-between mt-3">
+                            <Pressable
+                              onPress={() => handleAiSuggest(block.id)}
+                              disabled={aiLoadingBlockId === block.id}
+                              className="flex-row items-center gap-2 px-3 py-2 rounded-full bg-[#EEF2FF]"
+                              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                            >
+                              <Icon icon={Sparkles} size={14} color="#6366F1" />
+                              <Text className="text-[12px] font-semibold text-[#4F46E5]">
+                                {aiLoadingBlockId === block.id ? 'Analyzing…' : 'Ask AI'}
+                              </Text>
+                            </Pressable>
+                            {aiSuggestion && (
+                              <Text className="text-[12px] text-[#6B7280]">
+                                {Math.round(aiSuggestion.confidence * 100)}% confidence
+                              </Text>
+                            )}
                           </View>
-                        </Pressable>
-                      );
-                    })}
-                    </View>
+                          {aiSuggestion?.reason && (
+                            <Text className="text-[12px] text-[#6B7280] mt-2">{aiSuggestion.reason}</Text>
+                          )}
+                        </View>
+
+                        <View className="flex-row justify-between">
+                          {CATEGORIES.map((cat) => {
+                            const isSelected = selectedCategory === cat.id;
+                            const isAi = isAiSuggested === cat.id;
+
+                            return (
+                              <Pressable
+                                key={cat.id}
+                                onPress={() => handleCategorySelect(block.id, cat.id)}
+                                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                              >
+                                <View className="items-center gap-2">
+                                  <View
+                                    className="h-[52px] w-[52px] items-center justify-center rounded-full"
+                                    style={{
+                                      backgroundColor: isSelected ? cat.selectedBg : isAi ? cat.bgColor : '#F9FAFB',
+                                      borderWidth: isSelected || isAi ? 1.5 : 1,
+                                      borderColor: isSelected ? cat.color : isAi ? cat.color + '50' : '#E5E7EB',
+                                    }}
+                                  >
+                                    <Icon icon={cat.icon} size={20} color={isSelected || isAi ? cat.color : '#9CA3AF'} />
+                                  </View>
+                                  <Text
+                                    className="text-[12px] font-medium"
+                                    style={{ color: isSelected || isAi ? cat.color : '#9CA3AF' }}
+                                  >
+                                    {cat.label}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </>
                     )}
                   </View>
                 </View>
               );
             })}
           </View>
+
+          {timeBlocks.length > 0 && (
+            <Pressable
+              onPress={handleSaveAssignments}
+              disabled={isSaving}
+              className="mt-8 mb-4 items-center justify-center h-12 rounded-full bg-[#2563EB]"
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            >
+              <Text className="text-[15px] font-semibold text-white">
+                {isSaving ? 'Saving…' : 'Save to Actual'}
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 };
+
+function ymdMinutesToDate(ymd: string, startMinutes: number): Date {
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, month, day, 0, 0, 0, 0);
+  date.setMinutes(startMinutes);
+  return date;
+}
