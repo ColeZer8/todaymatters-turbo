@@ -14,6 +14,7 @@ import {
   getVerificationRule,
   appMatchesList,
   DISTRACTION_APPS,
+  WORK_APPS,
 } from './verification-rules';
 
 // ============================================================================
@@ -74,6 +75,10 @@ export interface ActualBlock {
   linkedPlannedEventId?: string;
   evidence: EvidenceSummary;
 }
+
+const MIN_SCREEN_TIME_BLOCK_MINUTES = 10;
+const SCREEN_TIME_GAP_MINUTES = 15;
+const PRODUCTIVE_APPS = ['calculator', 'notes', 'today matters', 'todaymatters', 'mobile'];
 
 // ============================================================================
 // Verification Logic
@@ -360,31 +365,28 @@ export function generateActualBlocks(
   const dayStart = ymdToDate(ymd);
 
   // ----- LOCATION-BASED BLOCKS -----
-  for (const loc of evidence.locationHourly) {
-    const hourStart = new Date(loc.hour_start);
-    const startMinutes = hourStart.getHours() * 60;
-    const endMinutes = startMinutes + 60;
-
-    // Check if this hour is covered by a planned event
+  const locationBlocks = buildLocationBlocks(dayStart, evidence.locationHourly);
+  for (const loc of locationBlocks) {
+    // Check if this block is covered by a planned event
     const isPlanned = plannedEvents.some(
-      (e) => e.startMinutes < endMinutes && (e.startMinutes + e.duration) > startMinutes
+      (e) => e.startMinutes < loc.endMinutes && (e.startMinutes + e.duration) > loc.startMinutes
     );
 
-    if (!isPlanned && loc.place_label) {
-      const category = placeToCategory(loc.place_category);
+    if (!isPlanned && loc.placeLabel) {
+      const category = placeToCategory(loc.placeCategory);
       blocks.push({
-        id: `loc_${loc.hour_start}`,
-        title: loc.place_label,
-        description: loc.place_category || '',
+        id: `loc_${loc.startMinutes}_${loc.endMinutes}`,
+        title: loc.placeLabel,
+        description: loc.placeCategory || '',
         category,
-        startMinutes,
-        endMinutes,
+        startMinutes: loc.startMinutes,
+        endMinutes: loc.endMinutes,
         source: 'location',
         evidence: {
           location: {
-            placeLabel: loc.place_label,
-            placeCategory: loc.place_category,
-            sampleCount: loc.sample_count,
+            placeLabel: loc.placeLabel,
+            placeCategory: loc.placeCategory,
+            sampleCount: loc.sampleCount,
             matchesExpected: true,
           },
         },
@@ -440,13 +442,14 @@ export function generateActualBlocks(
   );
 
   for (const block of screenTimeBlocks) {
-    if (block.durationMinutes >= 15) {
-      // Only show blocks >= 15 min
+    if (block.durationMinutes >= MIN_SCREEN_TIME_BLOCK_MINUTES) {
+      // Only show blocks >= 10 min
+      const classification = classifyScreenTimeBlock(block);
       blocks.push({
         id: `screen_${block.startMinutes}`,
-        title: 'Screen Time',
-        description: block.topApp || 'Phone usage',
-        category: 'digital',
+        title: classification.title,
+        description: classification.description,
+        category: classification.category,
         startMinutes: block.startMinutes,
         endMinutes: block.endMinutes,
         source: 'screen_time',
@@ -510,7 +513,7 @@ function groupScreenTimeSessions(
   plannedEvents: ScheduledEvent[]
 ): ScreenTimeBlock[] {
   const blocks: ScreenTimeBlock[] = [];
-  const GAP_THRESHOLD = 15; // Merge sessions within 15 minutes
+  const GAP_THRESHOLD = SCREEN_TIME_GAP_MINUTES; // Merge sessions within 15 minutes
 
   let currentBlock: ScreenTimeBlock | null = null;
   const appUsage = new Map<string, number>();
@@ -585,6 +588,51 @@ function groupScreenTimeSessions(
   return blocks;
 }
 
+interface LocationBlock {
+  startMinutes: number;
+  endMinutes: number;
+  placeLabel: string;
+  placeCategory: string | null;
+  placeKey: string;
+  sampleCount: number;
+}
+
+function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): LocationBlock[] {
+  const blocks: LocationBlock[] = [];
+  const sorted = [...rows].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
+  let current: LocationBlock | null = null;
+
+  for (const row of sorted) {
+    const hourStart = new Date(row.hour_start);
+    const startMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
+    if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
+
+    const placeLabel = row.place_label || row.place_category || '';
+    const placeCategory = row.place_category ?? null;
+    const placeKey = row.place_id ?? `${placeLabel}:${placeCategory ?? 'unknown'}`.toLowerCase();
+    const nextStart = startMinutes;
+    const nextEnd = startMinutes + 60;
+
+    if (current && current.placeKey === placeKey && current.endMinutes === nextStart) {
+      current.endMinutes = nextEnd;
+      current.sampleCount += row.sample_count;
+      continue;
+    }
+
+    current = {
+      startMinutes: nextStart,
+      endMinutes: nextEnd,
+      placeLabel,
+      placeCategory,
+      placeKey,
+      sampleCount: row.sample_count,
+    };
+    blocks.push(current);
+  }
+
+  return blocks;
+}
+
 function mergeOverlappingBlocks(blocks: ActualBlock[]): ActualBlock[] {
   if (blocks.length === 0) return [];
 
@@ -613,4 +661,37 @@ function mergeOverlappingBlocks(blocks: ActualBlock[]): ActualBlock[] {
   }
 
   return merged;
+}
+
+function classifyScreenTimeBlock(block: ScreenTimeBlock): {
+  title: string;
+  description: string;
+  category: EventCategory;
+} {
+  const topApp = block.topApp ?? 'Phone usage';
+  const isDistraction = appMatchesList(topApp, DISTRACTION_APPS);
+  const isWork =
+    appMatchesList(topApp, WORK_APPS) || appMatchesList(topApp, PRODUCTIVE_APPS);
+
+  if (isDistraction) {
+    return {
+      title: 'Doom Scroll',
+      description: topApp,
+      category: 'digital',
+    };
+  }
+
+  if (isWork) {
+    return {
+      title: 'Productive Screen Time',
+      description: topApp,
+      category: 'work',
+    };
+  }
+
+  return {
+    title: 'Screen Time',
+    description: topApp,
+    category: 'digital',
+  };
 }

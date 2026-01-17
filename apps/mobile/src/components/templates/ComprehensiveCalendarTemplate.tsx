@@ -19,6 +19,7 @@ import { Icon } from '../atoms/Icon';
 import { useReviewTimeStore, useDemoStore } from '@/stores';
 import type { EventCategory, ScheduledEvent } from '@/stores';
 import { EventEditorModal } from '../molecules/EventEditorModal';
+import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
 
 // Configuration
 const START_HOUR = 0; // 12 AM
@@ -140,6 +141,19 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
     
     const isSmall = event.duration < 30;
     const isTiny = event.duration < 20;
+    const blockHeight = Math.max(height - 2, 16);
+    const maxTitleLines = blockHeight >= 48 ? 2 : 1;
+    const maxDescriptionLines = !isSmall
+        ? blockHeight >= 96
+            ? 4
+            : blockHeight >= 72
+                ? 3
+                : blockHeight >= 48
+                    ? 2
+                    : blockHeight >= 32
+                        ? 1
+                        : 0
+        : 0;
     
     const handlePress = () => {
         if (isUnknown) {
@@ -160,7 +174,7 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
                 styles.eventBlock,
                 {
                     top,
-                    height: Math.max(height - 2, 16),
+                    height: blockHeight,
                     backgroundColor: catStyles.bg,
                     borderLeftColor: catStyles.accent,
                     borderStyle: isUnknown ? 'dashed' : 'solid',
@@ -187,7 +201,7 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
                     <Icon icon={HelpCircle} size={10} color={catStyles.text} style={{ marginRight: 3, opacity: 0.7 }} />
                 )}
                 <Text 
-                    numberOfLines={1} 
+                    numberOfLines={maxTitleLines} 
                     style={[
                         styles.eventTitle,
                         { 
@@ -200,9 +214,9 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
                     {event.title}
                 </Text>
             </View>
-            {!isSmall && event.description && (
+            {maxDescriptionLines > 0 && event.description && (
                 <Text 
-                    numberOfLines={1} 
+                    numberOfLines={maxDescriptionLines} 
                     style={[
                         styles.eventDescription,
                         { color: catStyles.text }
@@ -240,6 +254,7 @@ export const ComprehensiveCalendarTemplate = ({
     onUpdateActualEvent,
     onDeleteActualEvent,
 }: ComprehensiveCalendarTemplateProps) => {
+    const router = useRouter();
     const insets = useSafeAreaInsets();
     const scrollViewRef = useRef<ScrollView | null>(null);
     const [scrollViewHeight, setScrollViewHeight] = useState(0);
@@ -373,8 +388,19 @@ export const ComprehensiveCalendarTemplate = ({
     const clampedIndicatorTop = Math.min(Math.max(currentIndicatorTop, 0), GRID_HEIGHT);
     const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
     const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;
+    const actualVisibleUntil = isSelectedDateToday ? visibilityCutoff : undefined;
 
     const handleOpenEditor = (event: CalendarEvent, column: 'planned' | 'actual') => {
+        if (column === 'actual') {
+            return;
+        }
+        if (
+            (event.id.startsWith(DERIVED_ACTUAL_PREFIX) ||
+                event.id.startsWith(DERIVED_EVIDENCE_PREFIX)) &&
+            event.category !== 'unknown'
+        ) {
+            return;
+        }
         const fullEvent = column === 'planned'
             ? plannedEvents.find((e) => e.id === event.id)
             : actualEvents.find((e) => e.id === event.id);
@@ -512,7 +538,20 @@ export const ComprehensiveCalendarTemplate = ({
                                             <TimeEventBlock
                                                 key={event.id}
                                                 event={event}
-                                                onPress={(evt) => handleOpenEditor(evt, 'actual')}
+                                                visibleUntilMinutes={actualVisibleUntil}
+                                                onPress={() =>
+                                                    router.push({
+                                                        pathname: '/actual-adjust',
+                                                        params: {
+                                                            id: event.id,
+                                                            title: event.title,
+                                                            description: event.description,
+                                                            category: event.category,
+                                                            startMinutes: String(event.startMinutes),
+                                                            duration: String(event.duration),
+                                                        },
+                                                    })
+                                                }
                                             />
                                         ))}
                                     </View>
@@ -748,18 +787,20 @@ const styles = StyleSheet.create({
     },
     eventContent: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     eventTitle: {
         fontWeight: '700',
         letterSpacing: -0.2,
         flex: 1,
+        flexShrink: 1,
     },
     eventDescription: {
         fontSize: 10,
         fontWeight: '500',
         opacity: 0.75,
         marginTop: 1,
+        flexShrink: 1,
     },
     currentTimeIndicator: {
         position: 'absolute',

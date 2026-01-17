@@ -91,7 +91,12 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
 
   const meta = row.meta as Json;
   const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
-  const category = (metaParsed?.category ?? 'work') as EventCategory;
+  const suggestedCategory =
+    typeof metaParsed?.suggested_category === 'string' ? metaParsed.suggested_category : null;
+  const fallbackCategory = metaParsed?.category ?? 'work';
+  const category = (
+    fallbackCategory === 'unknown' && suggestedCategory ? suggestedCategory : fallbackCategory
+  ) as EventCategory;
   const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
 
   return {
@@ -120,7 +125,12 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
   const meta = row.meta as Json;
 
   const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
-  const category = (metaParsed?.category ?? 'work') as EventCategory;
+  const suggestedCategory =
+    typeof metaParsed?.suggested_category === 'string' ? metaParsed.suggested_category : null;
+  const fallbackCategory = metaParsed?.category ?? 'work';
+  const category = (
+    fallbackCategory === 'unknown' && suggestedCategory ? suggestedCategory : fallbackCategory
+  ) as EventCategory;
   const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
 
   return {

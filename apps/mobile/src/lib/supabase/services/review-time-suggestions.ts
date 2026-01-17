@@ -35,7 +35,8 @@ export async function requestReviewTimeSuggestion(
     });
 
     if (error) {
-      throw handleSupabaseError(error);
+      const contextualMessage = extractFunctionErrorMessage(error);
+      throw new Error(contextualMessage ?? handleSupabaseError(error).message);
     }
 
     if (!data || typeof data !== 'object') {
@@ -56,5 +57,21 @@ export async function requestReviewTimeSuggestion(
     };
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+function extractFunctionErrorMessage(error: unknown): string | null {
+  const err = error as { message?: string; context?: { body?: string } };
+  const body = err?.context?.body;
+  if (!body) return null;
+  try {
+    const parsed = JSON.parse(body) as { error?: string; hint?: string };
+    const message = parsed.error ?? err?.message ?? 'Edge function error';
+    if (parsed.hint) {
+      return `${message}\n${parsed.hint}`;
+    }
+    return message;
+  } catch {
+    return err?.message ?? null;
   }
 }

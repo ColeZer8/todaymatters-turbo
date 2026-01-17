@@ -20,6 +20,7 @@ export { IdealDayTemplate } from './IdealDayTemplate';
 export { AnalyticsTemplate } from './AnalyticsTemplate';
 export { ProfileTemplate } from './ProfileTemplate';
 export { ReviewTimeTemplate } from './ReviewTimeTemplate';
+export { ActualAdjustTemplate } from './ActualAdjustTemplate';
 export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
 export { DemoCarouselTemplate } from './DemoCarouselTemplate';

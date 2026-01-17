@@ -96,17 +96,17 @@ serve(async (req: Request) => {
       });
     }
 
-    const openaiApiKeyResult = await getConfigValue('OPENAI_API_KEY');
-    const modelResult = await getConfigValue('OPENAI_REVIEW_TIME_MODEL');
-    const openaiApiKey = openaiApiKeyResult.value;
-    const model = modelResult.value ?? 'gpt-4o-mini';
+    const anthropicKeyResult = await getConfigValue('ANTHROPIC_API_KEY');
+    const modelResult = await getConfigValue('ANTHROPIC_REVIEW_TIME_MODEL');
+    const anthropicApiKey = anthropicKeyResult.value;
+    const model = modelResult.value ?? 'claude-3-5-sonnet-20240620';
 
-    if (!openaiApiKey) {
+    if (!anthropicApiKey) {
       return new Response(
         JSON.stringify({
-          error: 'Missing OPENAI_API_KEY',
+          error: 'Missing ANTHROPIC_API_KEY',
           hint:
-            'For local testing, add OPENAI_API_KEY to project .env or supabase/.env. For deployed, set Supabase secrets.',
+            'For local testing, add ANTHROPIC_API_KEY to project .env or supabase/.env. For deployed, set Supabase secrets.',
         }),
         {
           status: 500,
@@ -117,26 +117,25 @@ serve(async (req: Request) => {
 
     const { system, userMsg } = buildPrompt(body);
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
+        'x-api-key': anthropicApiKey,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model,
         temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: JSON.stringify(userMsg) },
-        ],
+        max_tokens: 400,
+        system,
+        messages: [{ role: 'user', content: JSON.stringify(userMsg) }],
       }),
     });
 
     if (!resp.ok) {
       const errorText = await resp.text();
-      console.error('OpenAI API error:', resp.status, errorText);
+      console.error('Anthropic API error:', resp.status, errorText);
       return new Response(JSON.stringify({ error: 'Failed to generate suggestion' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -144,7 +143,7 @@ serve(async (req: Request) => {
     }
 
     const data = await resp.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content = data?.content?.[0]?.text;
     if (typeof content !== 'string') {
       return new Response(JSON.stringify({ error: 'Invalid model response' }), {
         status: 500,

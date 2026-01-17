@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import appConfig from '@/lib/config';
@@ -27,6 +28,44 @@ const GOOGLE_OAUTH_PATH_PREFIX = 'google/';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
+const normalizeLocalhostUrl = (value: string): string => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+      return value;
+    }
+
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (!hostUri) return value;
+
+    const hostUrl = hostUri.includes('://') ? hostUri : `http://${hostUri}`;
+    const hostParsed = new URL(hostUrl);
+    if (!hostParsed.hostname) return value;
+
+    parsed.hostname = hostParsed.hostname;
+    return trimTrailingSlash(parsed.toString());
+  } catch {
+    return value;
+  }
+};
+
+const resolveOAuthBaseUrl = (): string => {
+  const baseUrl = appConfig.oauth.apiBaseUrl;
+  if (!baseUrl) {
+    throw new Error(
+      'Missing OAuth API base URL. Set EXPO_PUBLIC_OAUTH_API_BASE_URL in your environment.'
+    );
+  }
+
+  const normalized = normalizeLocalhostUrl(baseUrl);
+  if (__DEV__ && normalized !== baseUrl) {
+    // eslint-disable-next-line no-console
+    console.log('🔗 OAuth base URL normalized for device:', normalized);
+  }
+
+  return normalized;
+};
+
 const parseServicesParam = (
   servicesParam?: string | string[] | null
 ): GoogleService[] => {
@@ -46,12 +85,7 @@ export const buildGoogleServicesOAuthUrl = (services: GoogleService[]): string =
     throw new Error('At least one service must be selected');
   }
 
-  const baseUrl = appConfig.oauth.apiBaseUrl;
-  if (!baseUrl) {
-    throw new Error(
-      'Missing OAuth API base URL. Set EXPO_PUBLIC_OAUTH_API_BASE_URL in your environment.'
-    );
-  }
+  const baseUrl = resolveOAuthBaseUrl();
 
   const servicesParam = services.join(',');
   return `${trimTrailingSlash(baseUrl)}/oauth2/google/start?services=${encodeURIComponent(
@@ -312,12 +346,7 @@ export const fetchConnectedGoogleServices = async (
     throw new Error('Missing access token. Please sign in again and retry.');
   }
 
-  const baseUrl = appConfig.oauth.apiBaseUrl;
-  if (!baseUrl) {
-    throw new Error(
-      'Missing OAuth API base URL. Set EXPO_PUBLIC_OAUTH_API_BASE_URL in your environment.'
-    );
-  }
+  const baseUrl = resolveOAuthBaseUrl();
 
   try {
     const response = await fetch(`${trimTrailingSlash(baseUrl)}/oauth2/google/status`, {

@@ -12,7 +12,13 @@ import {
   type ScreenTimeAuthorizationStatus,
   type ScreenTimeSummary,
 } from '@/lib/ios-insights';
+import {
+  getUsageAccessAuthorizationStatusSafeAsync,
+  getUsageSummarySafeAsync,
+  type UsageSummary,
+} from '@/lib/android-insights';
 import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
+import { buildActualDisplayEvents } from '@/lib/calendar/actual-display-events';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { useAuthStore } from '@/stores';
 import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
@@ -24,6 +30,7 @@ export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
   const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const isMountedRef = useRef(true);
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
@@ -46,6 +53,7 @@ export default function ComprehensiveCalendarScreen() {
   const setActualEventsForDate = useEventsStore((s) => s.setActualEventsForDate);
   const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
   const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
+  const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
@@ -59,7 +67,7 @@ export default function ComprehensiveCalendarScreen() {
     });
 
   // Verification: cross-reference planned events with evidence (location, screen time, health)
-  const { actualBlocks } = useVerification(plannedEvents, selectedDateYmd, {
+  const { actualBlocks, evidence, verificationResults } = useVerification(plannedEvents, selectedDateYmd, {
     autoFetch: true,
     onError: (err) => {
       if (__DEV__) {
@@ -163,6 +171,30 @@ export default function ComprehensiveCalendarScreen() {
     void maybeAutoSync();
   }, [maybeAutoSync]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (selectedDateYmd !== getTodayYmd()) {
+      setUsageSummary(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      const status = await getUsageAccessAuthorizationStatusSafeAsync();
+      if (cancelled) return;
+      if (status !== 'authorized') {
+        setUsageSummary(null);
+        return;
+      }
+      const usage = await getUsageSummarySafeAsync('today');
+      if (cancelled) return;
+      setUsageSummary(usage);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDateYmd]);
+
   const refreshActualEventsForSelectedDay = useCallback(async (): Promise<void> => {
     if (!userId) return;
     const events = await loadActualForDay(selectedDateYmd);
@@ -227,8 +259,26 @@ export default function ComprehensiveCalendarScreen() {
 
   // Combine Supabase actual events with verified/derived actual blocks
   const combinedActualEvents = useMemo(() => {
-    return displayActualEvents;
-  }, [displayActualEvents]);
+    return buildActualDisplayEvents({
+      ymd: selectedDateYmd,
+      plannedEvents,
+      actualEvents: displayActualEvents,
+      derivedActualEvents,
+      actualBlocks,
+      evidence,
+      verificationResults,
+      usageSummary,
+    });
+  }, [
+    actualBlocks,
+    derivedActualEvents,
+    displayActualEvents,
+    evidence,
+    plannedEvents,
+    selectedDateYmd,
+    usageSummary,
+    verificationResults,
+  ]);
 
   useEffect(() => {
     if (!userId) return;

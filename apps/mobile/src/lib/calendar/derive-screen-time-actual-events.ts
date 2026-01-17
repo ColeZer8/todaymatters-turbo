@@ -21,11 +21,19 @@ interface DistractionInfo {
   topApps: Array<{ appName: string; minutes: number }>;
 }
 
+interface SleepStartAdjustment {
+  sleepStartMinutes: number;
+  sleepDurationMinutes: number;
+  screenTimeMinutes: number;
+  topAppName: string | null;
+  screenTimeBlock: ScheduledEvent | null;
+}
+
 export function deriveActualEventsFromScreenTime({
   existingActualEvents,
   screenTimeSummary,
   distractionThresholdMinutes = 10,
-  minScreenTimeBlockMinutes = 15,
+  minScreenTimeBlockMinutes = 10,
 }: DeriveActualEventsFromScreenTimeOptions): ScheduledEvent[] {
   // Prefer sessions for precise overlap detection, fallback to hourlyByApp, then aggregate hourly buckets
   const hasSessions = screenTimeSummary.appSessions && screenTimeSummary.appSessions.length > 0;
@@ -58,11 +66,47 @@ export function deriveActualEventsFromScreenTime({
     const topAppLabel = distractionInfo.topApps.length > 0 ? distractionInfo.topApps[0].appName : null;
 
     if (event.category === 'sleep') {
-      // For sleep: interpret phone time as "sleep started late" and (when possible) represent it
+      const sleepAdjustment = buildSleepStartScreenTimeAdjustment({
+        screenTimeSummary,
+        sleepEvent: event,
+        minScreenTimeMinutes: distractionThresholdMinutes,
+        maxStartOffsetMinutes: 120,
+        mergeGapMinutes: 5,
+      });
+      if (sleepAdjustment) {
+        const nextDescription = buildSleepLateDescription({
+          distractedMinutes: sleepAdjustment.screenTimeMinutes,
+          topAppName: sleepAdjustment.topAppName,
+        });
+        if (sleepAdjustment.screenTimeBlock) {
+          const overlapsNonDigital = baseActualEvents
+            .filter((e) => e.category !== 'digital' && e.id !== event.id)
+            .some((e) =>
+              intervalsOverlap(
+                sleepAdjustment.screenTimeBlock.startMinutes,
+                sleepAdjustment.screenTimeBlock.startMinutes + sleepAdjustment.screenTimeBlock.duration,
+                e.startMinutes,
+                e.startMinutes + e.duration,
+              ),
+            );
+          if (!overlapsNonDigital) {
+            sleepLateBlocks.push(sleepAdjustment.screenTimeBlock);
+          }
+        }
+        return {
+          ...event,
+          startMinutes: sleepAdjustment.sleepStartMinutes,
+          duration: sleepAdjustment.sleepDurationMinutes,
+          description: nextDescription,
+        };
+      }
+
+      // Fallback: interpret phone time as "sleep started late" and (when possible) represent it
       // as a Screen Time block immediately before sleep (only if it won't overlap other non-digital events).
-      const nextDescription = topAppLabel
-        ? `Started late (${distractedLabel} on ${topAppLabel})`
-        : `Started late (${distractedLabel} on phone)`;
+      const nextDescription = buildSleepLateDescription({
+        distractedMinutes: distractionInfo.totalMinutes,
+        topAppName: topAppLabel,
+      });
       const preSleepBlock = buildPreSleepScreenTimeBlock({
         screenTimeSummary,
         sleepEvent: event,
@@ -439,6 +483,135 @@ function buildPreSleepScreenTimeBlock(options: {
     duration: endMinutes - startMinutes,
     category: 'digital',
   };
+}
+
+function buildSleepStartScreenTimeAdjustment(options: {
+  screenTimeSummary: ScreenTimeSummary;
+  sleepEvent: ScheduledEvent;
+  minScreenTimeMinutes: number;
+  maxStartOffsetMinutes: number;
+  mergeGapMinutes: number;
+}): SleepStartAdjustment | null {
+  const {
+    screenTimeSummary,
+    sleepEvent,
+    minScreenTimeMinutes,
+    maxStartOffsetMinutes,
+    mergeGapMinutes,
+  } = options;
+  if (!screenTimeSummary.appSessions || screenTimeSummary.appSessions.length === 0) {
+    return null;
+  }
+
+  const sleepStart = clampMinutes(sleepEvent.startMinutes);
+  const sleepEnd = clampMinutes(sleepEvent.startMinutes + sleepEvent.duration);
+  if (sleepEnd <= sleepStart) return null;
+
+  const sessionIntervals = buildSleepSessionIntervals({
+    sessions: screenTimeSummary.appSessions,
+    sleepStart,
+    sleepEnd,
+  });
+  if (sessionIntervals.length === 0) return null;
+
+  const mergedIntervals = mergeIntervals(sessionIntervals, mergeGapMinutes);
+  const candidate = mergedIntervals
+    .filter(
+      (interval) =>
+        interval.durationMinutes >= minScreenTimeMinutes &&
+        interval.startMinutes - sleepStart <= maxStartOffsetMinutes,
+    )
+    .at(-1);
+  if (!candidate) return null;
+
+  const remainingMinutes = sleepEnd - candidate.endMinutes;
+  if (remainingMinutes < 15) return null;
+
+  return {
+    sleepStartMinutes: candidate.endMinutes,
+    sleepDurationMinutes: remainingMinutes,
+    screenTimeMinutes: candidate.durationMinutes,
+    topAppName: candidate.topAppName,
+    screenTimeBlock: {
+      id: `st_sleepstart_${screenTimeSummary.generatedAtIso}_${sleepEvent.id}_${candidate.startMinutes}`,
+      title: 'Screen Time',
+      description: candidate.topAppName ? toScreenTimePhrase(candidate.topAppName) : 'Phone use',
+      startMinutes: candidate.startMinutes,
+      duration: candidate.durationMinutes,
+      category: 'digital',
+    },
+  };
+}
+
+function buildSleepLateDescription(options: { distractedMinutes: number; topAppName: string | null }): string {
+  const { distractedMinutes, topAppName } = options;
+  const distractedLabel = formatMinuteLabel(distractedMinutes);
+  if (topAppName) {
+    return `Started late (Stayed up scrolling on ${topAppName}, ${distractedLabel})`;
+  }
+  return `Started late (Stayed up scrolling, ${distractedLabel})`;
+}
+
+function buildSleepSessionIntervals(options: {
+  sessions: ScreenTimeAppSession[];
+  sleepStart: number;
+  sleepEnd: number;
+}): Array<{ startMinutes: number; endMinutes: number; durationMinutes: number; topAppName: string | null }> {
+  const { sessions, sleepStart, sleepEnd } = options;
+  const intervals: Array<{ startMinutes: number; endMinutes: number; appName: string }> = [];
+
+  for (const session of sessions) {
+    const sessionStartMs = new Date(session.startedAtIso).getTime();
+    const sessionEndMs = new Date(session.endedAtIso).getTime();
+    const sessionStartMinutes = Math.floor(sessionStartMs / (60 * 1000)) % (24 * 60);
+    const sessionEndMinutes = Math.floor(sessionEndMs / (60 * 1000)) % (24 * 60);
+    const overlapStart = Math.max(sleepStart, sessionStartMinutes);
+    const overlapEnd = Math.min(sleepEnd, sessionEndMinutes);
+    if (overlapEnd <= overlapStart) continue;
+    intervals.push({
+      startMinutes: overlapStart,
+      endMinutes: overlapEnd,
+      appName: session.displayName,
+    });
+  }
+
+  intervals.sort((a, b) => a.startMinutes - b.startMinutes);
+
+  return intervals.map((interval) => ({
+    startMinutes: interval.startMinutes,
+    endMinutes: interval.endMinutes,
+    durationMinutes: interval.endMinutes - interval.startMinutes,
+    topAppName: interval.appName,
+  }));
+}
+
+function mergeIntervals(
+  intervals: Array<{ startMinutes: number; endMinutes: number; topAppName: string | null }>,
+  gapMinutes: number,
+): Array<{ startMinutes: number; endMinutes: number; durationMinutes: number; topAppName: string | null }> {
+  if (intervals.length === 0) return [];
+  const merged: Array<{ startMinutes: number; endMinutes: number; topAppName: string | null }> = [];
+
+  for (const interval of intervals) {
+    const last = merged[merged.length - 1];
+    if (!last) {
+      merged.push({ ...interval });
+      continue;
+    }
+    if (interval.startMinutes <= last.endMinutes + gapMinutes) {
+      last.endMinutes = Math.max(last.endMinutes, interval.endMinutes);
+      if (!last.topAppName && interval.topAppName) {
+        last.topAppName = interval.topAppName;
+      }
+      continue;
+    }
+    merged.push({ ...interval });
+  }
+
+  return merged.map((interval) => ({
+    ...interval,
+    durationMinutes: interval.endMinutes - interval.startMinutes,
+  }));
 }
 
 function buildDistractedDescription(event: ScheduledEvent, distractedLabel: string, topAppName: string | null): string {

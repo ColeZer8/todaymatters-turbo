@@ -12,6 +12,32 @@ import { migrateSessionToSecureStorage } from './migration';
 let supabaseUrl: string | undefined;
 let supabaseAnonKey: string | undefined;
 
+const normalizeLocalhostUrl = (value: string): string => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+      return value;
+    }
+
+    if (Platform.OS === 'android' && !Constants.isDevice) {
+      parsed.hostname = '10.0.2.2';
+      return parsed.toString();
+    }
+
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (!hostUri) return value;
+
+    const hostUrl = hostUri.includes('://') ? hostUri : `http://${hostUri}`;
+    const hostParsed = new URL(hostUrl);
+    if (!hostParsed.hostname) return value;
+
+    parsed.hostname = hostParsed.hostname;
+    return parsed.toString();
+  } catch {
+    return value;
+  }
+};
+
 // Check if centralized config is available (from app.config.js extra field)
 const extra = Constants.expoConfig?.extra;
 if (extra?.supabaseUrl && extra?.supabaseAnonKey) {
@@ -30,9 +56,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+const normalizedSupabaseUrl = normalizeLocalhostUrl(supabaseUrl);
+if (__DEV__ && normalizedSupabaseUrl !== supabaseUrl) {
+  // eslint-disable-next-line no-console
+  console.log('🔌 Supabase URL normalized for device:', normalizedSupabaseUrl);
+}
+
 // Export the resolved values for modules that need to call Edge Functions via raw fetch
 // (useful for richer error messages than `supabase.functions.invoke` provides).
-export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_URL = normalizedSupabaseUrl;
 export const SUPABASE_ANON_KEY = supabaseAnonKey;
 
 // Check if we're in a server-side rendering environment (Expo Router static rendering)
@@ -62,7 +94,7 @@ if (!isSSR && !isWeb) {
   });
 }
 
-export const supabase = createClient<Database, 'tm'>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database, 'tm'>(normalizedSupabaseUrl, supabaseAnonKey, {
   db: {
     schema: 'tm', // Use tm schema instead of public
   },

@@ -1,5 +1,6 @@
 // Calendar utilities
 export * from './derive-screen-time-actual-events';
+export * from './actual-display-events';
 export * from './mock-planned-events';
 
 // Verification system
