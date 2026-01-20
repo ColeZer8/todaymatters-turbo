@@ -462,6 +462,11 @@ function buildPlannedActualEvent(options: {
         planned.category === 'sleep'
           ? {
               asleepMinutes: sleepQuality?.asleepMinutes,
+              deepMinutes: sleepQuality?.deepMinutes ?? null,
+              remMinutes: sleepQuality?.remMinutes ?? null,
+              awakeMinutes: sleepQuality?.awakeMinutes ?? null,
+              inBedMinutes: sleepQuality?.inBedMinutes ?? null,
+              wakeTimeMinutes: sleepQuality?.wakeTimeMinutes ?? null,
               hrvMs: sleepQuality?.hrvMs ?? null,
               restingHeartRateBpm: sleepQuality?.restingHeartRateBpm ?? null,
               heartRateAvgBpm: sleepQuality?.heartRateAvgBpm ?? null,

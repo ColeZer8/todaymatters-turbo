@@ -447,6 +447,7 @@ interface DemoOverviewGoalsProps {
 
 export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) => {
   const insets = useSafeAreaInsets();
+  const isIos = Platform.OS === 'ios';
   const [isEditing, setIsEditing] = useState(false);
   
   // Goals store
@@ -673,7 +674,8 @@ export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) 
   // Standalone mode - full layout with KeyboardAvoidingView, ScrollView, etc.
   return (
     <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={isIos ? 'padding' : undefined}
+      enabled={isIos}
       className="flex-1 bg-[#F7FAFF]"
     >
       <View
@@ -694,7 +696,6 @@ export const DemoOverviewGoals = ({ embedded = false }: DemoOverviewGoalsProps) 
     </KeyboardAvoidingView>
   );
 };
-
 
 
 

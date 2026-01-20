@@ -1,4 +1,4 @@
-import type { ScheduledEvent, EventCategory } from '@/stores';
+import type { ScheduledEvent, EventCategory, VerificationStrictness } from '@/stores';
 import {
   type EvidenceBundle,
   type LocationHourlyRow,
@@ -96,6 +96,42 @@ export interface VerificationReport {
   suggestions: string[];
 }
 
+export interface VerificationThresholds {
+  verifiedMin: number;
+  partialMin: number;
+  mostlyVerifiedMin: number;
+  timingVarianceMinutes: number;
+}
+
+export const DEFAULT_VERIFICATION_THRESHOLDS: VerificationThresholds = {
+  verifiedMin: 0.7,
+  partialMin: 0.3,
+  mostlyVerifiedMin: 0.85,
+  timingVarianceMinutes: 15,
+};
+
+export function getVerificationThresholds(
+  strictness: VerificationStrictness | undefined
+): VerificationThresholds {
+  if (strictness === 'lenient') {
+    return {
+      verifiedMin: 0.6,
+      partialMin: 0.2,
+      mostlyVerifiedMin: 0.78,
+      timingVarianceMinutes: 20,
+    };
+  }
+  if (strictness === 'strict') {
+    return {
+      verifiedMin: 0.8,
+      partialMin: 0.4,
+      mostlyVerifiedMin: 0.9,
+      timingVarianceMinutes: 10,
+    };
+  }
+  return DEFAULT_VERIFICATION_THRESHOLDS;
+}
+
 export interface ActualBlock {
   id: string;
   title: string;
@@ -124,6 +160,7 @@ export function verifyEvent(
   evidence: EvidenceBundle,
   ymd: string,
   appCategoryOverrides?: AppCategoryOverrides,
+  thresholds: VerificationThresholds = DEFAULT_VERIFICATION_THRESHOLDS,
 ): VerificationResult {
   const rule = getVerificationRule(event.category);
   const eventEndMinutes = event.startMinutes + event.duration;
@@ -356,11 +393,12 @@ export function verifyEvent(
     const lateMinutes = earliest - event.startMinutes;
     const extendedMinutes = latest - eventEndMinutes;
     const shortenedMinutes = eventEndMinutes - latest;
+    const timingVariance = thresholds.timingVarianceMinutes;
     timing = {
-      earlyMinutes: earlyMinutes >= 15 ? earlyMinutes : undefined,
-      lateMinutes: lateMinutes >= 15 ? lateMinutes : undefined,
-      extendedMinutes: extendedMinutes >= 15 ? extendedMinutes : undefined,
-      shortenedMinutes: shortenedMinutes >= 15 ? shortenedMinutes : undefined,
+      earlyMinutes: earlyMinutes >= timingVariance ? earlyMinutes : undefined,
+      lateMinutes: lateMinutes >= timingVariance ? lateMinutes : undefined,
+      extendedMinutes: extendedMinutes >= timingVariance ? extendedMinutes : undefined,
+      shortenedMinutes: shortenedMinutes >= timingVariance ? shortenedMinutes : undefined,
     };
   }
 
@@ -380,9 +418,9 @@ export function verifyEvent(
     status = 'contradicted';
   } else if (wasDistracted) {
     status = 'distracted';
-  } else if (confidence >= 0.7) {
+  } else if (confidence >= thresholds.verifiedMin) {
     status = 'verified';
-  } else if (confidence >= 0.3) {
+  } else if (confidence >= thresholds.partialMin) {
     status = 'partial';
   } else if (maxScore === 0 || rule.verifyWith.length === 0) {
     // Can't verify categories with no evidence requirements
@@ -397,7 +435,7 @@ export function verifyEvent(
     if (timing?.lateMinutes) timingStatus = 'late';
     if (timing?.shortenedMinutes) timingStatus = 'shortened';
     if (timing?.extendedMinutes) timingStatus = 'extended';
-    if (!timingStatus && status === 'verified' && confidence >= 0.85) {
+    if (!timingStatus && status === 'verified' && confidence >= thresholds.mostlyVerifiedMin) {
       timingStatus = 'mostly_verified';
     } else if (!timingStatus && status === 'partial') {
       timingStatus = 'partially_verified';
@@ -530,11 +568,12 @@ export function verifyPlannedEvents(
   evidence: EvidenceBundle,
   ymd: string,
   appCategoryOverrides?: AppCategoryOverrides,
+  thresholds: VerificationThresholds = DEFAULT_VERIFICATION_THRESHOLDS,
 ): Map<string, VerificationResult> {
   const results = new Map<string, VerificationResult>();
 
   for (const event of plannedEvents) {
-    const result = verifyEvent(event, evidence, ymd, appCategoryOverrides);
+    const result = verifyEvent(event, evidence, ymd, appCategoryOverrides, thresholds);
     results.set(event.id, result);
   }
 

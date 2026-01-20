@@ -7,12 +7,16 @@ interface PersonalizationTemplateProps {
   autoSuggestEvents: boolean;
   verificationAlerts: boolean;
   realTimeUpdates: boolean;
+  verificationStrictness: 'lenient' | 'balanced' | 'strict';
   isSaving: boolean;
+  appOverridesCount: number;
   onSelectGapFilling: (value: GapFillingPreference) => void;
   onSelectConfidence: (value: number) => void;
   onToggleAutoSuggest: (value: boolean) => void;
   onToggleVerificationAlerts: (value: boolean) => void;
   onToggleRealTimeUpdates: (value: boolean) => void;
+  onSelectVerificationStrictness: (value: 'lenient' | 'balanced' | 'strict') => void;
+  onOpenAppOverrides: () => void;
   onSave: () => void;
 }
 
@@ -24,12 +28,16 @@ export const PersonalizationTemplate = ({
   autoSuggestEvents,
   verificationAlerts,
   realTimeUpdates,
+  verificationStrictness,
   isSaving,
+  appOverridesCount,
   onSelectGapFilling,
   onSelectConfidence,
   onToggleAutoSuggest,
   onToggleVerificationAlerts,
   onToggleRealTimeUpdates,
+  onSelectVerificationStrictness,
+  onOpenAppOverrides,
   onSave,
 }: PersonalizationTemplateProps) => {
   return (
@@ -93,6 +101,32 @@ export const PersonalizationTemplate = ({
         </View>
 
         <View className="mt-4 px-4 py-4 rounded-2xl border border-[#E2E8F0] bg-white">
+          <Text className="text-[13px] font-semibold text-[#0F172A]">Verification strictness</Text>
+          <View className="mt-3 flex-row flex-wrap gap-2">
+            {(['lenient', 'balanced', 'strict'] as const).map((option) => {
+              const isActive = verificationStrictness === option;
+              const label = option === 'lenient' ? 'Lenient' : option === 'strict' ? 'Strict' : 'Balanced';
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => onSelectVerificationStrictness(option)}
+                  className={`px-4 py-2 rounded-full border ${
+                    isActive ? 'border-[#10B981] bg-[#ECFDF3]' : 'border-[#E2E8F0] bg-white'
+                  }`}
+                >
+                  <Text className={`text-[12px] font-semibold ${isActive ? 'text-[#10B981]' : 'text-[#475569]'}`}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text className="mt-3 text-[12px] text-[#94A3B8]">
+            Lenient marks more events verified; strict requires stronger evidence.
+          </Text>
+        </View>
+
+        <View className="mt-4 px-4 py-4 rounded-2xl border border-[#E2E8F0] bg-white">
           <Text className="text-[13px] font-semibold text-[#0F172A]">Suggestions & alerts</Text>
           <View className="mt-3 flex-row items-center justify-between">
             <Text className="text-[12px] text-[#475569]">Auto-suggest events</Text>
@@ -107,6 +141,19 @@ export const PersonalizationTemplate = ({
             <Switch value={realTimeUpdates} onValueChange={onToggleRealTimeUpdates} />
           </View>
         </View>
+
+        <Pressable
+          onPress={onOpenAppOverrides}
+          className="mt-4 flex-row items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white px-4 py-4"
+        >
+          <View>
+            <Text className="text-[13px] font-semibold text-[#0F172A]">App category overrides</Text>
+            <Text className="mt-1 text-[12px] text-[#64748B]">
+              {appOverridesCount} saved override{appOverridesCount === 1 ? '' : 's'}
+            </Text>
+          </View>
+          <Text className="text-[12px] font-semibold text-[#2563EB]">Manage</Text>
+        </Pressable>
 
         <Pressable
           onPress={onSave}

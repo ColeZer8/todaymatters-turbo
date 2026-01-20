@@ -2,13 +2,18 @@ import { Stack } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { PatternInsightsTemplate } from '@/components/templates/PatternInsightsTemplate';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
-import { buildPatternIndex } from '@/lib/calendar/pattern-recognition';
+import {
+  buildPatternIndex,
+  buildPatternIndexFromSlots,
+  serializePatternIndex,
+} from '@/lib/calendar/pattern-recognition';
 import {
   buildDailyPatternAnomalies,
   buildPatternPredictions,
 } from '@/lib/calendar/pattern-recognition';
 import { useAuthStore, useEventsStore, useUserPreferencesStore } from '@/stores';
 import type { ScheduledEvent } from '@/stores';
+import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
 
 const formatMinutesToTime = (totalMinutes: number): string => {
   const minutes = Math.max(0, totalMinutes);
@@ -73,10 +78,22 @@ export default function PatternInsightsScreen() {
       start.setDate(start.getDate() - 14);
       const startYmd = dateToYmd(start);
       const endYmd = dateToYmd(baseDate);
+      const stored = await fetchActivityPatterns(userId);
+      if (cancelled) return;
+      if (stored?.slots?.length) {
+        setPatternIndex(buildPatternIndexFromSlots(stored.slots));
+      }
       const history = await loadActualForRange(startYmd, endYmd);
       if (cancelled) return;
       const filtered = history.filter((entry) => entry.ymd !== selectedDateYmd);
-      setPatternIndex(buildPatternIndex(filtered));
+      const nextIndex = buildPatternIndex(filtered);
+      setPatternIndex(nextIndex);
+      await upsertActivityPatterns({
+        userId,
+        slots: serializePatternIndex(nextIndex),
+        windowStartYmd: startYmd,
+        windowEndYmd: endYmd,
+      });
     };
     void run();
     return () => {

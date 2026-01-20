@@ -49,14 +49,16 @@ export const SignInTemplate = ({
   onNavigateToSignUp,
   onNavigateToForgotPassword,
 }: SignInTemplateProps) => {
+  const isIos = Platform.OS === 'ios';
+
   return (
     <View className="flex-1 bg-[#F7FAFF]">
       <StatusBar style="dark" />
       <SafeAreaView className="flex-1">
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          enabled
+          behavior={isIos ? 'padding' : undefined}
+          enabled={isIos}
           keyboardVerticalOffset={0}
         >
           <ScrollView

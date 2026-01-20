@@ -158,6 +158,21 @@ export default function ActualAdjustScreen() {
     if (meta.evidence?.sleep?.asleepMinutes !== undefined) {
       rows.push({ label: 'Asleep', value: `${meta.evidence.sleep.asleepMinutes} min` });
     }
+    if (meta.evidence?.sleep?.deepMinutes !== undefined && meta.evidence.sleep.deepMinutes !== null) {
+      rows.push({ label: 'Deep sleep', value: `${meta.evidence.sleep.deepMinutes} min` });
+    }
+    if (meta.evidence?.sleep?.remMinutes !== undefined && meta.evidence.sleep.remMinutes !== null) {
+      rows.push({ label: 'REM sleep', value: `${meta.evidence.sleep.remMinutes} min` });
+    }
+    if (meta.evidence?.sleep?.awakeMinutes !== undefined && meta.evidence.sleep.awakeMinutes !== null) {
+      rows.push({ label: 'Awake', value: `${meta.evidence.sleep.awakeMinutes} min` });
+    }
+    if (meta.evidence?.sleep?.inBedMinutes !== undefined && meta.evidence.sleep.inBedMinutes !== null) {
+      rows.push({ label: 'In bed', value: `${meta.evidence.sleep.inBedMinutes} min` });
+    }
+    if (meta.evidence?.sleep?.wakeTimeMinutes !== undefined && meta.evidence.sleep.wakeTimeMinutes !== null) {
+      rows.push({ label: 'Wake time', value: formatMinutesToTime(meta.evidence.sleep.wakeTimeMinutes) });
+    }
     if (meta.evidence?.sleep?.qualityScore !== undefined && meta.evidence.sleep.qualityScore !== null) {
       rows.push({ label: 'Sleep quality', value: `${meta.evidence.sleep.qualityScore}%` });
     }

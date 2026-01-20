@@ -1,9 +1,17 @@
 import { Alert } from 'react-native';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AddEventTemplate } from '../components/templates/AddEventTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
-import { useEventsStore } from '@/stores';
+import { useAuthStore, useEventsStore, useUserPreferencesStore } from '@/stores';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+import {
+    buildPatternIndex,
+    buildPatternIndexFromSlots,
+    serializePatternIndex,
+    type PatternIndex,
+} from '@/lib/calendar/pattern-recognition';
+import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
 
 export default function AddEventScreen() {
     const router = useRouter();
@@ -11,7 +19,10 @@ export default function AddEventScreen() {
     const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
     const addScheduledEvent = useEventsStore((s) => s.addScheduledEvent);
     const addActualEvent = useEventsStore((s) => s.addActualEvent);
-    const { createPlanned, createActual } = useCalendarEventsSync({
+    const userId = useAuthStore((s) => s.user?.id ?? null);
+    const preferences = useUserPreferencesStore((s) => s.preferences);
+    const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
+    const { createPlanned, createActual, loadActualForRange } = useCalendarEventsSync({
         onError: (error) => {
             Alert.alert('Unable to save event', error.message);
         },
@@ -22,10 +33,49 @@ export default function AddEventScreen() {
     const initialDate = ymdToDate(ymd);
     const initialStartMinutes = params.startMinutes ? parseInt(params.startMinutes, 10) : undefined;
 
+    useEffect(() => {
+        if (!userId || !preferences.autoSuggestEvents) {
+            setPatternIndex(null);
+            return;
+        }
+        let cancelled = false;
+        const run = async () => {
+            const stored = await fetchActivityPatterns(userId);
+            if (cancelled) return;
+            if (stored?.slots?.length) {
+                setPatternIndex(buildPatternIndexFromSlots(stored.slots));
+                return;
+            }
+            const baseDate = ymdToDate(ymd);
+            const start = new Date(baseDate);
+            start.setDate(start.getDate() - 14);
+            const startYmd = dateToYmd(start);
+            const endYmd = dateToYmd(baseDate);
+            const history = await loadActualForRange(startYmd, endYmd);
+            if (cancelled) return;
+            const filtered = history.filter((entry) => entry.ymd !== ymd);
+            const nextIndex = buildPatternIndex(filtered);
+            setPatternIndex(nextIndex);
+            await upsertActivityPatterns({
+                userId,
+                slots: serializePatternIndex(nextIndex),
+                windowStartYmd: startYmd,
+                windowEndYmd: endYmd,
+            });
+        };
+        void run();
+        return () => {
+            cancelled = true;
+        };
+    }, [loadActualForRange, preferences.autoSuggestEvents, userId, ymd]);
+
     return (
         <AddEventTemplate
             initialDate={initialDate}
             initialStartMinutes={initialStartMinutes}
+            patternIndex={patternIndex}
+            patternMinConfidence={preferences.confidenceThreshold}
+            allowAutoSuggestions={preferences.autoSuggestEvents}
             onClose={() => router.back()}
             onSave={async (draft) => {
                 const title = draft.title.trim();
@@ -73,6 +123,14 @@ export default function AddEventScreen() {
                         });
                     }
 
+                    const suggestionMeta =
+                        draft.patternSuggestion?.applied
+                            ? {
+                                  suggested_category: draft.patternSuggestion.category,
+                                  confidence: draft.patternSuggestion.confidence,
+                              }
+                            : {};
+
                     const created =
                         column === 'actual'
                             ? await createActual({
@@ -89,7 +147,12 @@ export default function AddEventScreen() {
                                   location: draft.location,
                                   scheduledStartIso: start.toISOString(),
                                   scheduledEndIso: end.toISOString(),
-                                  meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
+                                  meta: {
+                                      category: draft.category,
+                                      isBig3: draft.isBig3,
+                                      source: 'user',
+                                      ...suggestionMeta,
+                                  },
                               });
 
                     if (__DEV__) {

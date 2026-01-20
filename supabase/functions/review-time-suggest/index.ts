@@ -102,11 +102,20 @@ serve(async (req: Request) => {
     const model = modelResult.value ?? 'claude-3-5-sonnet-20240620';
 
     if (!anthropicApiKey) {
+      console.error('ANTHROPIC_API_KEY lookup failed:', {
+        source: anthropicKeyResult.source,
+        path: anthropicKeyResult.path,
+        denoEnvKeys: Object.keys(Deno.env.toObject()).filter((k) => k.includes('ANTHROPIC')),
+      });
       return new Response(
         JSON.stringify({
           error: 'Missing ANTHROPIC_API_KEY',
           hint:
-            'For local testing, add ANTHROPIC_API_KEY to project .env or supabase/.env. For deployed, set Supabase secrets.',
+            'For local testing, add ANTHROPIC_API_KEY to supabase/.env and restart Supabase CLI. For deployed, use: supabase secrets set ANTHROPIC_API_KEY=your_key',
+          debug: {
+            source: anthropicKeyResult.source,
+            path: anthropicKeyResult.path,
+          },
         }),
         {
           status: 500,
@@ -234,11 +243,13 @@ type ConfigSource = 'denoEnv' | 'dotenvFile' | 'missing';
 async function getConfigValue(
   key: string
 ): Promise<{ value: string | null; source: ConfigSource; path?: string }> {
+  // First, check Deno.env (this is how Supabase CLI loads .env files in local dev)
   const fromEnv = Deno.env.get(key);
   if (fromEnv != null && fromEnv.trim() !== '') {
     return { value: fromEnv, source: 'denoEnv' };
   }
 
+  // Fallback: try reading .env files directly (for local development edge cases)
   const candidates = [
     join(PROJECT_ROOT, '.env'),
     join(PROJECT_ROOT, 'supabase', '.env'),
@@ -252,8 +263,13 @@ async function getConfigValue(
       if (val != null && val.trim() !== '') {
         return { value: val, source: 'dotenvFile', path };
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      // Log but don't fail - file might not exist
+      // Only log in local development (when Deno.env has SUPABASE_URL pointing to localhost)
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      if (supabaseUrl.includes('localhost') || supabaseUrl.includes('127.0.0.1')) {
+        console.debug(`Failed to read ${path}:`, err);
+      }
     }
   }
 
@@ -267,7 +283,7 @@ async function readDotenv(path: string): Promise<Record<string, string>> {
 
 function parseDotenv(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const lines = text.split('\\n');
+  const lines = text.split('\n');
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
@@ -275,7 +291,7 @@ function parseDotenv(text: string): Record<string, string> {
     if (idx == -1) continue;
     const key = line.slice(0, idx).trim();
     let val = line.slice(idx + 1).trim();
-    if ((val.startsWith('\"') && val.endsWith('\"')) || (val.startsWith(\"'\") && val.endsWith(\"'\"))) {
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
     out[key] = val;

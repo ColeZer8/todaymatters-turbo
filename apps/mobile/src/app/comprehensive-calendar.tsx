@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { Alert, AppState, AppStateStatus, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
@@ -26,14 +26,21 @@ import {
 } from '@/lib/android-insights';
 import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
 import { buildActualDisplayEvents } from '@/lib/calendar/actual-display-events';
-import { buildPatternIndex, type PatternIndex } from '@/lib/calendar/pattern-recognition';
+import {
+  buildPatternIndex,
+  buildPatternIndexFromSlots,
+  serializePatternIndex,
+  type PatternIndex,
+} from '@/lib/calendar/pattern-recognition';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
 import { useVerification } from '@/lib/calendar/use-verification';
 import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
+import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
 import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
 import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
 import { DEFAULT_USER_PREFERENCES } from '@/stores/user-preferences-store';
+import { supabase } from '@/lib/supabase/client';
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -81,15 +88,20 @@ export default function ComprehensiveCalendarScreen() {
     });
 
   // Verification: cross-reference planned events with evidence (location, screen time, health)
-  const { actualBlocks, evidence, verificationResults } = useVerification(plannedEvents, selectedDateYmd, {
+  const { actualBlocks, evidence, verificationResults, refresh: refreshVerification } = useVerification(
+    plannedEvents,
+    selectedDateYmd,
+    {
     autoFetch: true,
     appCategoryOverrides,
+    verificationStrictness: userPreferences.verificationStrictness,
     onError: (err) => {
       if (__DEV__) {
         console.warn('[Calendar] Verification error:', err.message);
       }
     },
-  });
+    },
+  );
 
   const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
 
@@ -198,10 +210,22 @@ export default function ComprehensiveCalendarScreen() {
       start.setDate(start.getDate() - 14);
       const startYmd = dateToYmd(start);
       const endYmd = dateToYmd(baseDate);
+      const stored = await fetchActivityPatterns(userId);
+      if (cancelled) return;
+      if (stored?.slots?.length) {
+        setPatternIndex(buildPatternIndexFromSlots(stored.slots));
+      }
       const history = await loadActualForRange(startYmd, endYmd);
       if (cancelled) return;
       const filtered = history.filter((entry) => entry.ymd !== selectedDateYmd);
-      setPatternIndex(buildPatternIndex(filtered));
+      const nextIndex = buildPatternIndex(filtered);
+      setPatternIndex(nextIndex);
+      await upsertActivityPatterns({
+        userId,
+        slots: serializePatternIndex(nextIndex),
+        windowStartYmd: startYmd,
+        windowEndYmd: endYmd,
+      });
     };
     void run();
     return () => {
@@ -271,6 +295,91 @@ export default function ComprehensiveCalendarScreen() {
     if (!isMountedRef.current) return;
     setActualEventsForDate(selectedDateYmd, events);
   }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, userId]);
+
+  useEffect(() => {
+    if (!userId || !userPreferences.realTimeUpdates) return;
+    const channel = supabase.channel(`tm-events-${userId}`);
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'tm',
+        table: 'events',
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        void loadPlannedForDay(selectedDateYmd).then((events) => {
+          setPlannedEventsForDate(selectedDateYmd, events);
+        });
+        void refreshActualEventsForSelectedDay();
+      },
+    );
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'tm',
+        table: 'screen_time_app_sessions',
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        void refreshVerification();
+      },
+    );
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'tm',
+        table: 'health_workouts',
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        void refreshVerification();
+      },
+    );
+    channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'tm',
+        table: 'location_hourly',
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        void refreshVerification();
+      },
+    );
+    channel.subscribe();
+    return () => {
+      void channel.unsubscribe();
+    };
+  }, [
+    loadPlannedForDay,
+    refreshActualEventsForSelectedDay,
+    refreshVerification,
+    selectedDateYmd,
+    setPlannedEventsForDate,
+    userId,
+    userPreferences.realTimeUpdates,
+  ]);
+
+  const lastAlertRef = useRef<string>('');
+  useEffect(() => {
+    if (!userPreferences.verificationAlerts) return;
+    if (!verificationResults || verificationResults.size === 0) return;
+    const flagged = plannedEvents.filter((event) => {
+      const result = verificationResults.get(event.id);
+      return result?.status === 'contradicted' || result?.status === 'distracted';
+    });
+    if (flagged.length === 0) return;
+    const alertKey = flagged.map((event) => event.id).join('|');
+    if (alertKey === lastAlertRef.current) return;
+    lastAlertRef.current = alertKey;
+    const preview = flagged.slice(0, 3).map((event) => event.title).join(', ');
+    const suffix = flagged.length > 3 ? '…' : '';
+    Alert.alert('Verification alert', `We found conflicts for: ${preview}${suffix}`);
+  }, [plannedEvents, userPreferences.verificationAlerts, verificationResults]);
 
   useEffect(() => {
     // Derive “display actual” events when Screen Time is present; otherwise clear derivation.

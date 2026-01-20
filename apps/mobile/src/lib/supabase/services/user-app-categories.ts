@@ -73,6 +73,83 @@ export async function fetchUserAppCategoryOverrides(userId: string): Promise<App
   }
 }
 
+export async function fetchUserAppCategoryDetails(userId: string): Promise<UserAppCategoryFeedbackResult[]> {
+  try {
+    const { data, error } = await tmSchema()
+      .from('user_app_categories')
+      .select('app_key, app_name, category, confidence, sample_count')
+      .eq('user_id', userId)
+      .order('app_name', { ascending: true });
+
+    if (error) throw handleSupabaseError(error);
+    return (data ?? []).map((row) => rowToOverride(row as UserAppCategoryRow));
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[UserAppCategories] Failed to fetch details:', error);
+    }
+    return [];
+  }
+}
+
+export async function upsertUserAppCategoryOverride(options: {
+  userId: string;
+  appKey: string;
+  appName: string | null;
+  category: EventCategory;
+  confidence?: number;
+  sampleCount?: number;
+}): Promise<UserAppCategoryFeedbackResult | null> {
+  const { userId, appKey, appName, category, confidence = CONFIDENCE_RESET, sampleCount } = options;
+  if (!appKey) return null;
+  try {
+    const { data, error } = await tmSchema()
+      .from('user_app_categories')
+      .upsert(
+        {
+          user_id: userId,
+          app_key: appKey,
+          app_name: appName,
+          category,
+          confidence,
+          sample_count: sampleCount ?? 1,
+          last_corrected_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id, app_key' },
+      )
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw handleSupabaseError(error);
+    return data ? rowToOverride(data as UserAppCategoryRow) : null;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[UserAppCategories] Failed to upsert override:', error);
+    }
+    return null;
+  }
+}
+
+export async function removeUserAppCategoryOverride(options: {
+  userId: string;
+  appKey: string;
+}): Promise<boolean> {
+  const { userId, appKey } = options;
+  try {
+    const { error } = await tmSchema()
+      .from('user_app_categories')
+      .delete()
+      .eq('user_id', userId)
+      .eq('app_key', appKey);
+    if (error) throw handleSupabaseError(error);
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[UserAppCategories] Failed to remove override:', error);
+    }
+    return false;
+  }
+}
+
 export async function applyUserAppCategoryFeedback(options: {
   userId: string;
   appName: string;

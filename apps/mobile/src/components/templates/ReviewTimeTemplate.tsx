@@ -16,7 +16,7 @@ import {
 } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 import { TimeSplitControl } from '@/components/molecules';
-import { useReviewTimeStore, useAuthStore, useEventsStore, type EventCategory } from '@/stores';
+import { useReviewTimeStore, useAuthStore, useEventsStore, type EventCategory, type ScheduledEvent, type TimeBlock } from '@/stores';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { fetchAllEvidenceForDay } from '@/lib/supabase/services/evidence-data';
 import { buildReviewTimeBlocks } from '@/lib/calendar/review-time-blocks';
@@ -50,7 +50,25 @@ const formatDuration = (minutes: number): string => {
   return `${minutes}m`;
 };
 
-export const ReviewTimeTemplate = () => {
+const formatMinutesToTime = (totalMinutes: number): string => {
+  const hours24 = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+interface ReviewTimeTemplateProps {
+  focusBlock?: {
+    id: string;
+    startMinutes: number;
+    duration: number;
+    title?: string;
+    description?: string;
+  };
+}
+
+export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -88,6 +106,51 @@ export const ReviewTimeTemplate = () => {
 
   const { loadActualForDay, createActual, updateActual } = useCalendarEventsSync();
 
+  const focusTimeBlock = useMemo<TimeBlock | null>(() => {
+    if (!focusBlock) return null;
+    if (!Number.isFinite(focusBlock.startMinutes) || !Number.isFinite(focusBlock.duration)) return null;
+    const startMinutes = Math.max(0, Math.round(focusBlock.startMinutes));
+    const duration = Math.max(1, Math.round(focusBlock.duration));
+    const rawTitle = focusBlock.title?.trim();
+    const rawDescription = focusBlock.description?.trim();
+    const description = rawDescription && rawDescription !== 'Tap to assign' ? rawDescription : '';
+
+    return {
+      id: focusBlock.id,
+      sourceId: `unknown:${focusBlock.id}`,
+      source: 'unknown',
+      title: rawTitle || 'Unknown',
+      description,
+      duration,
+      startMinutes,
+      startTime: formatMinutesToTime(startMinutes),
+      endTime: formatMinutesToTime(startMinutes + duration),
+      activityDetected: 'No activity detected',
+    };
+  }, [focusBlock]);
+
+  const mergeFocusBlock = useCallback(
+    (blocks: TimeBlock[], actualEvents: ScheduledEvent[]) => {
+      if (!focusTimeBlock) return blocks;
+      const focusStart = focusTimeBlock.startMinutes;
+      const focusEnd = focusStart + focusTimeBlock.duration;
+      const hasNonUnknownOverlap = actualEvents.some((event) => {
+        if (event.category === 'unknown') return false;
+        const eventStart = event.startMinutes;
+        const eventEnd = event.startMinutes + event.duration;
+        return eventEnd > focusStart && eventStart < focusEnd;
+      });
+
+      if (hasNonUnknownOverlap) return blocks;
+      const alreadyIncluded = blocks.some(
+        (block) => block.id === focusTimeBlock.id || block.eventId === focusTimeBlock.id
+      );
+      if (alreadyIncluded) return blocks;
+      return [...blocks, focusTimeBlock].sort((a, b) => a.startMinutes - b.startMinutes);
+    },
+    [focusTimeBlock]
+  );
+
   const totalUnassigned = timeBlocks.reduce((sum, block) => {
     if (!assignments[block.id]) return sum + block.duration;
     return sum;
@@ -109,7 +172,7 @@ export const ReviewTimeTemplate = () => {
       setActualEventsForDate(selectedDateYmd, events);
       const evidence = await fetchAllEvidenceForDay(userId, selectedDateYmd);
       const blocks = buildReviewTimeBlocks({ ymd: selectedDateYmd, evidence, actualEvents: events });
-      setTimeBlocks(blocks);
+      setTimeBlocks(mergeFocusBlock(blocks, events));
     } catch (error) {
       if (__DEV__) {
         console.error('[ReviewTime] Failed to load blocks:', error);
@@ -117,7 +180,7 @@ export const ReviewTimeTemplate = () => {
     } finally {
       setIsLoadingBlocks(false);
     }
-  }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, setTimeBlocks, userId]);
+  }, [loadActualForDay, mergeFocusBlock, selectedDateYmd, setActualEventsForDate, setTimeBlocks, userId]);
 
   useEffect(() => {
     void refreshBlocks();

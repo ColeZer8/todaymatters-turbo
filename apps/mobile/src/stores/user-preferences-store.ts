@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 export type GapFillingPreference = 'conservative' | 'aggressive' | 'manual';
+export type VerificationStrictness = 'lenient' | 'balanced' | 'strict';
 
 export interface UserDataPreferences {
   gapFillingPreference: GapFillingPreference;
@@ -8,6 +9,7 @@ export interface UserDataPreferences {
   autoSuggestEvents: boolean;
   verificationAlerts: boolean;
   realTimeUpdates: boolean;
+  verificationStrictness: VerificationStrictness;
 }
 
 export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
@@ -16,6 +18,7 @@ export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
   autoSuggestEvents: true,
   verificationAlerts: true,
   realTimeUpdates: false,
+  verificationStrictness: 'balanced',
 };
 
 interface UserPreferencesState {

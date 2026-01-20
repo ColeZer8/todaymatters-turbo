@@ -3,6 +3,7 @@ import { handleSupabaseError } from '../utils/error-handler';
 import {
   DEFAULT_USER_PREFERENCES,
   type GapFillingPreference,
+  type VerificationStrictness,
   type UserDataPreferences,
 } from '@/stores/user-preferences-store';
 
@@ -17,6 +18,7 @@ interface GapFillingPreferencesPayload {
   autoSuggestEvents?: boolean;
   verificationAlerts?: boolean;
   realTimeUpdates?: boolean;
+  verificationStrictness?: VerificationStrictness;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,6 +34,11 @@ function parseGapFillingPreferences(value: unknown): GapFillingPreferencesPayloa
 function coerceGapFillingPreference(value: unknown): GapFillingPreference {
   if (value === 'aggressive' || value === 'manual') return value;
   return 'conservative';
+}
+
+function coerceVerificationStrictness(value: unknown): VerificationStrictness {
+  if (value === 'lenient' || value === 'strict') return value;
+  return 'balanced';
 }
 
 function mergePreferences(payload: GapFillingPreferencesPayload | null): UserDataPreferences {
@@ -55,6 +62,7 @@ function mergePreferences(payload: GapFillingPreferencesPayload | null): UserDat
       typeof payload.realTimeUpdates === 'boolean'
         ? payload.realTimeUpdates
         : defaults.realTimeUpdates,
+    verificationStrictness: coerceVerificationStrictness(payload.verificationStrictness),
   };
 }
 
@@ -90,6 +98,7 @@ export async function upsertUserDataPreferences(options: {
     autoSuggestEvents: preferences.autoSuggestEvents,
     verificationAlerts: preferences.verificationAlerts,
     realTimeUpdates: preferences.realTimeUpdates,
+    verificationStrictness: preferences.verificationStrictness,
   };
 
   try {

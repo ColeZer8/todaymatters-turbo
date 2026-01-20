@@ -35,6 +35,8 @@ export const ConfirmEmailTemplate = ({
   onResend,
   onBackToSignIn,
 }: ConfirmEmailTemplateProps) => {
+  const isIos = Platform.OS === 'ios';
+
   return (
     <LinearGradient
       colors={['#f5f9ff', '#eef5ff']}
@@ -47,8 +49,8 @@ export const ConfirmEmailTemplate = ({
       <SafeAreaView className="flex-1" style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          enabled
+          behavior={isIos ? 'padding' : undefined}
+          enabled={isIos}
           keyboardVerticalOffset={0}
         >
           <ScrollView

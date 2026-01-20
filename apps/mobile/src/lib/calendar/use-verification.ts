@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { useAuthStore, type ScheduledEvent, type EventCategory } from '@/stores';
+import { useAuthStore, type ScheduledEvent, type EventCategory, type VerificationStrictness } from '@/stores';
 import { fetchAllEvidenceForDay, type EvidenceBundle } from '@/lib/supabase/services/evidence-data';
 import {
   verifyPlannedEvents,
@@ -7,6 +7,7 @@ import {
   type VerificationResult,
   type ActualBlock,
   type VerificationStatus,
+  getVerificationThresholds,
 } from './verification-engine';
 import type { AppCategoryOverrides } from './app-classification';
 
@@ -24,6 +25,8 @@ export interface UseVerificationOptions {
   onError?: (error: Error) => void;
   /** User-specific app category overrides */
   appCategoryOverrides?: AppCategoryOverrides;
+  /** User strictness preference */
+  verificationStrictness?: VerificationStrictness;
 }
 
 export interface UseVerificationReturn {
@@ -71,7 +74,7 @@ export function useVerification(
   ymd: string,
   options: UseVerificationOptions = {}
 ): UseVerificationReturn {
-  const { autoFetch = true, onError, appCategoryOverrides } = options;
+  const { autoFetch = true, onError, appCategoryOverrides, verificationStrictness } = options;
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -105,7 +108,8 @@ export function useVerification(
       setEvidence(bundle);
 
       // Run verification
-      const results = verifyPlannedEvents(plannedEvents, bundle, ymd, appCategoryOverrides);
+      const thresholds = getVerificationThresholds(verificationStrictness);
+      const results = verifyPlannedEvents(plannedEvents, bundle, ymd, appCategoryOverrides, thresholds);
       setVerificationResults(results);
 
       // Generate actual blocks
@@ -125,7 +129,7 @@ export function useVerification(
     } finally {
       setIsLoading(false);
     }
-  }, [appCategoryOverrides, isAuthenticated, userId, ymd, plannedEvents, onError]);
+  }, [appCategoryOverrides, isAuthenticated, userId, ymd, plannedEvents, onError, verificationStrictness]);
 
   // Auto-fetch when date or user changes
   useEffect(() => {
@@ -147,12 +151,13 @@ export function useVerification(
   useEffect(() => {
     if (!evidence) return;
 
-    const results = verifyPlannedEvents(plannedEvents, evidence, ymd, appCategoryOverrides);
+    const thresholds = getVerificationThresholds(verificationStrictness);
+    const results = verifyPlannedEvents(plannedEvents, evidence, ymd, appCategoryOverrides, thresholds);
     setVerificationResults(results);
 
     const blocks = generateActualBlocks(evidence, ymd, plannedEvents, appCategoryOverrides);
     setActualBlocks(blocks);
-  }, [appCategoryOverrides, evidence, plannedEvents, ymd]);
+  }, [appCategoryOverrides, evidence, plannedEvents, verificationStrictness, ymd]);
 
   /**
    * Get verification result for a specific event.

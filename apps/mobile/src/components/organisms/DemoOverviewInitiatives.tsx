@@ -427,6 +427,7 @@ interface DemoOverviewInitiativesProps {
 
 export const DemoOverviewInitiatives = ({ embedded = false }: DemoOverviewInitiativesProps) => {
   const insets = useSafeAreaInsets();
+  const isIos = Platform.OS === 'ios';
   const [isEditing, setIsEditing] = useState(false);
   
   // Initiatives store
@@ -651,7 +652,8 @@ export const DemoOverviewInitiatives = ({ embedded = false }: DemoOverviewInitia
   // Standalone mode - full layout with KeyboardAvoidingView, ScrollView, etc.
   return (
     <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={isIos ? 'padding' : undefined}
+      enabled={isIos}
       className="flex-1 bg-[#F7FAFF]"
     >
       <View
@@ -672,7 +674,6 @@ export const DemoOverviewInitiatives = ({ embedded = false }: DemoOverviewInitia
     </KeyboardAvoidingView>
   );
 };
-
 
 
 

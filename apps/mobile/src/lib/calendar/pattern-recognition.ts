@@ -125,6 +125,19 @@ export function buildPatternIndex(entries: ActualPatternSourceEvent[]): PatternI
   return { slots };
 }
 
+export function buildPatternIndexFromSlots(slots: PatternSlot[]): PatternIndex {
+  const map = new Map<string, PatternSlot>();
+  for (const slot of slots) {
+    map.set(keyFor(slot.dayOfWeek, slot.slotStartMinutes), slot);
+  }
+  return { slots: map };
+}
+
+export function serializePatternIndex(index: PatternIndex | null): PatternSlot[] {
+  if (!index) return [];
+  return Array.from(index.slots.values());
+}
+
 function findBestPatternForRange(
   index: PatternIndex,
   ymd: string,

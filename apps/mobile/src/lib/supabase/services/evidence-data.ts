@@ -56,8 +56,20 @@ export interface HealthDailyRow {
   id: string;
   user_id: string;
   local_date: string;
+  window_start?: string | null;
+  window_end?: string | null;
   steps: number | null;
+  active_energy_kcal?: number | null;
+  distance_meters?: number | null;
   sleep_asleep_seconds: number | null;
+  sleep_in_bed_seconds?: number | null;
+  sleep_awake_seconds?: number | null;
+  sleep_deep_seconds?: number | null;
+  sleep_rem_seconds?: number | null;
+  sleep_light_seconds?: number | null;
+  heart_rate_avg_bpm?: number | null;
+  resting_heart_rate_avg_bpm?: number | null;
+  hrv_sdnn_seconds?: number | null;
   workouts_count: number | null;
   workouts_duration_seconds: number | null;
 }

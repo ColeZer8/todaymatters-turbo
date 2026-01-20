@@ -91,7 +91,13 @@ export const ActualAdjustTemplate = ({
         </Pressable>
       </View>
 
-      <ScrollView className="flex-1 px-5" contentContainerClassName="pb-8">
+      <ScrollView
+        className="flex-1 px-5"
+        contentContainerClassName="pb-8"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+      >
         <View className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
           <Text className="text-[14px] font-semibold text-[#111827]">{title}</Text>
           <Text className="mt-1 text-[12px] text-[#64748B]">{timeLabel}</Text>

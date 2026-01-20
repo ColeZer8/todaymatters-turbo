@@ -51,6 +51,11 @@ export interface CalendarEventMeta {
       interruptions?: number;
       interruptionMinutes?: number;
       asleepMinutes?: number | null;
+      deepMinutes?: number | null;
+      remMinutes?: number | null;
+      awakeMinutes?: number | null;
+      inBedMinutes?: number | null;
+      wakeTimeMinutes?: number | null;
       hrvMs?: number | null;
       restingHeartRateBpm?: number | null;
       heartRateAvgBpm?: number | null;

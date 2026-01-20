@@ -879,6 +879,36 @@ export type Database = {
         }
         Relationships: []
       }
+      activity_patterns: {
+        Row: {
+          user_id: string
+          slots: Json
+          window_start_ymd: string | null
+          window_end_ymd: string | null
+          generated_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          slots?: Json
+          window_start_ymd?: string | null
+          window_end_ymd?: string | null
+          generated_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          slots?: Json
+          window_start_ymd?: string | null
+          window_end_ymd?: string | null
+          generated_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       routines: {
         Row: {
           id: string

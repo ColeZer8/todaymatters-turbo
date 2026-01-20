@@ -1,8 +1,8 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { PersonalizationTemplate } from '@/components/templates/PersonalizationTemplate';
-import { useAuthStore, useUserPreferencesStore } from '@/stores';
+import { useAppCategoryOverridesStore, useAuthStore, useUserPreferencesStore } from '@/stores';
 import {
   DEFAULT_USER_PREFERENCES,
   type GapFillingPreference,
@@ -11,9 +11,11 @@ import {
 import { fetchUserDataPreferences, upsertUserDataPreferences } from '@/lib/supabase/services/user-preferences';
 
 export default function PersonalizationScreen() {
+  const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const preferences = useUserPreferencesStore((s) => s.preferences);
   const setPreferences = useUserPreferencesStore((s) => s.setPreferences);
+  const overridesCount = useAppCategoryOverridesStore((s) => Object.keys(s.overrides).length);
   const [draft, setDraft] = useState<UserDataPreferences>(preferences);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,7 +70,9 @@ export default function PersonalizationScreen() {
         autoSuggestEvents={draft.autoSuggestEvents}
         verificationAlerts={draft.verificationAlerts}
         realTimeUpdates={draft.realTimeUpdates}
+        verificationStrictness={draft.verificationStrictness}
         isSaving={isSaving}
+        appOverridesCount={overridesCount}
         onSelectGapFilling={(value: GapFillingPreference) =>
           setDraft((prev) => ({ ...prev, gapFillingPreference: value }))
         }
@@ -78,6 +82,10 @@ export default function PersonalizationScreen() {
         onToggleAutoSuggest={(value) => setDraft((prev) => ({ ...prev, autoSuggestEvents: value }))}
         onToggleVerificationAlerts={(value) => setDraft((prev) => ({ ...prev, verificationAlerts: value }))}
         onToggleRealTimeUpdates={(value) => setDraft((prev) => ({ ...prev, realTimeUpdates: value }))}
+        onSelectVerificationStrictness={(value) =>
+          setDraft((prev) => ({ ...prev, verificationStrictness: value }))
+        }
+        onOpenAppOverrides={() => router.push('/app-category-overrides')}
         onSave={onSave}
       />
     </>

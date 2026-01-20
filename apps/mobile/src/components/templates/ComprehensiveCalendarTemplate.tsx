@@ -159,7 +159,16 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
         if (isUnknown) {
             // Set which block to highlight before navigating
             setHighlightedBlockId(event.id);
-            router.push('/review-time');
+            router.push({
+                pathname: '/review-time',
+                params: {
+                    focusId: event.id,
+                    startMinutes: String(event.startMinutes),
+                    duration: String(event.duration),
+                    title: event.title,
+                    description: event.description,
+                },
+            });
             return;
         }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, ChevronRight, Check } from 'lucide-react-native';
@@ -6,6 +6,8 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { EventCategory } from '@/stores';
+import type { PatternIndex } from '@/lib/calendar/pattern-recognition';
+import { getPatternSuggestionForRange } from '@/lib/calendar/pattern-recognition';
 import { LocationSearchModal } from '../molecules/LocationSearchModal';
 
 // Life areas with icons - same as EventEditorModal
@@ -40,16 +42,40 @@ interface AddEventDraft {
     selectedDate: Date;
     startTime: Date;
     endTime: Date;
+    patternSuggestion?: {
+        category: EventCategory;
+        title: string;
+        confidence: number;
+        applied: boolean;
+    } | null;
 }
 
 interface AddEventTemplateProps {
     initialDate: Date;
     initialStartMinutes?: number;
+    patternIndex?: PatternIndex | null;
+    patternMinConfidence?: number;
+    allowAutoSuggestions?: boolean;
     onClose: () => void;
     onSave: (draft: AddEventDraft) => void | Promise<void>;
 }
 
-export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, onSave }: AddEventTemplateProps) => {
+const dateToYmd = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+export const AddEventTemplate = ({
+    initialDate,
+    initialStartMinutes,
+    patternIndex,
+    patternMinConfidence = 0.6,
+    allowAutoSuggestions = true,
+    onClose,
+    onSave,
+}: AddEventTemplateProps) => {
     const insets = useSafeAreaInsets();
     const { joySelections, goals, initiatives } = useOnboardingStore();
     
@@ -59,6 +85,9 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
     const [selectedValue, setSelectedValue] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [location, setLocation] = useState('');
+    const [hasCustomTitle, setHasCustomTitle] = useState(false);
+    const [hasCustomCategory, setHasCustomCategory] = useState(false);
+    const [suggestionApplied, setSuggestionApplied] = useState(false);
     const [selectedDate, setSelectedDate] = useState(initialDate);
     const [startTime, setStartTime] = useState(() => {
         const date = new Date(initialDate);
@@ -94,6 +123,42 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
     
     // Combine goals and initiatives
     const allGoals = [...goals, ...initiatives].filter(Boolean);
+
+    const patternSuggestion = useMemo(() => {
+        if (!allowAutoSuggestions || !patternIndex) return null;
+        const ymd = dateToYmd(selectedDate);
+        const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+        const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+        const suggestion = getPatternSuggestionForRange(patternIndex, ymd, startMinutes, endMinutes);
+        if (!suggestion || suggestion.confidence < patternMinConfidence) return null;
+        return suggestion;
+    }, [allowAutoSuggestions, patternIndex, patternMinConfidence, selectedDate, startTime, endTime]);
+
+    useEffect(() => {
+        if (!patternSuggestion) {
+            setSuggestionApplied(false);
+            return;
+        }
+        let applied = false;
+        if (!hasCustomTitle && title.trim().length === 0) {
+            setTitle(patternSuggestion.title);
+            applied = true;
+        }
+        if (!hasCustomCategory) {
+            setSelectedCategory(patternSuggestion.category);
+            applied = true;
+        }
+        if (applied) {
+            setSuggestionApplied(true);
+        }
+    }, [patternSuggestion, hasCustomCategory, hasCustomTitle, title]);
+
+    const applySuggestion = useCallback(() => {
+        if (!patternSuggestion) return;
+        setTitle(patternSuggestion.title);
+        setSelectedCategory(patternSuggestion.category);
+        setSuggestionApplied(true);
+    }, [patternSuggestion]);
     
     const handleSave = () => {
         void onSave({
@@ -104,6 +169,14 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
             selectedDate,
             startTime,
             endTime,
+            patternSuggestion: patternSuggestion
+                ? {
+                      category: patternSuggestion.category,
+                      title: patternSuggestion.title,
+                      confidence: patternSuggestion.confidence,
+                      applied: suggestionApplied,
+                  }
+                : null,
         });
     };
 
@@ -181,11 +254,33 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
                 contentContainerStyle={{ paddingBottom: 40 }}
             >
                 {/* Title & Location Section */}
+                {patternSuggestion && (
+                    <View className="mt-4 mx-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+                        <Text className="text-[12px] font-semibold text-[#0F172A]">
+                            Suggested from your patterns
+                        </Text>
+                        <Text className="mt-1 text-[12px] text-[#64748B]">
+                            {patternSuggestion.title} • {patternSuggestion.category} • {Math.round(patternSuggestion.confidence * 100)}%
+                        </Text>
+                        {!suggestionApplied && (
+                            <Pressable
+                                onPress={applySuggestion}
+                                className="mt-2 self-start rounded-full bg-[#2563EB] px-3 py-1.5"
+                            >
+                                <Text className="text-[11px] font-semibold text-white">Use suggestion</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                )}
                 <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
                     <View className="px-4 py-3">
                         <TextInput
                             value={title}
-                            onChangeText={setTitle}
+                            onChangeText={(value) => {
+                                setTitle(value);
+                                setHasCustomTitle(true);
+                                setSuggestionApplied(false);
+                            }}
                             placeholder="Title"
                             placeholderTextColor="#94A3B8"
                             className="text-lg text-[#111827]"
@@ -327,7 +422,11 @@ export const AddEventTemplate = ({ initialDate, initialStartMinutes, onClose, on
                             return (
                                 <Pressable
                                     key={area.id}
-                                    onPress={() => setSelectedCategory(area.id)}
+                                    onPress={() => {
+                                        setSelectedCategory(area.id);
+                                        setHasCustomCategory(true);
+                                        setSuggestionApplied(false);
+                                    }}
                                     className={`flex-row items-center gap-2 rounded-full border px-4 py-2.5 ${
                                         isSelected 
                                             ? 'border-[#2563EB] bg-[#EFF6FF]' 

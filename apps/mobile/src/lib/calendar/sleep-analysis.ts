@@ -6,6 +6,11 @@ export interface SleepQualityMetrics {
   restingHeartRateBpm?: number | null;
   heartRateAvgBpm?: number | null;
   qualityScore?: number | null;
+  deepMinutes?: number | null;
+  remMinutes?: number | null;
+  awakeMinutes?: number | null;
+  inBedMinutes?: number | null;
+  wakeTimeMinutes?: number | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -18,11 +23,35 @@ export function buildSleepQualityMetrics(healthDaily: HealthDailyRow | null): Sl
   const asleepMinutes = healthDaily.sleep_asleep_seconds
     ? Math.round(healthDaily.sleep_asleep_seconds / 60)
     : undefined;
+  const deepMinutes = healthDaily.sleep_deep_seconds
+    ? Math.round(healthDaily.sleep_deep_seconds / 60)
+    : null;
+  const remMinutes = healthDaily.sleep_rem_seconds
+    ? Math.round(healthDaily.sleep_rem_seconds / 60)
+    : null;
+  const awakeMinutes = healthDaily.sleep_awake_seconds
+    ? Math.round(healthDaily.sleep_awake_seconds / 60)
+    : null;
+  const inBedMinutes = healthDaily.sleep_in_bed_seconds
+    ? Math.round(healthDaily.sleep_in_bed_seconds / 60)
+    : null;
   const hrvMs = healthDaily.hrv_sdnn_seconds ? Math.round(healthDaily.hrv_sdnn_seconds * 1000) : null;
   const restingHeartRateBpm = healthDaily.resting_heart_rate_avg_bpm ?? null;
   const heartRateAvgBpm = healthDaily.heart_rate_avg_bpm ?? null;
+  const wakeTime = healthDaily.window_end ? new Date(healthDaily.window_end) : null;
+  const wakeTimeMinutes = wakeTime ? wakeTime.getHours() * 60 + wakeTime.getMinutes() : null;
 
-  if (asleepMinutes === undefined && hrvMs === null && restingHeartRateBpm === null && heartRateAvgBpm === null) {
+  if (
+    asleepMinutes === undefined &&
+    hrvMs === null &&
+    restingHeartRateBpm === null &&
+    heartRateAvgBpm === null &&
+    deepMinutes === null &&
+    remMinutes === null &&
+    awakeMinutes === null &&
+    inBedMinutes === null &&
+    wakeTimeMinutes === null
+  ) {
     return null;
   }
 
@@ -44,5 +73,10 @@ export function buildSleepQualityMetrics(healthDaily: HealthDailyRow | null): Sl
     restingHeartRateBpm,
     heartRateAvgBpm,
     qualityScore,
+    deepMinutes,
+    remMinutes,
+    awakeMinutes,
+    inBedMinutes,
+    wakeTimeMinutes,
   };
 }

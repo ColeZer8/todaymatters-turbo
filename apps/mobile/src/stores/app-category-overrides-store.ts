@@ -5,6 +5,7 @@ interface AppCategoryOverridesState {
   overrides: AppCategoryOverrides;
   setOverrides: (overrides: AppCategoryOverrides) => void;
   upsertOverride: (appKey: string, override: AppCategoryOverride) => void;
+  removeOverride: (appKey: string) => void;
 }
 
 export const useAppCategoryOverridesStore = create<AppCategoryOverridesState>((set) => ({
@@ -17,4 +18,11 @@ export const useAppCategoryOverridesStore = create<AppCategoryOverridesState>((s
         [appKey]: override,
       },
     })),
+  removeOverride: (appKey) =>
+    set((state) => {
+      if (!state.overrides[appKey]) return {};
+      const next = { ...state.overrides };
+      delete next[appKey];
+      return { overrides: next };
+    }),
 }));

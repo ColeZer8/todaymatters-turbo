@@ -23,6 +23,7 @@ export { ReviewTimeTemplate } from './ReviewTimeTemplate';
 export { ActualAdjustTemplate } from './ActualAdjustTemplate';
 export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
+export { AppCategoryOverridesTemplate } from './AppCategoryOverridesTemplate';
 export { DemoCarouselTemplate } from './DemoCarouselTemplate';
 export { ScreenTimeAnalyticsTemplate } from './ScreenTimeAnalyticsTemplate';
 export { HealthKitDashboardTemplate } from './HealthKitDashboardTemplate';
