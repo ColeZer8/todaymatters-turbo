@@ -1,4 +1,4 @@
-export const SETUP_SCREENS_TOTAL_STEPS = 12;
+export const SETUP_SCREENS_TOTAL_STEPS = 13;
 
 // “Meeting flow” (subset of onboarding) — only these screens are intended to be visible/reachable for now.
 export const SETUP_SCREENS_STEPS = {
@@ -13,7 +13,8 @@ export const SETUP_SCREENS_STEPS = {
   idealDay: 9,
   dailyRhythm: 10,
   myChurch: 11,
-  aiSummary: 12,
+  setupQuestions: 12,
+  aiSummary: 13,
 } as const;
 
 export type SetupScreensStepKey = keyof typeof SETUP_SCREENS_STEPS;

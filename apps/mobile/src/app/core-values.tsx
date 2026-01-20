@@ -15,10 +15,23 @@ export default function CoreValuesScreen() {
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const coreValues = useOnboardingStore((state) => state.coreValues);
-  const toggleCoreValue = useOnboardingStore((state) => state.toggleCoreValue);
-  const addCoreValue = useOnboardingStore((state) => state.addCoreValue);
-  const removeCoreValue = useOnboardingStore((state) => state.removeCoreValue);
+  const setCoreValues = useOnboardingStore((state) => state.setCoreValues);
   const { saveCoreValues } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const baseValueIds = ['faith', 'family', 'health', 'work', 'personal-growth', 'finances'];
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+    const normalized = coreValues.map((value) => ({
+      ...value,
+      isSelected: baseValueIds.includes(value.id),
+    }));
+    const needsUpdate = coreValues.some(
+      (value, index) => value.isSelected !== normalized[index]?.isSelected
+    );
+    if (needsUpdate) {
+      setCoreValues(normalized);
+    }
+  }, [coreValues, hasHydrated, setCoreValues]);
 
   useEffect(() => {
     if (!isNavigationReady) return;
@@ -56,10 +69,8 @@ export default function CoreValuesScreen() {
     <CoreValuesTemplate
       step={SETUP_SCREENS_STEPS.coreValues}
       totalSteps={SETUP_SCREENS_TOTAL_STEPS}
-      coreValues={coreValues}
-      onToggleValue={toggleCoreValue}
-      onAddValue={addCoreValue}
-      onRemoveValue={removeCoreValue}
+      coreValues={coreValues.filter((value) => baseValueIds.includes(value.id))}
+      isSelectionLocked
       onContinue={handleContinue}
       onBack={handleBack}
     />

@@ -8,6 +8,15 @@ import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setu
 import { generateOnboardingCategorySuggestionsLlm } from '@/lib/supabase/services';
 import { useOnboardingSync } from '@/lib/supabase/hooks';
 
+const REQUIRED_CATEGORY_SEEDS = [
+  { valueId: 'health', label: 'Exercise', color: '#F95C2E' },
+  { valueId: 'health', label: 'Nutrition', color: '#F95C2E' },
+  { valueId: 'health', label: 'Sleep / Recovery', color: '#F95C2E' },
+  { valueId: 'finances', label: 'Budgeting', color: '#10B981' },
+  { valueId: 'finances', label: 'Saving', color: '#10B981' },
+  { valueId: 'finances', label: 'Investing', color: '#10B981' },
+] as const;
+
 export default function CoreCategoriesScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -17,6 +26,7 @@ export default function CoreCategoriesScreen() {
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const coreValues = useOnboardingStore((state) => state.coreValues);
   const coreCategories = useOnboardingStore((state) => state.coreCategories);
+  const setCoreCategories = useOnboardingStore((state) => state.setCoreCategories);
   const addCoreCategory = useOnboardingStore((state) => state.addCoreCategory);
   const removeCoreCategory = useOnboardingStore((state) => state.removeCoreCategory);
   const { saveCoreCategories } = useOnboardingSync({ autoLoad: false, autoSave: false });
@@ -35,6 +45,25 @@ export default function CoreCategoriesScreen() {
       router.replace('/');
     }
   }, [isAuthenticated, isNavigationReady, router]);
+
+  useEffect(() => {
+    if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
+    const existingLabels = new Set(
+      coreCategories.map((category) => `${category.valueId}:${category.label.toLowerCase()}`)
+    );
+    const additions = REQUIRED_CATEGORY_SEEDS.filter(
+      (seed) => !existingLabels.has(`${seed.valueId}:${seed.label.toLowerCase()}`)
+    ).map((seed) => ({
+      id: `${seed.valueId}-${seed.label.toLowerCase().replace(/\s+/g, '-')}`,
+      valueId: seed.valueId,
+      label: seed.label,
+      color: seed.color,
+      isCustom: false,
+    }));
+    if (additions.length > 0) {
+      setCoreCategories([...coreCategories, ...additions]);
+    }
+  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, setCoreCategories]);
 
   useEffect(() => {
     if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;

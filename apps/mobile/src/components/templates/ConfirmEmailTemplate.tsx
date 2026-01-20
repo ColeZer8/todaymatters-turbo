@@ -3,7 +3,15 @@ import { AuthInput } from '@/components/molecules';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Mail } from 'lucide-react-native';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface ConfirmEmailTemplateProps {
@@ -37,80 +45,87 @@ export const ConfirmEmailTemplate = ({
     >
       <StatusBar style="dark" />
       <SafeAreaView className="flex-1" style={styles.safeArea}>
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          enabled
+          keyboardVerticalOffset={0}
         >
-          <View className="flex-1 w-full items-center" style={styles.content}>
-            <View className="items-center">
-              <LogoBadge />
-              <Text className="mt-6 text-3xl font-semibold text-text-primary">Check your email</Text>
-              <Text className="mt-2 text-lg text-text-secondary text-center">
-                We sent a confirmation link to finish setting up your account.
-              </Text>
-            </View>
-
-            <View className="w-full mt-8" style={{ maxWidth: CARD_MAX_WIDTH }}>
-              <View style={[styles.card, styles.cardShadow]}>
-                <Text className="text-2xl font-extrabold text-text-primary">Confirm your email</Text>
-                <Text className="mt-2 text-base text-text-secondary">
-                  Open the link in your inbox to continue.
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View className="flex-1 w-full items-center" style={styles.content}>
+              <View className="items-center">
+                <LogoBadge />
+                <Text className="mt-6 text-3xl font-semibold text-text-primary">Check your email</Text>
+                <Text className="mt-2 text-lg text-text-secondary text-center">
+                  We sent a confirmation link to finish setting up your account.
                 </Text>
+              </View>
 
-                {statusMessage ? (
-                  <Text className="mt-4 text-sm font-semibold text-green-600">{statusMessage}</Text>
-                ) : null}
+              <View className="w-full mt-8" style={{ maxWidth: CARD_MAX_WIDTH }}>
+                <View style={[styles.card, styles.cardShadow]}>
+                  <Text className="text-2xl font-extrabold text-text-primary">Confirm your email</Text>
+                  <Text className="mt-2 text-base text-text-secondary">
+                    Open the link in your inbox to continue.
+                  </Text>
 
-                {errorMessage ? (
-                  <Text className="mt-4 text-sm font-semibold text-red-500">{errorMessage}</Text>
-                ) : null}
+                  {statusMessage ? (
+                    <Text className="mt-4 text-sm font-semibold text-green-600">{statusMessage}</Text>
+                  ) : null}
 
-                <View className="mt-6">
-                  <AuthInput
-                    label="Email"
-                    icon={Mail}
-                    value={email}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder="name@email.com"
-                    onChangeText={onEmailChange}
-                    returnKeyType="done"
-                    onSubmitEditing={onResend}
-                  />
-                </View>
+                  {errorMessage ? (
+                    <Text className="mt-4 text-sm font-semibold text-red-500">{errorMessage}</Text>
+                  ) : null}
 
-                <View className="mt-6">
-                  <GradientButton
-                    label="Resend confirmation email"
-                    onPress={onResend}
-                    loading={isSending}
-                    disabled={isSending || !email}
-                  />
+                  <View className="mt-6">
+                    <AuthInput
+                      label="Email"
+                      icon={Mail}
+                      value={email}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      inputMode="email"
+                      placeholder="name@email.com"
+                      onChangeText={onEmailChange}
+                      returnKeyType="done"
+                      onSubmitEditing={onResend}
+                    />
+                  </View>
+
+                  <View className="mt-6">
+                    <GradientButton
+                      label="Resend confirmation email"
+                      onPress={onResend}
+                      loading={isSending}
+                      disabled={isSending || !email}
+                    />
+                  </View>
                 </View>
               </View>
-            </View>
 
-            <View style={styles.flexSpacer} />
+              <View style={styles.flexSpacer} />
 
-            <View className="flex-row items-center justify-center">
-              <Text className="text-base text-text-secondary">Ready to sign in?</Text>
-              <Text
-                className="ml-2 text-base font-semibold text-text-primary"
-                onPress={onBackToSignIn}
-              >
-                Back to sign in
-              </Text>
+              <View className="flex-row items-center justify-center">
+                <Text className="text-base text-text-secondary">Ready to sign in?</Text>
+                <Text
+                  className="ml-2 text-base font-semibold text-text-primary"
+                  onPress={onBackToSignIn}
+                >
+                  Back to sign in
+                </Text>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-        {isSending ? (
-          <View className="absolute inset-0 items-center justify-center bg-white/60">
-            <ActivityIndicator size="large" color="#2563EB" />
-          </View>
-        ) : null}
+          </ScrollView>
+          {isSending ? (
+            <View className="absolute inset-0 items-center justify-center bg-white/60">
+              <ActivityIndicator size="large" color="#2563EB" />
+            </View>
+          ) : null}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -121,6 +136,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  keyboardAvoid: {
     flex: 1,
   },
   scrollContent: {

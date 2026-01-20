@@ -40,12 +40,12 @@ export default function MyChurchScreen() {
 
   const handleContinue = () => {
     saveChurchInfo({ name: churchName, address: churchAddress, website: churchWebsite });
-    router.replace('/ai-summary');
+    router.replace('/setup-questions');
   };
 
   const handleSkip = () => {
     saveChurchInfo({ name: churchName, address: churchAddress, website: churchWebsite });
-    router.replace('/ai-summary');
+    router.replace('/setup-questions');
   };
 
   const handleBack = () => {

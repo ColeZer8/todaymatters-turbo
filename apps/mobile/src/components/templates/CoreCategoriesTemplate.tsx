@@ -39,6 +39,78 @@ const CATEGORY_COLORS = [
   '#F33C83', '#F59E0B', '#1FA56E', '#4F8BFF', '#8B5CF6', '#F95C2E', '#10B981', '#EC4899',
 ];
 
+const VALUE_COLORS: Record<string, string> = {
+  faith: '#F33C83',
+  family: '#F59E0B',
+  health: '#F95C2E',
+  work: '#1FA56E',
+  'personal-growth': '#8B5CF6',
+  finances: '#10B981',
+};
+
+const EXAMPLE_CATEGORIES: Record<string, string[]> = {
+  faith: [
+    'Prayer / Meditation',
+    'Scripture / Study',
+    'Worship',
+    'Spiritual Growth',
+    'Moral Grounding',
+    'Gratitude',
+    'Service to Others',
+    'Calling / Purpose',
+  ],
+  family: [
+    'Marriage / Spouse',
+    'Parenting',
+    'Quality Time',
+    'Communication',
+    'Extended Family',
+    'Emotional Presence',
+    'Conflict Resolution',
+    'Love & Support',
+  ],
+  health: [
+    'Exercise / Movement',
+    'Nutrition',
+    'Sleep / Recovery',
+    'Mental Health',
+    'Stress Management',
+    'Emotional Resilience',
+    'Medical Care',
+    'Energy Management',
+  ],
+  work: [
+    'Career / Vocation',
+    'Leadership',
+    'Productivity',
+    'Focus / Deep Work',
+    'Excellence',
+    'Creativity',
+    'Stewardship of Skills',
+    'Impact & Contribution',
+  ],
+  'personal-growth': [
+    'Learning / Education',
+    'Character Development',
+    'Emotional Intelligence',
+    'Habits & Discipline',
+    'Self-Reflection',
+    'Coaching / Mentorship',
+    'Vision & Goals',
+    'Identity Formation',
+  ],
+  finances: [
+    'Budgeting',
+    'Saving',
+    'Investing',
+    'Generosity / Giving',
+    'Debt Management',
+    'Financial Planning',
+    'Margin & Simplicity',
+    'Long-Term Security',
+  ],
+};
+
 const ICON_MAP: Record<string, typeof Cross> = {
   cross: Cross,
   users: Users,
@@ -119,7 +191,7 @@ export const CoreCategoriesTemplate = ({
       step={step}
       totalSteps={totalSteps}
       title="Time Categories"
-      subtitle="How do you spend time in each area? Add categories to track."
+      subtitle="How do you live each value? Add sub-categories that explain why."
       onBack={onBack}
       footer={
         <View className="gap-3">
@@ -144,8 +216,9 @@ export const CoreCategoriesTemplate = ({
           style={cardShadowStyle}
         >
           <Text className="text-sm leading-5 text-text-secondary">
-            Categories help you track how you spend time within each core value.
-            For example, under "Work" you might have "Deep Work", "Meetings", and "Admin".
+            Each activity gets a primary value and an optional sub-category. For example, under
+            "Work" you might have "Deep Work", "Meetings", and "Admin". If you add a hobby, pick
+            the value it serves (golf can be Health, Family, Work, or Personal Growth).
           </Text>
         </View>
 
@@ -154,7 +227,8 @@ export const CoreCategoriesTemplate = ({
           const isExpanded = expandedValues.has(value.id);
           const valueCategories = categoriesByValue[value.id] || [];
           const IconComponent = ICON_MAP[value.icon] || Star;
-          const accentColor = valueCategories[0]?.color ?? '#2563EB';
+          const accentColor =
+            valueCategories[0]?.color ?? VALUE_COLORS[value.id] ?? '#2563EB';
           const rawSuggestions = suggestionsByValueId?.[value.id] ?? [];
           const existingLabels = new Set(
             valueCategories.map((c) => c.label.trim().toLowerCase())
@@ -269,6 +343,29 @@ export const CoreCategoriesTemplate = ({
                   {/* Add Category */}
                   {addingForValue === value.id ? (
                     <View className="mt-2 gap-2">
+                      {EXAMPLE_CATEGORIES[value.id]?.length ? (
+                        <View className="gap-2">
+                          <Text className="text-xs font-semibold uppercase tracking-wider text-[#94A3B8]">
+                            Quick add examples
+                          </Text>
+                          <View className="flex-row flex-wrap gap-2">
+                            {EXAMPLE_CATEGORIES[value.id].map((example) => (
+                              <Pressable
+                                key={example}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Add ${example}`}
+                                onPress={() => onAddCategory(value.id, example, accentColor)}
+                                className="rounded-2xl border border-[#E4E8F0] bg-white px-3 py-2"
+                                style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                              >
+                                <Text className="text-xs font-semibold text-text-primary">
+                                  {example}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      ) : null}
                       <View className="flex-row items-center gap-2">
                         <TextInput
                           value={newCategoryText}

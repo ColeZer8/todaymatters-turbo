@@ -6,6 +6,7 @@
 import { useEffect, useCallback } from 'react';
 import { useAuthStore, useOnboardingStore } from '@/stores';
 import type { PermissionsData } from '@/stores/onboarding-store';
+import type { AiSetupResponses } from '@/lib/ai-setup';
 import {
   fetchProfile,
   updateProfile,
@@ -65,6 +66,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const morningMindset = useOnboardingStore((s) => s.morningMindset);
   const homeAddress = useOnboardingStore((s) => s.homeAddress);
   const workAddress = useOnboardingStore((s) => s.workAddress);
+  const aiSetupResponses = useOnboardingStore((s) => s.aiSetupResponses);
   const goals = useOnboardingStore((s) => s.goals);
   const initiatives = useOnboardingStore((s) => s.initiatives);
   const goalWhys = useOnboardingStore((s) => s.goalWhys);
@@ -92,6 +94,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setMorningMindset = useOnboardingStore((s) => s.setMorningMindset);
   const setHomeAddress = useOnboardingStore((s) => s.setHomeAddress);
   const setWorkAddress = useOnboardingStore((s) => s.setWorkAddress);
+  const setAiSetupResponses = useOnboardingStore((s) => s.setAiSetupResponses);
   const setGoals = useOnboardingStore((s) => s.setGoals);
   const setInitiatives = useOnboardingStore((s) => s.setInitiatives);
   const setGoalWhys = useOnboardingStore((s) => s.setGoalWhys);
@@ -202,6 +205,9 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         if (preferences.work_address) {
           setWorkAddress(preferences.work_address);
         }
+        if (preferences.ai_setup_responses) {
+          setAiSetupResponses(preferences.ai_setup_responses);
+        }
       }
 
       // Load goals and initiatives
@@ -243,6 +249,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     setFocusStyle,
     setCoachPersona,
     setMorningMindset,
+    setAiSetupResponses,
     setGoals,
     setInitiatives,
     setHasWatchedExplainerVideo,
@@ -299,6 +306,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         morning_mindset: morningMindset,
         home_address: homeAddress,
         work_address: workAddress,
+        ai_setup_responses: aiSetupResponses,
       });
 
       // Save goals and initiatives
@@ -332,6 +340,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     focusStyle,
     coachPersona,
     morningMindset,
+    aiSetupResponses,
     goals,
     initiatives,
     hasWatchedExplainerVideo,
@@ -514,6 +523,18 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     [isAuthenticated, user?.id, onError]
   );
 
+  const saveAiSetupResponses = useCallback(
+    async (responses: AiSetupResponses) => {
+      if (!isAuthenticated || !user?.id) return;
+      try {
+        await updateProfilePreferences(user.id, { ai_setup_responses: responses });
+      } catch (error) {
+        onError?.(error instanceof Error ? error : new Error('Failed to save AI setup responses'));
+      }
+    },
+    [isAuthenticated, user?.id, onError]
+  );
+
   const saveCoreValues = useCallback(
     async (values: ProfileData['core_values']) => {
       if (!isAuthenticated || !user?.id) return;
@@ -627,6 +648,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     savePurpose,
     saveHomeAddress,
     saveWorkAddress,
+    saveAiSetupResponses,
     saveCoreValues,
     saveCoreCategories,
     saveValuesScores,

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { AiSetupResponses } from '@/lib/ai-setup';
 
 // Step 2: Permissions
 export interface PermissionsData extends Record<string, boolean> {
@@ -104,6 +105,9 @@ interface OnboardingState {
   // Step 15: Setup Questions
   role: string | null;
 
+  // AI Setup Questions
+  aiSetupResponses: AiSetupResponses;
+
   // Step 16: Daily Rhythm
   wakeTime: string;
   sleepTime: string;
@@ -194,6 +198,10 @@ interface OnboardingState {
   // Actions - Setup Questions
   setRole: (role: string | null) => void;
 
+  // Actions - AI Setup Questions
+  setAiSetupResponses: (responses: AiSetupResponses) => void;
+  setAiSetupResponse: (key: keyof AiSetupResponses, value: string | null) => void;
+
   // Actions - Daily Rhythm
   setWakeTime: (time: Date) => void;
   setSleepTime: (time: Date) => void;
@@ -248,15 +256,17 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
 
 // Predefined Core Values (curated starter list)
 const DEFAULT_CORE_VALUES: CoreValue[] = [
-  // Defaults selected (match the “starter 6” in the notes)
+  // Defaults selected (6-value taxonomy)
   { id: 'faith', label: 'Faith', icon: 'cross', isSelected: true, isCustom: false },
   { id: 'family', label: 'Family', icon: 'users', isSelected: true, isCustom: false },
+  { id: 'health', label: 'Health', icon: 'heart', isSelected: true, isCustom: false },
   { id: 'work', label: 'Work', icon: 'briefcase', isSelected: true, isCustom: false },
-  { id: 'rest', label: 'Rest', icon: 'moon', isSelected: true, isCustom: false },
   { id: 'personal-growth', label: 'Personal Growth', icon: 'trending-up', isSelected: true, isCustom: false },
-  { id: 'fitness', label: 'Fitness', icon: 'heart', isSelected: true, isCustom: false },
+  { id: 'finances', label: 'Finances', icon: 'briefcase', isSelected: true, isCustom: false },
 
   // Common additions
+  { id: 'rest', label: 'Rest', icon: 'moon', isSelected: false, isCustom: false },
+  { id: 'fitness', label: 'Fitness', icon: 'heart', isSelected: false, isCustom: false },
   { id: 'friendship', label: 'Friendship', icon: 'users', isSelected: false, isCustom: false },
   { id: 'marriage', label: 'Marriage', icon: 'users', isSelected: false, isCustom: false },
   { id: 'parenting', label: 'Parenting', icon: 'users', isSelected: false, isCustom: false },
@@ -264,7 +274,6 @@ const DEFAULT_CORE_VALUES: CoreValue[] = [
   { id: 'service', label: 'Service', icon: 'home', isSelected: false, isCustom: false },
   { id: 'generosity', label: 'Generosity', icon: 'heart', isSelected: false, isCustom: false },
   { id: 'gratitude', label: 'Gratitude', icon: 'heart', isSelected: false, isCustom: false },
-  { id: 'health', label: 'Health', icon: 'heart', isSelected: false, isCustom: false },
   { id: 'learning', label: 'Learning', icon: 'trending-up', isSelected: false, isCustom: false },
   { id: 'discipline', label: 'Discipline', icon: 'trending-up', isSelected: false, isCustom: false },
   { id: 'leadership', label: 'Leadership', icon: 'star', isSelected: false, isCustom: false },
@@ -277,7 +286,6 @@ const DEFAULT_CORE_VALUES: CoreValue[] = [
   { id: 'prayer', label: 'Prayer', icon: 'cross', isSelected: false, isCustom: false },
   { id: 'purpose', label: 'Purpose', icon: 'star', isSelected: false, isCustom: false },
   { id: 'stewardship', label: 'Stewardship', icon: 'briefcase', isSelected: false, isCustom: false },
-  { id: 'finances', label: 'Finances', icon: 'briefcase', isSelected: false, isCustom: false },
   { id: 'home', label: 'Home', icon: 'home', isSelected: false, isCustom: false },
   { id: 'nature', label: 'Nature', icon: 'home', isSelected: false, isCustom: false },
 ];
@@ -285,22 +293,23 @@ const DEFAULT_CORE_VALUES: CoreValue[] = [
 // Predefined Core Categories mapped to values
 const DEFAULT_CORE_CATEGORIES: CoreCategory[] = [
   { id: 'prayer', valueId: 'faith', label: 'Prayer', color: '#F33C83', isCustom: false },
-  { id: 'bible-study', valueId: 'faith', label: 'Bible Study', color: '#F33C83', isCustom: false },
-  { id: 'church', valueId: 'faith', label: 'Church', color: '#F33C83', isCustom: false },
+  { id: 'scripture-study', valueId: 'faith', label: 'Scripture / Study', color: '#F33C83', isCustom: false },
+  { id: 'worship', valueId: 'faith', label: 'Worship', color: '#F33C83', isCustom: false },
+  { id: 'marriage', valueId: 'family', label: 'Marriage / Spouse', color: '#F59E0B', isCustom: false },
+  { id: 'parenting', valueId: 'family', label: 'Parenting', color: '#F59E0B', isCustom: false },
   { id: 'quality-time', valueId: 'family', label: 'Quality Time', color: '#F59E0B', isCustom: false },
-  { id: 'date-night', valueId: 'family', label: 'Date Night', color: '#F59E0B', isCustom: false },
-  { id: 'kids-activities', valueId: 'family', label: 'Kids Activities', color: '#F59E0B', isCustom: false },
+  { id: 'exercise', valueId: 'health', label: 'Exercise', color: '#F95C2E', isCustom: false },
+  { id: 'nutrition', valueId: 'health', label: 'Nutrition', color: '#F95C2E', isCustom: false },
+  { id: 'sleep-recovery', valueId: 'health', label: 'Sleep / Recovery', color: '#F95C2E', isCustom: false },
   { id: 'deep-work', valueId: 'work', label: 'Deep Work', color: '#1FA56E', isCustom: false },
   { id: 'meetings', valueId: 'work', label: 'Meetings', color: '#1FA56E', isCustom: false },
   { id: 'admin', valueId: 'work', label: 'Admin', color: '#1FA56E', isCustom: false },
-  { id: 'sleep', valueId: 'rest', label: 'Sleep', color: '#4F8BFF', isCustom: false },
-  { id: 'relaxation', valueId: 'rest', label: 'Relaxation', color: '#4F8BFF', isCustom: false },
-  { id: 'reading', valueId: 'personal-growth', label: 'Reading', color: '#8B5CF6', isCustom: false },
-  { id: 'studying', valueId: 'personal-growth', label: 'Studying', color: '#8B5CF6', isCustom: false },
-  { id: 'courses', valueId: 'personal-growth', label: 'Courses', color: '#8B5CF6', isCustom: false },
-  { id: 'exercise', valueId: 'fitness', label: 'Exercise', color: '#F95C2E', isCustom: false },
-  { id: 'sports', valueId: 'fitness', label: 'Sports', color: '#F95C2E', isCustom: false },
-  { id: 'outdoor', valueId: 'fitness', label: 'Outdoor Activities', color: '#F95C2E', isCustom: false },
+  { id: 'learning', valueId: 'personal-growth', label: 'Learning / Education', color: '#8B5CF6', isCustom: false },
+  { id: 'habits-discipline', valueId: 'personal-growth', label: 'Habits & Discipline', color: '#8B5CF6', isCustom: false },
+  { id: 'self-reflection', valueId: 'personal-growth', label: 'Self-Reflection', color: '#8B5CF6', isCustom: false },
+  { id: 'budgeting', valueId: 'finances', label: 'Budgeting', color: '#10B981', isCustom: false },
+  { id: 'saving', valueId: 'finances', label: 'Saving', color: '#10B981', isCustom: false },
+  { id: 'investing', valueId: 'finances', label: 'Investing', color: '#10B981', isCustom: false },
 ];
 
 // Helper to generate unique ID
@@ -339,6 +348,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       churchAddress: '',
       churchWebsite: '',
       role: null,
+      aiSetupResponses: {},
       wakeTime: createTimeString(6, 30),
       sleepTime: createTimeString(22, 30),
       joySelections: [],
@@ -526,6 +536,13 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       // Actions - Setup Questions
       setRole: (role) => set({ role }),
+
+      // Actions - AI Setup Questions
+      setAiSetupResponses: (responses) => set({ aiSetupResponses: responses }),
+      setAiSetupResponse: (key, value) =>
+        set((state) => ({
+          aiSetupResponses: { ...state.aiSetupResponses, [key]: value },
+        })),
 
       // Actions - Daily Rhythm
       setWakeTime: (time) => set({ wakeTime: time.toISOString() }),

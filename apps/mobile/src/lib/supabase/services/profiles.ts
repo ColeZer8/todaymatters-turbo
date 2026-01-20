@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { handleSupabaseError } from '../utils/error-handler';
 import type { Json } from '../database.types';
+import type { AiSetupResponses } from '@/lib/ai-setup';
 
 /**
  * Profile preferences stored in meta JSONB
@@ -26,6 +27,7 @@ export interface ProfilePreferences extends Record<string, Json> {
   ideal_day_day_type?: 'weekdays' | 'saturday' | 'sunday' | 'custom' | null;
   home_address?: string | null;
   work_address?: string | null;
+  ai_setup_responses?: AiSetupResponses;
 }
 
 /**

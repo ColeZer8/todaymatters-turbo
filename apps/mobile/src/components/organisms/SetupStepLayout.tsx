@@ -34,6 +34,7 @@ export const SetupStepLayout = ({
   const isAndroid = Platform.OS === 'android';
   const ScrollView = RNScrollView;
   const shouldPinFooter = isAndroid && !!footer;
+  const keyboardBehavior = Platform.OS === 'ios' ? 'padding' : 'height';
 
   return (
     <LinearGradient
@@ -46,9 +47,9 @@ export const SetupStepLayout = ({
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          enabled={Platform.OS === 'ios'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          behavior={keyboardBehavior}
+          enabled
+          keyboardVerticalOffset={0}
         >
           <View style={styles.container}>
             <ScrollView

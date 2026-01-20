@@ -40,7 +40,7 @@ export default function AISummaryScreen() {
   };
 
   const handleBack = () => {
-    router.replace('/my-church');
+    router.replace('/setup-questions');
   };
 
   if (!isNavigationReady || !hasHydrated) {
