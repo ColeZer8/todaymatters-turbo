@@ -4,7 +4,14 @@ import { useRouter } from 'expo-router';
 import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
 import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
-import { getTodayYmd, useEventsStore } from '@/stores';
+import {
+  getTodayYmd,
+  useAppCategoryOverridesStore,
+  useEventsStore,
+  useAuthStore,
+  useOnboardingStore,
+  useUserPreferencesStore,
+} from '@/stores';
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -19,12 +26,14 @@ import {
 } from '@/lib/android-insights';
 import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
 import { buildActualDisplayEvents } from '@/lib/calendar/actual-display-events';
+import { buildPatternIndex, type PatternIndex } from '@/lib/calendar/pattern-recognition';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
-import { useAuthStore } from '@/stores';
 import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
-import { useOnboardingStore } from '@/stores';
 import { useVerification } from '@/lib/calendar/use-verification';
 import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
+import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
+import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
+import { DEFAULT_USER_PREFERENCES } from '@/stores/user-preferences-store';
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -35,6 +44,10 @@ export default function ComprehensiveCalendarScreen() {
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
   const setDerivedActualEvents = useEventsStore((state) => state.setDerivedActualEvents);
+  const appCategoryOverrides = useAppCategoryOverridesStore((state) => state.overrides);
+  const setAppCategoryOverrides = useAppCategoryOverridesStore((state) => state.setOverrides);
+  const userPreferences = useUserPreferencesStore((state) => state.preferences);
+  const setUserPreferences = useUserPreferencesStore((state) => state.setPreferences);
 
   const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
   const setSelectedDateYmd = useEventsStore((s) => s.setSelectedDateYmd);
@@ -54,6 +67,7 @@ export default function ComprehensiveCalendarScreen() {
   const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
   const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
   const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
+  const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
@@ -61,7 +75,7 @@ export default function ComprehensiveCalendarScreen() {
     }
   }, []);
 
-  const { loadPlannedForDay, loadActualForDay, updatePlanned, updateActual, deletePlanned, deleteActual } =
+  const { loadPlannedForDay, loadActualForDay, loadActualForRange, updatePlanned, updateActual, deletePlanned, deleteActual } =
     useCalendarEventsSync({
       onError: handleCalendarSyncError,
     });
@@ -69,6 +83,7 @@ export default function ComprehensiveCalendarScreen() {
   // Verification: cross-reference planned events with evidence (location, screen time, health)
   const { actualBlocks, evidence, verificationResults } = useVerification(plannedEvents, selectedDateYmd, {
     autoFetch: true,
+    appCategoryOverrides,
     onError: (err) => {
       if (__DEV__) {
         console.warn('[Calendar] Verification error:', err.message);
@@ -138,6 +153,61 @@ export default function ComprehensiveCalendarScreen() {
       cancelled = true;
     };
   }, [actualDateYmd, loadActualForDay, selectedDateYmd, setActualDateYmd, setActualEventsForDate, userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setAppCategoryOverrides({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const overrides = await fetchUserAppCategoryOverrides(userId);
+      if (cancelled) return;
+      setAppCategoryOverrides(overrides);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setAppCategoryOverrides, userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setUserPreferences(DEFAULT_USER_PREFERENCES);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const preferences = await fetchUserDataPreferences(userId);
+      if (cancelled) return;
+      setUserPreferences(preferences);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [setUserPreferences, userId]);
+
+  useEffect(() => {
+    if (!userId || USE_MOCK_CALENDAR) {
+      setPatternIndex(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      const baseDate = ymdToDate(selectedDateYmd);
+      const start = new Date(baseDate);
+      start.setDate(start.getDate() - 14);
+      const startYmd = dateToYmd(start);
+      const endYmd = dateToYmd(baseDate);
+      const history = await loadActualForRange(startYmd, endYmd);
+      if (cancelled) return;
+      const filtered = history.filter((entry) => entry.ymd !== selectedDateYmd);
+      setPatternIndex(buildPatternIndex(filtered));
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadActualForRange, selectedDateYmd, userId]);
 
   const maybeAutoSync = useCallback(async (): Promise<void> => {
     if (Platform.OS !== 'ios') return;
@@ -215,10 +285,11 @@ export default function ComprehensiveCalendarScreen() {
     const derived = deriveActualEventsFromScreenTime({
       existingActualEvents: baseActualEvents,
       screenTimeSummary: summary,
+      appCategoryOverrides,
     });
 
     setDerivedActualEvents(derived);
-  }, [actualEvents, setDerivedActualEvents, status, summary, supportStatus]);
+  }, [actualEvents, appCategoryOverrides, setDerivedActualEvents, status, summary, supportStatus]);
 
   // Actual events are Supabase-backed (no mock defaults). Screen Time derivation remains separate.
   const displayActualEvents = actualEvents;
@@ -268,14 +339,22 @@ export default function ComprehensiveCalendarScreen() {
       evidence,
       verificationResults,
       usageSummary,
+      patternIndex,
+      appCategoryOverrides,
+      gapFillingPreference: userPreferences.gapFillingPreference,
+      confidenceThreshold: userPreferences.confidenceThreshold,
+      allowAutoSuggestions: userPreferences.autoSuggestEvents,
     });
   }, [
     actualBlocks,
+    appCategoryOverrides,
     derivedActualEvents,
     displayActualEvents,
     evidence,
     plannedEvents,
+    patternIndex,
     selectedDateYmd,
+    userPreferences,
     usageSummary,
     verificationResults,
   ]);

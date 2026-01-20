@@ -76,6 +76,29 @@ function sumPickupsFromTopApps(topApps: Array<{ pickups?: number }>): number | n
   return total > 0 ? total : null;
 }
 
+function sumNullableInt(a?: number | null, b?: number | null): number | null {
+  if (a == null && b == null) return null;
+  return (a ?? 0) + (b ?? 0);
+}
+
+function dedupeAppDailyRows(rows: ScreenTimeAppDailyInsert[]): ScreenTimeAppDailyInsert[] {
+  const deduped = new Map<string, ScreenTimeAppDailyInsert>();
+  for (const row of rows) {
+    const existing = deduped.get(row.app_id);
+    if (!existing) {
+      deduped.set(row.app_id, { ...row });
+      continue;
+    }
+    existing.duration_seconds += row.duration_seconds;
+    existing.pickups = sumNullableInt(existing.pickups, row.pickups);
+    existing.notifications = sumNullableInt(existing.notifications, row.notifications);
+    if (!existing.display_name && row.display_name) {
+      existing.display_name = row.display_name;
+    }
+  }
+  return Array.from(deduped.values());
+}
+
 async function upsertScreenTimeDaily(row: ScreenTimeDailyInsert): Promise<{ id: string; localDate: string }> {
   const { data, error } = await tmSchema()
     .from('screen_time_daily')
@@ -88,21 +111,33 @@ async function upsertScreenTimeDaily(row: ScreenTimeDailyInsert): Promise<{ id: 
 }
 
 async function replaceAppDaily(screenTimeDailyId: string, rows: ScreenTimeAppDailyInsert[]): Promise<void> {
-  await tmSchema().from('screen_time_app_daily').delete().eq('screen_time_daily_id', screenTimeDailyId);
+  const { error: deleteError } = await tmSchema()
+    .from('screen_time_app_daily')
+    .delete()
+    .eq('screen_time_daily_id', screenTimeDailyId);
+  if (deleteError) throw handleSupabaseError(deleteError);
   if (rows.length === 0) return;
   const { error } = await tmSchema().from('screen_time_app_daily').insert(rows);
   if (error) throw handleSupabaseError(error);
 }
 
 async function replaceAppHourly(screenTimeDailyId: string, rows: ScreenTimeAppHourlyInsert[]): Promise<void> {
-  await tmSchema().from('screen_time_app_hourly').delete().eq('screen_time_daily_id', screenTimeDailyId);
+  const { error: deleteError } = await tmSchema()
+    .from('screen_time_app_hourly')
+    .delete()
+    .eq('screen_time_daily_id', screenTimeDailyId);
+  if (deleteError) throw handleSupabaseError(deleteError);
   if (rows.length === 0) return;
   const { error } = await tmSchema().from('screen_time_app_hourly').insert(rows);
   if (error) throw handleSupabaseError(error);
 }
 
 async function replaceAppSessions(screenTimeDailyId: string, rows: ScreenTimeAppSessionInsert[]): Promise<void> {
-  await tmSchema().from('screen_time_app_sessions').delete().eq('screen_time_daily_id', screenTimeDailyId);
+  const { error: deleteError } = await tmSchema()
+    .from('screen_time_app_sessions')
+    .delete()
+    .eq('screen_time_daily_id', screenTimeDailyId);
+  if (deleteError) throw handleSupabaseError(deleteError);
   if (rows.length === 0) return;
   const { error } = await tmSchema().from('screen_time_app_sessions').insert(rows);
   if (error) throw handleSupabaseError(error);
@@ -159,16 +194,18 @@ export async function syncIosScreenTimeSummary(
 
   const { id: dailyId } = await upsertScreenTimeDaily(dailyRow);
 
-  const appDailyRows: ScreenTimeAppDailyInsert[] = summary.topApps.map((app) => ({
-    screen_time_daily_id: dailyId,
-    user_id: userId,
-    app_id: app.bundleIdentifier,
-    display_name: app.displayName,
-    duration_seconds: app.durationSeconds,
-    pickups: app.pickups ?? null,
-    notifications: null,
-    meta: { timezone } as Json,
-  }));
+  const appDailyRows = dedupeAppDailyRows(
+    summary.topApps.map((app) => ({
+      screen_time_daily_id: dailyId,
+      user_id: userId,
+      app_id: app.bundleIdentifier,
+      display_name: app.displayName,
+      duration_seconds: app.durationSeconds,
+      pickups: app.pickups ?? null,
+      notifications: null,
+      meta: { timezone } as Json,
+    }))
+  );
   await replaceAppDaily(dailyId, appDailyRows);
 
   const hourlyByApp = summary.hourlyByApp ?? null;
@@ -239,16 +276,18 @@ export async function syncAndroidUsageSummary(
 
   const { id: dailyId } = await upsertScreenTimeDaily(dailyRow);
 
-  const appDailyRows: ScreenTimeAppDailyInsert[] = summary.topApps.map((app) => ({
-    screen_time_daily_id: dailyId,
-    user_id: userId,
-    app_id: app.packageName,
-    display_name: app.displayName,
-    duration_seconds: app.durationSeconds,
-    pickups: null,
-    notifications: null,
-    meta: { timezone } as Json,
-  }));
+  const appDailyRows = dedupeAppDailyRows(
+    summary.topApps.map((app) => ({
+      screen_time_daily_id: dailyId,
+      user_id: userId,
+      app_id: app.packageName,
+      display_name: app.displayName,
+      duration_seconds: app.durationSeconds,
+      pickups: null,
+      notifications: null,
+      meta: { timezone } as Json,
+    }))
+  );
   await replaceAppDaily(dailyId, appDailyRows);
 
   await replaceAppSessions(dailyId, []);

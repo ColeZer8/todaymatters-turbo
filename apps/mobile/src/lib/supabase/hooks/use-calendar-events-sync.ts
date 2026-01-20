@@ -6,9 +6,11 @@ import {
   deleteActualCalendarEvent,
   deletePlannedCalendarEvent,
   fetchActualCalendarEventsForDay,
+  fetchActualCalendarEventsForRange,
   fetchPlannedCalendarEventsForDay,
   updateActualCalendarEvent,
   updatePlannedCalendarEvent,
+  type ActualPatternSourceEvent,
   type CreatePlannedCalendarEventInput,
   type PlannedCalendarMeta,
 } from '../services/calendar-events';
@@ -44,6 +46,20 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
         return await fetchActualCalendarEventsForDay(userId, ymd);
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Failed to load actual events');
+        onError?.(err);
+        return [];
+      }
+    },
+    [isAuthenticated, onError, userId]
+  );
+
+  const loadActualForRange = useCallback(
+    async (startYmd: string, endYmd: string): Promise<ActualPatternSourceEvent[]> => {
+      if (!isAuthenticated || !userId) return [];
+      try {
+        return await fetchActualCalendarEventsForRange(userId, startYmd, endYmd);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error('Failed to load actual events range');
         onError?.(err);
         return [];
       }
@@ -167,7 +183,17 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
     [isAuthenticated, onError, userId]
   );
 
-  return { loadPlannedForDay, loadActualForDay, createPlanned, createActual, updatePlanned, updateActual, deletePlanned, deleteActual };
+  return {
+    loadPlannedForDay,
+    loadActualForDay,
+    loadActualForRange,
+    createPlanned,
+    createActual,
+    updatePlanned,
+    updateActual,
+    deletePlanned,
+    deleteActual,
+  };
 }
 
 

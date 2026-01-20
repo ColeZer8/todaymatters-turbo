@@ -8,6 +8,7 @@ import {
   type ActualBlock,
   type VerificationStatus,
 } from './verification-engine';
+import type { AppCategoryOverrides } from './app-classification';
 
 // Re-export types for convenience
 export type { VerificationResult, VerificationStatus, ActualBlock };
@@ -21,6 +22,8 @@ export interface UseVerificationOptions {
   autoFetch?: boolean;
   /** Callback when verification fails */
   onError?: (error: Error) => void;
+  /** User-specific app category overrides */
+  appCategoryOverrides?: AppCategoryOverrides;
 }
 
 export interface UseVerificationReturn {
@@ -68,7 +71,7 @@ export function useVerification(
   ymd: string,
   options: UseVerificationOptions = {}
 ): UseVerificationReturn {
-  const { autoFetch = true, onError } = options;
+  const { autoFetch = true, onError, appCategoryOverrides } = options;
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -102,11 +105,11 @@ export function useVerification(
       setEvidence(bundle);
 
       // Run verification
-      const results = verifyPlannedEvents(plannedEvents, bundle, ymd);
+      const results = verifyPlannedEvents(plannedEvents, bundle, ymd, appCategoryOverrides);
       setVerificationResults(results);
 
       // Generate actual blocks
-      const blocks = generateActualBlocks(bundle, ymd, plannedEvents);
+      const blocks = generateActualBlocks(bundle, ymd, plannedEvents, appCategoryOverrides);
       setActualBlocks(blocks);
 
       lastFetched.current = { ymd, userId };
@@ -122,7 +125,7 @@ export function useVerification(
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, userId, ymd, plannedEvents, onError]);
+  }, [appCategoryOverrides, isAuthenticated, userId, ymd, plannedEvents, onError]);
 
   // Auto-fetch when date or user changes
   useEffect(() => {
@@ -144,12 +147,12 @@ export function useVerification(
   useEffect(() => {
     if (!evidence) return;
 
-    const results = verifyPlannedEvents(plannedEvents, evidence, ymd);
+    const results = verifyPlannedEvents(plannedEvents, evidence, ymd, appCategoryOverrides);
     setVerificationResults(results);
 
-    const blocks = generateActualBlocks(evidence, ymd, plannedEvents);
+    const blocks = generateActualBlocks(evidence, ymd, plannedEvents, appCategoryOverrides);
     setActualBlocks(blocks);
-  }, [evidence, plannedEvents, ymd]);
+  }, [appCategoryOverrides, evidence, plannedEvents, ymd]);
 
   /**
    * Get verification result for a specific event.
@@ -191,7 +194,13 @@ export function useVerification(
         case 'verified':
           verified++;
           break;
+        case 'mostly_verified':
+          verified++;
+          break;
         case 'partial':
+          partial++;
+          break;
+        case 'partially_verified':
           partial++;
           break;
         case 'unverified':
@@ -202,6 +211,12 @@ export function useVerification(
           break;
         case 'distracted':
           distracted++;
+          break;
+        case 'early':
+        case 'late':
+        case 'shortened':
+        case 'extended':
+          partial++;
           break;
       }
 

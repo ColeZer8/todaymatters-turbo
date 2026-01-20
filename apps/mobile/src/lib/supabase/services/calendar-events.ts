@@ -1,7 +1,7 @@
 import { supabase } from '../client';
 import { handleSupabaseError } from '../utils/error-handler';
 import type { Database, Json } from '../database.types';
-import type { EventCategory, ScheduledEvent } from '@/stores';
+import type { CalendarEventMeta, EventCategory, ScheduledEvent } from '@/stores';
 
 const PLANNED_EVENT_TYPE = 'calendar_planned';
 const ACTUAL_EVENT_TYPE = 'calendar_actual';
@@ -10,23 +10,7 @@ type TmEventRow = Database['tm']['Tables']['events']['Row'];
 type TmEventInsert = Database['tm']['Tables']['events']['Insert'];
 type TmEventUpdate = Database['tm']['Tables']['events']['Update'];
 
-export interface PlannedCalendarMeta extends Record<string, Json> {
-  category: EventCategory;
-  isBig3?: boolean;
-  location?: string | null;
-  source?: 'user' | 'system';
-  plannedEventId?: string;
-  kind?: 'sleep_schedule';
-  startYmd?: string;
-  actual?: boolean;
-  tags?: string[];
-  source_id?: string;
-  suggested_category?: EventCategory;
-  ai?: {
-    confidence?: number;
-    reason?: string;
-  };
-}
+export type PlannedCalendarMeta = CalendarEventMeta & Record<string, Json>;
 
 function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -58,6 +42,15 @@ function ymdToDate(ymd: string): Date {
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
   return new Date(year, month, day);
+}
+
+function isoToLocalYmd(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function parseTimeIsoToHoursMinutes(timeIso: string): { hours: number; minutes: number } {
@@ -108,6 +101,7 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
     duration,
     category,
     isBig3: metaParsed?.isBig3 ?? false,
+    meta: metaParsed ?? undefined,
   };
 }
 
@@ -142,6 +136,7 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
     duration,
     category,
     isBig3: metaParsed?.isBig3 ?? false,
+    meta: metaParsed ?? undefined,
   };
 }
 
@@ -198,6 +193,48 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
       .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
       .filter((e): e is ScheduledEvent => !!e)
       .sort((a, b) => a.startMinutes - b.startMinutes);
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+export interface ActualPatternSourceEvent {
+  ymd: string;
+  event: ScheduledEvent;
+}
+
+export async function fetchActualCalendarEventsForRange(
+  userId: string,
+  startYmd: string,
+  endYmd: string
+): Promise<ActualPatternSourceEvent[]> {
+  try {
+    const rangeStart = ymdToLocalDayStart(startYmd);
+    const rangeEnd = addDays(ymdToLocalDayStart(endYmd), 1);
+    const startIso = rangeStart.toISOString();
+    const endIso = rangeEnd.toISOString();
+
+    const { data, error } = await supabase
+      .schema('tm')
+      .from('events')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('type', ACTUAL_EVENT_TYPE)
+      .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso)
+      .order('scheduled_start', { ascending: true });
+
+    if (error) throw handleSupabaseError(error);
+
+    return (data ?? [])
+      .map((row) => {
+        const mapped = rowToScheduledEvent(row as TmEventRow);
+        if (!mapped || !row.scheduled_start) return null;
+        const ymd = isoToLocalYmd(row.scheduled_start);
+        if (!ymd) return null;
+        return { ymd, event: mapped };
+      })
+      .filter((item): item is ActualPatternSourceEvent => Boolean(item));
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }

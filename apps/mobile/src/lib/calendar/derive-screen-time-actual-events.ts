@@ -1,5 +1,6 @@
 import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights';
 import type { ScheduledEvent } from '@/stores/events-store';
+import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
 
 interface DeriveActualEventsFromScreenTimeOptions {
   existingActualEvents: ScheduledEvent[];
@@ -14,6 +15,7 @@ interface DeriveActualEventsFromScreenTimeOptions {
    * doesn't overlap any non-digital actual events).
    */
   minScreenTimeBlockMinutes?: number;
+  appCategoryOverrides?: AppCategoryOverrides;
 }
 
 interface DistractionInfo {
@@ -34,6 +36,7 @@ export function deriveActualEventsFromScreenTime({
   screenTimeSummary,
   distractionThresholdMinutes = 10,
   minScreenTimeBlockMinutes = 10,
+  appCategoryOverrides,
 }: DeriveActualEventsFromScreenTimeOptions): ScheduledEvent[] {
   // Prefer sessions for precise overlap detection, fallback to hourlyByApp, then aggregate hourly buckets
   const hasSessions = screenTimeSummary.appSessions && screenTimeSummary.appSessions.length > 0;
@@ -147,6 +150,7 @@ export function deriveActualEventsFromScreenTime({
     appSessions: screenTimeSummary.appSessions ?? null,
     existingNonDigitalEvents: baseActualEvents.filter((e) => e.category !== 'digital'),
     minScreenTimeBlockMinutes,
+    appCategoryOverrides,
   });
 
   return [...distractedActualEvents, ...sleepLateBlocks, ...screenTimeBlocks].sort((a, b) => a.startMinutes - b.startMinutes);
@@ -294,6 +298,7 @@ function deriveStandaloneScreenTimeBlocks(options: {
   appSessions: ScreenTimeAppSession[] | null;
   existingNonDigitalEvents: ScheduledEvent[];
   minScreenTimeBlockMinutes: number;
+  appCategoryOverrides?: AppCategoryOverrides;
 }): ScheduledEvent[] {
   const {
     screenTimeSummary,
@@ -302,15 +307,28 @@ function deriveStandaloneScreenTimeBlocks(options: {
     appSessions,
     existingNonDigitalEvents,
     minScreenTimeBlockMinutes,
+    appCategoryOverrides,
   } = options;
 
   // Prefer sessions for precise blocks, fallback to hourly data
   if (appSessions && appSessions.length > 0) {
-    return deriveBlocksFromSessions(appSessions, existingNonDigitalEvents, minScreenTimeBlockMinutes, screenTimeSummary);
+    return deriveBlocksFromSessions(
+      appSessions,
+      existingNonDigitalEvents,
+      minScreenTimeBlockMinutes,
+      screenTimeSummary,
+      appCategoryOverrides,
+    );
   }
 
   if (hourlyByApp && Object.keys(hourlyByApp).length > 0) {
-    return deriveBlocksFromHourlyByApp(hourlyByApp, existingNonDigitalEvents, minScreenTimeBlockMinutes, screenTimeSummary);
+    return deriveBlocksFromHourlyByApp(
+      hourlyByApp,
+      existingNonDigitalEvents,
+      minScreenTimeBlockMinutes,
+      screenTimeSummary,
+      appCategoryOverrides,
+    );
   }
 
   if (hourlyBucketsSeconds && hourlyBucketsSeconds.length > 0) {
@@ -319,6 +337,7 @@ function deriveStandaloneScreenTimeBlocks(options: {
       existingNonDigitalEvents,
       minScreenTimeBlockMinutes,
       screenTimeSummary,
+      appCategoryOverrides,
     );
   }
 
@@ -330,6 +349,7 @@ function deriveBlocksFromSessions(
   existingNonDigitalEvents: ScheduledEvent[],
   minScreenTimeBlockMinutes: number,
   screenTimeSummary: ScreenTimeSummary,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): ScheduledEvent[] {
   const blocks: ScheduledEvent[] = [];
   let derivedIndex = 0;
@@ -350,15 +370,27 @@ function deriveBlocksFromSessions(
     );
     if (overlapsNonDigital) continue;
 
-    const description = toScreenTimePhrase(session.displayName);
+    const appName = session.displayName;
+    const description = toScreenTimePhrase(appName);
+    const classification = classifyAppUsage(appName, appCategoryOverrides);
 
     blocks.push({
       id: `st_session_${screenTimeSummary.generatedAtIso}_${derivedIndex++}`,
-      title: 'Screen Time',
+      title: classification.title,
       description,
       startMinutes: sessionStartMinutes,
       duration: clampDurationMinutes(sessionDuration),
-      category: 'digital',
+      category: classification.category,
+      meta: {
+        category: classification.category,
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: classification.confidence,
+        evidence: {
+          topApp: appName,
+          screenTimeMinutes: sessionDuration,
+        },
+      },
     });
   }
 
@@ -370,6 +402,7 @@ function deriveBlocksFromHourlyByApp(
   existingNonDigitalEvents: ScheduledEvent[],
   minScreenTimeBlockMinutes: number,
   screenTimeSummary: ScreenTimeSummary,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): ScheduledEvent[] {
   const blocks: ScheduledEvent[] = [];
   let derivedIndex = 0;
@@ -406,15 +439,27 @@ function deriveBlocksFromHourlyByApp(
     );
     if (overlapsNonDigital) continue;
 
+    const appName = hourData.topApp ?? 'Phone usage';
     const description = hourData.topApp ? toScreenTimePhrase(hourData.topApp) : 'Phone use';
+    const classification = classifyAppUsage(appName, appCategoryOverrides);
 
     blocks.push({
       id: `st_${screenTimeSummary.generatedAtIso}_${startMinutes}_${derivedIndex++}`,
-      title: 'Screen Time',
+      title: classification.title,
       description,
       startMinutes,
       duration,
-      category: 'digital',
+      category: classification.category,
+      meta: {
+        category: classification.category,
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: classification.confidence,
+        evidence: {
+          topApp: hourData.topApp ?? null,
+          screenTimeMinutes: duration,
+        },
+      },
     });
   }
 
@@ -426,11 +471,13 @@ function deriveBlocksFromAggregateHourly(
   existingNonDigitalEvents: ScheduledEvent[],
   minScreenTimeBlockMinutes: number,
   screenTimeSummary: ScreenTimeSummary,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): ScheduledEvent[] {
   const blocks: ScheduledEvent[] = [];
   let derivedIndex = 0;
   const topAppName = screenTimeSummary.topApps[0]?.displayName ?? null;
   const description = topAppName ? toScreenTimePhrase(topAppName) : 'Phone use';
+  const classification = classifyAppUsage(topAppName ?? 'Phone usage', appCategoryOverrides);
 
   for (let hour = 0; hour < 24; hour++) {
     const bucketSeconds = hourlyBucketsSeconds[hour] ?? 0;
@@ -448,11 +495,21 @@ function deriveBlocksFromAggregateHourly(
 
     blocks.push({
       id: `st_${screenTimeSummary.generatedAtIso}_${startMinutes}_${derivedIndex++}`,
-      title: 'Screen Time',
+      title: classification.title,
       description,
       startMinutes,
       duration,
-      category: 'digital',
+      category: classification.category,
+      meta: {
+        category: classification.category,
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: classification.confidence,
+        evidence: {
+          topApp: topAppName,
+          screenTimeMinutes: duration,
+        },
+      },
     });
   }
 
@@ -482,6 +539,16 @@ function buildPreSleepScreenTimeBlock(options: {
     startMinutes,
     duration: endMinutes - startMinutes,
     category: 'digital',
+    meta: {
+      category: 'digital',
+      source: 'derived',
+      kind: 'screen_time',
+      confidence: 0.6,
+      evidence: {
+        topApp: topAppName,
+        screenTimeMinutes: duration,
+      },
+    },
   };
 }
 
@@ -539,6 +606,16 @@ function buildSleepStartScreenTimeAdjustment(options: {
       startMinutes: candidate.startMinutes,
       duration: candidate.durationMinutes,
       category: 'digital',
+      meta: {
+        category: 'digital',
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: 0.6,
+        evidence: {
+          topApp: candidate.topAppName,
+          screenTimeMinutes: candidate.durationMinutes,
+        },
+      },
     },
   };
 }
@@ -665,5 +742,3 @@ function roundToNearest(value: number, step: number): number {
   if (step <= 0) return Math.round(value);
   return Math.round(value / step) * step;
 }
-
-

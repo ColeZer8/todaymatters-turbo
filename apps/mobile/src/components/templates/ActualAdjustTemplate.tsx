@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, Text, TextInput, View, Switch } from 'react-native';
 import type { EventCategory } from '@/stores';
@@ -21,6 +22,7 @@ export interface ActualAdjustTemplateProps {
   selectedGoalId: string | null;
   note: string;
   helperText: string;
+  evidenceRows?: Array<{ label: string; value: string }>;
   suggestion?: ActualAdjustSuggestion | null;
   isSaving: boolean;
   onCancel: () => void;
@@ -53,6 +55,7 @@ export const ActualAdjustTemplate = ({
   selectedGoalId,
   note,
   helperText,
+  evidenceRows = [],
   suggestion,
   isSaving,
   onCancel,
@@ -63,6 +66,12 @@ export const ActualAdjustTemplate = ({
   onSelectValue,
   onSelectGoal,
 }: ActualAdjustTemplateProps) => {
+  const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(false);
+  const confidenceRow = useMemo(
+    () => evidenceRows.find((row) => row.label.toLowerCase() === 'confidence') ?? null,
+    [evidenceRows],
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-[#F7FAFF]">
       <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
@@ -214,6 +223,30 @@ export const ActualAdjustTemplate = ({
             <Text className="mt-2 text-[12px] text-[#6B7280]">{suggestion.reason}</Text>
           )}
         </View>
+
+        {evidenceRows.length > 0 && (
+          <View className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+            <Pressable
+              onPress={() => setIsEvidenceExpanded((prev) => !prev)}
+              className="flex-row items-center justify-between"
+            >
+              <Text className="text-[13px] font-semibold text-[#111827]">Why we marked this</Text>
+              <Text className="text-[12px] font-semibold text-[#2563EB]">
+                {confidenceRow?.value ?? (isEvidenceExpanded ? 'Hide' : 'Details')}
+              </Text>
+            </Pressable>
+            {isEvidenceExpanded && (
+              <View className="mt-3 gap-2">
+                {evidenceRows.map((row) => (
+                  <View key={row.label} className="flex-row items-center justify-between">
+                    <Text className="text-[12px] text-[#64748B]">{row.label}</Text>
+                    <Text className="text-[12px] font-semibold text-[#111827]">{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

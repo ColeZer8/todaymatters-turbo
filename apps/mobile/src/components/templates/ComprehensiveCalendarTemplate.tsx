@@ -549,6 +549,7 @@ export const ComprehensiveCalendarTemplate = ({
                                                             category: event.category,
                                                             startMinutes: String(event.startMinutes),
                                                             duration: String(event.duration),
+                                                            meta: event.meta ? JSON.stringify(event.meta) : undefined,
                                                         },
                                                     })
                                                 }

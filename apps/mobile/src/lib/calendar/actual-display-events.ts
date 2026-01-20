@@ -1,15 +1,28 @@
-import type { ScheduledEvent } from '@/stores';
-import type { EvidenceBundle, LocationHourlyRow } from '@/lib/supabase/services/evidence-data';
+import type { CalendarEventMeta, ScheduledEvent } from '@/stores';
+import type {
+  EvidenceBundle,
+  HealthDailyRow,
+  LocationHourlyRow,
+  ScreenTimeSessionRow,
+} from '@/lib/supabase/services/evidence-data';
 import type { UsageSummary } from '@/lib/android-insights';
 import type { ActualBlock, VerificationResult } from './verification-engine';
-import { appMatchesList, DISTRACTION_APPS, WORK_APPS } from './verification-rules';
+import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
+import { buildSleepQualityMetrics } from './sleep-analysis';
+import { buildDataQualityMetrics } from './data-quality';
+import { buildEvidenceFusion } from './evidence-fusion';
+import {
+  applyPatternSuggestions,
+  buildPatternSummary,
+  getPatternSuggestionForRange,
+  type PatternIndex,
+} from './pattern-recognition';
 
 export const DERIVED_ACTUAL_PREFIX = 'derived_actual:';
 export const DERIVED_EVIDENCE_PREFIX = 'derived_evidence:';
 
 const MIN_EVIDENCE_BLOCK_MINUTES = 10;
 const DISTRACTION_THRESHOLD_MINUTES = 10;
-const PRODUCTIVE_APPS = ['calculator', 'notes', 'today matters', 'todaymatters', 'mobile'];
 const SCREEN_TIME_GAP_MINUTES = 15;
 const SLEEP_SCREEN_TIME_GAP_MINUTES = 5;
 const SLEEP_MAX_START_OFFSET_MINUTES = 120;
@@ -26,7 +39,13 @@ interface BuildActualDisplayEventsInput {
   verificationResults?: Map<string, VerificationResult>;
   evidence?: EvidenceBundle | null;
   usageSummary?: UsageSummary | null;
+  patternIndex?: PatternIndex | null;
+  patternMinConfidence?: number;
   minEvidenceBlockMinutes?: number;
+  appCategoryOverrides?: AppCategoryOverrides;
+  gapFillingPreference?: 'conservative' | 'aggressive' | 'manual';
+  confidenceThreshold?: number;
+  allowAutoSuggestions?: boolean;
 }
 
 interface LocationBlock {
@@ -35,6 +54,12 @@ interface LocationBlock {
   placeLabel: string;
   placeCategory: string | null;
 }
+
+interface TransitionContext {
+  locationBlocks: LocationBlock[];
+}
+
+const TRANSITION_TARGET_CATEGORIES: EventCategory[] = ['work', 'health', 'meeting'];
 
 interface SleepStartAdjustment {
   sleepStartMinutes: number;
@@ -59,9 +84,16 @@ export function buildActualDisplayEvents({
   verificationResults,
   evidence,
   usageSummary,
+  patternIndex,
+  patternMinConfidence,
   minEvidenceBlockMinutes = MIN_EVIDENCE_BLOCK_MINUTES,
+  appCategoryOverrides,
+  gapFillingPreference = 'conservative',
+  confidenceThreshold = 0.6,
+  allowAutoSuggestions = true,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
   const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly) : [];
+  const dataQuality = buildDataQualityMetrics({ evidence, usageSummary });
   const plannedSorted = [...plannedEvents].sort((a, b) => a.startMinutes - b.startMinutes);
 
   const sleepOverrideIntervals = buildSleepScheduleIntervals(plannedSorted);
@@ -120,6 +152,7 @@ export function buildActualDisplayEvents({
       usageSummary,
       plannedEvents: plannedSorted,
       minMinutes: minEvidenceBlockMinutes,
+      appCategoryOverrides,
     });
     for (const block of usageBlocks) {
       addIfFree(block);
@@ -130,6 +163,18 @@ export function buildActualDisplayEvents({
     for (const block of actualBlocks) {
       const duration = Math.max(1, block.endMinutes - block.startMinutes);
       if (duration < minEvidenceBlockMinutes) continue;
+      const meta: CalendarEventMeta = {
+        category: block.category,
+        source: 'evidence',
+        kind: 'evidence_block',
+        confidence: block.confidence ?? 0.55,
+        dataQuality,
+        evidence: {
+          locationLabel: block.evidence.location?.placeLabel ?? null,
+          screenTimeMinutes: block.evidence.screenTime?.totalMinutes,
+          topApp: block.evidence.screenTime?.topApps[0]?.app ?? null,
+        },
+      };
       addIfFree({
         id: `${DERIVED_EVIDENCE_PREFIX}${block.id}`,
         title: block.title,
@@ -137,6 +182,7 @@ export function buildActualDisplayEvents({
         startMinutes: block.startMinutes,
         duration,
         category: block.category,
+        meta,
       });
     }
   }
@@ -198,6 +244,11 @@ export function buildActualDisplayEvents({
       plannedEvents: plannedSorted,
       locationBlocks,
       usageSummary,
+      healthDaily: evidence?.healthDaily ?? null,
+      patternIndex,
+      ymd,
+      dataQuality,
+      appCategoryOverrides,
     });
     if (!derived) continue;
     addIfFree(derived, 1);
@@ -217,14 +268,52 @@ export function buildActualDisplayEvents({
     : results;
 
   const withUnknowns = fillUnknownGaps(filteredResults);
-  const withSleepFilled = replaceUnknownWithSleepSchedule(withUnknowns, sleepOverrideIntervals);
-  const withProductiveFilled = replaceUnknownWithProductiveUsage(
-    withSleepFilled,
+  const withSleepFilled = replaceUnknownWithSleepSchedule(withUnknowns, sleepOverrideIntervals, {
+    ymd,
     usageSummary,
-    minEvidenceBlockMinutes,
+    screenTimeSessions: evidence?.screenTimeSessions ?? null,
+    healthDaily: evidence?.healthDaily ?? null,
+    dataQuality,
+  });
+  const allowGapFilling = gapFillingPreference !== 'manual';
+  const allowProductiveFill = gapFillingPreference === 'aggressive';
+  const allowTransitions = gapFillingPreference === 'aggressive';
+  const allowPatterns = allowGapFilling && allowAutoSuggestions;
+  const preferenceOffset = gapFillingPreference === 'aggressive' ? -0.1 : gapFillingPreference === 'conservative' ? 0.1 : 0;
+  const effectivePatternMinConfidence = Math.max(
+    0.4,
+    Math.min(0.95, Math.max(patternMinConfidence ?? 0.6, confidenceThreshold + preferenceOffset)),
   );
 
-  return mergeAdjacentSleep(withProductiveFilled).sort((a, b) => a.startMinutes - b.startMinutes);
+  const withProductiveFilled = allowProductiveFill
+    ? replaceUnknownWithProductiveUsage(
+        withSleepFilled,
+        usageSummary,
+        minEvidenceBlockMinutes,
+        appCategoryOverrides,
+      )
+    : withSleepFilled;
+  const withTransitions = allowTransitions
+    ? replaceUnknownWithTransitions(withProductiveFilled, {
+        locationBlocks,
+      })
+    : withProductiveFilled;
+  const withPrepWindDown = allowTransitions
+    ? replaceUnknownWithPrepWindDown(withTransitions, {
+        locationBlocks,
+      })
+    : withTransitions;
+  const withPatternFilled = allowPatterns
+    ? applyPatternSuggestions(
+        withPrepWindDown,
+        patternIndex ?? null,
+        ymd,
+        effectivePatternMinConfidence,
+      )
+    : withPrepWindDown;
+  const withQuality = attachDataQuality(withPatternFilled, dataQuality);
+
+  return mergeAdjacentSleep(withQuality).sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
 function buildPlannedActualEvent(options: {
@@ -233,8 +322,24 @@ function buildPlannedActualEvent(options: {
   plannedEvents: ScheduledEvent[];
   locationBlocks: LocationBlock[];
   usageSummary?: UsageSummary | null;
+  healthDaily?: HealthDailyRow | null;
+  patternIndex?: PatternIndex | null;
+  ymd: string;
+  dataQuality: ReturnType<typeof buildDataQualityMetrics>;
+  appCategoryOverrides?: AppCategoryOverrides;
 }): ScheduledEvent | null {
-  const { planned, verification, plannedEvents, locationBlocks, usageSummary } = options;
+  const {
+    planned,
+    verification,
+    plannedEvents,
+    locationBlocks,
+    usageSummary,
+    healthDaily,
+    patternIndex,
+    ymd,
+    dataQuality,
+    appCategoryOverrides,
+  } = options;
   const startMinutes = clampMinutes(planned.startMinutes);
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
   if (plannedEnd <= startMinutes) return null;
@@ -256,7 +361,7 @@ function buildPlannedActualEvent(options: {
   }
 
   const usageInfo = usageSummary
-    ? getUsageOverlapInfo(usageSummary, startMinutes, actualEnd)
+    ? getUsageOverlapInfo(usageSummary, startMinutes, actualEnd, appCategoryOverrides)
     : null;
 
   const description = buildActualDescription({
@@ -267,6 +372,111 @@ function buildPlannedActualEvent(options: {
     usageInfo,
   });
 
+  const sleepQuality = buildSleepQualityMetrics(healthDaily ?? null);
+
+  const conflicts: Array<{ source: 'location' | 'screen_time' | 'health'; detail: string }> = [];
+  if (planned.category === 'work' && usageInfo?.isDistraction) {
+    conflicts.push({ source: 'screen_time', detail: 'Distraction apps during work' });
+  }
+  if (
+    planned.category === 'sleep' &&
+    usageInfo &&
+    usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+  ) {
+    conflicts.push({ source: 'screen_time', detail: 'Phone use during sleep window' });
+  }
+  if (planned.category === 'work' && sleepQuality?.qualityScore && sleepQuality.qualityScore < 50) {
+    conflicts.push({ source: 'health', detail: 'Low sleep quality before work' });
+  }
+  if (
+    planned.location &&
+    matchingLocation?.placeLabel &&
+    planned.location.toLowerCase() !== matchingLocation.placeLabel.toLowerCase()
+  ) {
+    conflicts.push({ source: 'location', detail: 'Location differs from plan' });
+  }
+
+  const patternSuggestion = getPatternSuggestionForRange(
+    patternIndex ?? null,
+    ymd,
+    startMinutes,
+    actualEnd,
+  );
+  if (patternSuggestion && patternSuggestion.category !== planned.category && patternSuggestion.confidence >= 0.6) {
+    conflicts.push({
+      source: 'pattern',
+      detail: `Typical ${patternSuggestion.category} at this time`,
+    });
+  }
+
+  const patternSummary = buildPatternSummary(
+    patternIndex ?? null,
+    ymd,
+    startMinutes,
+    actualEnd,
+    planned.category,
+  );
+
+  const verificationReport = verification?.report
+    ? {
+        status: verification.report.status,
+        confidence: verification.report.confidence,
+        discrepancies: [
+          ...(verification.report.discrepancies ?? []),
+          ...(patternSummary?.deviation && patternSummary.typicalCategory
+            ? [
+                {
+                  type: 'pattern',
+                  expected: `Typical ${patternSummary.typicalCategory}`,
+                  actual: planned.category,
+                  severity: 'minor',
+                },
+              ]
+            : []),
+        ],
+        suggestions: verification.report.suggestions,
+      }
+    : undefined;
+
+  const fusion = buildEvidenceFusion({
+    verification,
+    dataQuality,
+    patternSummary: patternSummary ?? null,
+    conflicts,
+    plannedCategory: planned.category,
+  });
+
+  const meta: CalendarEventMeta = {
+    category: planned.category,
+    source: 'derived',
+    plannedEventId: planned.id,
+    confidence: fusion.confidence,
+    dataQuality,
+    patternSummary: patternSummary ?? undefined,
+    verificationReport,
+    evidence: {
+      locationLabel: matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
+      screenTimeMinutes: usageInfo ? Math.round(usageInfo.totalMinutes) : undefined,
+      topApp: usageInfo?.topApp ?? null,
+      sleep:
+        planned.category === 'sleep'
+          ? {
+              asleepMinutes: sleepQuality?.asleepMinutes,
+              hrvMs: sleepQuality?.hrvMs ?? null,
+              restingHeartRateBpm: sleepQuality?.restingHeartRateBpm ?? null,
+              heartRateAvgBpm: sleepQuality?.heartRateAvgBpm ?? null,
+              qualityScore: sleepQuality?.qualityScore ?? null,
+            }
+          : undefined,
+      conflicts: conflicts.length > 0 ? conflicts : undefined,
+    },
+    evidenceFusion: fusion,
+    kind:
+      planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+        ? 'sleep_late'
+        : 'planned_actual',
+  };
+
   return {
     ...planned,
     id: `${DERIVED_ACTUAL_PREFIX}${planned.id}`,
@@ -274,6 +484,7 @@ function buildPlannedActualEvent(options: {
     startMinutes,
     duration: Math.max(1, actualEnd - startMinutes),
     location: planned.location ?? matchingLocation?.placeLabel ?? planned.location,
+    meta,
   };
 }
 
@@ -458,9 +669,18 @@ function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
   return mergeAdjacentUnknowns(filled);
 }
 
+interface SleepInterruptionContext {
+  ymd: string;
+  usageSummary?: UsageSummary | null;
+  screenTimeSessions?: ScreenTimeSessionRow[] | null;
+  healthDaily?: HealthDailyRow | null;
+  dataQuality: ReturnType<typeof buildDataQualityMetrics>;
+}
+
 function replaceUnknownWithSleepSchedule(
   events: ScheduledEvent[],
   sleepIntervals: Array<{ startMinutes: number; endMinutes: number }>,
+  context: SleepInterruptionContext,
 ): ScheduledEvent[] {
   if (sleepIntervals.length === 0) return events;
 
@@ -497,7 +717,7 @@ function replaceUnknownWithSleepSchedule(
       }
 
       if (overlapEnd > overlapStart) {
-        updated.push(buildInterruptedSleepEvent(overlapStart, overlapEnd - overlapStart));
+        updated.push(buildInterruptedSleepEvent(overlapStart, overlapEnd - overlapStart, context));
       }
 
       cursor = Math.max(cursor, overlapEnd);
@@ -515,6 +735,7 @@ function replaceUnknownWithProductiveUsage(
   events: ScheduledEvent[],
   usageSummary: UsageSummary | null | undefined,
   minMinutes: number,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): ScheduledEvent[] {
   if (!usageSummary) return events;
 
@@ -530,7 +751,7 @@ function replaceUnknownWithProductiveUsage(
     const end = clampMinutes(event.startMinutes + event.duration);
     if (end <= start) continue;
 
-    const usageInfo = getUsageOverlapInfo(usageSummary, start, end);
+    const usageInfo = getUsageOverlapInfo(usageSummary, start, end, appCategoryOverrides);
     if (!usageInfo || !usageInfo.isProductive || usageInfo.totalMinutes < minMinutes) {
       updated.push(event);
       continue;
@@ -543,14 +764,307 @@ function replaceUnknownWithProductiveUsage(
   return updated;
 }
 
-function buildInterruptedSleepEvent(startMinutes: number, duration: number): ScheduledEvent {
+function findLocationLabelAtMinute(
+  blocks: LocationBlock[],
+  minute: number,
+): { label: string | null; category: string | null } {
+  for (const block of blocks) {
+    if (minute >= block.startMinutes && minute < block.endMinutes) {
+      return { label: block.placeLabel, category: block.placeCategory };
+    }
+  }
+  return { label: null, category: null };
+}
+
+function replaceUnknownWithTransitions(
+  events: ScheduledEvent[],
+  context: TransitionContext,
+): ScheduledEvent[] {
+  const sorted = [...events].sort((a, b) => a.startMinutes - b.startMinutes);
+  const updated: ScheduledEvent[] = [];
+
+  for (let i = 0; i < sorted.length; i += 1) {
+    const event = sorted[i];
+    if (event.category !== 'unknown') {
+      updated.push(event);
+      continue;
+    }
+
+    const prev = sorted[i - 1];
+    const next = sorted[i + 1];
+    if (!prev || !next) {
+      updated.push(event);
+      continue;
+    }
+
+    const gapMinutes = event.duration;
+    if (gapMinutes < 15 || gapMinutes > 90) {
+      updated.push(event);
+      continue;
+    }
+
+    const startMinute = event.startMinutes;
+    const endMinute = event.startMinutes + event.duration;
+    const fromLocation = findLocationLabelAtMinute(context.locationBlocks, startMinute);
+    const toLocation = findLocationLabelAtMinute(context.locationBlocks, endMinute);
+    const fromLabel = fromLocation.label ?? prev.location ?? null;
+    const toLabel = toLocation.label ?? next.location ?? null;
+
+    if (!fromLabel || !toLabel || fromLabel.toLowerCase() === toLabel.toLowerCase()) {
+      updated.push(event);
+      continue;
+    }
+
+    const meta: CalendarEventMeta = {
+      category: 'comm',
+      source: 'derived',
+      kind: 'transition_commute',
+      confidence: 0.45,
+      evidence: {
+        locationLabel: `${fromLabel} → ${toLabel}`,
+      },
+    };
+
+    updated.push({
+      ...event,
+      title: 'Commute',
+      description: `${fromLabel} → ${toLabel}`,
+      category: 'comm',
+      meta,
+    });
+  }
+
+  return updated;
+}
+
+function replaceUnknownWithPrepWindDown(
+  events: ScheduledEvent[],
+  context: TransitionContext,
+): ScheduledEvent[] {
+  const sorted = [...events].sort((a, b) => a.startMinutes - b.startMinutes);
+  const updated: ScheduledEvent[] = [];
+
+  for (let i = 0; i < sorted.length; i += 1) {
+    const event = sorted[i];
+    if (event.category !== 'unknown') {
+      updated.push(event);
+      continue;
+    }
+
+    const prev = sorted[i - 1];
+    const next = sorted[i + 1];
+    if (!prev || !next) {
+      updated.push(event);
+      continue;
+    }
+
+    const gapMinutes = event.duration;
+    if (gapMinutes < 10 || gapMinutes > 45) {
+      updated.push(event);
+      continue;
+    }
+
+    const sameCategory = prev.category === next.category;
+    const isTargetCategory = TRANSITION_TARGET_CATEGORIES.includes(prev.category);
+    if (!sameCategory || !isTargetCategory) {
+      updated.push(event);
+      continue;
+    }
+
+    const startMinute = event.startMinutes;
+    const endMinute = event.startMinutes + event.duration;
+    const fromLocation = findLocationLabelAtMinute(context.locationBlocks, startMinute);
+    const toLocation = findLocationLabelAtMinute(context.locationBlocks, endMinute);
+    const fromLabel = fromLocation.label ?? prev.location ?? null;
+    const toLabel = toLocation.label ?? next.location ?? null;
+
+    if (fromLabel && toLabel && fromLabel.toLowerCase() !== toLabel.toLowerCase()) {
+      updated.push(event);
+      continue;
+    }
+
+    const isPrep = next.category === prev.category;
+    const title = isPrep ? 'Prep' : 'Wind down';
+    const kind = isPrep ? 'transition_prep' : 'transition_wind_down';
+    const meta: CalendarEventMeta = {
+      category: prev.category,
+      source: 'derived',
+      kind,
+      confidence: 0.35,
+      evidence: {
+        locationLabel: fromLabel ?? toLabel ?? null,
+      },
+    };
+
+    updated.push({
+      ...event,
+      title,
+      description: fromLabel ? `${title} at ${fromLabel}` : title,
+      category: prev.category,
+      meta,
+    });
+  }
+
+  return updated;
+}
+
+function attachDataQuality(
+  events: ScheduledEvent[],
+  dataQuality: ReturnType<typeof buildDataQualityMetrics>,
+): ScheduledEvent[] {
+  return events.map((event) => {
+    if (!event.meta) return event;
+    if (event.meta.dataQuality) return event;
+    return {
+      ...event,
+      meta: {
+        ...event.meta,
+        dataQuality,
+      },
+    };
+  });
+}
+
+interface SleepInterruptionSummary {
+  interruptionCount: number;
+  interruptionMinutes: number;
+  topAppName: string | null;
+}
+
+function buildSleepInterruptionSummaryFromSessions(
+  sessions: ScreenTimeSessionRow[],
+  ymd: string,
+  startMinutes: number,
+  endMinutes: number,
+): SleepInterruptionSummary | null {
+  if (endMinutes <= startMinutes || sessions.length === 0) return null;
+
+  const dayStart = ymdToDate(ymd);
+  const intervals: Array<{ startMinutes: number; endMinutes: number }> = [];
+  const appUsage = new Map<string, number>();
+
+  for (const session of sessions) {
+    const sessionStart = new Date(session.started_at);
+    const sessionEnd = new Date(session.ended_at);
+    const sessionStartMinutes = (sessionStart.getTime() - dayStart.getTime()) / 60_000;
+    const sessionEndMinutes = (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
+    const overlapStart = Math.max(startMinutes, sessionStartMinutes);
+    const overlapEnd = Math.min(endMinutes, sessionEndMinutes);
+    if (overlapEnd <= overlapStart) continue;
+
+    intervals.push({ startMinutes: overlapStart, endMinutes: overlapEnd });
+    const overlapMinutes = overlapEnd - overlapStart;
+    const appName = session.display_name || session.app_id;
+    const current = appUsage.get(appName) ?? 0;
+    appUsage.set(appName, current + overlapMinutes);
+  }
+
+  if (intervals.length === 0) return null;
+  const mergedIntervals = mergeIntervals(intervals, SLEEP_SCREEN_TIME_GAP_MINUTES);
+  const interruptionCount = Math.max(1, mergedIntervals.length);
+  const interruptionMinutes = mergedIntervals.reduce(
+    (total, interval) => total + (interval.endMinutes - interval.startMinutes),
+    0,
+  );
+  const topAppName =
+    Array.from(appUsage.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  return {
+    interruptionCount,
+    interruptionMinutes,
+    topAppName,
+  };
+}
+
+function buildSleepInterruptionSummary(
+  usageSummary: UsageSummary,
+  startMinutes: number,
+  endMinutes: number,
+): SleepInterruptionSummary | null {
+  if (endMinutes <= startMinutes) return null;
+  const usageInfo = getUsageOverlapInfo(usageSummary, startMinutes, endMinutes);
+  if (!usageInfo || usageInfo.totalMinutes <= 0) return null;
+
+  let interruptionCount = 1;
+  if (usageSummary.sessions && usageSummary.sessions.length > 0) {
+    const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+    const intervals = buildSleepSessionIntervals({
+      sessions: usageSummary.sessions,
+      sleepStart: startMinutes,
+      sleepEnd: endMinutes,
+      appIdToName,
+    });
+    if (intervals.length > 0) {
+      const mergedIntervals = mergeIntervals(intervals, SLEEP_SCREEN_TIME_GAP_MINUTES);
+      interruptionCount = Math.max(1, mergedIntervals.length);
+    }
+  }
+
+  return {
+    interruptionCount,
+    interruptionMinutes: usageInfo.totalMinutes,
+    topAppName: usageInfo.topApp,
+  };
+}
+
+function buildSleepInterruptedDescription(summary: SleepInterruptionSummary | null): string {
+  if (!summary) return 'Sleep schedule • Interrupted';
+  const rounded = Math.round(summary.interruptionMinutes);
+  const timesLabel = summary.interruptionCount === 1 ? 'time' : 'times';
+  const appLabel = summary.topAppName ? ` on ${summary.topAppName}` : '';
+  return `Sleep schedule • Interrupted ${summary.interruptionCount} ${timesLabel} (${rounded} min${appLabel})`;
+}
+
+function buildInterruptedSleepEvent(
+  startMinutes: number,
+  duration: number,
+  context: SleepInterruptionContext,
+): ScheduledEvent {
+  const endMinutes = startMinutes + duration;
+  const interruptionSummary =
+    context.screenTimeSessions && context.screenTimeSessions.length > 0
+      ? buildSleepInterruptionSummaryFromSessions(
+          context.screenTimeSessions,
+          context.ymd,
+          startMinutes,
+          endMinutes,
+        )
+      : context.usageSummary
+        ? buildSleepInterruptionSummary(context.usageSummary, startMinutes, endMinutes)
+        : null;
+
+  const sleepQuality = buildSleepQualityMetrics(context.healthDaily ?? null);
+
+  const meta: CalendarEventMeta = {
+    category: 'sleep',
+    source: 'derived',
+    kind: 'sleep_interrupted',
+    confidence: interruptionSummary ? 0.7 : 0.5,
+    dataQuality: context.dataQuality,
+    evidence: {
+      topApp: interruptionSummary?.topAppName ?? null,
+      sleep: {
+        interruptions: interruptionSummary?.interruptionCount,
+        interruptionMinutes: interruptionSummary
+          ? Math.round(interruptionSummary.interruptionMinutes)
+          : undefined,
+        asleepMinutes: sleepQuality?.asleepMinutes,
+        hrvMs: sleepQuality?.hrvMs ?? null,
+        restingHeartRateBpm: sleepQuality?.restingHeartRateBpm ?? null,
+        heartRateAvgBpm: sleepQuality?.heartRateAvgBpm ?? null,
+        qualityScore: sleepQuality?.qualityScore ?? null,
+      },
+    },
+  };
+
   return {
     id: `${DERIVED_ACTUAL_PREFIX}sleep_interrupted_${startMinutes}_${duration}`,
     title: 'Sleep',
-    description: 'Sleep schedule • Ended early (Interrupted)',
+    description: buildSleepInterruptedDescription(interruptionSummary),
     startMinutes,
     duration,
     category: 'sleep',
+    meta,
   };
 }
 
@@ -560,6 +1074,15 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
   const remaining = minutes % 60;
   const durationLabel = hours > 0 ? `${hours}h ${remaining}m` : `${remaining}m`;
   const appLabel = topAppName ? ` on ${topAppName}` : '';
+  const meta: CalendarEventMeta = {
+    category: 'work',
+    source: 'derived',
+    kind: 'unknown_gap',
+    confidence: 0.45,
+    evidence: {
+      topApp: topAppName,
+    },
+  };
 
   return {
     id: `${DERIVED_ACTUAL_PREFIX}productive_${startMinutes}_${minutes}`,
@@ -568,10 +1091,18 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
     startMinutes,
     duration: minutes,
     category: 'work',
+    meta,
   };
 }
 
 function buildUnknownEvent(startMinutes: number, duration: number): ScheduledEvent {
+  const meta: CalendarEventMeta = {
+    category: 'unknown',
+    source: 'derived',
+    kind: 'unknown_gap',
+    confidence: 0.2,
+  };
+
   return {
     id: `${DERIVED_ACTUAL_PREFIX}unknown_${startMinutes}_${duration}`,
     title: 'Unknown',
@@ -579,6 +1110,7 @@ function buildUnknownEvent(startMinutes: number, duration: number): ScheduledEve
     startMinutes,
     duration,
     category: 'unknown',
+    meta,
   };
 }
 
@@ -628,8 +1160,9 @@ function deriveUsageSummaryBlocks(options: {
   usageSummary: UsageSummary;
   plannedEvents: ScheduledEvent[];
   minMinutes: number;
+  appCategoryOverrides?: AppCategoryOverrides;
 }): ScheduledEvent[] {
-  const { usageSummary, plannedEvents, minMinutes } = options;
+  const { usageSummary, plannedEvents, minMinutes, appCategoryOverrides } = options;
   const plannedIntervals = plannedEvents.map((event) => ({
     start: event.startMinutes,
     end: event.startMinutes + event.duration,
@@ -666,7 +1199,15 @@ function deriveUsageSummaryBlocks(options: {
     return blocks
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
       .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
-      .map((b) => buildScreenTimeEvent(b.startMinutes, b.endMinutes, b.topApp, usageSummary.generatedAtIso));
+      .map((b) =>
+        buildScreenTimeEvent(
+          b.startMinutes,
+          b.endMinutes,
+          b.topApp,
+          usageSummary.generatedAtIso,
+          appCategoryOverrides,
+        ),
+      );
   }
 
   if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
@@ -696,7 +1237,15 @@ function deriveUsageSummaryBlocks(options: {
       })
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
       .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
-      .map((b) => buildScreenTimeEvent(b.startMinutes, b.endMinutes, b.topApp, usageSummary.generatedAtIso));
+      .map((b) =>
+        buildScreenTimeEvent(
+          b.startMinutes,
+          b.endMinutes,
+          b.topApp,
+          usageSummary.generatedAtIso,
+          appCategoryOverrides,
+        ),
+      );
   }
 
   if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
@@ -710,7 +1259,15 @@ function deriveUsageSummaryBlocks(options: {
       })
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
       .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
-      .map((b) => buildScreenTimeEvent(b.startMinutes, b.endMinutes, b.topApp, usageSummary.generatedAtIso));
+      .map((b) =>
+        buildScreenTimeEvent(
+          b.startMinutes,
+          b.endMinutes,
+          b.topApp,
+          usageSummary.generatedAtIso,
+          appCategoryOverrides,
+        ),
+      );
   }
 
   return [];
@@ -732,6 +1289,16 @@ function buildSleepOverrideBlocksFromUsageSummary(options: {
       minMinutes,
     });
     for (const block of intervalBlocks) {
+      const meta: CalendarEventMeta = {
+        category: 'digital',
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: 0.6,
+        evidence: {
+          topApp: block.description || interval.topAppName || null,
+          screenTimeMinutes: block.duration,
+        },
+      };
       blocks.push({
         ...block,
         title: 'Screen Time',
@@ -739,6 +1306,7 @@ function buildSleepOverrideBlocksFromUsageSummary(options: {
           topAppName: block.description || interval.topAppName,
         }),
         category: 'digital',
+        meta,
       });
     }
   }
@@ -990,7 +1558,8 @@ interface UsageOverlapInfo {
 function getUsageOverlapInfo(
   usageSummary: UsageSummary,
   startMinutes: number,
-  endMinutes: number
+  endMinutes: number,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): UsageOverlapInfo | null {
   if (endMinutes <= startMinutes) return null;
 
@@ -1042,11 +1611,12 @@ function getUsageOverlapInfo(
       totalMinutes += (seconds / 60) * (overlapMinutesInHour / 60);
     }
     if (totalMinutes <= 0) return null;
+    const classification = topApp ? classifyAppUsage(topApp, appCategoryOverrides) : null;
     return {
       totalMinutes,
       topApp,
-      isDistraction: Boolean(topApp && appMatchesList(topApp, DISTRACTION_APPS)),
-      isProductive: Boolean(topApp && (appMatchesList(topApp, WORK_APPS) || appMatchesList(topApp, PRODUCTIVE_APPS))),
+      isDistraction: classification?.isDistraction ?? false,
+      isProductive: classification?.isProductive ?? false,
     };
   }
 
@@ -1057,12 +1627,13 @@ function getUsageOverlapInfo(
     .sort((a, b) => b.minutes - a.minutes);
   const totalMinutes = sorted.reduce((sum, entry) => sum + entry.minutes, 0);
   const topApp = sorted[0]?.app ?? null;
+  const classification = topApp ? classifyAppUsage(topApp, appCategoryOverrides) : null;
 
   return {
     totalMinutes,
     topApp,
-    isDistraction: Boolean(topApp && appMatchesList(topApp, DISTRACTION_APPS)),
-    isProductive: Boolean(topApp && (appMatchesList(topApp, WORK_APPS) || appMatchesList(topApp, PRODUCTIVE_APPS))),
+    isDistraction: classification?.isDistraction ?? false,
+    isProductive: classification?.isProductive ?? false,
   };
 }
 
@@ -1130,6 +1701,16 @@ function buildSleepStartAdjustmentFromUsageSummary(options: {
       startMinutes: candidate.startMinutes,
       duration: candidate.durationMinutes,
       category: 'digital',
+      meta: {
+        category: 'digital',
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: 0.6,
+        evidence: {
+          screenTimeMinutes: Math.round(candidate.durationMinutes),
+          topApp: topAppName,
+        },
+      },
     },
   };
 }
@@ -1234,9 +1815,20 @@ function buildScreenTimeEvent(
   startMinutes: number,
   endMinutes: number,
   topApp: string,
-  generatedAtIso: string
+  generatedAtIso: string,
+  appCategoryOverrides?: AppCategoryOverrides,
 ): ScheduledEvent {
-  const classification = classifyScreenTimeApp(topApp);
+  const classification = classifyAppUsage(topApp, appCategoryOverrides);
+  const meta: CalendarEventMeta = {
+    category: classification.category,
+    source: 'derived',
+    kind: 'screen_time',
+    confidence: classification.confidence,
+    evidence: {
+      topApp,
+      screenTimeMinutes: Math.max(1, Math.round(endMinutes - startMinutes)),
+    },
+  };
   return {
     id: `${DERIVED_EVIDENCE_PREFIX}android_${generatedAtIso}_${startMinutes}`,
     title: classification.title,
@@ -1244,18 +1836,6 @@ function buildScreenTimeEvent(
     startMinutes,
     duration: Math.max(1, endMinutes - startMinutes),
     category: classification.category,
+    meta,
   };
-}
-
-function classifyScreenTimeApp(appName: string): { title: string; description: string; category: ScheduledEvent['category'] } {
-  const isDistraction = appMatchesList(appName, DISTRACTION_APPS);
-  const isWork = appMatchesList(appName, WORK_APPS) || appMatchesList(appName, PRODUCTIVE_APPS);
-
-  if (isDistraction) {
-    return { title: 'Doom Scroll', description: appName, category: 'digital' };
-  }
-  if (isWork) {
-    return { title: 'Productive Screen Time', description: appName, category: 'work' };
-  }
-  return { title: 'Screen Time', description: appName, category: 'digital' };
 }

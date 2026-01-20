@@ -84,10 +84,26 @@ export async function syncActualEvidenceBlocks({
         source_id: sourceId,
         actual: true,
         tags: ['actual'],
+        confidence: block.confidence ?? null,
+        kind: 'evidence_block',
       };
 
       if (block.source === 'location') {
         meta.location = block.title;
+      }
+
+      if (block.evidence.location?.placeLabel) {
+        meta.location_label = block.evidence.location.placeLabel;
+      }
+
+      if (block.evidence.screenTime) {
+        meta.screen_time_minutes = Math.round(block.evidence.screenTime.totalMinutes);
+        meta.top_app = block.evidence.screenTime.topApps[0]?.app ?? null;
+      }
+
+      if (block.evidence.health?.hasWorkout) {
+        meta.workout_type = block.evidence.health.workoutType ?? null;
+        meta.workout_minutes = block.evidence.health.workoutDurationMinutes ?? null;
       }
 
       inserts.push({

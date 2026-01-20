@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
+  Activity,
   Bell,
   Briefcase,
   Calendar,
@@ -11,6 +12,7 @@ import {
   MoonStar,
   Play,
   Settings,
+  Sparkles,
   Target,
 } from 'lucide-react-native';
 import { Alert, Platform } from 'react-native';
@@ -205,6 +207,18 @@ export default function ProfileScreen() {
 
   // Personalization settings - edit onboarding preferences
   const personalizationItems = [
+    {
+      id: 'personalization',
+      label: 'Personalization',
+      icon: Sparkles,
+      onPress: () => router.push('/Personalization'),
+    },
+    {
+      id: 'pattern-insights',
+      label: 'Pattern Insights',
+      icon: Activity,
+      onPress: () => router.push('/PatternInsights'),
+    },
     {
       id: 'daily-rhythm',
       label: 'Daily Rhythm',

@@ -19,6 +19,88 @@ export type EventCategory =
   | 'unknown'
   | 'free';
 
+export interface CalendarEventMeta {
+  category: EventCategory;
+  isBig3?: boolean;
+  location?: string | null;
+  source?: 'user' | 'system' | 'evidence' | 'derived';
+  plannedEventId?: string;
+  kind?:
+    | 'sleep_schedule'
+    | 'sleep_interrupted'
+    | 'sleep_late'
+    | 'screen_time'
+    | 'unknown_gap'
+    | 'pattern_gap'
+    | 'planned_actual'
+    | 'evidence_block'
+    | 'transition_commute'
+    | 'transition_prep'
+    | 'transition_wind_down';
+  startYmd?: string;
+  actual?: boolean;
+  tags?: string[];
+  source_id?: string;
+  suggested_category?: EventCategory;
+  confidence?: number;
+  evidence?: {
+    locationLabel?: string | null;
+    screenTimeMinutes?: number;
+    topApp?: string | null;
+    sleep?: {
+      interruptions?: number;
+      interruptionMinutes?: number;
+      asleepMinutes?: number | null;
+      hrvMs?: number | null;
+      restingHeartRateBpm?: number | null;
+      heartRateAvgBpm?: number | null;
+      qualityScore?: number | null;
+    };
+    conflicts?: Array<{ source: 'location' | 'screen_time' | 'health' | 'pattern'; detail: string }>;
+  };
+  evidenceFusion?: {
+    confidence: number;
+    sources: Array<{ type: 'location' | 'screen_time' | 'health' | 'pattern' | 'user_history'; weight: number; detail: string }>;
+    conflicts: Array<{
+      source1: 'location' | 'screen_time' | 'health' | 'pattern';
+      source2: 'plan' | 'pattern';
+      conflict: string;
+      resolution: 'source1_wins' | 'source2_wins' | 'compromise' | 'unresolved';
+    }>;
+  };
+  dataQuality?: {
+    freshnessMinutes?: number | null;
+    completeness: number;
+    reliability: number;
+    sources: string[];
+  };
+  patternSummary?: {
+    confidence: number;
+    sampleCount: number;
+    typicalCategory?: EventCategory;
+    deviation?: boolean;
+  };
+  learnedFrom?: {
+    originalId?: string;
+    kind?: CalendarEventMeta['kind'];
+    source?: CalendarEventMeta['source'];
+    title?: string;
+    category?: EventCategory;
+    confidence?: number | null;
+    topApp?: string | null;
+  };
+  verificationReport?: {
+    status: string;
+    confidence: number;
+    discrepancies?: Array<{ type: string; expected: string; actual: string; severity: string }>;
+    suggestions?: string[];
+  };
+  ai?: {
+    confidence?: number;
+    reason?: string;
+  };
+}
+
 export interface ScheduledEvent {
   id: string;
   title: string;
@@ -31,6 +113,7 @@ export interface ScheduledEvent {
   category: EventCategory;
   /** Whether this is a Big 3 priority item */
   isBig3?: boolean;
+  meta?: CalendarEventMeta;
 }
 
 interface EventsState {
@@ -289,7 +372,6 @@ export const formatMinutesToDisplay = (minutes: number): string => {
   const hours12 = hours24 % 12 || 12;
   return mins === 0 ? `${hours12}:00 ${period}` : `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
 };
-
 
 
 
