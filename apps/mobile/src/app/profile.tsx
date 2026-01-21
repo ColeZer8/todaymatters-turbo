@@ -52,6 +52,7 @@ import { flushPendingLocationSamplesToSupabaseAsync } from '@/lib/ios-location';
 import { flushPendingAndroidLocationSamplesToSupabaseAsync } from '@/lib/android-location';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
 import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
+import appConfig from '@/lib/config';
 
 // Start with empty values - will load from Supabase if authenticated
 const CORE_VALUES: string[] = [];
@@ -75,6 +76,7 @@ export default function ProfileScreen() {
   const setDemoActive = useDemoStore((state) => state.setActive);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const signOut = useAuthStore((state) => state.signOut);
   const fullName = useOnboardingStore((s) => s.fullName);
   const setFullName = useOnboardingStore((s) => s.setFullName);
   const requestAutoAssignAll = useReviewTimeStore((s) => s.requestAutoAssignAll);
@@ -250,8 +252,8 @@ export default function ProfileScreen() {
     { id: 'account-settings', label: 'Account Settings', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'subscription', label: 'Subscription', icon: CreditCard },
-    // Demo Mode - only visible in development
-    ...(__DEV__
+    // Demo Mode - visible in development and preview builds (not production)
+    ...(__DEV__ || !appConfig.env.isProd
       ? [
           {
             id: 'demo-mode',
@@ -309,7 +311,20 @@ export default function ProfileScreen() {
           },
         ]
       : []),
-    { id: 'logout', label: 'Log Out', icon: LogOut },
+    {
+      id: 'logout',
+      label: 'Log Out',
+      icon: LogOut,
+      onPress: async () => {
+        try {
+          await signOut();
+          // Navigate to sign-in screen after successful logout
+          router.replace('/');
+        } catch (error) {
+          Alert.alert('Error', error instanceof Error ? error.message : 'Failed to sign out. Please try again.');
+        }
+      },
+    },
   ];
   const [isEditing, setIsEditing] = useState(false);
   const [draftFullName, setDraftFullName] = useState(fullName);

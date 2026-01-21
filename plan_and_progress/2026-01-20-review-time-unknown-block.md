@@ -21,7 +21,7 @@ Restore the intended Review Time assignment screen for unknown blocks so tapping
 
 ## Progress
 
-- 2026-01-20: Routed unknown blocks with focus params and added review-time fallback block support.
+- 2026-01-20: Routed unknown blocks with focus params and added review-time fallback support from store events.
 
 ## Verification
 

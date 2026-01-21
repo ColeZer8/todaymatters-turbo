@@ -161,6 +161,11 @@ export default {
       ...getEnvVars(),
       appEnv: process.env.APP_ENV || 'development',
     },
+    // EAS Update configuration - updates are enabled via channels in eas.json
+    updates: {
+      checkAutomatically: 'ON_LOAD',
+      fallbackToCacheTimeout: 0,
+    },
   },
 };
 

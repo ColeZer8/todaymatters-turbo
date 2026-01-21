@@ -58,6 +58,14 @@ export const createSessionFromUrl = async (url: string): Promise<Session | null>
     return data.session;
   }
 
+  // Handle password reset tokens (type=recovery)
+  if (token_hash && type === 'recovery') {
+    // Password reset tokens don't create a session immediately
+    // They need to be verified, then user updates password
+    // Return null here - the reset password screen will handle verification
+    return null;
+  }
+
   // No valid auth parameters found
   return null;
 };
@@ -75,6 +83,11 @@ export const performOAuth = async (provider: 'google' | 'apple' | 'github'): Pro
   });
 
   if (error) {
+    // Improve error messages for OAuth provider issues
+    if (error.message.includes('provider is not enabled')) {
+      const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+      throw new Error(`${providerName} sign-in is not enabled. Please use email/password or contact support.`);
+    }
     throw error;
   }
 
@@ -87,6 +100,10 @@ export const performOAuth = async (provider: 'google' | 'apple' | 'github'): Pro
   if (res.type === 'success') {
     const { url } = res;
     await createSessionFromUrl(url);
+  } else if (res.type === 'cancel') {
+    throw new Error('Sign-in was cancelled');
+  } else {
+    throw new Error('Failed to complete sign-in. Please try again.');
   }
 };
 
@@ -127,6 +144,43 @@ export const resendEmailConfirmation = async (email: string): Promise<void> => {
 };
 
 /**
+ * Sends a password reset email to the specified email address.
+ */
+export const sendPasswordResetEmail = async (email: string): Promise<void> => {
+  // Use the app's deep link scheme for password reset redirects
+  // This URL will be used when user clicks the reset link in their email
+  const emailRedirectTo = 'todaymatters://reset-password';
+  
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: emailRedirectTo,
+  });
+
+  if (error) {
+    // Improve error messages
+    if (error.message.includes('provider is not enabled')) {
+      throw new Error('Email authentication is not enabled. Please contact support.');
+    }
+    throw error;
+  }
+};
+
+/**
+ * Updates the user's password using a password reset token.
+ */
+export const updatePassword = async (newPassword: string): Promise<void> => {
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    if (error.message.includes('Password')) {
+      throw new Error('Password is too weak. Please use a stronger password.');
+    }
+    throw error;
+  }
+};
+
+/**
  * Handles deep linking for authentication callbacks.
  * Call this in your root component to handle auth redirects.
  * Returns a cleanup function to remove the event listener.
@@ -135,17 +189,49 @@ export const handleAuthCallback = (): (() => void) => {
   // Handle initial URL if app was opened via deep link
   Linking.getInitialURL().then((url) => {
     if (url) {
-      createSessionFromUrl(url).catch(console.error);
+      handleAuthUrl(url).catch(console.error);
     }
   });
 
   // Listen for deep links while app is running
   const subscription = Linking.addEventListener('url', (event) => {
-    createSessionFromUrl(event.url).catch(console.error);
+    handleAuthUrl(event.url).catch(console.error);
   });
 
   // Return cleanup function
   return () => {
     subscription.remove();
   };
+};
+
+/**
+ * Handles authentication URLs, routing to appropriate screens.
+ */
+const handleAuthUrl = async (url: string): Promise<void> => {
+  const { params } = QueryParams.getQueryParams(url);
+  
+  // Check if this is a password reset link
+  // Password reset links from Supabase contain access_token/refresh_token
+  // after Supabase verifies the token server-side
+  const isPasswordReset = url.includes('reset-password');
+  
+  if (isPasswordReset) {
+    // For password reset, Supabase verifies the token server-side and redirects
+    // with access_token/refresh_token. Create a session first (this allows updatePassword to work).
+    // The session will be temporary and used only for password reset.
+    try {
+      await createSessionFromUrl(url);
+      // Session created successfully - the reset-password screen will be shown
+      // via the deep link routing, and updatePassword will work
+    } catch (error) {
+      // If session creation fails, still allow navigation
+      // The reset-password screen will show an error if updatePassword fails
+      console.error('Failed to create session from reset link:', error);
+    }
+    // The deep link will automatically navigate to /reset-password route
+    return;
+  }
+
+  // Otherwise, try to create a session (for OAuth, email confirmation, etc.)
+  await createSessionFromUrl(url);
 };

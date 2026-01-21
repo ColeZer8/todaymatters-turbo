@@ -83,6 +83,7 @@ export default function SignInScreen() {
       onApplePress={() => handleOAuthSignIn('apple')}
       onGooglePress={() => handleOAuthSignIn('google')}
       onNavigateToSignUp={() => router.push('/signup')}
+      onNavigateToForgotPassword={() => router.push('/forgot-password')}
     />
   );
 }

@@ -51,7 +51,16 @@ export const useAuthStore = create<AuthState>()(
           password,
         });
 
-        if (error) throw error;
+        if (error) {
+          // Improve error messages for common cases
+          if (error.message.includes('provider is not enabled')) {
+            throw new Error('Email authentication is not enabled. Please contact support.');
+          }
+          if (error.message.includes('Invalid login credentials')) {
+            throw new Error('Invalid email or password. Please check your credentials and try again.');
+          }
+          throw error;
+        }
 
         get().setSession(data.session);
         return { session: data.session, user: data.user };
@@ -76,7 +85,19 @@ export const useAuthStore = create<AuthState>()(
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          // Improve error messages for common cases
+          if (error.message.includes('provider is not enabled')) {
+            throw new Error('Email authentication is not enabled. Please contact support.');
+          }
+          if (error.message.includes('User already registered')) {
+            throw new Error('An account with this email already exists. Please sign in instead.');
+          }
+          if (error.message.includes('Password')) {
+            throw new Error('Password is too weak. Please use a stronger password.');
+          }
+          throw error;
+        }
 
         get().setSession(data.session);
         return { session: data.session, user: data.user };

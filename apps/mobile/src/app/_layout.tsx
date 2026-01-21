@@ -120,6 +120,8 @@ export default function Layout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
       <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="reset-password" options={{ headerShown: false }} />
       <Stack.Screen name="permissions" options={{ headerShown: false }} />
       <Stack.Screen name="connect-google-services" options={{ headerShown: false }} />
       <Stack.Screen name="core-values" options={{ headerShown: false }} />

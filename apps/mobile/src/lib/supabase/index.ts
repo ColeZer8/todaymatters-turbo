@@ -5,6 +5,8 @@ export {
   sendMagicLink,
   handleAuthCallback,
   resendEmailConfirmation,
+  sendPasswordResetEmail,
+  updatePassword,
 } from './auth';
 export {
   refreshSession,

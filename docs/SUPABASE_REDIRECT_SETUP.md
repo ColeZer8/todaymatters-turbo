@@ -17,6 +17,7 @@ Configure Supabase to use your app's deep link scheme: `todaymatters://`
    ```
    todaymatters://auth/confirm
    todaymatters://auth/callback
+   todaymatters://reset-password
    ```
 
 3. Click "Save"
@@ -61,8 +62,10 @@ todaymatters://auth/confirm
 ## Additional Notes
 
 - The code has been updated to automatically use `todaymatters://auth/confirm` for sign up
+- Password reset uses `todaymatters://reset-password` for reset links
 - Deep linking is already set up in `_layout.tsx` to handle these URLs
-- The `handleAuthCallback` function will process the confirmation tokens
+- The `handleAuthCallback` function will process the confirmation tokens and password reset tokens
+- Supabase password reset is fully supported and follows the official Supabase React Native pattern
 
 
 

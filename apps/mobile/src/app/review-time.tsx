@@ -12,12 +12,12 @@ export default function ReviewTimeScreen() {
   }>();
 
   const focusBlock = useMemo(() => {
-    if (!params.focusId || !params.startMinutes || !params.duration) return undefined;
+    if (!params.startMinutes || !params.duration) return undefined;
     const startMinutes = Number(params.startMinutes);
     const duration = Number(params.duration);
     if (!Number.isFinite(startMinutes) || !Number.isFinite(duration)) return undefined;
     return {
-      id: params.focusId,
+      id: params.focusId ?? `focus_${Math.round(startMinutes)}_${Math.round(duration)}`,
       startMinutes,
       duration,
       title: params.title,

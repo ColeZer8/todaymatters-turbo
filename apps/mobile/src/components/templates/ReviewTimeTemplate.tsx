@@ -82,6 +82,8 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
 
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
+  const actualEvents = useEventsStore((s) => s.actualEvents);
+  const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
   const setActualEventsForDate = useEventsStore((s) => s.setActualEventsForDate);
   const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
   const addActualEvent = useEventsStore((s) => s.addActualEvent);
@@ -106,18 +108,28 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
 
   const { loadActualForDay, createActual, updateActual } = useCalendarEventsSync();
 
+  const focusEventFromStore = useMemo<ScheduledEvent | null>(() => {
+    if (focusBlock) return null;
+    if (!highlightedBlockId) return null;
+    const allEvents = [...(derivedActualEvents ?? []), ...actualEvents];
+    const match = allEvents.find((event) => event.id === highlightedBlockId);
+    if (!match || match.category !== 'unknown') return null;
+    return match;
+  }, [actualEvents, derivedActualEvents, focusBlock, highlightedBlockId]);
+
   const focusTimeBlock = useMemo<TimeBlock | null>(() => {
-    if (!focusBlock) return null;
-    if (!Number.isFinite(focusBlock.startMinutes) || !Number.isFinite(focusBlock.duration)) return null;
-    const startMinutes = Math.max(0, Math.round(focusBlock.startMinutes));
-    const duration = Math.max(1, Math.round(focusBlock.duration));
-    const rawTitle = focusBlock.title?.trim();
-    const rawDescription = focusBlock.description?.trim();
+    const source = focusBlock ?? focusEventFromStore;
+    if (!source) return null;
+    if (!Number.isFinite(source.startMinutes) || !Number.isFinite(source.duration)) return null;
+    const startMinutes = Math.max(0, Math.round(source.startMinutes));
+    const duration = Math.max(1, Math.round(source.duration));
+    const rawTitle = source.title?.trim();
+    const rawDescription = source.description?.trim();
     const description = rawDescription && rawDescription !== 'Tap to assign' ? rawDescription : '';
 
     return {
-      id: focusBlock.id,
-      sourceId: `unknown:${focusBlock.id}`,
+      id: focusBlock?.id ?? focusEventFromStore?.id ?? `focus_unknown_${startMinutes}_${duration}`,
+      sourceId: `unknown:${focusBlock?.id ?? focusEventFromStore?.id ?? `${startMinutes}_${duration}`}`,
       source: 'unknown',
       title: rawTitle || 'Unknown',
       description,
@@ -127,7 +139,7 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
       endTime: formatMinutesToTime(startMinutes + duration),
       activityDetected: 'No activity detected',
     };
-  }, [focusBlock]);
+  }, [focusBlock, focusEventFromStore]);
 
   const mergeFocusBlock = useCallback(
     (blocks: TimeBlock[], actualEvents: ScheduledEvent[]) => {
@@ -165,7 +177,13 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
   }, [highlightedBlockId, timeBlocks]);
 
   const refreshBlocks = useCallback(async () => {
-    if (!userId) return;
+    if (!userId) {
+      if (focusTimeBlock) {
+        const fallbackEvents = useEventsStore.getState().actualEvents;
+        setTimeBlocks(mergeFocusBlock([], fallbackEvents));
+      }
+      return;
+    }
     setIsLoadingBlocks(true);
     try {
       const events = await loadActualForDay(selectedDateYmd);
@@ -180,7 +198,15 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
     } finally {
       setIsLoadingBlocks(false);
     }
-  }, [loadActualForDay, mergeFocusBlock, selectedDateYmd, setActualEventsForDate, setTimeBlocks, userId]);
+  }, [
+    focusTimeBlock,
+    loadActualForDay,
+    mergeFocusBlock,
+    selectedDateYmd,
+    setActualEventsForDate,
+    setTimeBlocks,
+    userId,
+  ]);
 
   useEffect(() => {
     void refreshBlocks();
@@ -261,6 +287,13 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
       setHighlightedBlockId(null);
     };
   }, [highlightedBlockKey, setHighlightedBlockId]);
+
+  useEffect(() => {
+    if (!focusTimeBlock) return;
+    if (isLoadingBlocks) return;
+    if (timeBlocks.some((block) => block.id === focusTimeBlock.id || block.eventId === focusTimeBlock.id)) return;
+    setTimeBlocks(mergeFocusBlock(timeBlocks, actualEvents));
+  }, [actualEvents, focusTimeBlock, isLoadingBlocks, mergeFocusBlock, setTimeBlocks, timeBlocks]);
 
   const handleBlockLayout = useCallback((blockId: string, event: LayoutChangeEvent) => {
     blockPositions.current[blockId] = event.nativeEvent.layout.y;
