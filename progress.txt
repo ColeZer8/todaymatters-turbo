@@ -1,0 +1,15 @@
+## Codebase Patterns
+- This is a Turborepo monorepo with pnpm as package manager
+- Quality checks available: `pnpm run lint` and `pnpm run check-types`
+- Pre-existing type errors may exist in the codebase - isolate your changes and commit only what's relevant to your story
+
+---
+
+## 2026-01-22 - Story 1
+- **What was implemented:** Created a README.md file at the project root with the content "Hello Ralph"
+- **Files changed:** README.md (created/replaced)
+- **Learnings for future iterations:**
+  - The codebase may have pre-existing type errors unrelated to your work - don't let them block unrelated changes
+  - Focus on committing only the files relevant to your user story
+  - The root README.md previously existed but had different content (153 lines deleted)
+---

@@ -1,4 +1,5 @@
-import { SafeAreaView, ScrollView, Text, Pressable, View, Switch } from 'react-native';
+import { ScrollView, Text, Pressable, View, Switch } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { GapFillingPreference } from '@/stores/user-preferences-store';
 
 interface PersonalizationTemplateProps {

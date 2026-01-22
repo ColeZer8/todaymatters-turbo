@@ -93,16 +93,18 @@ export default function ActualAdjustScreen() {
     };
   }, [actualEvents, params]);
 
+  const normalizedStartMinutes = useMemo(() => Math.max(0, Math.round(event.startMinutes)), [event.startMinutes]);
+  const normalizedDuration = useMemo(() => Math.max(1, Math.round(event.duration)), [event.duration]);
+
   const timeLabel = useMemo(() => {
-    const start = formatMinutesToTime(event.startMinutes);
-    const end = formatMinutesToTime(event.startMinutes + event.duration);
+    const start = formatMinutesToTime(normalizedStartMinutes);
+    const end = formatMinutesToTime(normalizedStartMinutes + normalizedDuration);
     return `${start} – ${end}`;
-  }, [event.duration, event.startMinutes]);
+  }, [normalizedDuration, normalizedStartMinutes]);
 
   const helperText = useMemo(() => {
     const kind = event.meta?.kind;
     const topApp = event.meta?.evidence?.topApp;
-    const screenTime = event.meta?.evidence?.screenTimeMinutes;
     const interruptions = event.meta?.evidence?.sleep?.interruptions;
     const interruptionMinutes = event.meta?.evidence?.sleep?.interruptionMinutes;
 
@@ -118,7 +120,7 @@ export default function ActualAdjustScreen() {
 
     if (kind === 'screen_time') {
       const appLabel = topApp ? ` on ${topApp}` : '';
-      const minutesLabel = screenTime !== undefined ? `${Math.round(screenTime)} min` : 'a while';
+      const minutesLabel = `${normalizedDuration} min`;
       return `We marked this as ${event.title} because you were on your phone${appLabel} for ${minutesLabel} between ${timeLabel}. Describe what really happened and Today Matters will sort and title it!`;
     }
 
@@ -127,7 +129,7 @@ export default function ActualAdjustScreen() {
     }
 
     return `We marked this as ${event.title} between ${timeLabel}. Describe what really happened and Today Matters will sort and title it!`;
-  }, [event.meta, event.title, timeLabel]);
+  }, [event.meta, event.title, normalizedDuration, timeLabel]);
 
   const evidenceRows = useMemo(() => {
     const meta = event.meta;
@@ -273,9 +275,9 @@ export default function ActualAdjustScreen() {
         title: event.title,
         description: event.description ?? '',
         source: 'actual_adjust',
-        startTime: formatMinutesToTime(event.startMinutes),
-        endTime: formatMinutesToTime(event.startMinutes + event.duration),
-        durationMinutes: event.duration,
+        startTime: formatMinutesToTime(normalizedStartMinutes),
+        endTime: formatMinutesToTime(normalizedStartMinutes + normalizedDuration),
+        durationMinutes: normalizedDuration,
         activityDetected: null,
         location: event.location ?? null,
         note,
@@ -290,14 +292,14 @@ export default function ActualAdjustScreen() {
       confidence: ai.confidence,
       reason: ai.reason,
     };
-  }, [event, note, selectedCategory, selectedDateYmd]);
+  }, [event, note, normalizedDuration, normalizedStartMinutes, selectedCategory, selectedDateYmd]);
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      const start = ymdMinutesToDate(selectedDateYmd, event.startMinutes);
+      const start = ymdMinutesToDate(selectedDateYmd, normalizedStartMinutes);
       const end = new Date(start);
-      end.setMinutes(end.getMinutes() + event.duration);
+      end.setMinutes(end.getMinutes() + normalizedDuration);
 
       let nextSuggestion = suggestion;
       if (!nextSuggestion && note.trim()) {
@@ -432,6 +434,8 @@ export default function ActualAdjustScreen() {
     createActual,
     event,
     isBig3,
+    normalizedDuration,
+    normalizedStartMinutes,
     selectedGoalId,
     selectedValue,
     note,

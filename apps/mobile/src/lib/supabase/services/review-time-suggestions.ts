@@ -44,7 +44,10 @@ export async function requestReviewTimeSuggestion(
     }
 
     const d = data as Partial<ReviewTimeSuggestionResponse>;
-    if (!d.category || typeof d.confidence !== 'number') {
+    const title = typeof d.title === 'string' ? d.title.trim() : '';
+    const description = typeof d.description === 'string' ? d.description.trim() : '';
+
+    if (!d.category || typeof d.confidence !== 'number' || !title || !description) {
       throw new Error('Incomplete response from review-time-suggest function');
     }
 
@@ -52,8 +55,8 @@ export async function requestReviewTimeSuggestion(
       category: d.category,
       confidence: d.confidence,
       reason: d.reason,
-      title: d.title,
-      description: d.description,
+      title,
+      description,
     };
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);

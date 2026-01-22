@@ -47,8 +47,8 @@ interface ReviewTimeSuggestResponse {
   category: ReviewCategoryId;
   confidence: number;
   reason: string;
-  title?: string;
-  description?: string;
+  title: string;
+  description: string;
 }
 
 serve(async (req: Request) => {
@@ -170,7 +170,10 @@ serve(async (req: Request) => {
       });
     }
 
-    if (!parsed.category || typeof parsed.confidence !== 'number' || !parsed.reason) {
+    const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+    const description = typeof parsed.description === 'string' ? parsed.description.trim() : '';
+
+    if (!parsed.category || typeof parsed.confidence !== 'number' || !parsed.reason || !title || !description) {
       return new Response(JSON.stringify({ error: 'Incomplete model response' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -181,8 +184,8 @@ serve(async (req: Request) => {
       category: normalizeCategory(parsed.category),
       confidence: clampConfidence(parsed.confidence),
       reason: parsed.reason,
-      title: typeof parsed.title === 'string' ? parsed.title : undefined,
-      description: typeof parsed.description === 'string' ? parsed.description : undefined,
+      title,
+      description,
     };
 
     return new Response(JSON.stringify(result), {
@@ -202,9 +205,13 @@ function buildPrompt(payload: ReviewTimeSuggestRequest): { system: string; userM
 
 Rules:
 - Always choose exactly one category from: faith, family, work, health, other.
+- Use the user's block.note as the primary signal for both category and wording.
+- If block.title is generic (e.g., "Unknown", "Screen Time", "Sleep"), do NOT reuse it.
+- Do not include time ranges or exact timestamps in the title/description.
 - Return JSON only with keys: category, confidence, reason, title, description.
 - Confidence is a number between 0 and 1.
-- Title/description should be short and human-friendly.`;
+- Title must be 2–6 words.
+- Description must be 1 short sentence (max ~140 chars).`;
 
   const userMsg = {
     date: payload.date,
@@ -214,8 +221,8 @@ Rules:
       category: 'faith | family | work | health | other',
       confidence: 'number (0-1)',
       reason: 'string',
-      title: 'string (optional)',
-      description: 'string (optional)',
+      title: 'string (required)',
+      description: 'string (required)',
     },
   };
 
