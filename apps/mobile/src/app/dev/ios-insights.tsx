@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/atoms/GradientButton';
 import {
   getHealthSummarySafeAsync,
@@ -95,8 +96,9 @@ export default function IosInsightsDevScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'iOS Insights (Dev)', headerShown: true }} />
-      <ScrollView className="flex-1 bg-slate-950">
-        <View className="flex-1 px-5 py-6">
+      <SafeAreaView className="flex-1 bg-slate-950" edges={['bottom']}>
+        <ScrollView className="flex-1">
+          <View className="flex-1 px-5 py-6">
           <Text className="text-2xl font-semibold text-white">iOS Insights (Dev)</Text>
           <Text className="mt-2 text-sm text-slate-300">
             This screen is for validating native permissions and data access. It is not linked from the app UI.
@@ -169,7 +171,8 @@ export default function IosInsightsDevScreen() {
             </View>
           ) : null}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }

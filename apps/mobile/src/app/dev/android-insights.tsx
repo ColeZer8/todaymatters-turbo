@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Platform, ScrollView, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientButton } from '@/components/atoms/GradientButton';
 import {
   getAndroidInsightsSupportStatus,
@@ -115,8 +116,9 @@ export default function AndroidInsightsDevScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Android Insights (Dev)', headerShown: true }} />
-      <ScrollView className="flex-1 bg-slate-950">
-        <View className="flex-1 px-5 py-6">
+      <SafeAreaView className="flex-1 bg-slate-950" edges={['bottom']}>
+        <ScrollView className="flex-1">
+          <View className="flex-1 px-5 py-6">
           <Text className="text-2xl font-semibold text-white">Android Insights (Dev)</Text>
           <Text className="mt-2 text-sm text-slate-300">{statusLabel}</Text>
 
@@ -197,7 +199,8 @@ export default function AndroidInsightsDevScreen() {
             </View>
           ) : null}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }
