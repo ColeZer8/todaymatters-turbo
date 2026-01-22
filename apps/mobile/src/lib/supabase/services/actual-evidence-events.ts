@@ -16,7 +16,7 @@ function tmSchema(): any {
 }
 
 function ymdToDate(ymd: string): Date {
-  const match = ymd.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return new Date();
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;
@@ -26,7 +26,9 @@ function ymdToDate(ymd: string): Date {
 
 function minutesToIso(ymd: string, minutes: number): string {
   const base = ymdToDate(ymd);
-  base.setMinutes(minutes);
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  base.setHours(hours, mins, 0, 0);
   return base.toISOString();
 }
 

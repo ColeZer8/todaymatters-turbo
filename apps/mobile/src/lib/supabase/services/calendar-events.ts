@@ -44,8 +44,22 @@ function ymdToDate(ymd: string): Date {
   return new Date(year, month, day);
 }
 
+/**
+ * Parse a database timestamp string to a Date object.
+ * Ensures the timestamp is interpreted as UTC if no timezone info is present.
+ * This prevents issues where timestamps without 'Z' suffix would be interpreted as local time.
+ */
+function parseDbTimestamp(timestamp: string): Date {
+  // If the timestamp already has timezone info (Z or offset), parse normally
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
+    return new Date(timestamp);
+  }
+  // Otherwise, treat it as UTC by appending 'Z'
+  return new Date(timestamp + 'Z');
+}
+
 function isoToLocalYmd(iso: string): string {
-  const date = new Date(iso);
+  const date = parseDbTimestamp(iso);
   if (Number.isNaN(date.getTime())) return '';
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -54,7 +68,7 @@ function isoToLocalYmd(iso: string): string {
 }
 
 function parseTimeIsoToHoursMinutes(timeIso: string): { hours: number; minutes: number } {
-  const parsed = new Date(timeIso);
+  const parsed = parseDbTimestamp(timeIso);
   if (Number.isNaN(parsed.getTime())) return { hours: 22, minutes: 30 };
   return { hours: parsed.getHours(), minutes: parsed.getMinutes() };
 }
@@ -66,8 +80,8 @@ function dateToMinutesFromMidnightLocal(date: Date): number {
 function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date): ScheduledEvent | null {
   if (!row.id) return null;
   if (!row.scheduled_start || !row.scheduled_end) return null;
-  const start = new Date(row.scheduled_start);
-  const end = new Date(row.scheduled_end);
+  const start = parseDbTimestamp(row.scheduled_start);
+  const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
   if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
@@ -108,8 +122,8 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
 function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
   if (!row.id) return null;
   if (!row.scheduled_start || !row.scheduled_end) return null;
-  const start = new Date(row.scheduled_start);
-  const end = new Date(row.scheduled_end);
+  const start = parseDbTimestamp(row.scheduled_start);
+  const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
   if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;

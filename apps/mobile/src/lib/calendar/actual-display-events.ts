@@ -561,7 +561,7 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[]): LocationBl
   let current: LocationBlock | null = null;
 
   for (const row of sorted) {
-    const hourStart = new Date(row.hour_start);
+    const hourStart = parseDbTimestamp(row.hour_start);
     const startMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
     if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
 
@@ -648,6 +648,17 @@ function ymdToDate(ymd: string): Date {
   const month = Number(match[2]) - 1;
   const day = Number(match[3]);
   return new Date(year, month, day, 0, 0, 0, 0);
+}
+
+/**
+ * Parse a database timestamp string to a Date object.
+ * Ensures the timestamp is interpreted as UTC if no timezone info is present.
+ */
+function parseDbTimestamp(timestamp: string): Date {
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
+    return new Date(timestamp);
+  }
+  return new Date(timestamp + 'Z');
 }
 
 function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
@@ -949,8 +960,8 @@ function buildSleepInterruptionSummaryFromSessions(
   const appUsage = new Map<string, number>();
 
   for (const session of sessions) {
-    const sessionStart = new Date(session.started_at);
-    const sessionEnd = new Date(session.ended_at);
+    const sessionStart = parseDbTimestamp(session.started_at);
+    const sessionEnd = parseDbTimestamp(session.ended_at);
     const sessionStartMinutes = (sessionStart.getTime() - dayStart.getTime()) / 60_000;
     const sessionEndMinutes = (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
     const overlapStart = Math.max(startMinutes, sessionStartMinutes);
