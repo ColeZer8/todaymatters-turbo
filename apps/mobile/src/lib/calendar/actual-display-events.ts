@@ -665,13 +665,14 @@ function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
   const sorted = [...events].sort((a, b) => a.startMinutes - b.startMinutes);
   const filled: ScheduledEvent[] = [];
   let cursor = 0;
+  let unknownCounter = 0;
 
   for (const event of sorted) {
     const start = clampMinutes(event.startMinutes);
     const end = clampMinutes(event.startMinutes + event.duration);
     if (start > cursor) {
       const gapDuration = Math.max(1, start - cursor);
-      filled.push(buildUnknownEvent(cursor, gapDuration));
+      filled.push(buildUnknownEvent(cursor, gapDuration, unknownCounter++));
     }
     filled.push(event);
     cursor = Math.max(cursor, end);
@@ -679,7 +680,7 @@ function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
 
   if (cursor < 24 * 60) {
     const gapDuration = Math.max(1, 24 * 60 - cursor);
-    filled.push(buildUnknownEvent(cursor, gapDuration));
+    filled.push(buildUnknownEvent(cursor, gapDuration, unknownCounter++));
   }
 
   return mergeAdjacentUnknowns(filled);
@@ -709,6 +710,7 @@ function replaceUnknownWithSleepSchedule(
     .sort((a, b) => a.startMinutes - b.startMinutes);
 
   const updated: ScheduledEvent[] = [];
+  let unknownCounter = 0;
 
   for (const event of events) {
     if (event.category !== 'unknown') {
@@ -729,7 +731,7 @@ function replaceUnknownWithSleepSchedule(
       const overlapEnd = Math.min(end, interval.endMinutes);
 
       if (overlapStart > cursor) {
-        updated.push(buildUnknownEvent(cursor, overlapStart - cursor));
+        updated.push(buildUnknownEvent(cursor, overlapStart - cursor, unknownCounter++));
       }
 
       if (overlapEnd > overlapStart) {
@@ -740,7 +742,7 @@ function replaceUnknownWithSleepSchedule(
     }
 
     if (cursor < end) {
-      updated.push(buildUnknownEvent(cursor, end - cursor));
+      updated.push(buildUnknownEvent(cursor, end - cursor, unknownCounter++));
     }
   }
 
@@ -1111,7 +1113,7 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
   };
 }
 
-function buildUnknownEvent(startMinutes: number, duration: number): ScheduledEvent {
+function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: number): ScheduledEvent {
   const meta: CalendarEventMeta = {
     category: 'unknown',
     source: 'derived',
@@ -1119,8 +1121,10 @@ function buildUnknownEvent(startMinutes: number, duration: number): ScheduledEve
     confidence: 0.2,
   };
 
+  // Use uniqueId if provided, otherwise fall back to timestamp-based suffix for uniqueness
+  const uniqueSuffix = uniqueId !== undefined ? uniqueId : Date.now();
   return {
-    id: `${DERIVED_ACTUAL_PREFIX}unknown_${startMinutes}_${duration}`,
+    id: `${DERIVED_ACTUAL_PREFIX}unknown_${startMinutes}_${duration}_${uniqueSuffix}`,
     title: 'Unknown',
     description: 'Tap to assign',
     startMinutes,
@@ -1132,6 +1136,7 @@ function buildUnknownEvent(startMinutes: number, duration: number): ScheduledEve
 
 function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
   const merged: ScheduledEvent[] = [];
+  let unknownCounter = 0;
 
   for (const event of events) {
     const last = merged[merged.length - 1];
@@ -1141,7 +1146,9 @@ function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
       event.category === 'unknown' &&
       last.startMinutes + last.duration === event.startMinutes
     ) {
+      // Merge by updating duration and regenerating ID to ensure uniqueness
       last.duration += event.duration;
+      last.id = `${DERIVED_ACTUAL_PREFIX}unknown_${last.startMinutes}_${last.duration}_${unknownCounter++}`;
       continue;
     }
 

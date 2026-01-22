@@ -33,9 +33,10 @@ import {
   type PatternIndex,
 } from '@/lib/calendar/pattern-recognition';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
-import { ensurePlannedSleepScheduleForDay } from '@/lib/supabase/services/calendar-events';
+import { ensurePlannedSleepScheduleForDay, syncDerivedActualEvents } from '@/lib/supabase/services/calendar-events';
 import { useVerification } from '@/lib/calendar/use-verification';
 import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
+import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
 import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
 import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
 import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
@@ -110,6 +111,7 @@ export default function ComprehensiveCalendarScreen() {
   }, [setSelectedDateYmd]);
 
   const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
+  const derivedEventsSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
 
   const isStale = useCallback((generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
     if (!generatedAtIso) return true;
@@ -494,6 +496,56 @@ export default function ComprehensiveCalendarScreen() {
       cancelled = true;
     };
   }, [actualBlocks, refreshActualEventsForSelectedDay, selectedDateYmd, userId]);
+
+  // Automatically sync derived actual events to Supabase
+  useEffect(() => {
+    if (!userId || USE_MOCK_CALENDAR) return;
+    if (!combinedActualEvents || combinedActualEvents.length === 0) return;
+
+    // Filter for derived events that need to be saved
+    const derivedEvents = combinedActualEvents.filter(
+      (event) => event.id.startsWith(DERIVED_ACTUAL_PREFIX) || event.id.startsWith(DERIVED_EVIDENCE_PREFIX)
+    );
+
+    if (derivedEvents.length === 0) return;
+
+    // Create fingerprint to avoid duplicate syncs
+    const fingerprint = derivedEvents
+      .map((event) => `${event.id}:${event.startMinutes}:${event.duration}`)
+      .sort()
+      .join('|');
+
+    if (
+      derivedEventsSyncRef.current?.ymd === selectedDateYmd &&
+      derivedEventsSyncRef.current?.fingerprint === fingerprint
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await syncDerivedActualEvents({
+          userId,
+          ymd: selectedDateYmd,
+          derivedEvents,
+        });
+        if (cancelled) return;
+        if (saved.length > 0) {
+          // Refresh actual events to include the newly saved ones
+          await refreshActualEventsForSelectedDay();
+        }
+        derivedEventsSyncRef.current = { ymd: selectedDateYmd, fingerprint };
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[Calendar] Failed to sync derived actual events:', error);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [combinedActualEvents, refreshActualEventsForSelectedDay, selectedDateYmd, userId]);
 
   return (
     <ComprehensiveCalendarTemplate

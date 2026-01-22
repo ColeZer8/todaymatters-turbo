@@ -239,7 +239,10 @@ export const AddEventTemplate = ({
             style={{ paddingBottom: insets.bottom }}
         >
             {/* Header */}
-            <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+            <View 
+                className="flex-row items-center justify-between px-4 pb-2"
+                style={{ paddingTop: insets.top + 16 }}
+            >
                 <Pressable onPress={onClose}>
                     <Text className="text-lg text-[#2563EB]">Cancel</Text>
                 </Pressable>

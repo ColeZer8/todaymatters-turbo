@@ -44,6 +44,8 @@ export const SetupStepLayout = ({
   const isIos = Platform.OS === 'ios';
   const ScrollView = RNScrollView;
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const bottomInset = isAndroid ? 0 : insets.bottom;
+  const safeAreaEdges = isAndroid ? ['top', 'left', 'right'] : ['top', 'left', 'right', 'bottom'];
 
   useEffect(() => {
     const showEvent = isIos ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -69,7 +71,7 @@ export const SetupStepLayout = ({
       style={styles.gradient}
     >
       <StatusBar style="dark" />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={safeAreaEdges}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
           behavior={keyboardBehavior}
@@ -82,7 +84,7 @@ export const SetupStepLayout = ({
               contentContainerStyle={[
                 styles.scrollContent,
                 // Reserve space for the pinned footer so content doesn't sit underneath it.
-                shouldPinFooter ? { paddingBottom: 32 + PINNED_FOOTER_SPACE + insets.bottom } : null,
+                shouldPinFooter ? { paddingBottom: 32 + PINNED_FOOTER_SPACE + bottomInset } : null,
               ]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -156,7 +158,7 @@ export const SetupStepLayout = ({
 
             {/* Pin footer to bottom so it doesn't bounce/scroll */}
             {shouldPinFooter ? (
-              <View style={[styles.pinnedFooter, { paddingBottom: 12 + insets.bottom }]}>
+              <View style={[styles.pinnedFooter, { paddingBottom: 12 + bottomInset }]}>
                 <View style={styles.contentWidth}>{footer}</View>
               </View>
             ) : null}

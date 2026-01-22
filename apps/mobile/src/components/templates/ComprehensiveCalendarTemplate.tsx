@@ -118,9 +118,15 @@ interface TimeEventBlockProps {
     event: CalendarEvent;
     visibleUntilMinutes?: number;
     onPress?: (event: CalendarEvent) => void;
+    enableReviewTimeShortcut?: boolean;
 }
 
-const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockProps) => {
+const TimeEventBlock = ({
+    event,
+    visibleUntilMinutes,
+    onPress,
+    enableReviewTimeShortcut = true,
+}: TimeEventBlockProps) => {
     const router = useRouter();
     const setHighlightedBlockId = useReviewTimeStore((state) => state.setHighlightedBlockId);
     const eventStart = event.startMinutes;
@@ -156,7 +162,7 @@ const TimeEventBlock = ({ event, visibleUntilMinutes, onPress }: TimeEventBlockP
         : 0;
     
     const handlePress = () => {
-        if (isUnknown) {
+        if (isUnknown && enableReviewTimeShortcut) {
             // Set which block to highlight before navigating
             setHighlightedBlockId(event.id);
             router.push({
@@ -548,6 +554,7 @@ export const ComprehensiveCalendarTemplate = ({
                                                 key={event.id}
                                                 event={event}
                                                 visibleUntilMinutes={actualVisibleUntil}
+                                                enableReviewTimeShortcut={false}
                                                 onPress={() =>
                                                     router.push({
                                                         pathname: '/actual-adjust',

@@ -263,8 +263,11 @@ export default function ProfileScreen() {
 
   // Build menu items - include Demo Mode in development builds
   // Always show dev menu in preview builds (check via Constants.executionEnvironment)
+  // Preview builds are standalone builds, so check for that OR if not production
   const isPreviewBuild = Constants.executionEnvironment === 'standalone';
-  const showDevMenu = __DEV__ || !appConfig.env.isProd || isPreviewBuild;
+  const isStoreClient = Constants.executionEnvironment === 'storeClient';
+  // Show dev menu if: dev mode, not production env, standalone build (preview), or store client
+  const showDevMenu = __DEV__ || !appConfig.env.isProd || isPreviewBuild || isStoreClient;
   
   const menuItems = [
     { id: 'account-settings', label: 'Account Settings', icon: Settings },

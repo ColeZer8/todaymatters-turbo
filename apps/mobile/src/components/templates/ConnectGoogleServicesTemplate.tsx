@@ -78,7 +78,7 @@ export const ConnectGoogleServicesTemplate = ({
     [connectedSet, selectedServices]
   );
   // UX: after the user returns from an attempted connection, don't trap them in a "connect again" loop.
-  // Always allow continuing, and offer an explicit retry action.
+  // Always allow continuing, and offer an explicit try-again action.
   const showPostConnectActions = hasAttemptedConnection;
 
   const showContinue = showPostConnectActions || (connectedSet.size > 0 && selectedUnconnectedCount === 0);
@@ -108,7 +108,7 @@ export const ConnectGoogleServicesTemplate = ({
                 className="items-center justify-center py-2 active:opacity-70"
                 style={({ pressed }) => [{ opacity: pressed && !isConnecting ? 0.8 : 1 }]}
               >
-                <Text className="text-sm font-semibold text-slate-600">Retry connection</Text>
+                <Text className="text-sm font-semibold text-slate-600">Try again</Text>
               </Pressable>
             ) : onSkip && !showContinue ? (
               <Pressable
@@ -237,5 +237,4 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 });
-
 

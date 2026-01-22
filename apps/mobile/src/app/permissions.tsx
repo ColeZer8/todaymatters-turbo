@@ -7,6 +7,9 @@ import { useOnboardingStore, type PermissionKey } from '@/stores/onboarding-stor
 import { useOnboardingSync } from '@/lib/supabase/hooks';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
 import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
+import { startIosBackgroundLocationAsync } from '@/lib/ios-location';
+import { startAndroidBackgroundLocationAsync } from '@/lib/android-location';
+import { useAuthStore } from '@/stores';
 import {
   getAndroidInsightsSupportStatus,
   getHealthAuthorizationStatusSafeAsync as getAndroidHealthAuthorizationStatusSafeAsync,
@@ -14,6 +17,20 @@ import {
   openUsageAccessSettingsSafeAsync,
   requestHealthConnectAuthorizationSafeAsync,
 } from '@/lib/android-insights';
+import {
+  getIosInsightsSupportStatus,
+  getScreenTimeAuthorizationStatusSafeAsync,
+  requestScreenTimeAuthorizationSafeAsync,
+  presentScreenTimeReportSafeAsync,
+  getCachedScreenTimeSummarySafeAsync,
+  getHealthAuthorizationStatusSafeAsync as getIosHealthAuthorizationStatusSafeAsync,
+  requestHealthKitAuthorizationAsync,
+  getHealthSummarySafeAsync,
+  getTodayActivityRingsSummarySafeAsync,
+  getLatestWorkoutSummarySafeAsync,
+} from '@/lib/ios-insights';
+import { syncIosScreenTimeSummary } from '@/lib/supabase/services/screen-time-sync';
+import { syncIosHealthSummary } from '@/lib/supabase/services/health-sync';
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -23,6 +40,7 @@ export default function PermissionsScreen() {
   const permissions = useOnboardingStore((state) => state.permissions);
   const togglePermission = useOnboardingStore((state) => state.togglePermission);
   const setAllPermissions = useOnboardingStore((state) => state.setAllPermissions);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
 
   const { savePermissions } = useOnboardingSync({ autoLoad: false, autoSave: false });
 
@@ -65,6 +83,90 @@ export default function PermissionsScreen() {
     );
     return false;
   }, []);
+
+  const ensureIosScreenTimePermissionIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'ios') return true;
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') {
+      Alert.alert(
+        'Screen Time not available in this build',
+        support === 'expoGo'
+          ? 'Screen Time requires a custom dev client or production build (not Expo Go).'
+          : 'This iOS build is missing the native insights module. Reinstall the native app and try again.'
+      );
+      return false;
+    }
+
+    const status = await getScreenTimeAuthorizationStatusSafeAsync();
+    if (status === 'approved') return true;
+
+    const next = await requestScreenTimeAuthorizationSafeAsync();
+    if (next !== 'approved') {
+      Alert.alert('Screen Time permission needed', 'Please allow Screen Time access, then retry.');
+      return false;
+    }
+
+    // Prime the cache so the background sync has something to upload.
+    // On iOS, we rely on the system report to populate our cached summary.
+    try {
+      await presentScreenTimeReportSafeAsync('today');
+      const summary = await getCachedScreenTimeSummarySafeAsync('today');
+      if (summary && userId) {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+        await syncIosScreenTimeSummary(userId, summary, timezone);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[Permissions] Failed to prime Screen Time cache:', error);
+      }
+    }
+
+    return true;
+  }, [userId]);
+
+  const ensureIosHealthPermissionIfNeeded = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'ios') return true;
+    const support = getIosInsightsSupportStatus();
+    if (support !== 'available') {
+      Alert.alert(
+        'Health not available in this build',
+        support === 'expoGo'
+          ? 'Health requires a custom dev client or production build (not Expo Go).'
+          : 'This iOS build is missing the native insights module. Reinstall the native app and try again.'
+      );
+      return false;
+    }
+
+    const status = await getIosHealthAuthorizationStatusSafeAsync();
+    if (status === 'authorized') return true;
+
+    const ok = await requestHealthKitAuthorizationAsync();
+    if (!ok) {
+      Alert.alert('Health permission needed', 'Please allow Health access, then retry.');
+      return false;
+    }
+
+    // Seed Supabase immediately so calendar evidence queries work right away.
+    try {
+      if (userId) {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+        const [summary, rings, workout] = await Promise.all([
+          getHealthSummarySafeAsync('today'),
+          getTodayActivityRingsSummarySafeAsync(),
+          getLatestWorkoutSummarySafeAsync('today'),
+        ]);
+        if (summary) {
+          await syncIosHealthSummary(userId, summary, timezone, rings, workout);
+        }
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[Permissions] Failed to seed Health data:', error);
+      }
+    }
+
+    return true;
+  }, [userId]);
 
   const ensureAndroidHealthPermissionIfNeeded = useCallback(async (): Promise<boolean> => {
     if (Platform.OS !== 'android') return true;
@@ -129,9 +231,21 @@ export default function PermissionsScreen() {
         if (!ok) {
           // Revert just the location toggle (others can remain enabled).
           togglePermission('location');
+        } else {
+          // Start tracking immediately after permission is granted.
+          if (Platform.OS === 'ios') {
+            void startIosBackgroundLocationAsync();
+          } else if (Platform.OS === 'android') {
+            void startAndroidBackgroundLocationAsync();
+          }
         }
 
-        if (Platform.OS === 'android') {
+        if (Platform.OS === 'ios') {
+          const appUsageOk = await ensureIosScreenTimePermissionIfNeeded();
+          if (!appUsageOk) togglePermission('appUsage');
+          const healthOk = await ensureIosHealthPermissionIfNeeded();
+          if (!healthOk) togglePermission('health');
+        } else if (Platform.OS === 'android') {
           const healthOk = await ensureAndroidHealthPermissionIfNeeded();
           if (!healthOk) {
             togglePermission('health');
@@ -146,6 +260,8 @@ export default function PermissionsScreen() {
     })();
   }, [
     allEnabled,
+    ensureIosHealthPermissionIfNeeded,
+    ensureIosScreenTimePermissionIfNeeded,
     ensureAndroidHealthPermissionIfNeeded,
     ensureAndroidUsageAccessIfNeeded,
     ensureLocationPermissionIfNeeded,
@@ -162,22 +278,39 @@ export default function PermissionsScreen() {
         if (key === 'location' && nextEnabled) {
           const ok = await ensureLocationPermissionIfNeeded();
           if (!ok) return;
+          if (Platform.OS === 'ios') {
+            void startIosBackgroundLocationAsync();
+          } else if (Platform.OS === 'android') {
+            void startAndroidBackgroundLocationAsync();
+          }
         }
 
         if (key === 'health' && nextEnabled) {
-          const ok = await ensureAndroidHealthPermissionIfNeeded();
-          if (!ok) return;
+          if (Platform.OS === 'ios') {
+            const ok = await ensureIosHealthPermissionIfNeeded();
+            if (!ok) return;
+          } else {
+            const ok = await ensureAndroidHealthPermissionIfNeeded();
+            if (!ok) return;
+          }
         }
 
         if (key === 'appUsage' && nextEnabled) {
-          const ok = await ensureAndroidUsageAccessIfNeeded();
-          if (!ok) return;
+          if (Platform.OS === 'ios') {
+            const ok = await ensureIosScreenTimePermissionIfNeeded();
+            if (!ok) return;
+          } else {
+            const ok = await ensureAndroidUsageAccessIfNeeded();
+            if (!ok) return;
+          }
         }
 
         togglePermission(key);
       })();
     },
     [
+      ensureIosHealthPermissionIfNeeded,
+      ensureIosScreenTimePermissionIfNeeded,
       ensureAndroidHealthPermissionIfNeeded,
       ensureAndroidUsageAccessIfNeeded,
       ensureLocationPermissionIfNeeded,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { IdealDayTemplate } from '@/components/templates';
@@ -27,11 +27,7 @@ export default function IdealDayScreen() {
   const customDayConfigs = useIdealDayStore((state) => state.customDayConfigs);
   const toggleDay = useIdealDayStore((state) => state.toggleDay);
 
-  const handleSyncError = useCallback((err: Error) => {
-    console.error('Failed to sync ideal day:', err);
-  }, []);
-
-  const { saveIdealDay } = useIdealDaySync({ autoLoad: true, onError: handleSyncError });
+  const { saveIdealDay } = useIdealDaySync({ autoLoad: true, onError: (err) => console.error('Failed to sync ideal day:', err) });
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) return;

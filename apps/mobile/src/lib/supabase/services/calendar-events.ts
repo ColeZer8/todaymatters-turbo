@@ -556,4 +556,149 @@ export async function deleteActualCalendarEvent(eventId: string): Promise<void> 
   return await deletePlannedCalendarEvent(eventId);
 }
 
+export interface SyncDerivedActualEventsInput {
+  userId: string;
+  ymd: string;
+  derivedEvents: ScheduledEvent[];
+}
+
+/**
+ * Automatically saves derived actual events to Supabase.
+ * Only saves events that don't already exist (checked by source_id in meta).
+ */
+export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInput): Promise<ScheduledEvent[]> {
+  const { userId, ymd, derivedEvents } = input;
+  
+  if (derivedEvents.length === 0) return [];
+
+  try {
+    const dayStart = ymdToLocalDayStart(ymd);
+    const dayEnd = addDays(dayStart, 1);
+    const startIso = dayStart.toISOString();
+    const endIso = dayEnd.toISOString();
+
+    // Fetch existing actual events for this day to check for duplicates
+    const { data: existing, error: fetchError } = await supabase
+      .schema('tm')
+      .from('events')
+      .select('id, scheduled_start, scheduled_end, meta')
+      .eq('user_id', userId)
+      .eq('type', ACTUAL_EVENT_TYPE)
+      .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso);
+
+    if (fetchError) throw handleSupabaseError(fetchError);
+
+    const existingSourceIds = new Set<string>();
+    if (existing) {
+      for (const row of existing) {
+        const meta = row.meta as Record<string, Json> | null;
+        if (meta?.source_id && typeof meta.source_id === 'string') {
+          existingSourceIds.add(meta.source_id);
+        }
+        // Also check for derived events by checking if meta.source is 'derived' and matching time ranges
+        if (meta?.source === 'derived' && meta?.kind) {
+          const start = new Date(row.scheduled_start).getTime();
+          const end = new Date(row.scheduled_end).getTime();
+          existingSourceIds.add(`derived_${start}_${end}_${meta.kind}`);
+        }
+      }
+    }
+
+    const inserts: Array<Record<string, unknown>> = [];
+    const savedEvents: ScheduledEvent[] = [];
+
+    for (const event of derivedEvents) {
+      // Skip if this is not a derived event (already saved)
+      if (!event.id.startsWith('derived_actual:') && !event.id.startsWith('derived_evidence:')) {
+        continue;
+      }
+
+      // Create a source_id based on the event's derived ID
+      const sourceId = event.id;
+      
+      // Check if we already have this event saved
+      if (existingSourceIds.has(sourceId)) {
+        continue;
+      }
+
+      // Also check by time range and kind for derived events
+      const startDate = new Date(dayStart);
+      startDate.setHours(Math.floor(event.startMinutes / 60), event.startMinutes % 60, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setMinutes(endDate.getMinutes() + event.duration);
+      
+      const timeRangeKey = `derived_${startDate.getTime()}_${endDate.getTime()}_${event.meta?.kind ?? 'unknown'}`;
+      if (existingSourceIds.has(timeRangeKey)) {
+        continue;
+      }
+
+      const meta: Record<string, Json> = {
+        category: event.category,
+        source: event.meta?.source ?? 'derived',
+        kind: event.meta?.kind ?? 'unknown_gap',
+        source_id: sourceId,
+        actual: true,
+        tags: ['actual'],
+        confidence: event.meta?.confidence ?? 0.2,
+        ...(event.meta?.evidence ? { evidence: event.meta.evidence } : {}),
+        ...(event.meta?.dataQuality ? { dataQuality: event.meta.dataQuality } : {}),
+        ...(event.meta?.verificationReport ? { verificationReport: event.meta.verificationReport } : {}),
+        ...(event.meta?.patternSummary ? { patternSummary: event.meta.patternSummary } : {}),
+        ...(event.meta?.evidenceFusion ? { evidenceFusion: event.meta.evidenceFusion } : {}),
+        ...(event.meta?.plannedEventId ? { plannedEventId: event.meta.plannedEventId } : {}),
+      };
+
+      if (event.location) {
+        meta.location = event.location;
+      }
+
+      inserts.push({
+        user_id: userId,
+        type: ACTUAL_EVENT_TYPE,
+        title: event.title,
+        description: event.description ?? '',
+        scheduled_start: startDate.toISOString(),
+        scheduled_end: endDate.toISOString(),
+        meta: meta as unknown as Json,
+      });
+    }
+
+    if (inserts.length === 0) return [];
+
+    if (__DEV__) {
+      console.log(`[Supabase] Syncing ${inserts.length} derived actual events for ${ymd}`);
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .schema('tm')
+      .from('events')
+      .insert(inserts)
+      .select('*');
+
+    if (insertError) throw handleSupabaseError(insertError);
+
+    if (!inserted) return [];
+
+    // Map inserted rows to ScheduledEvent format
+    for (const row of inserted) {
+      const mapped = rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd);
+      if (mapped) {
+        savedEvents.push(mapped);
+      }
+    }
+
+    if (__DEV__) {
+      console.log(`[Supabase] ✅ Successfully synced ${savedEvents.length} derived actual events`);
+    }
+
+    return savedEvents;
+  } catch (error) {
+    if (__DEV__) {
+      console.error('[Supabase] ❌ Error syncing derived actual events:', error);
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
 

@@ -605,23 +605,30 @@ export function generateActualBlocks(
       (e) => e.startMinutes < loc.endMinutes && (e.startMinutes + e.duration) > loc.startMinutes
     );
 
-    if (!isPlanned && loc.placeLabel) {
-      const category = placeToCategory(loc.placeCategory);
+    if (!isPlanned) {
+      const hasLabel = Boolean(loc.placeLabel && loc.placeLabel.trim().length > 0);
+      const inferredTravel = (loc.radiusM ?? 0) >= 600; // meters
+      const title = hasLabel
+        ? loc.placeLabel
+        : inferredTravel
+          ? 'Travel'
+          : 'Out and about';
+      const category = hasLabel ? placeToCategory(loc.placeCategory) : inferredTravel ? 'travel' : 'unknown';
       blocks.push({
         id: `loc_${loc.startMinutes}_${loc.endMinutes}`,
-        title: loc.placeLabel,
-        description: loc.placeCategory || '',
+        title,
+        description: hasLabel ? (loc.placeCategory || '') : (loc.geohash7 ? `geohash:${loc.geohash7}` : ''),
         category,
         startMinutes: loc.startMinutes,
         endMinutes: loc.endMinutes,
         source: 'location',
-        confidence: loc.sampleCount >= 6 ? 0.7 : 0.55,
+        confidence: hasLabel ? (loc.sampleCount >= 6 ? 0.7 : 0.55) : (loc.sampleCount >= 6 ? 0.55 : 0.4),
         evidence: {
           location: {
-            placeLabel: loc.placeLabel,
-            placeCategory: loc.placeCategory,
+            placeLabel: hasLabel ? loc.placeLabel : null,
+            placeCategory: hasLabel ? loc.placeCategory : null,
             sampleCount: loc.sampleCount,
-            matchesExpected: true,
+            matchesExpected: hasLabel,
           },
         },
       });
@@ -831,6 +838,15 @@ interface LocationBlock {
   placeCategory: string | null;
   placeKey: string;
   sampleCount: number;
+  radiusM: number | null;
+  geohash7: string | null;
+}
+
+function parseDbTimestamp(timestamp: string): Date {
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
+    return new Date(timestamp);
+  }
+  return new Date(`${timestamp}Z`);
 }
 
 function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): LocationBlock[] {
@@ -839,7 +855,7 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
   let current: LocationBlock | null = null;
 
   for (const row of sorted) {
-    const hourStart = new Date(row.hour_start);
+    const hourStart = parseDbTimestamp(row.hour_start);
     const startMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
     if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
 
@@ -848,10 +864,16 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
     const placeKey = row.place_id ?? `${placeLabel}:${placeCategory ?? 'unknown'}`.toLowerCase();
     const nextStart = startMinutes;
     const nextEnd = startMinutes + 60;
+    const radiusM = typeof row.radius_m === 'number' ? row.radius_m : null;
+    const geohash7 = typeof row.geohash7 === 'string' ? row.geohash7 : null;
 
     if (current && current.placeKey === placeKey && current.endMinutes === nextStart) {
       current.endMinutes = nextEnd;
       current.sampleCount += row.sample_count;
+      // Keep the max radius across merged hours (useful for “travel” vs “stayed put”).
+      if (radiusM != null) {
+        current.radiusM = current.radiusM == null ? radiusM : Math.max(current.radiusM, radiusM);
+      }
       continue;
     }
 
@@ -862,6 +884,8 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
       placeCategory,
       placeKey,
       sampleCount: row.sample_count,
+      radiusM,
+      geohash7,
     };
     blocks.push(current);
   }
