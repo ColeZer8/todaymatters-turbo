@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { ActualAdjustTemplate } from '@/components/templates/ActualAdjustTemplate';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
@@ -230,6 +230,7 @@ export default function ActualAdjustScreen() {
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>(event.category);
   const [note, setNote] = useState('');
   const [isBig3, setIsBig3] = useState(Boolean(event.isBig3));
+  const [titleInput, setTitleInput] = useState(event.title || 'Actual');
   const [selectedValue, setSelectedValue] = useState<string | null>(null);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<{
@@ -240,6 +241,10 @@ export default function ActualAdjustScreen() {
     reason?: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setTitleInput(event.title || 'Actual');
+  }, [event.title]);
 
   const valuesOptions = useMemo(() => {
     const valueLabels = coreValues.filter((value) => value.isSelected).map((value) => value.label);
@@ -337,7 +342,8 @@ export default function ActualAdjustScreen() {
       }
 
       const didUseAi = Boolean(nextSuggestion);
-      const title = didUseAi ? (nextSuggestion?.title || event.title || 'Actual') : event.title || 'Actual';
+      const title =
+        didUseAi ? (nextSuggestion?.title || titleInput || 'Actual') : titleInput || 'Actual';
       const description = didUseAi
         ? (nextSuggestion?.description || '')
         : (note.trim() || event.description || '');
@@ -456,6 +462,7 @@ export default function ActualAdjustScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ActualAdjustTemplate
         title={event.title}
+        titleValue={titleInput}
         timeLabel={timeLabel}
         selectedCategory={selectedCategory}
         isBig3={isBig3}
@@ -470,6 +477,22 @@ export default function ActualAdjustScreen() {
         isSaving={isSaving}
         onCancel={() => router.back()}
         onSave={handleSave}
+        onSplit={() => {
+          router.push({
+            pathname: '/actual-split',
+            params: {
+              id: event.id,
+              title: titleInput,
+              description: event.description,
+              category: event.category,
+              startMinutes: String(normalizedStartMinutes),
+              duration: String(normalizedDuration),
+              meta: event.meta ? JSON.stringify(event.meta) : undefined,
+              location: event.location ?? undefined,
+            },
+          });
+        }}
+        onChangeTitle={setTitleInput}
         onChangeNote={setNote}
         onToggleBig3={setIsBig3}
         onSelectCategory={setSelectedCategory}

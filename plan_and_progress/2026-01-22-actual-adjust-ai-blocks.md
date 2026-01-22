@@ -23,7 +23,7 @@ Fix the "tell us what really happened" AI summary time mismatch and ensure user 
 
 ## Progress
 
-- 2026-01-22: Inspected actual-adjust and review-time-suggest flow; updated helper text and AI prompt/validation.
+- 2026-01-22: Inspected actual-adjust and review-time-suggest flow; added AI fallback handling and stronger prompt/validation.
 
 ## Verification
 

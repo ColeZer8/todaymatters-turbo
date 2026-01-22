@@ -8,7 +8,6 @@ export interface PermissionsData extends Record<string, boolean> {
   calendar: boolean;
   notifications: boolean;
   email: boolean;
-  health: boolean;
   location: boolean;
   contacts: boolean;
   browsing: boolean;
@@ -247,12 +246,21 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   calendar: true,
   notifications: true,
   email: true,
-  health: true,
   location: true,
   contacts: true,
   browsing: true,
   appUsage: true,
 };
+
+const normalizePermissions = (source?: Partial<PermissionsData> | null): PermissionsData => ({
+  calendar: source?.calendar ?? DEFAULT_PERMISSIONS.calendar,
+  notifications: source?.notifications ?? DEFAULT_PERMISSIONS.notifications,
+  email: source?.email ?? DEFAULT_PERMISSIONS.email,
+  location: source?.location ?? DEFAULT_PERMISSIONS.location,
+  contacts: source?.contacts ?? DEFAULT_PERMISSIONS.contacts,
+  browsing: source?.browsing ?? DEFAULT_PERMISSIONS.browsing,
+  appUsage: source?.appUsage ?? DEFAULT_PERMISSIONS.appUsage,
+});
 
 // Predefined Core Values (curated starter list)
 const DEFAULT_CORE_VALUES: CoreValue[] = [
@@ -379,7 +387,6 @@ export const useOnboardingStore = create<OnboardingState>()(
             calendar: value,
             notifications: value,
             email: value,
-            health: value,
             location: value,
             contacts: value,
             browsing: value,
@@ -608,6 +615,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         };
         return {
           ...merged,
+          permissions: normalizePermissions(merged.permissions),
           goals: dedupeStringList(merged.goals ?? []),
           initiatives: dedupeStringList(merged.initiatives ?? []),
         };
@@ -624,8 +632,6 @@ export const getWakeTimeAsDate = (state: OnboardingState) =>
   new Date(state.wakeTime);
 export const getSleepTimeAsDate = (state: OnboardingState) =>
   new Date(state.sleepTime);
-
-
 
 
 

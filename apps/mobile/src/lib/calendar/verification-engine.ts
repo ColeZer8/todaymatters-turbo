@@ -600,29 +600,52 @@ export function generateActualBlocks(
   // ----- LOCATION-BASED BLOCKS -----
   const locationBlocks = buildLocationBlocks(dayStart, evidence.locationHourly);
   for (const loc of locationBlocks) {
-    // Check if this block is covered by a planned event
-    const isPlanned = plannedEvents.some(
-      (e) => e.startMinutes < loc.endMinutes && (e.startMinutes + e.duration) > loc.startMinutes
+    const blockDuration = Math.max(1, loc.endMinutes - loc.startMinutes);
+    const overlapMinutes = Math.min(
+      blockDuration,
+      plannedEvents.reduce(
+        (sum, event) =>
+          sum +
+          overlapMinutesBetween(
+            loc.startMinutes,
+            loc.endMinutes,
+            event.startMinutes,
+            event.startMinutes + event.duration
+          ),
+        0
+      )
     );
+    // Consider a block "planned" only if it is mostly covered by planned events.
+    const isPlanned = overlapMinutes >= blockDuration * 0.5;
 
     if (!isPlanned) {
-      const hasLabel = Boolean(loc.placeLabel && loc.placeLabel.trim().length > 0);
-      const inferredTravel = (loc.radiusM ?? 0) >= 600; // meters
+      const hasLabel = loc.hasLabel;
+      const inferredTravel = loc.isTransition || (loc.radiusM ?? 0) >= 600; // meters
       const title = hasLabel
         ? loc.placeLabel
         : inferredTravel
           ? 'Travel'
           : 'Out and about';
       const category = hasLabel ? placeToCategory(loc.placeCategory) : inferredTravel ? 'travel' : 'unknown';
+      const baseDescription = hasLabel
+        ? (loc.placeCategory || '')
+        : (loc.geohash7 ? `geohash:${loc.geohash7}` : '');
+      const description = loc.isTransition && !hasLabel
+        ? [baseDescription, 'transition'].filter(Boolean).join(' • ')
+        : baseDescription;
+      const baseConfidence = hasLabel
+        ? (loc.sampleCount >= 6 ? 0.7 : 0.55)
+        : (loc.sampleCount >= 6 ? 0.55 : 0.4);
+      const confidence = loc.isTransition ? Math.max(baseConfidence, 0.55) : baseConfidence;
       blocks.push({
         id: `loc_${loc.startMinutes}_${loc.endMinutes}`,
         title,
-        description: hasLabel ? (loc.placeCategory || '') : (loc.geohash7 ? `geohash:${loc.geohash7}` : ''),
+        description,
         category,
         startMinutes: loc.startMinutes,
         endMinutes: loc.endMinutes,
         source: 'location',
-        confidence: hasLabel ? (loc.sampleCount >= 6 ? 0.7 : 0.55) : (loc.sampleCount >= 6 ? 0.55 : 0.4),
+        confidence,
         evidence: {
           location: {
             placeLabel: hasLabel ? loc.placeLabel : null,
@@ -840,6 +863,8 @@ interface LocationBlock {
   sampleCount: number;
   radiusM: number | null;
   geohash7: string | null;
+  hasLabel: boolean;
+  isTransition: boolean;
 }
 
 function parseDbTimestamp(timestamp: string): Date {
@@ -847,6 +872,12 @@ function parseDbTimestamp(timestamp: string): Date {
     return new Date(timestamp);
   }
   return new Date(`${timestamp}Z`);
+}
+
+function overlapMinutesBetween(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
+  const start = Math.max(aStart, bStart);
+  const end = Math.min(aEnd, bEnd);
+  return Math.max(0, end - start);
 }
 
 function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): LocationBlock[] {
@@ -861,11 +892,13 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
 
     const placeLabel = row.place_label || row.place_category || '';
     const placeCategory = row.place_category ?? null;
-    const placeKey = row.place_id ?? `${placeLabel}:${placeCategory ?? 'unknown'}`.toLowerCase();
+    const hasLabel = Boolean(placeLabel.trim().length > 0);
+    const geohash7 = typeof row.geohash7 === 'string' ? row.geohash7 : null;
+    const fallbackKey = geohash7 ? `geohash:${geohash7}` : `hour:${row.hour_start}`;
+    const placeKey = (row.place_id ?? (hasLabel ? `${placeLabel}:${placeCategory ?? 'unknown'}` : fallbackKey)).toLowerCase();
     const nextStart = startMinutes;
     const nextEnd = startMinutes + 60;
     const radiusM = typeof row.radius_m === 'number' ? row.radius_m : null;
-    const geohash7 = typeof row.geohash7 === 'string' ? row.geohash7 : null;
 
     if (current && current.placeKey === placeKey && current.endMinutes === nextStart) {
       current.endMinutes = nextEnd;
@@ -877,6 +910,11 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
       continue;
     }
 
+    const isTransition =
+      Boolean(current) &&
+      current.placeKey !== placeKey &&
+      Boolean(current.geohash7 && geohash7 && current.geohash7 !== geohash7);
+
     current = {
       startMinutes: nextStart,
       endMinutes: nextEnd,
@@ -886,6 +924,8 @@ function buildLocationBlocks(dayStart: Date, rows: LocationHourlyRow[]): Locatio
       sampleCount: row.sample_count,
       radiusM,
       geohash7,
+      hasLabel,
+      isTransition,
     };
     blocks.push(current);
   }

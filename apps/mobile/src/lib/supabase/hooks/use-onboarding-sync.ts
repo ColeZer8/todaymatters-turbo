@@ -171,7 +171,6 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
             calendar: !!preferences.permissions.calendar,
             notifications: !!preferences.permissions.notifications,
             email: !!preferences.permissions.email,
-            health: !!preferences.permissions.health,
             location: !!preferences.permissions.location,
             contacts: !!preferences.permissions.contacts,
             browsing: !!preferences.permissions.browsing,
@@ -658,7 +657,6 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     saveOnboardingCompleted,
   };
 }
-
 
 
 

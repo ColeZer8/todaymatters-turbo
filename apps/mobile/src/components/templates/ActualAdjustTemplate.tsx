@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, Text, TextInput, View, Switch } from 'react-native';
 import type { EventCategory } from '@/stores';
 
@@ -13,6 +13,7 @@ export interface ActualAdjustSuggestion {
 
 export interface ActualAdjustTemplateProps {
   title: string;
+  titleValue: string;
   timeLabel: string;
   selectedCategory: EventCategory;
   isBig3: boolean;
@@ -27,6 +28,8 @@ export interface ActualAdjustTemplateProps {
   isSaving: boolean;
   onCancel: () => void;
   onSave: () => void;
+  onSplit?: () => void;
+  onChangeTitle: (value: string) => void;
   onChangeNote: (value: string) => void;
   onToggleBig3: (value: boolean) => void;
   onSelectCategory: (value: EventCategory) => void;
@@ -46,6 +49,7 @@ const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
 
 export const ActualAdjustTemplate = ({
   title,
+  titleValue,
   timeLabel,
   selectedCategory,
   isBig3,
@@ -60,6 +64,8 @@ export const ActualAdjustTemplate = ({
   isSaving,
   onCancel,
   onSave,
+  onSplit,
+  onChangeTitle,
   onChangeNote,
   onToggleBig3,
   onSelectCategory,
@@ -67,6 +73,7 @@ export const ActualAdjustTemplate = ({
   onSelectGoal,
 }: ActualAdjustTemplateProps) => {
   const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(false);
+  const insets = useSafeAreaInsets();
   const confidenceRow = useMemo(
     () => evidenceRows.find((row) => row.label.toLowerCase() === 'confidence') ?? null,
     [evidenceRows],
@@ -74,7 +81,10 @@ export const ActualAdjustTemplate = ({
 
   return (
     <SafeAreaView className="flex-1 bg-[#F7FAFF]">
-      <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
+      <View
+        className="flex-row items-center justify-between px-5 pb-3"
+        style={{ paddingTop: insets.top + 8 }}
+      >
         <Pressable onPress={onCancel} className="px-3 py-2" disabled={isSaving}>
           <Text className="text-[14px] font-semibold text-[#64748B]">Cancel</Text>
         </Pressable>
@@ -99,8 +109,25 @@ export const ActualAdjustTemplate = ({
         automaticallyAdjustKeyboardInsets
       >
         <View className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-          <Text className="text-[14px] font-semibold text-[#111827]">{title}</Text>
+          <TextInput
+            value={titleValue}
+            onChangeText={onChangeTitle}
+            placeholder={title}
+            placeholderTextColor="#94A3B8"
+            className="text-[14px] font-semibold text-[#111827]"
+            autoCapitalize="sentences"
+            returnKeyType="done"
+          />
           <Text className="mt-1 text-[12px] text-[#64748B]">{timeLabel}</Text>
+          {onSplit && (
+            <Pressable
+              onPress={onSplit}
+              className="mt-3 self-start rounded-full border border-[#E2E8F0] bg-white px-3 py-2"
+              style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text className="text-[12px] font-semibold text-[#2563EB]">Split event</Text>
+            </Pressable>
+          )}
         </View>
 
         <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">

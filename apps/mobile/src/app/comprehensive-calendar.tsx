@@ -33,7 +33,11 @@ import {
   type PatternIndex,
 } from '@/lib/calendar/pattern-recognition';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
-import { ensurePlannedSleepScheduleForDay, syncDerivedActualEvents } from '@/lib/supabase/services/calendar-events';
+import {
+  ensurePlannedSleepScheduleForDay,
+  syncDerivedActualEvents,
+  deleteActualCalendarEventsByIds,
+} from '@/lib/supabase/services/calendar-events';
 import { useVerification } from '@/lib/calendar/use-verification';
 import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
 import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
@@ -112,6 +116,7 @@ export default function ComprehensiveCalendarScreen() {
 
   const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
   const derivedEventsSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
+  const cleanupRef = useRef<Set<string>>(new Set());
 
   const isStale = useCallback((generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
     if (!generatedAtIso) return true;
@@ -162,6 +167,37 @@ export default function ComprehensiveCalendarScreen() {
       const events = await loadActualForDay(selectedDateYmd);
       if (cancelled) return;
       setActualEventsForDate(selectedDateYmd, events);
+      if (cleanupRef.current.has(selectedDateYmd)) return;
+      cleanupRef.current.add(selectedDateYmd);
+      const toRemove: string[] = [];
+      const overlaps = (a: ScheduledEvent, b: ScheduledEvent) => {
+        const start = Math.max(a.startMinutes, b.startMinutes);
+        const end = Math.min(a.startMinutes + a.duration, b.startMinutes + b.duration);
+        return end > start;
+      };
+      for (const event of events) {
+        const sourceId = event.meta?.source_id;
+        if (!sourceId || typeof sourceId !== 'string') continue;
+        if (!sourceId.startsWith('derived_actual:') && !sourceId.startsWith('derived_evidence:')) continue;
+        const hasOverlap = events.some((other) => other.id !== event.id && overlaps(event, other));
+        if (hasOverlap) {
+          toRemove.push(event.id);
+        }
+      }
+      if (toRemove.length > 0) {
+        try {
+          await deleteActualCalendarEventsByIds(userId, toRemove);
+          if (cancelled) return;
+          setActualEventsForDate(
+            selectedDateYmd,
+            events.filter((item) => !toRemove.includes(item.id))
+          );
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('[Calendar] Failed cleanup of derived overlaps:', error);
+          }
+        }
+      }
     })();
     return () => {
       cancelled = true;

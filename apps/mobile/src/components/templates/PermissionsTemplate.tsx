@@ -10,7 +10,6 @@ import {
   Calendar,
   Bell,
   Mail,
-  Heart,
   MapPin,
   Users,
   Globe,
@@ -25,7 +24,6 @@ export type PermissionKey =
   | 'calendar'
   | 'notifications'
   | 'email'
-  | 'health'
   | 'location'
   | 'contacts'
   | 'browsing'
@@ -35,7 +33,6 @@ export interface IndividualPermissions {
   calendar: boolean;
   notifications: boolean;
   email: boolean;
-  health: boolean;
   location: boolean;
   contacts: boolean;
   browsing: boolean;
@@ -73,13 +70,6 @@ const PERMISSION_ROWS: PermissionRowConfig[] = [
     bgColor: 'bg-violet-500',
   },
   {
-    key: 'health',
-    title: 'Health / Activity',
-    description: 'Estimate sleep and movement patterns.',
-    icon: Heart,
-    bgColor: 'bg-rose-500',
-  },
-  {
     key: 'location',
     title: 'Location',
     description: 'Access your location for better scheduling.',
@@ -102,8 +92,8 @@ const PERMISSION_ROWS: PermissionRowConfig[] = [
   },
   {
     key: 'appUsage',
-    title: 'App Usage',
-    description: 'Access your app usage for better scheduling.',
+    title: 'Screen Time',
+    description: 'Read app usage to estimate screen time.',
     icon: Smartphone,
     bgColor: 'bg-orange-500',
   },
@@ -213,7 +203,7 @@ export const PermissionsTemplate = ({
                   <View className="flex-1">
                     <Text className="text-base font-semibold text-white">Allow all permissions</Text>
                     <Text className="text-sm text-white/80 mt-0.5">
-                      Calendar, notifications, email, health &amp; more
+                      Calendar, notifications, email &amp; more
                     </Text>
                   </View>
                   <View className="w-14 h-8 rounded-full bg-white/25 justify-center px-1">

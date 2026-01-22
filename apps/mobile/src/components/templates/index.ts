@@ -23,6 +23,7 @@ export { AnalyticsTemplate } from './AnalyticsTemplate';
 export { ProfileTemplate } from './ProfileTemplate';
 export { ReviewTimeTemplate } from './ReviewTimeTemplate';
 export { ActualAdjustTemplate } from './ActualAdjustTemplate';
+export { ActualSplitTemplate } from './ActualSplitTemplate';
 export { CategoryHealthTemplate } from './CategoryHealthTemplate';
 export { AddEventTemplate } from './AddEventTemplate';
 export { AppCategoryOverridesTemplate } from './AppCategoryOverridesTemplate';

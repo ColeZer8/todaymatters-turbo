@@ -12,10 +12,7 @@ import { startAndroidBackgroundLocationAsync } from '@/lib/android-location';
 import { useAuthStore } from '@/stores';
 import {
   getAndroidInsightsSupportStatus,
-  getHealthAuthorizationStatusSafeAsync as getAndroidHealthAuthorizationStatusSafeAsync,
   getUsageAccessAuthorizationStatusSafeAsync,
-  openUsageAccessSettingsSafeAsync,
-  requestHealthConnectAuthorizationSafeAsync,
 } from '@/lib/android-insights';
 import {
   getIosInsightsSupportStatus,
@@ -23,14 +20,8 @@ import {
   requestScreenTimeAuthorizationSafeAsync,
   presentScreenTimeReportSafeAsync,
   getCachedScreenTimeSummarySafeAsync,
-  getHealthAuthorizationStatusSafeAsync as getIosHealthAuthorizationStatusSafeAsync,
-  requestHealthKitAuthorizationAsync,
-  getHealthSummarySafeAsync,
-  getTodayActivityRingsSummarySafeAsync,
-  getLatestWorkoutSummarySafeAsync,
 } from '@/lib/ios-insights';
 import { syncIosScreenTimeSummary } from '@/lib/supabase/services/screen-time-sync';
-import { syncIosHealthSummary } from '@/lib/supabase/services/health-sync';
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -124,81 +115,13 @@ export default function PermissionsScreen() {
     return true;
   }, [userId]);
 
-  const ensureIosHealthPermissionIfNeeded = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS !== 'ios') return true;
-    const support = getIosInsightsSupportStatus();
-    if (support !== 'available') {
-      Alert.alert(
-        'Health not available in this build',
-        support === 'expoGo'
-          ? 'Health requires a custom dev client or production build (not Expo Go).'
-          : 'This iOS build is missing the native insights module. Reinstall the native app and try again.'
-      );
-      return false;
-    }
-
-    const status = await getIosHealthAuthorizationStatusSafeAsync();
-    if (status === 'authorized') return true;
-
-    const ok = await requestHealthKitAuthorizationAsync();
-    if (!ok) {
-      Alert.alert('Health permission needed', 'Please allow Health access, then retry.');
-      return false;
-    }
-
-    // Seed Supabase immediately so calendar evidence queries work right away.
-    try {
-      if (userId) {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-        const [summary, rings, workout] = await Promise.all([
-          getHealthSummarySafeAsync('today'),
-          getTodayActivityRingsSummarySafeAsync(),
-          getLatestWorkoutSummarySafeAsync('today'),
-        ]);
-        if (summary) {
-          await syncIosHealthSummary(userId, summary, timezone, rings, workout);
-        }
-      }
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('[Permissions] Failed to seed Health data:', error);
-      }
-    }
-
-    return true;
-  }, [userId]);
-
-  const ensureAndroidHealthPermissionIfNeeded = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS !== 'android') return true;
-    const support = getAndroidInsightsSupportStatus();
-    if (support !== 'available') {
-      Alert.alert(
-        'Health data not available in this build',
-        'Health Connect requires the custom Android dev client. Rebuild the app, then try again.'
-      );
-      return false;
-    }
-
-    const status = await getAndroidHealthAuthorizationStatusSafeAsync();
-    if (status === 'authorized') return true;
-
-    const ok = await requestHealthConnectAuthorizationSafeAsync();
-    if (ok) return true;
-
-    Alert.alert(
-      'Health Connect permission needed',
-      'Please enable TodayMatters in Health Connect, then return and try again.'
-    );
-    return false;
-  }, []);
-
   const ensureAndroidUsageAccessIfNeeded = useCallback(async (): Promise<boolean> => {
     if (Platform.OS !== 'android') return true;
     const support = getAndroidInsightsSupportStatus();
     if (support !== 'available') {
       Alert.alert(
-        'App usage not available in this build',
-        'Usage access requires the custom Android dev client. Rebuild the app, then try again.'
+        'Screen Time not available in this build',
+        'Screen Time access requires the custom Android dev client. Rebuild the app, then try again.'
       );
       return false;
     }
@@ -206,10 +129,10 @@ export default function PermissionsScreen() {
     const status = await getUsageAccessAuthorizationStatusSafeAsync();
     if (status === 'authorized') return true;
 
-    await openUsageAccessSettingsSafeAsync();
+    await Linking.openSettings();
     Alert.alert(
-      'Usage access required',
-      'Enable TodayMatters in Usage Access settings, then return and try again.'
+      'Screen Time access required',
+      'Open App data and enable Screen Time (Usage Access) for TodayMatters, then return and try again.'
     );
     return false;
   }, []);
@@ -243,14 +166,7 @@ export default function PermissionsScreen() {
         if (Platform.OS === 'ios') {
           const appUsageOk = await ensureIosScreenTimePermissionIfNeeded();
           if (!appUsageOk) togglePermission('appUsage');
-          const healthOk = await ensureIosHealthPermissionIfNeeded();
-          if (!healthOk) togglePermission('health');
         } else if (Platform.OS === 'android') {
-          const healthOk = await ensureAndroidHealthPermissionIfNeeded();
-          if (!healthOk) {
-            togglePermission('health');
-          }
-
           const usageOk = await ensureAndroidUsageAccessIfNeeded();
           if (!usageOk) {
             togglePermission('appUsage');
@@ -260,9 +176,7 @@ export default function PermissionsScreen() {
     })();
   }, [
     allEnabled,
-    ensureIosHealthPermissionIfNeeded,
     ensureIosScreenTimePermissionIfNeeded,
-    ensureAndroidHealthPermissionIfNeeded,
     ensureAndroidUsageAccessIfNeeded,
     ensureLocationPermissionIfNeeded,
     setAllPermissions,
@@ -285,16 +199,6 @@ export default function PermissionsScreen() {
           }
         }
 
-        if (key === 'health' && nextEnabled) {
-          if (Platform.OS === 'ios') {
-            const ok = await ensureIosHealthPermissionIfNeeded();
-            if (!ok) return;
-          } else {
-            const ok = await ensureAndroidHealthPermissionIfNeeded();
-            if (!ok) return;
-          }
-        }
-
         if (key === 'appUsage' && nextEnabled) {
           if (Platform.OS === 'ios') {
             const ok = await ensureIosScreenTimePermissionIfNeeded();
@@ -309,9 +213,7 @@ export default function PermissionsScreen() {
       })();
     },
     [
-      ensureIosHealthPermissionIfNeeded,
       ensureIosScreenTimePermissionIfNeeded,
-      ensureAndroidHealthPermissionIfNeeded,
       ensureAndroidUsageAccessIfNeeded,
       ensureLocationPermissionIfNeeded,
       permissions,
@@ -331,14 +233,6 @@ export default function PermissionsScreen() {
         if (!ok) {
           // Keep the UI consistent: flip off the toggle if we couldn't obtain permission.
           togglePermission('location');
-          return;
-        }
-      }
-
-      if (Platform.OS === 'android' && permissions.health) {
-        const ok = await ensureAndroidHealthPermissionIfNeeded();
-        if (!ok) {
-          togglePermission('health');
           return;
         }
       }

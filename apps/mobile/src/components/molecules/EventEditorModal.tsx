@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, Check } from 'lucide-react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid, DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { ScheduledEvent, EventCategory } from '@/stores';
@@ -30,6 +30,12 @@ const formatTime = (date: Date) => {
     const period = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
     return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+const combineDateAndTime = (date: Date, time: Date) => {
+    const next = new Date(date);
+    next.setHours(time.getHours(), time.getMinutes(), 0, 0);
+    return next;
 };
 
 interface EventEditorModalProps {
@@ -137,31 +143,58 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
         });
     };
 
+    const openAndroidDatePicker = () => {
+        DateTimePickerAndroid.open({
+            value: selectedDate,
+            mode: 'date',
+            onChange: (ev, date) => {
+                if (ev.type !== 'set' || !date) return;
+                setSelectedDate(date);
+                setStartTime((prev) => combineDateAndTime(date, prev));
+                setEndTime((prev) => combineDateAndTime(date, prev));
+            },
+        });
+    };
+
+    const openAndroidStartTimePicker = () => {
+        DateTimePickerAndroid.open({
+            value: startTime,
+            mode: 'time',
+            onChange: (ev, date) => {
+                if (ev.type !== 'set' || !date) return;
+                setStartTime(combineDateAndTime(selectedDate, date));
+            },
+        });
+    };
+
+    const openAndroidEndTimePicker = () => {
+        DateTimePickerAndroid.open({
+            value: endTime,
+            mode: 'time',
+            onChange: (ev, date) => {
+                if (ev.type !== 'set' || !date) return;
+                setEndTime(combineDateAndTime(selectedDate, date));
+            },
+        });
+    };
+
     const onDateChange = (ev: DateTimePickerEvent, date?: Date) => {
-        // Android shows DateTimePicker as a modal dialog. Close picker on any event to prevent re-open loop.
-        if (Platform.OS === 'android') {
-            setShowDatePicker(false);
-            if (ev.type === 'dismissed') return;
+        // iOS: inline picker stays mounted; apply changes as user scrolls.
+        if (date) {
+            setSelectedDate(date);
+            setStartTime((prev) => combineDateAndTime(date, prev));
+            setEndTime((prev) => combineDateAndTime(date, prev));
         }
-        if (date) setSelectedDate(date);
     };
 
     const onStartTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
-        // Android: close picker on any event to prevent modal lock-in
-        if (Platform.OS === 'android') {
-            setShowStartTimePicker(false);
-            if (ev.type === 'dismissed') return;
-        }
-        if (date) setStartTime(date);
+        // iOS: inline picker updates time continuously
+        if (date) setStartTime(combineDateAndTime(selectedDate, date));
     };
 
     const onEndTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
-        // Android: close picker on any event to prevent modal lock-in
-        if (Platform.OS === 'android') {
-            setShowEndTimePicker(false);
-            if (ev.type === 'dismissed') return;
-        }
-        if (date) setEndTime(date);
+        // iOS: inline picker updates time continuously
+        if (date) setEndTime(combineDateAndTime(selectedDate, date));
     };
 
     return (
@@ -238,7 +271,15 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                             <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
                             
                             <Pressable 
-                                onPress={() => setShowDatePicker(!showDatePicker)}
+                                onPress={() => {
+                                    if (Platform.OS === 'android') {
+                                        openAndroidDatePicker();
+                                        return;
+                                    }
+                                    setShowDatePicker(!showDatePicker);
+                                    setShowStartTimePicker(false);
+                                    setShowEndTimePicker(false);
+                                }}
                                 className="flex-row items-center justify-between px-4 py-3"
                             >
                                 <Text className="text-lg text-[#111827]">Starts</Text>
@@ -247,7 +288,17 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                         <Text className="text-lg text-[#111827]">{formatDateFull(selectedDate)}</Text>
                                     </View>
                                     {!allDay && (
-                                        <Pressable onPress={() => setShowStartTimePicker(!showStartTimePicker)}>
+                                        <Pressable
+                                            onPress={() => {
+                                                if (Platform.OS === 'android') {
+                                                    openAndroidStartTimePicker();
+                                                    return;
+                                                }
+                                                setShowStartTimePicker(!showStartTimePicker);
+                                                setShowDatePicker(false);
+                                                setShowEndTimePicker(false);
+                                            }}
+                                        >
                                             <View className="rounded-lg bg-[#E5E5EA] px-2 py-1">
                                                 <Text className={`text-lg ${showStartTimePicker ? 'text-[#EF4444]' : 'text-[#111827]'}`}>
                                                     {formatTime(startTime)}
@@ -258,7 +309,7 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                 </View>
                             </Pressable>
                             
-                            {showDatePicker && (
+                            {showDatePicker && Platform.OS === 'ios' && (
                                 <View className="bg-white px-4 pb-4">
                                     <DateTimePicker
                                         value={selectedDate}
@@ -284,22 +335,21 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                     />
                                 </View>
                             )}
-                            {/* Android time picker - renders as modal */}
-                            {showStartTimePicker && !allDay && Platform.OS === 'android' && (
-                                <DateTimePicker
-                                    value={startTime}
-                                    mode="time"
-                                    display="default"
-                                    onChange={onStartTimeChange}
-                                />
-                            )}
 
                             <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
 
                             {!allDay && (
                                 <>
                                     <Pressable 
-                                        onPress={() => setShowEndTimePicker(!showEndTimePicker)}
+                                        onPress={() => {
+                                            if (Platform.OS === 'android') {
+                                                openAndroidEndTimePicker();
+                                                return;
+                                            }
+                                            setShowEndTimePicker(!showEndTimePicker);
+                                            setShowDatePicker(false);
+                                            setShowStartTimePicker(false);
+                                        }}
                                         className="flex-row items-center justify-between px-4 py-3"
                                     >
                                         <Text className="text-lg text-[#111827]">Ends</Text>
@@ -322,15 +372,6 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                                 style={{ height: 200 }}
                                             />
                                         </View>
-                                    )}
-                                    {/* End time picker - Android modal */}
-                                    {showEndTimePicker && Platform.OS === 'android' && (
-                                        <DateTimePicker
-                                            value={endTime}
-                                            mode="time"
-                                            display="default"
-                                            onChange={onEndTimeChange}
-                                        />
                                     )}
                                 </>
                             )}

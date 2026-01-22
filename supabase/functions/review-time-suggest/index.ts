@@ -107,21 +107,10 @@ serve(async (req: Request) => {
         path: anthropicKeyResult.path,
         denoEnvKeys: Object.keys(Deno.env.toObject()).filter((k) => k.includes('ANTHROPIC')),
       });
-      return new Response(
-        JSON.stringify({
-          error: 'Missing ANTHROPIC_API_KEY',
-          hint:
-            'For local testing, add ANTHROPIC_API_KEY to supabase/.env and restart Supabase CLI. For deployed, use: supabase secrets set ANTHROPIC_API_KEY=your_key',
-          debug: {
-            source: anthropicKeyResult.source,
-            path: anthropicKeyResult.path,
-          },
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+      const fallback = buildFallbackSuggestion(body, 'AI unavailable (missing API key). Using your note instead.');
+      return new Response(JSON.stringify(fallback), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const { system, userMsg } = buildPrompt(body);
@@ -145,8 +134,11 @@ serve(async (req: Request) => {
     if (!resp.ok) {
       const errorText = await resp.text();
       console.error('Anthropic API error:', resp.status, errorText);
-      return new Response(JSON.stringify({ error: 'Failed to generate suggestion' }), {
-        status: 500,
+      const fallback = buildFallbackSuggestion(
+        body,
+        `AI unavailable (status ${resp.status}). Using your note instead.`
+      );
+      return new Response(JSON.stringify(fallback), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -154,8 +146,8 @@ serve(async (req: Request) => {
     const data = await resp.json();
     const content = data?.content?.[0]?.text;
     if (typeof content !== 'string') {
-      return new Response(JSON.stringify({ error: 'Invalid model response' }), {
-        status: 500,
+      const fallback = buildFallbackSuggestion(body, 'AI returned an invalid response. Using your note instead.');
+      return new Response(JSON.stringify(fallback), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -164,8 +156,8 @@ serve(async (req: Request) => {
     try {
       parsed = JSON.parse(content);
     } catch {
-      return new Response(JSON.stringify({ error: 'Invalid model JSON' }), {
-        status: 500,
+      const fallback = buildFallbackSuggestion(body, 'AI returned malformed JSON. Using your note instead.');
+      return new Response(JSON.stringify(fallback), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -173,20 +165,16 @@ serve(async (req: Request) => {
     const title = typeof parsed.title === 'string' ? parsed.title.trim() : '';
     const description = typeof parsed.description === 'string' ? parsed.description.trim() : '';
 
-    if (!parsed.category || typeof parsed.confidence !== 'number' || !parsed.reason || !title || !description) {
-      return new Response(JSON.stringify({ error: 'Incomplete model response' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const result: ReviewTimeSuggestResponse = {
-      category: normalizeCategory(parsed.category),
-      confidence: clampConfidence(parsed.confidence),
-      reason: parsed.reason,
-      title,
-      description,
-    };
+    const hasRequired = parsed.category && typeof parsed.confidence === 'number' && parsed.reason && title && description;
+    const result: ReviewTimeSuggestResponse = hasRequired
+      ? {
+          category: normalizeCategory(parsed.category),
+          confidence: clampConfidence(parsed.confidence),
+          reason: parsed.reason,
+          title,
+          description,
+        }
+      : buildFallbackSuggestion(body, 'AI response incomplete. Using your note instead.');
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -243,6 +231,62 @@ function clampConfidence(value: number): number {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+function buildFallbackSuggestion(payload: ReviewTimeSuggestRequest, reason: string): ReviewTimeSuggestResponse {
+  const note = payload.block?.note ?? '';
+  const fallbackTitle = deriveTitleFromNote(note, payload.block?.title ?? '');
+  const fallbackDescription = deriveDescriptionFromNote(note);
+  return {
+    category: guessCategoryFromNote(note),
+    confidence: 0.35,
+    reason,
+    title: fallbackTitle,
+    description: fallbackDescription,
+  };
+}
+
+function isGenericTitle(title: string): boolean {
+  const lowered = title.trim().toLowerCase();
+  return (
+    lowered === 'unknown' ||
+    lowered === 'screen time' ||
+    lowered === 'sleep' ||
+    lowered === 'actual' ||
+    lowered === 'untitled'
+  );
+}
+
+function deriveTitleFromNote(note: string, fallbackTitle: string): string {
+  const cleaned = note
+    .replace(/\s+/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+  const words = cleaned.split(' ').filter(Boolean);
+  if (words.length >= 2) {
+    const slice = words.slice(0, Math.min(6, Math.max(2, words.length >= 4 ? 4 : words.length)));
+    return slice.join(' ');
+  }
+  const fallback = fallbackTitle?.trim() ?? '';
+  if (fallback && !isGenericTitle(fallback)) return fallback;
+  return 'Actual activity';
+}
+
+function deriveDescriptionFromNote(note: string): string {
+  const cleaned = note.replace(/\s+/g, ' ').replace(/[\r\n]+/g, ' ').trim();
+  if (!cleaned) return 'User described this block in their own words.';
+  const maxLen = 140;
+  const clipped = cleaned.length > maxLen ? `${cleaned.slice(0, maxLen - 1)}…` : cleaned;
+  return clipped.endsWith('.') || clipped.endsWith('!') || clipped.endsWith('?') ? clipped : `${clipped}.`;
+}
+
+function guessCategoryFromNote(note: string): ReviewCategoryId {
+  const lower = note.toLowerCase();
+  if (/(pray|church|bible|worship|faith)/.test(lower)) return 'faith';
+  if (/(family|kids|child|spouse|wife|husband|parents)/.test(lower)) return 'family';
+  if (/(work|meeting|client|email|project|deadline|sales|coding|design)/.test(lower)) return 'work';
+  if (/(gym|workout|run|walk|doctor|therapy|health|sleep|yoga)/.test(lower)) return 'health';
+  return 'other';
 }
 
 type ConfigSource = 'denoEnv' | 'dotenvFile' | 'missing';

@@ -106,11 +106,36 @@ export function buildActualDisplayEvents({
     end: event.startMinutes + event.duration,
   }));
 
+  // Track saved derived events by their source_id to avoid duplicates
+  const savedDerivedEventKeys = new Set<string>();
+  for (const event of filteredActualEvents) {
+    const meta = event.meta as Record<string, unknown> | undefined;
+    if (meta?.source_id && typeof meta.source_id === 'string') {
+      // Check if this is a saved derived event
+      if (meta.source_id.startsWith('derived_actual:') || meta.source_id.startsWith('derived_evidence:')) {
+        // Create a key based on time range and kind to detect duplicates
+        const key = `${event.startMinutes}_${event.startMinutes + event.duration}_${meta.kind ?? 'unknown'}`;
+        savedDerivedEventKeys.add(key);
+      }
+    }
+  }
+
   const addIfFree = (event: ScheduledEvent, minOverlapMinutes = 1) => {
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
     if (end <= start) return;
+    
+    // Check for overlap with existing events
     if (hasOverlap(start, end, occupied, minOverlapMinutes)) return;
+    
+    // For derived events, check if we already have a saved version with the same time range
+    if (event.id.startsWith('derived_actual:') || event.id.startsWith('derived_evidence:')) {
+      const key = `${start}_${end}_${event.meta?.kind ?? 'unknown'}`;
+      if (savedDerivedEventKeys.has(key)) {
+        return; // Skip - we already have this event saved
+      }
+    }
+    
     results.push(event);
     occupied.push({ start, end });
   };
@@ -143,8 +168,7 @@ export function buildActualDisplayEvents({
         minMinutes: minEvidenceBlockMinutes,
       });
       for (const block of sleepOverrideBlocks) {
-        results.push(block);
-        occupied.push({ start: block.startMinutes, end: block.startMinutes + block.duration });
+        addIfFree(block);
       }
     }
 
@@ -313,7 +337,62 @@ export function buildActualDisplayEvents({
     : withPrepWindDown;
   const withQuality = attachDataQuality(withPatternFilled, dataQuality);
 
-  return mergeAdjacentSleep(withQuality).sort((a, b) => a.startMinutes - b.startMinutes);
+  // Final deduplication pass: remove any overlapping events, keeping the first one encountered
+  const deduplicated = removeOverlappingEvents(mergeAdjacentSleep(withQuality));
+
+  // CRITICAL: Always ensure gaps are filled with unknown events, even after deduplication
+  // This guarantees there's always something in the "actual" column
+  const withGapsFilled = fillUnknownGaps(deduplicated);
+
+  return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
+}
+
+/**
+ * Removes overlapping events, keeping the first event encountered for each time slot.
+ * Only removes events if there's significant overlap (more than 10 minutes) to avoid
+ * removing events that just touch at boundaries or have minor overlaps.
+ * This ensures no visual overlaps in the calendar display while preserving events.
+ * 
+ * Priority: Keep events in this order:
+ * 1. Events from Supabase (already saved)
+ * 2. Derived events with higher confidence
+ * 3. Unknown events (lowest priority - can be replaced)
+ */
+function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
+  const sorted = [...events].sort((a, b) => {
+    // Sort by priority: non-unknown events first, then by confidence, then by start time
+    if (a.category !== 'unknown' && b.category === 'unknown') return -1;
+    if (a.category === 'unknown' && b.category !== 'unknown') return 1;
+    
+    const aConfidence = (a.meta as { confidence?: number } | undefined)?.confidence ?? 0;
+    const bConfidence = (b.meta as { confidence?: number } | undefined)?.confidence ?? 0;
+    if (aConfidence !== bConfidence) return bConfidence - aConfidence; // Higher confidence first
+    
+    return a.startMinutes - b.startMinutes;
+  });
+
+  const result: ScheduledEvent[] = [];
+  const occupied: Array<{ start: number; end: number }> = [];
+
+  for (const event of sorted) {
+    const start = event.startMinutes;
+    const end = event.startMinutes + event.duration;
+    
+    // Check for significant overlap (more than 10 minutes) with any existing event
+    const hasSignificantOverlap = occupied.some((interval) => {
+      const overlapStart = Math.max(start, interval.start);
+      const overlapEnd = Math.min(end, interval.end);
+      const overlapMinutes = overlapEnd - overlapStart;
+      return overlapMinutes > 10; // Only consider it overlapping if more than 10 minutes
+    });
+
+    if (!hasSignificantOverlap) {
+      result.push(event);
+      occupied.push({ start, end });
+    }
+  }
+
+  return result;
 }
 
 function buildPlannedActualEvent(options: {

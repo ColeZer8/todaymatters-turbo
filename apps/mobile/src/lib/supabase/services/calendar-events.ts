@@ -556,6 +556,22 @@ export async function deleteActualCalendarEvent(eventId: string): Promise<void> 
   return await deletePlannedCalendarEvent(eventId);
 }
 
+export async function deleteActualCalendarEventsByIds(userId: string, eventIds: string[]): Promise<void> {
+  if (eventIds.length === 0) return;
+  try {
+    const { error } = await supabase
+      .schema('tm')
+      .from('events')
+      .delete()
+      .eq('user_id', userId)
+      .eq('type', ACTUAL_EVENT_TYPE)
+      .in('id', eventIds);
+    if (error) throw handleSupabaseError(error);
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
 export interface SyncDerivedActualEventsInput {
   userId: string;
   ymd: string;

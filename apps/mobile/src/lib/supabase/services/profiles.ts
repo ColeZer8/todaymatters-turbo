@@ -11,7 +11,6 @@ export interface ProfilePreferences extends Record<string, Json> {
     calendar?: boolean;
     notifications?: boolean;
     email?: boolean;
-    health?: boolean;
     location?: boolean;
     contacts?: boolean;
     browsing?: boolean;

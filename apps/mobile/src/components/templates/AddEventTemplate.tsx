@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, ChevronRight, Check } from 'lucide-react-native';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerAndroid, DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { EventCategory } from '@/stores';
@@ -32,6 +32,12 @@ const formatTime = (date: Date) => {
     const period = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
     return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+const combineDateAndTime = (date: Date, time: Date) => {
+    const next = new Date(date);
+    next.setHours(time.getHours(), time.getMinutes(), 0, 0);
+    return next;
 };
 
 interface AddEventDraft {
@@ -180,13 +186,43 @@ export const AddEventTemplate = ({
         });
     };
 
+    const openAndroidDatePicker = useCallback(() => {
+        DateTimePickerAndroid.open({
+            value: selectedDate,
+            mode: 'date',
+            onChange: (event, date) => {
+                if (event.type !== 'set' || !date) return;
+                setSelectedDate(date);
+                setStartTime((prev) => combineDateAndTime(date, prev));
+                setEndTime((prev) => combineDateAndTime(date, prev));
+            },
+        });
+    }, [selectedDate]);
+
+    const openAndroidStartTimePicker = useCallback(() => {
+        DateTimePickerAndroid.open({
+            value: startTime,
+            mode: 'time',
+            onChange: (event, date) => {
+                if (event.type !== 'set' || !date) return;
+                setStartTime(combineDateAndTime(selectedDate, date));
+            },
+        });
+    }, [selectedDate, startTime]);
+
+    const openAndroidEndTimePicker = useCallback(() => {
+        DateTimePickerAndroid.open({
+            value: endTime,
+            mode: 'time',
+            onChange: (event, date) => {
+                if (event.type !== 'set' || !date) return;
+                setEndTime(combineDateAndTime(selectedDate, date));
+            },
+        });
+    }, [endTime, selectedDate]);
+
     const onDateChange = (event: DateTimePickerEvent, date?: Date) => {
-        // Android shows DateTimePicker as a modal dialog. If we keep it mounted, it will immediately re-open
-        // after "OK" or "Cancel", causing a stuck loop. iOS uses inline rendering, so we only auto-close on Android.
-        if (Platform.OS === 'android') {
-            setShowDatePicker(false);
-            if (event.type === 'dismissed') return;
-        }
+        // iOS: inline picker stays mounted; apply changes as user scrolls.
         if (date) {
             setSelectedDate(date);
             // Also update start/end times to keep them on the same day if needed
@@ -200,34 +236,49 @@ export const AddEventTemplate = ({
     };
 
     const onStartTimeChange = (event: DateTimePickerEvent, date?: Date) => {
-        if (Platform.OS === 'android') {
-            setShowStartTimePicker(false);
-            if (event.type === 'dismissed') return;
-        }
-        if (date) setStartTime(date);
+        // iOS: inline picker updates time continuously
+        if (date) setStartTime(combineDateAndTime(selectedDate, date));
     };
 
     const onEndTimeChange = (event: DateTimePickerEvent, date?: Date) => {
-        if (Platform.OS === 'android') {
-            setShowEndTimePicker(false);
-            if (event.type === 'dismissed') return;
-        }
-        if (date) setEndTime(date);
+        // iOS: inline picker updates time continuously
+        if (date) setEndTime(combineDateAndTime(selectedDate, date));
     };
 
     const toggleDatePicker = () => {
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            setShowStartTimePicker(false);
+            setShowEndTimePicker(false);
+            openAndroidDatePicker();
+            return;
+        }
         setShowDatePicker(!showDatePicker);
         setShowStartTimePicker(false);
         setShowEndTimePicker(false);
     };
 
     const toggleStartTimePicker = () => {
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            setShowStartTimePicker(false);
+            setShowEndTimePicker(false);
+            openAndroidStartTimePicker();
+            return;
+        }
         setShowStartTimePicker(!showStartTimePicker);
         setShowDatePicker(false);
         setShowEndTimePicker(false);
     };
 
     const toggleEndTimePicker = () => {
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            setShowStartTimePicker(false);
+            setShowEndTimePicker(false);
+            openAndroidEndTimePicker();
+            return;
+        }
         setShowEndTimePicker(!showEndTimePicker);
         setShowDatePicker(false);
         setShowStartTimePicker(false);
@@ -336,7 +387,7 @@ export const AddEventTemplate = ({
                     </Pressable>
                     
                     {/* Inline Date Picker */}
-                    {showDatePicker && (
+                    {showDatePicker && Platform.OS === 'ios' && (
                         <View className="bg-white px-4 pb-4">
                             <DateTimePicker
                                 value={selectedDate}
@@ -361,15 +412,6 @@ export const AddEventTemplate = ({
                                 style={{ height: 200 }}
                             />
                         </View>
-                    )}
-                    {/* Android time picker - renders as modal */}
-                    {showStartTimePicker && !allDay && Platform.OS === 'android' && (
-                        <DateTimePicker
-                            value={startTime}
-                            mode="time"
-                            display="default"
-                            onChange={onStartTimeChange}
-                        />
                     )}
 
                     <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
@@ -401,15 +443,6 @@ export const AddEventTemplate = ({
                                         style={{ height: 200 }}
                                     />
                                 </View>
-                            )}
-                            {/* End time picker - Android modal */}
-                            {showEndTimePicker && Platform.OS === 'android' && (
-                                <DateTimePicker
-                                    value={endTime}
-                                    mode="time"
-                                    display="default"
-                                    onChange={onEndTimeChange}
-                                />
                             )}
                         </>
                     )}
