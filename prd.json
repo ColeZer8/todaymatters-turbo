@@ -1,9 +1,455 @@
 {
-    "userStories": [
-      {
-        "id": "1",
-        "title": "Create a README.md file that says 'Hello Ralph'",
-        "passes": true
-      }
-    ]
-  }
+  "project": "TodayMatters",
+  "branchName": "ralph/critical-flow-data-issues",
+  "description": "Critical Flow & Data Issues - Fix timeline editability, location segmentation, calendar integration, safe areas, and date/time handling",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Audit and fix SafeAreaView usage in template files",
+      "description": "As a user, I want app UI to never overlap system icons so I can see time, battery, and signal.",
+      "acceptanceCriteria": [
+        "All template files in /apps/mobile/src/components/templates/ use SafeAreaView from react-native-safe-area-context as root container",
+        "Any template missing SafeAreaView wrapper gets it added",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Fixed 3 templates using wrong SafeAreaView import: PersonalizationTemplate, AppCategoryOverridesTemplate, PatternInsightsTemplate"
+    },
+    {
+      "id": "US-002",
+      "title": "Audit and fix SafeAreaView usage in screen files",
+      "description": "As a user, I want all screens to respect safe areas so buttons never appear under status bar.",
+      "acceptanceCriteria": [
+        "All screen files in /apps/mobile/src/app/ use SafeAreaView or delegate to templates that do",
+        "Headers never overlap iOS notch or Android status bar",
+        "Remove or correctly position any floating/debug icons (orange icon in header)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Fixed 2 dev screens (ios-insights.tsx, android-insights.tsx) missing SafeAreaView wrappers. All other screens properly delegate to templates. No floating/debug orange icons found in codebase."
+    },
+    {
+      "id": "US-003",
+      "title": "Fix Android date/time picker state persistence in AddEventTemplate",
+      "description": "As an Android user, I want to create events at any time, not just 9:30am.",
+      "acceptanceCriteria": [
+        "In AddEventTemplate.tsx, time picker changes persist and save correctly on Android",
+        "Event creation allows any start time selection (not locked to 9:30am)",
+        "No modal lock-in states when using Android native date/time pickers",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Fixed by using display='default' for Android time pickers (native modal) instead of inline spinners. iOS continues to use display='spinner' for inline picker UX."
+    },
+    {
+      "id": "US-004",
+      "title": "Fix Android date/time picker in EventEditorModal",
+      "description": "As an Android user, I want edit screen to have proper safe area padding and working time pickers.",
+      "acceptanceCriteria": [
+        "In EventEditorModal.tsx, Cancel/Confirm buttons not blocked by Android status bar",
+        "Time picker changes persist correctly on Android",
+        "Supabase saves immediately without forcing user back to picker screen",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Fixed by adding safe area top padding on Android for header buttons, and using display='default' for Android time pickers (native modal) instead of inline spinners to match AddEventTemplate."
+    },
+    {
+      "id": "US-005",
+      "title": "Ensure all timezone conversions use device local time",
+      "description": "As a user, I want dates and times to display correctly relative to my timezone.",
+      "acceptanceCriteria": [
+        "Events never appear in the future when they occurred in the past",
+        "All times display correctly vs device local time in calendar-events.ts",
+        "Date/time pickers persist state after selection",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/supabase/services/calendar-events.ts"
+    },
+    {
+      "id": "US-006",
+      "title": "Make Unknown timeline blocks tappable to open edit modal",
+      "description": "As a user, I want to tap any timeline block including Unknown to edit it.",
+      "acceptanceCriteria": [
+        "Tapping any timeline block (including Unknown) opens EventEditorModal",
+        "Unknown blocks are not restricted from editing",
+        "Editable fields available: title, description, category",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/app/actual-adjust.tsx"
+    },
+    {
+      "id": "US-007",
+      "title": "Add time range editing to EventEditorModal",
+      "description": "As a user, I want to edit start and end times of any timeline block.",
+      "acceptanceCriteria": [
+        "EventEditorModal shows start time and end time pickers",
+        "User can modify time range (startMinutes and duration)",
+        "Changes save immediately and reflect in timeline",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/components/molecules/EventEditorModal.tsx"
+    },
+    {
+      "id": "US-008",
+      "title": "Add location field to EventEditorModal",
+      "description": "As a user, I want to edit or add location to any timeline block.",
+      "acceptanceCriteria": [
+        "EventEditorModal includes location field",
+        "Tapping location field opens LocationSearchModal",
+        "Selected location saves to event",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/components/molecules/EventEditorModal.tsx"
+    },
+    {
+      "id": "US-009",
+      "title": "Add swipe actions to timeline blocks for quick operations",
+      "description": "As a user, I want swipe actions for quick delete and Big 3 toggle.",
+      "acceptanceCriteria": [
+        "Timeline blocks support swipe left gesture",
+        "Swipe reveals delete action and Big 3 toggle action",
+        "Actions execute immediately on tap",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Add to timeline block component in actual calendar view"
+    },
+    {
+      "id": "US-010",
+      "title": "Activate split action for Unknown blocks in actual-adjust",
+      "description": "As a user, I want to split Unknown blocks into multiple activities.",
+      "acceptanceCriteria": [
+        "Split action button visible in actual-adjust.tsx edit UI for Unknown blocks",
+        "Existing split screen component activated when split tapped",
+        "Split is discoverable - visible in edit modal",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Split screen exists but is not active for Unknown events. File: /apps/mobile/src/app/actual-adjust.tsx"
+    },
+    {
+      "id": "US-011",
+      "title": "Enable split action for all timeline block types",
+      "description": "As a user, I want to split any timeline block, not just Unknown.",
+      "acceptanceCriteria": [
+        "Split action available on ALL timeline block types",
+        "Splitting opens interface to define split point",
+        "Each resulting segment is independently editable",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Merge planned calendar events into actual timeline display",
+      "description": "As a user, I want my scheduled calendar events to appear in my daily timeline.",
+      "acceptanceCriteria": [
+        "buildActualDisplayEvents() includes planned calendar events for today",
+        "Calendar events appear in timeline alongside detected activities",
+        "Calendar events maintain their scheduled time",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/calendar/actual-display-events.ts"
+    },
+    {
+      "id": "US-013",
+      "title": "Add visual distinction for calendar events vs detected activities",
+      "description": "As a user, I want calendar events to look different from auto-detected activities.",
+      "acceptanceCriteria": [
+        "Calendar events shown with purple accent/border (Scheduled state)",
+        "Auto-detected activities shown with gray border (Inferred state)",
+        "Visual difference is immediately apparent",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Handle calendar vs detected activity conflicts",
+      "description": "As a user, I want calendar events to take precedence when overlapping with detected activities.",
+      "acceptanceCriteria": [
+        "When auto-detected overlaps with calendar event, calendar event takes precedence by default",
+        "Conflict resolution logic added to buildActualDisplayEvents()",
+        "Detected activity is hidden or truncated around calendar event",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/calendar/actual-display-events.ts"
+    },
+    {
+      "id": "US-015",
+      "title": "Add user-defined locations storage to onboarding store",
+      "description": "As a user, I want to define named locations like home, work, gym.",
+      "acceptanceCriteria": [
+        "Onboarding store includes userDefinedLocations array",
+        "Each location has: id, name, latitude, longitude, radius_m",
+        "Locations can be added, edited, removed",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Extend existing onboarding store for geofence definitions"
+    },
+    {
+      "id": "US-016",
+      "title": "Create location transition detection utility",
+      "description": "As a developer, I need a utility to detect meaningful location changes from location samples.",
+      "acceptanceCriteria": [
+        "Create detectLocationTransitions() function in location-samples.ts",
+        "Detects transitions when distance > 500m or crosses user-defined geofence",
+        "Returns array of transition events with timestamps and location labels",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/supabase/services/location-samples.ts"
+    },
+    {
+      "id": "US-017",
+      "title": "Use location transitions to segment timeline",
+      "description": "As a user, I want my timeline to reflect location transitions so I see fewer Unknown blocks.",
+      "acceptanceCriteria": [
+        "buildActualDisplayEvents() calls detectLocationTransitions()",
+        "Location transitions create segment boundaries in timeline",
+        "Long Unknown blocks are split at location transition points",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/calendar/actual-display-events.ts"
+    },
+    {
+      "id": "US-018",
+      "title": "Display location labels on timeline segments",
+      "description": "As a user, I want to see location labels like Home or Office on timeline segments.",
+      "acceptanceCriteria": [
+        "Timeline segments show location label when available",
+        "Labels use user-defined location names or inferred names",
+        "Label appears in segment header or subtitle",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Show user's actual Big 3 items in goal attribution",
+      "description": "As a user, I want to see my actual Big 3 items when attributing activities to goals.",
+      "acceptanceCriteria": [
+        "ActualAdjustTemplate shows selectable list of user's actual Big 3 items",
+        "Vague labels like 'Mark is big three' replaced with actual goal names",
+        "Single-select supported for goal attribution",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/components/templates/ActualAdjustTemplate.tsx"
+    },
+    {
+      "id": "US-020",
+      "title": "Remove auto-100% completion and require user confirmation",
+      "description": "As a user, I want completion percentages only when I explicitly set them.",
+      "acceptanceCriteria": [
+        "Never auto-mark 100% completion without user confirmation",
+        "Default to 'Unassigned' or 'Not evaluated' for unset goals",
+        "Remove placeholder percentage logic",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Add visual state type to timeline blocks",
+      "description": "As a developer, I need timeline blocks to track their visual state for clear feedback.",
+      "acceptanceCriteria": [
+        "Add visualState field to ScheduledEvent or display event type: 'inferred' | 'confirmed' | 'edited' | 'scheduled'",
+        "Default state is 'inferred' for auto-detected, 'scheduled' for calendar",
+        "State changes to 'edited' when user modifies block",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/stores/events-store.ts"
+    },
+    {
+      "id": "US-022",
+      "title": "Render timeline blocks with state-based colors",
+      "description": "As a user, I want timeline blocks to have distinct colors based on their state.",
+      "acceptanceCriteria": [
+        "Inferred state: light gray border",
+        "Confirmed state: green accent",
+        "Edited state: blue accent",
+        "Scheduled state: purple accent",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Make sleep block editable with start/end time pickers",
+      "description": "As a user, I want to easily edit my sleep start and end times.",
+      "acceptanceCriteria": [
+        "Sleep treated as a special editable timeline block",
+        "Easy access to edit sleep start time and wake time",
+        "Edits persist and update related calculations",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Auto-promote user note to event title via AI",
+      "description": "As a user, I want my description to become the event title so events aren't stuck as Unknown.",
+      "acceptanceCriteria": [
+        "When user enters note, requestReviewTimeSuggestion() extracts meaningful title",
+        "Suggested title is applied to event (not just displayed)",
+        "Title auto-populates from user input",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Leverage existing edge function. File: /apps/mobile/src/app/actual-adjust.tsx"
+    },
+    {
+      "id": "US-025",
+      "title": "Sync title/description across all views",
+      "description": "As a user, I want title and description to stay in sync across timeline, detail, and edit views.",
+      "acceptanceCriteria": [
+        "Title/description sync across all views (timeline, detail, edit)",
+        "User can override auto-generated title",
+        "All user-added items are editable and removable",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Normalize button placement between AddEventTemplate and EventEditorModal",
+      "description": "As an Android user, I want create and edit screens to have buttons in the same locations.",
+      "acceptanceCriteria": [
+        "Buttons (Save, Cancel, Delete) in same locations on both AddEventTemplate and EventEditorModal",
+        "Same fields behave identically on both screens",
+        "Reuse same component logic where possible",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Android-only focus"
+    },
+    {
+      "id": "US-027",
+      "title": "Fix email sync to retrieve last 24 hours",
+      "description": "As a user, I want to see my recent emails, not very old ones.",
+      "acceptanceCriteria": [
+        "Email sync retrieves emails from last 24 hours minimum",
+        "Proper time-based filtering (not showing very old emails)",
+        "Latest emails always appear first",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Remove test/demo goals from production",
+      "description": "As a user, I don't want to see unexpected test goals appearing.",
+      "acceptanceCriteria": [
+        "No unexpected goals appearing (remove test data references)",
+        "No '100% interest rate' or similar nonsensical labels",
+        "Only user-created goals appear in UI",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Implement data hierarchy in buildActualDisplayEvents",
+      "description": "As a developer, I need buildActualDisplayEvents to enforce the correct data priority hierarchy.",
+      "acceptanceCriteria": [
+        "Hierarchy enforced: User edits > Calendar events > Location transitions > Device activity > Email",
+        "User corrections always take precedence",
+        "Document hierarchy in code comments",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "File: /apps/mobile/src/lib/calendar/actual-display-events.ts"
+    },
+    {
+      "id": "US-030",
+      "title": "Display confidence indicator for inferred data",
+      "description": "As a user, I want to see confidence levels for app-inferred activities.",
+      "acceptanceCriteria": [
+        "Confidence scores displayed for inferred data (high/medium/low)",
+        "Low-confidence inferences flagged for user review",
+        "Confidence indicator visible on timeline block",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Ensure setup flow persists progress on backgrounding",
+      "description": "As a new user, I want setup progress to persist if I background the app.",
+      "acceptanceCriteria": [
+        "Setup flow progress persists if user backgrounds app",
+        "No random resets or repeated steps",
+        "Clear navigation between setup steps",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Add Why affordance to show reasoning for inferences",
+      "description": "As a user, I want to understand why the app made certain inferences.",
+      "acceptanceCriteria": [
+        "When app auto-categorizes, show brief reason ('Based on location: Home')",
+        "'Why?' affordance available to see reasoning for any inference",
+        "Never change user data without explanation",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -2,14 +2,66 @@
 - This is a Turborepo monorepo with pnpm as package manager
 - Quality checks available: `pnpm run lint` and `pnpm run check-types`
 - Pre-existing type errors may exist in the codebase - isolate your changes and commit only what's relevant to your story
+- React Native mobile app located in /apps/mobile
+- Key files for this PRD:
+  - Timeline building: /apps/mobile/src/lib/calendar/actual-display-events.ts
+  - Event editing: /apps/mobile/src/components/molecules/EventEditorModal.tsx
+  - Actual adjust screen: /apps/mobile/src/app/actual-adjust.tsx
+  - Location services: /apps/mobile/src/lib/supabase/services/location-samples.ts
+  - Events store: /apps/mobile/src/stores/events-store.ts
+- SafeAreaView must be imported from 'react-native-safe-area-context' not 'react-native' for proper notch/status bar handling
+- Templates can either use SafeAreaView directly, useSafeAreaInsets hook with manual padding, or delegate to SetupStepLayout
+- Android DateTimePicker: Use `display="default"` (native modal) not `display="spinner"` (inline) for proper state persistence
+- For slide-up modals on Android, add `paddingTop: insets.top` to prevent header content from being blocked by status bar
 
 ---
 
-## 2026-01-22 - Story 1
-- **What was implemented:** Created a README.md file at the project root with the content "Hello Ralph"
-- **Files changed:** README.md (created/replaced)
+## 2026-01-22 - US-001
+- What was implemented: Fixed SafeAreaView imports in 3 template files
+- Files changed:
+  - apps/mobile/src/components/templates/PersonalizationTemplate.tsx
+  - apps/mobile/src/components/templates/AppCategoryOverridesTemplate.tsx
+  - apps/mobile/src/components/templates/PatternInsightsTemplate.tsx
 - **Learnings for future iterations:**
-  - The codebase may have pre-existing type errors unrelated to your work - don't let them block unrelated changes
-  - Focus on committing only the files relevant to your user story
-  - The root README.md previously existed but had different content (153 lines deleted)
+  - 3 templates were using SafeAreaView from 'react-native' (wrong) instead of 'react-native-safe-area-context' (correct)
+  - Other templates either: 1) correctly import from react-native-safe-area-context, 2) use useSafeAreaInsets hook with manual padding, or 3) delegate to SetupStepLayout which handles safe areas
+  - SetupStepLayout at /apps/mobile/src/components/organisms/SetupStepLayout.tsx properly wraps with SafeAreaView from react-native-safe-area-context
 ---
+
+## 2026-01-22 - US-002
+- What was implemented: Audited and fixed SafeAreaView usage in screen files
+- Files changed:
+  - apps/mobile/src/app/dev/ios-insights.tsx
+  - apps/mobile/src/app/dev/android-insights.tsx
+- **Learnings for future iterations:**
+  - Most screen files delegate to templates that handle safe areas - no direct SafeAreaView needed in screens
+  - Dev screens using Stack.Screen with headerShown: true still need SafeAreaView for bottom edge (edges={['bottom']}) since header handles top
+  - All 44 templates already have proper SafeAreaView handling (from react-native-safe-area-context)
+  - No floating/debug "orange icon" was found in the codebase - this may have been a runtime visual artifact
+  - Pre-existing type errors exist in the codebase (CalendarEventMeta, Json types) - these are unrelated to SafeAreaView changes
+---
+
+## 2026-01-22 - US-003
+- What was implemented: Fixed Android date/time picker state persistence in AddEventTemplate
+- Files changed:
+  - apps/mobile/src/components/templates/AddEventTemplate.tsx
+- **Learnings for future iterations:**
+  - On Android, `display="spinner"` for DateTimePicker renders inline but has state persistence issues
+  - On Android, use `display="default"` which shows native modal dialog and properly persists state
+  - iOS can continue using `display="spinner"` for inline picker experience
+  - Pattern: Platform-specific rendering with `Platform.OS === 'ios'` / `Platform.OS === 'android'` conditionals
+  - The existing Android dismiss handling (`setShowPicker(false)` on any event type) was already correct
+  - The 9:30am default is intentional when `initialStartMinutes` is undefined, not a bug
+---
+
+## 2026-01-22 - US-004
+- What was implemented: Fixed Android date/time picker in EventEditorModal
+- Files changed:
+  - apps/mobile/src/components/molecules/EventEditorModal.tsx
+- **Learnings for future iterations:**
+  - For modals that slide up 92% of screen height, add `paddingTop: Platform.OS === 'android' ? insets.top : 0` to prevent header buttons from being blocked by status bar
+  - EventEditorModal now uses same Android date/time picker pattern as AddEventTemplate: `display="default"` (native modal) for Android, `display="spinner"` (inline) for iOS
+  - Must close picker state (`setShowPicker(false)`) on ANY Android event including 'dismissed' to prevent modal re-open loop
+  - The `useSafeAreaInsets` hook is already imported from 'react-native-safe-area-context' - use `insets.top` for top padding, `insets.bottom` for bottom padding
+---
+
