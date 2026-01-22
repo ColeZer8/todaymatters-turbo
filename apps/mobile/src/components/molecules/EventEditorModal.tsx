@@ -138,14 +138,29 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
     };
 
     const onDateChange = (ev: DateTimePickerEvent, date?: Date) => {
+        // Android shows DateTimePicker as a modal dialog. Close picker on any event to prevent re-open loop.
+        if (Platform.OS === 'android') {
+            setShowDatePicker(false);
+            if (ev.type === 'dismissed') return;
+        }
         if (date) setSelectedDate(date);
     };
 
     const onStartTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
+        // Android: close picker on any event to prevent modal lock-in
+        if (Platform.OS === 'android') {
+            setShowStartTimePicker(false);
+            if (ev.type === 'dismissed') return;
+        }
         if (date) setStartTime(date);
     };
 
     const onEndTimeChange = (ev: DateTimePickerEvent, date?: Date) => {
+        // Android: close picker on any event to prevent modal lock-in
+        if (Platform.OS === 'android') {
+            setShowEndTimePicker(false);
+            if (ev.type === 'dismissed') return;
+        }
         if (date) setEndTime(date);
     };
 
@@ -164,11 +179,13 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                 />
                 
                 {/* Panel */}
-                <Animated.View 
+                <Animated.View
                     className="bg-[#F2F2F7] rounded-t-3xl"
-                    style={{ 
+                    style={{
                         height: '92%',
                         transform: [{ translateY: panelTranslateY }],
+                        // Add top padding for safe area on Android to prevent status bar overlap
+                        paddingTop: Platform.OS === 'android' ? insets.top : 0,
                     }}
                 >
                     {/* Header */}
@@ -246,14 +263,15 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                     <DateTimePicker
                                         value={selectedDate}
                                         mode="date"
-                                        display="inline"
+                                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
                                         onChange={onDateChange}
                                         themeVariant="light"
                                     />
                                 </View>
                             )}
 
-                            {showStartTimePicker && !allDay && (
+                            {/* Inline Start Time Picker (iOS) */}
+                            {showStartTimePicker && !allDay && Platform.OS === 'ios' && (
                                 <View className="bg-white">
                                     <View className="h-[1px] bg-[#E5E5EA]" />
                                     <DateTimePicker
@@ -265,6 +283,15 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                         style={{ height: 200 }}
                                     />
                                 </View>
+                            )}
+                            {/* Android time picker - renders as modal */}
+                            {showStartTimePicker && !allDay && Platform.OS === 'android' && (
+                                <DateTimePicker
+                                    value={startTime}
+                                    mode="time"
+                                    display="default"
+                                    onChange={onStartTimeChange}
+                                />
                             )}
 
                             <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
@@ -282,7 +309,8 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                             </Text>
                                         </View>
                                     </Pressable>
-                                    {showEndTimePicker && (
+                                    {/* End time picker - iOS inline */}
+                                    {showEndTimePicker && Platform.OS === 'ios' && (
                                         <View className="bg-white">
                                             <View className="h-[1px] bg-[#E5E5EA]" />
                                             <DateTimePicker
@@ -294,6 +322,15 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                                 style={{ height: 200 }}
                                             />
                                         </View>
+                                    )}
+                                    {/* End time picker - Android modal */}
+                                    {showEndTimePicker && Platform.OS === 'android' && (
+                                        <DateTimePicker
+                                            value={endTime}
+                                            mode="time"
+                                            display="default"
+                                            onChange={onEndTimeChange}
+                                        />
                                     )}
                                 </>
                             )}
