@@ -1,0 +1,9 @@
+{
+    "userStories": [
+      {
+        "id": "1",
+        "title": "Create a README.md file that says 'Hello Ralph'",
+        "passes": true
+      }
+    ]
+  }
