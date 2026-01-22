@@ -13,6 +13,7 @@
 - Templates can either use SafeAreaView directly, useSafeAreaInsets hook with manual padding, or delegate to SetupStepLayout
 - Android DateTimePicker: Use `display="default"` (native modal) not `display="spinner"` (inline) for proper state persistence
 - For slide-up modals on Android, add `paddingTop: insets.top` to prevent header content from being blocked by status bar
+- When parsing database timestamps, use `parseDbTimestamp()` helper (in calendar-events.ts) to ensure UTC interpretation
 
 ---
 
@@ -63,5 +64,20 @@
   - EventEditorModal now uses same Android date/time picker pattern as AddEventTemplate: `display="default"` (native modal) for Android, `display="spinner"` (inline) for iOS
   - Must close picker state (`setShowPicker(false)`) on ANY Android event including 'dismissed' to prevent modal re-open loop
   - The `useSafeAreaInsets` hook is already imported from 'react-native-safe-area-context' - use `insets.top` for top padding, `insets.bottom` for bottom padding
+---
+
+## 2026-01-22 - US-005
+- What was implemented: Added defensive UTC parsing for database timestamps to ensure correct timezone handling
+- Files changed:
+  - apps/mobile/src/lib/supabase/services/calendar-events.ts
+  - apps/mobile/src/lib/calendar/actual-display-events.ts
+  - apps/mobile/src/lib/supabase/services/actual-evidence-events.ts
+- **Learnings for future iterations:**
+  - Database timestamps (from Supabase) should always include timezone info (Z suffix or offset), but defensive parsing is safer
+  - `parseDbTimestamp()` helper ensures timestamps without timezone info are interpreted as UTC, not local time
+  - JavaScript's `new Date("2026-01-22T15:00:00")` (no Z) interprets as LOCAL time, while `new Date("2026-01-22T15:00:00Z")` interprets as UTC
+  - This difference can cause events to appear hours off depending on user timezone
+  - The same pattern should be used anywhere database timestamps are parsed: `parseDbTimestamp(row.timestamp)` instead of `new Date(row.timestamp)`
+  - Pre-existing type errors (CalendarEventMeta export, Json types) are unrelated to timezone handling
 ---
 

@@ -69,8 +69,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "File: /apps/mobile/src/lib/supabase/services/calendar-events.ts"
+      "passes": true,
+      "notes": "Added parseDbTimestamp() helper to ensure database timestamps are always interpreted as UTC. Applied to calendar-events.ts, actual-display-events.ts, and actual-evidence-events.ts. Pre-existing type errors unrelated to timezone handling."
     },
     {
       "id": "US-006",
