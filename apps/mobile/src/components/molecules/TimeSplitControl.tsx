@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, PanResponder, LayoutChangeEvent } from 'react-native';
+import { useState, useCallback, useMemo, useRef } from 'react';
+import { View, Text, Pressable, LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Check, X } from 'lucide-react-native';
 import { Icon } from '@/components/atoms';
 
@@ -56,36 +57,43 @@ export const TimeSplitControl = ({
     Math.max(minSplit, Math.min(defaultSplit, duration - minSplit))
   );
   const [isDragging, setIsDragging] = useState(false);
+  const startSplitRef = useRef(splitMinutes);
 
   const handleTrackLayout = useCallback((event: LayoutChangeEvent) => {
     trackWidth.current = event.nativeEvent.layout.width;
   }, []);
 
   const pixelToMinutes = useCallback((pixelX: number): number => {
-    if (trackWidth.current === 0) return splitMinutes;
+    if (trackWidth.current === 0) return minSplit;
     const ratio = Math.max(0, Math.min(1, pixelX / trackWidth.current));
     const rawMinutes = ratio * duration;
     const snapped = Math.round(rawMinutes / 5) * 5;
     return Math.max(minSplit, Math.min(snapped, duration - minSplit));
-  }, [duration, splitMinutes]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => setIsDragging(true),
-      onPanResponderMove: (_, gestureState) => {
-        const currentPosition = (splitMinutes / duration) * trackWidth.current;
-        const newX = currentPosition + gestureState.dx;
-        setSplitMinutes(pixelToMinutes(newX));
-      },
-      onPanResponderRelease: () => setIsDragging(false),
-    })
-  ).current;
+  }, [duration]);
 
   const handleTrackPress = useCallback((event: { nativeEvent: { locationX: number } }) => {
     setSplitMinutes(pixelToMinutes(event.nativeEvent.locationX));
   }, [pixelToMinutes]);
+
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activeOffsetX([-4, 4])
+      .failOffsetY([-8, 8])
+      .runOnJS(true)
+      .onBegin(() => {
+        startSplitRef.current = splitMinutes;
+        setIsDragging(true);
+      })
+      .onUpdate((e) => {
+        if (trackWidth.current === 0) return;
+        const startPx = (startSplitRef.current / duration) * trackWidth.current;
+        const nextPx = startPx + e.translationX;
+        setSplitMinutes(pixelToMinutes(nextPx));
+      })
+      .onFinalize(() => setIsDragging(false));
+
+    return pan;
+  }, [duration, pixelToMinutes, splitMinutes]);
 
   const startMinutes = parseTimeToMinutes(startTime);
   const splitTime = formatMinutesToTime(startMinutes + splitMinutes);
@@ -151,47 +159,48 @@ export const TimeSplitControl = ({
         </View>
 
         {/* Draggable handle - clean line with small knob */}
-        <View 
-          {...panResponder.panHandlers}
-          style={{
-            position: 'absolute',
-            left: `${splitPosition}%`,
-            top: -4,
-            bottom: -4,
-            width: 32,
-            marginLeft: -16,
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10,
-          }}
-        >
-          {/* Thin line */}
-          <View 
-            style={{
-              width: 3,
-              height: '100%',
-              backgroundColor: isDragging ? '#1D4ED8' : '#2563EB',
-              borderRadius: 1.5,
-            }}
-          />
-          {/* Small knob */}
-          <View 
+        <GestureDetector gesture={gesture}>
+          <View
             style={{
               position: 'absolute',
-              width: 20,
-              height: 20,
-              borderRadius: 10,
-              backgroundColor: '#FFFFFF',
-              borderWidth: 3,
-              borderColor: isDragging ? '#1D4ED8' : '#2563EB',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.2,
-              shadowRadius: 2,
-              elevation: 3,
+              left: `${splitPosition}%`,
+              top: -4,
+              bottom: -4,
+              width: 44,
+              marginLeft: -22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
             }}
-          />
-        </View>
+          >
+            {/* Thin line */}
+            <View
+              style={{
+                width: 3,
+                height: '100%',
+                backgroundColor: isDragging ? '#1D4ED8' : '#2563EB',
+                borderRadius: 1.5,
+              }}
+            />
+            {/* Small knob */}
+            <View
+              style={{
+                position: 'absolute',
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                backgroundColor: '#FFFFFF',
+                borderWidth: 3,
+                borderColor: isDragging ? '#1D4ED8' : '#2563EB',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.2,
+                shadowRadius: 2,
+                elevation: 3,
+              }}
+            />
+          </View>
+        </GestureDetector>
       </Pressable>
 
       {/* Time range labels */}

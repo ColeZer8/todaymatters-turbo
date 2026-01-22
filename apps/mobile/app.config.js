@@ -163,9 +163,11 @@ export default {
     },
     // EAS Update configuration - updates are enabled via channels in eas.json
     updates: {
+      url: 'https://u.expo.dev/4e1c4706-73fc-4230-bc8d-a876941dbf1b',
       checkAutomatically: 'ON_LOAD',
       fallbackToCacheTimeout: 0,
     },
+    runtimeVersion: '1.0.0',
   },
 };
 

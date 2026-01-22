@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type ComponentType } from 'react';
-import { LayoutChangeEvent, PanResponder, Pressable, Text, TextInput, View } from 'react-native';
+import { useMemo, useState, type ComponentType } from 'react';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowRight, Edit3, Clock, Trash2 } from 'lucide-react-native';
-import { GradientButton } from '@/components/atoms';
+import { GradientButton, HardenedSlider } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import type { IdealDayCategory } from '@/stores/ideal-day-store';
@@ -63,7 +63,7 @@ const DEFAULT_HOURS: Record<string, number> = {
 const isDayTypeConfigured = (categories: IdealDayCategory[]): boolean => {
   // Different number of categories = configured
   if (categories.length !== 5) return true;
-  
+
   // Check if any default category has different hours
   for (const cat of categories) {
     const defaultHours = DEFAULT_HOURS[cat.id];
@@ -78,8 +78,6 @@ const isDayTypeConfigured = (categories: IdealDayCategory[]): boolean => {
   return false;
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
 interface SliderBarProps {
   icon: ComponentType<{ size?: number; color?: string }>;
   label: string;
@@ -91,40 +89,6 @@ interface SliderBarProps {
 }
 
 const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDelete }: SliderBarProps) => {
-  const [width, setWidth] = useState(0);
-  const trackRef = useRef<View>(null);
-  // Use ref to avoid stale closure in PanResponder
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  const handleLayout = (e: LayoutChangeEvent) => {
-    setWidth(e.nativeEvent.layout.width);
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          if (!width) return;
-          const { locationX } = evt.nativeEvent;
-          const clampedPx = clamp(locationX, 0, width);
-          const newHours = Math.round((clampedPx / width) * maxHours * 2) / 2;
-          onChangeRef.current(newHours);
-        },
-        onPanResponderMove: (evt) => {
-          if (!width) return;
-          const { locationX } = evt.nativeEvent;
-          const clampedPx = clamp(locationX, 0, width);
-          const newHours = Math.round((clampedPx / width) * maxHours * 2) / 2;
-          onChangeRef.current(newHours);
-        },
-      }),
-    [width, maxHours],
-  );
-
-  const filledWidth = width ? clamp((hours / maxHours) * width, 0, width) : 0;
-
   return (
     <View className="flex-row items-center gap-3 rounded-2xl bg-white px-3 py-3" style={{ shadowColor: '#0F172A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }}>
       <View className="h-11 w-11 items-center justify-center rounded-xl" style={{ backgroundColor: `${color}15` }}>
@@ -132,17 +96,15 @@ const SliderBar = ({ icon: Icon, label, color, hours, maxHours, onChange, onDele
       </View>
       <View className="flex-1 gap-1.5">
         <Text className="text-[15px] font-semibold" style={{ color }}>{label}</Text>
-        <View
-          className="h-3 rounded-full bg-[#F1F5F9]"
-          onLayout={handleLayout}
-          ref={trackRef}
-          {...panResponder.panHandlers}
-        >
-          <View
-            className="h-full rounded-full"
-            style={{ width: filledWidth, backgroundColor: color }}
-          />
-        </View>
+        <HardenedSlider
+          value={hours}
+          min={0}
+          max={maxHours}
+          step={0.5}
+          fillColor={color}
+          accessibilityLabel={`${label} hours`}
+          onChange={onChange}
+        />
       </View>
       <View className="min-w-[44px] rounded-xl bg-[#F8FAFC] px-2.5 py-1.5" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
         <Text className="text-center text-[15px] font-bold text-text-primary">{hours}</Text>
@@ -180,30 +142,30 @@ export const IdealDayTemplate = ({
 }: IdealDayTemplateProps) => {
   const isSettings = mode === 'settings';
   const totalHours = useMemo(() => categories.reduce((sum, cat) => sum + cat.hours, 0), [categories]);
-  
+
   // Days with BASE template configured (weekdays/saturday/sunday)
   // Blue dot = base schedule has been customized
   const baseConfiguredDays = useMemo(() => {
     const configured = new Set<number>();
-    
+
     // Check weekdays template (Mon-Fri: indices 0-4)
     if (isDayTypeConfigured(categoriesByType.weekdays)) {
       for (let i = 0; i < 5; i++) configured.add(i);
     }
-    
+
     // Check saturday template (index 5)
     if (isDayTypeConfigured(categoriesByType.saturday)) {
       configured.add(5);
     }
-    
+
     // Check sunday template (index 6)
     if (isDayTypeConfigured(categoriesByType.sunday)) {
       configured.add(6);
     }
-    
+
     return configured;
   }, [categoriesByType]);
-  
+
   // Days with CUSTOM override (saved in customDayConfigs)
   // Orange dot = this day has a saved custom schedule
   // Also include currently editing day (selectedDaysByType.custom)
@@ -219,6 +181,7 @@ export const IdealDayTemplate = ({
     }
     return days;
   }, [customDayConfigs, selectedDaysByType]);
+
   const freeTime = Math.max(0, 24 - totalHours);
   const [newName, setNewName] = useState('');
   const [newColorIndex, setNewColorIndex] = useState(0);
@@ -261,7 +224,6 @@ export const IdealDayTemplate = ({
                 <Pressable
                   key={tab.key}
                   onPress={() => {
-                    console.log(`📅 Day type changed: ${tab.key}`);
                     onDayTypeChange(tab.key);
                   }}
                   className={`rounded-full px-5 py-2 ${dayType === tab.key ? 'bg-white' : ''}`}
@@ -278,7 +240,7 @@ export const IdealDayTemplate = ({
           {/* Helper text for Custom mode */}
           {dayType === 'custom' && (
             <Text className="text-center text-[11px] text-[#94A3B8] -mt-1">
-              {selectedDays.length === 0 
+              {selectedDays.length === 0
                 ? 'Tap a day to customize its schedule'
                 : 'Tap again to remove override, or tap another day'}
             </Text>
@@ -311,20 +273,22 @@ export const IdealDayTemplate = ({
                   <Text className={`text-[15px] font-bold ${active ? 'text-white' : 'text-[#9CA3AF]'}`}>
                     {day.short}
                   </Text>
+
                   {/* Base config indicator - blue dot top-right */}
                   {hasBaseConfig && !hasCustomOverride && (
                     <View
                       className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
-                      style={{ 
+                      style={{
                         backgroundColor: active ? 'rgba(255,255,255,0.9)' : '#2563EB',
                       }}
                     />
                   )}
+
                   {/* Custom override indicator - orange dot top-left (always on top, always orange) */}
                   {hasCustomOverride && (
                     <View
                       className="absolute left-1 top-1 h-2.5 w-2.5 rounded-full"
-                      style={{ 
+                      style={{
                         backgroundColor: '#F59E0B',
                         borderWidth: 1.5,
                         borderColor: 'rgba(255,255,255,0.9)',
@@ -398,7 +362,6 @@ export const IdealDayTemplate = ({
               hours={cat.hours}
               maxHours={cat.maxHours}
               onChange={(hours) => {
-                console.log(`🎚️ Slider changed: ${cat.name} -> ${hours}`);
                 onCategoryHoursChange(cat.id, hours);
               }}
               onDelete={isEditing && categories.length > 3 ? () => onDeleteCategory(cat.id) : undefined}

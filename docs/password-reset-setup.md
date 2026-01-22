@@ -23,7 +23,7 @@ Password reset is **fully supported** by Supabase and follows their official Rea
 
 **Critical:** You must add the password reset redirect URL to your Supabase project:
 
-1. Go to: https://supabase.com/dashboard/project/ysyiyzdtftctvdk/auth/url-configuration
+1. Go to: https://supabase.com/dashboard/project/bqbbuysyiyzdtftctvdk/auth/url-configuration
 2. Under "Redirect URLs", add:
    ```
    todaymatters://reset-password
@@ -90,6 +90,7 @@ Both formats are automatically supported.
 ### Reset Link Doesn't Open App
 
 - **Check redirect URL**: Must be `todaymatters://reset-password` in Supabase dashboard
+- **If you see `http://localhost:3000/#access_token=...&type=recovery`**: your Supabase **Site URL** (and/or the password recovery email template) is still pointing at `localhost:3000`, so the link will open a browser page that doesn’t exist on your machine. Update **Authentication → URL Configuration → Site URL** to `todaymatters://` (or your real web domain) and ensure your recovery email template uses the provided action/confirmation URL instead of hardcoding `{{ .SiteURL }}`.
 - **Check email provider**: Must be enabled in Supabase
 - **Check deep link config**: Verify `app.config.js` has correct scheme
 

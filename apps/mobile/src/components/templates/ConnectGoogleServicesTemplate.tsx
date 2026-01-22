@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Calendar, Check, ChevronDown, ChevronUp, Mail } from 'lucide-react-native';
+import { ArrowRight, Calendar, Check, ChevronDown, ChevronUp, Mail } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { GradientButton } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
@@ -43,9 +43,12 @@ interface ConnectGoogleServicesTemplateProps {
   connectedServices?: GoogleService[];
   isConnecting: boolean;
   errorMessage?: string | null;
+  hasAttemptedConnection?: boolean;
   onToggleService: (serviceId: GoogleService) => void;
   onToggleExpanded: (serviceId: GoogleService) => void;
   onConnect: () => void;
+  onContinue?: () => void;
+  onRetryConnection?: () => void;
   onSkip?: () => void;
   onBack?: () => void;
 }
@@ -58,15 +61,28 @@ export const ConnectGoogleServicesTemplate = ({
   connectedServices,
   isConnecting,
   errorMessage,
+  hasAttemptedConnection = false,
   onToggleService,
   onToggleExpanded,
   onConnect,
+  onContinue,
+  onRetryConnection,
   onSkip,
   onBack,
 }: ConnectGoogleServicesTemplateProps) => {
   const selectedCount = selectedServices.length;
   const connectedSet = useMemo(() => new Set(connectedServices ?? []), [connectedServices]);
   const selectedSet = useMemo(() => new Set(selectedServices), [selectedServices]);
+  const selectedUnconnectedCount = useMemo(
+    () => selectedServices.filter((service) => !connectedSet.has(service)).length,
+    [connectedSet, selectedServices]
+  );
+  // UX: after the user returns from an attempted connection, don't trap them in a "connect again" loop.
+  // Always allow continuing, and offer an explicit retry action.
+  const showPostConnectActions = hasAttemptedConnection;
+
+  const showContinue = showPostConnectActions || (connectedSet.size > 0 && selectedUnconnectedCount === 0);
+  const primaryLabel = showContinue ? 'Continue' : selectedCount > 0 ? `Connect (${selectedCount})` : 'Connect';
 
   return (
     <View style={styles.root}>
@@ -79,12 +95,22 @@ export const ConnectGoogleServicesTemplate = ({
         footer={
           <View className="gap-3">
             <GradientButton
-              label={selectedCount > 0 ? `Connect (${selectedCount})` : 'Connect'}
-              onPress={onConnect}
-              disabled={selectedCount === 0 || isConnecting}
-              rightIcon={undefined}
+              label={primaryLabel}
+              onPress={showContinue ? (onContinue ?? onSkip ?? onConnect) : onConnect}
+              disabled={showContinue ? isConnecting : selectedUnconnectedCount === 0 || isConnecting}
+              rightIcon={showContinue ? ArrowRight : undefined}
             />
-            {onSkip ? (
+            {showPostConnectActions ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onRetryConnection ?? onConnect}
+                disabled={isConnecting}
+                className="items-center justify-center py-2 active:opacity-70"
+                style={({ pressed }) => [{ opacity: pressed && !isConnecting ? 0.8 : 1 }]}
+              >
+                <Text className="text-sm font-semibold text-slate-600">Retry connection</Text>
+              </Pressable>
+            ) : onSkip && !showContinue ? (
               <Pressable
                 accessibilityRole="button"
                 onPress={onSkip}

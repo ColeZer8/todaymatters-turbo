@@ -34,16 +34,6 @@
     "production": {
       "channel": "production"
     }
-  },
-  "update": {
-    "preview": {
-      "channel": "preview",
-      "checkAutomatically": "ON_LOAD"
-    },
-    "production": {
-      "channel": "production",
-      "checkAutomatically": "ON_LOAD"
-    }
   }
 }
 

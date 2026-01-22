@@ -58,6 +58,10 @@ const DEFAULT_CATEGORIES: IdealDayCategory[] = [
   { id: 'fitness', name: 'Fitness', hours: 1, maxHours: 3, color: '#F95C2E', icon: Dumbbell, iconName: 'Dumbbell' },
 ];
 
+export function getIdealDayDefaultCategories(): IdealDayCategory[] {
+  return DEFAULT_CATEGORIES.map((cat) => ({ ...cat }));
+}
+
 // Serializable category (without icon function)
 interface SerializableCategory {
   id: string;
@@ -142,11 +146,47 @@ export const useIdealDayStore = create<IdealDayState>()(
           customDayConfigs: snapshot.customDayConfigs,
         })),
       setDayType: (type) =>
-        set(() => ({
-          // Only change the active day type; preserve all selectedDaysByType
-          // (weekdays/saturday/sunday have fixed selections, custom persists user choices)
-          dayType: type,
-        })),
+        set((state) => {
+          if (state.dayType === type) return state;
+
+          let nextCustomDayConfigs = state.customDayConfigs;
+          let nextCategoriesByType = state.categoriesByType;
+
+          // If leaving custom mode while editing a specific day, persist the current custom buffer
+          // so switching tabs doesn't "lose" edits or cause confusing UI.
+          if (state.dayType === 'custom' && type !== 'custom') {
+            const editingDay = state.selectedDaysByType.custom?.[0];
+            if (editingDay !== undefined) {
+              nextCustomDayConfigs = {
+                ...state.customDayConfigs,
+                [editingDay]: state.categoriesByType.custom.map((cat) => ({ ...cat })),
+              };
+            }
+          }
+
+          // If entering custom mode and a day is already selected, ensure we load that day's buffer
+          // (or derive it from the base template) so the UI doesn't flicker/blank.
+          if (type === 'custom') {
+            const editingDay = state.selectedDaysByType.custom?.[0];
+            if (editingDay !== undefined) {
+              const existing = nextCustomDayConfigs[editingDay];
+              const baseType: DayType =
+                editingDay < 5 ? 'weekdays' : editingDay === 5 ? 'saturday' : 'sunday';
+              const fallbackBase = state.categoriesByType[baseType];
+              const nextCustom =
+                existing?.length
+                  ? existing.map((cat) => ({ ...cat }))
+                  : fallbackBase.map((cat) => ({ ...cat }));
+              nextCategoriesByType = { ...state.categoriesByType, custom: nextCustom };
+            }
+          }
+
+          return {
+            dayType: type,
+            categoriesByType: nextCategoriesByType,
+            customDayConfigs: nextCustomDayConfigs,
+          };
+        }),
       setHours: (id, hours) =>
         set((state) => {
           const current = state.categoriesByType[state.dayType] || [];

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, InteractionManager, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { RoutineBuilderTemplate } from '@/components/templates/RoutineBuilderTemplate';
@@ -25,7 +25,11 @@ export default function BuildRoutineScreen() {
   const addItem = useRoutineBuilderStore((state) => state.addItem);
   const deleteItem = useRoutineBuilderStore((state) => state.deleteItem);
 
-  const { saveRoutine } = useRoutineSync({ autoLoad: true, onError: (err) => console.error('Failed to sync routine:', err) });
+  const handleSyncError = useCallback((err: Error) => {
+    console.error('Failed to sync routine:', err);
+  }, []);
+
+  const { saveRoutine } = useRoutineSync({ autoLoad: true, onError: handleSyncError });
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) return;

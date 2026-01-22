@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores';
 import { getIconByKey, useRoutineBuilderStore, type IconKey } from '@/stores/routine-builder-store';
 import { fetchRoutine, saveRoutine } from '../services/routines';
@@ -17,6 +17,14 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
   const items = useRoutineBuilderStore((s) => s.items);
   const setItems = useRoutineBuilderStore((s) => s.setItems);
   const setWakeTime = useRoutineBuilderStore((s) => s.setWakeTime);
+
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  const hasAutoLoadedRef = useRef(false);
+  const autoLoadedUserIdRef = useRef<string | null>(null);
 
   const toIconKey = useCallback((value: string | null): IconKey => {
     if (value === 'droplet' || value === 'book' || value === 'utensils' || value === 'moon' || value === 'sun') {
@@ -53,9 +61,9 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Failed to load routine');
-      onError?.(err);
+      onErrorRef.current?.(err);
     }
-  }, [isAuthenticated, user?.id, setItems, setWakeTime, onError, toIconKey]);
+  }, [isAuthenticated, user?.id, setItems, setWakeTime, toIconKey]);
 
   const saveRoutineSnapshot = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
@@ -74,14 +82,22 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
       );
     } catch (error) {
       const err = error instanceof Error ? error : new Error('Failed to save routine');
-      onError?.(err);
+      onErrorRef.current?.(err);
     }
-  }, [isAuthenticated, user?.id, wakeTime, items, onError]);
+  }, [isAuthenticated, user?.id, wakeTime, items]);
 
   useEffect(() => {
-    if (autoLoad && isAuthenticated && user?.id) {
-      void loadRoutine();
+    if (!autoLoad) return;
+    if (!isAuthenticated || !user?.id) return;
+
+    if (autoLoadedUserIdRef.current !== user.id) {
+      autoLoadedUserIdRef.current = user.id;
+      hasAutoLoadedRef.current = false;
     }
+    if (hasAutoLoadedRef.current) return;
+    hasAutoLoadedRef.current = true;
+
+    void loadRoutine();
   }, [autoLoad, isAuthenticated, user?.id, loadRoutine]);
 
   return { loadRoutine, saveRoutine: saveRoutineSnapshot };

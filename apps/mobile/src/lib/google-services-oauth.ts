@@ -184,7 +184,7 @@ const getRedirectUrlFromOAuthStartResponse = (response: Response): string | null
 export const startGoogleServicesOAuth = async (
   services: GoogleService[],
   accessToken: string
-): Promise<void> => {
+): Promise<WebBrowser.WebBrowserAuthSessionResult> => {
   if (!accessToken) {
     throw new Error('Missing access token. Please sign in again and retry.');
   }
@@ -273,7 +273,7 @@ export const startGoogleServicesOAuth = async (
    *
    * So we do NOT treat cancel/dismiss as an error here.
    */
-  return;
+  return result;
 };
 
 export const isGoogleServicesOAuthCallback = (url: string): boolean => {

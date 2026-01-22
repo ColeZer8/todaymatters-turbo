@@ -112,12 +112,23 @@ export const useAuthStore = create<AuthState>()(
     signOut: async () => {
       set({ isLoading: true });
       try {
+        // Sign out from Supabase - this clears the session on the server
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
 
+        // Clear local session state immediately
         get().setSession(null);
+        
+        if (__DEV__) {
+          console.log('✅ Sign out successful - session cleared');
+        }
       } catch (error) {
+        // Even if Supabase signOut fails, clear local state
+        get().setSession(null);
         set({ isLoading: false });
+        if (__DEV__) {
+          console.error('⚠️ Supabase signOut error, but clearing local session:', error);
+        }
         throw error;
       } finally {
         set({ isLoading: false });

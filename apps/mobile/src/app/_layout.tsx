@@ -13,6 +13,7 @@ import { verifyAuthAndData } from "@/lib/supabase/services";
 import { useInsightsSync, useLocationSamplesSync, useOnboardingSync } from "@/lib/supabase/hooks";
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
+import { checkAndApplyUpdate, isUpdateEnabled, getUpdateInfo } from "@/lib/updates";
 
 // Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
 void registerIosLocationBackgroundTaskAsync();
@@ -88,10 +89,20 @@ export default function Layout() {
     };
   }, [isAuthenticated, userId, loadOnboardingData]);
 
-  // Refresh session when app returns from background
+  // Refresh session and check for updates when app returns from background
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
+        // Avoid refreshing auth while an in-app OAuth flow is in progress (Android custom tabs / iOS auth sessions).
+        // Some devices will background/foreground during OAuth, and an aggressive refresh can sign the user out unexpectedly.
+        const isGoogleOAuthProcessing = useGoogleServicesOAuthStore.getState().isProcessing;
+        if (isGoogleOAuthProcessing) {
+          if (__DEV__) {
+            console.log('⏭️ Skipping session refresh (Google OAuth in progress)');
+          }
+          return;
+        }
+
         // App came to foreground - refresh session if needed
         const session = useAuthStore.getState().session;
         if (session) {
@@ -105,6 +116,25 @@ export default function Layout() {
               console.error('⚠️ Failed to refresh session on foreground:', error);
             }
             // Error handling is done in refreshSession - user will be signed out if needed
+          }
+        }
+
+        // Check for EAS updates (only in production builds)
+        if (isUpdateEnabled()) {
+          try {
+            if (__DEV__) {
+              console.log('🔄 Checking for EAS updates...');
+            }
+            const updateInfo = getUpdateInfo();
+            if (__DEV__ && updateInfo) {
+              console.log('📦 Update info:', updateInfo);
+            }
+            // Note: Automatic checking is handled by expo-updates with checkAutomatically: 'ON_LOAD'
+            // This is just for manual checking if needed
+          } catch (error) {
+            if (__DEV__) {
+              console.error('⚠️ Failed to check for updates:', error);
+            }
           }
         }
       }

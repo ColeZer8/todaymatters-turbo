@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { ArrowRight, TrendingUp } from 'lucide-react-native';
-import { LayoutChangeEvent, PanResponder, Pressable, Text, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
+import { Pressable, Text, View } from 'react-native';
+import { GradientButton, HardenedSlider } from '@/components/atoms';
 import { SetupStepLayout } from '@/components/organisms';
 import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
 import type { CoreValue, ValueScore } from '@/stores/onboarding-store';
@@ -36,8 +36,6 @@ const getScoreLabel = (score: number) => {
   return 'Doing Well';
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
 interface ScoreSliderProps {
   label: string;
   score: number;
@@ -45,39 +43,6 @@ interface ScoreSliderProps {
 }
 
 const ScoreSlider = ({ label, score, onScoreChange }: ScoreSliderProps) => {
-  const [width, setWidth] = useState(0);
-  const trackRef = useRef<View>(null);
-  const onChangeRef = useRef(onScoreChange);
-  const dragStartXRef = useRef(0);
-  onChangeRef.current = onScoreChange;
-
-  const handleLayout = (e: LayoutChangeEvent) => {
-    setWidth(e.nativeEvent.layout.width);
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          if (!width) return;
-          const { locationX } = evt.nativeEvent;
-          const clampedPx = clamp(locationX, 0, width);
-          dragStartXRef.current = clampedPx;
-          const newScore = Math.round((clampedPx / width) * 9) + 1; // 1-10 scale
-          onChangeRef.current(clamp(newScore, 1, 10));
-        },
-        onPanResponderMove: (_evt, gestureState) => {
-          if (!width) return;
-          const clampedPx = clamp(dragStartXRef.current + gestureState.dx, 0, width);
-          const newScore = Math.round((clampedPx / width) * 9) + 1;
-          onChangeRef.current(clamp(newScore, 1, 10));
-        },
-      }),
-    [width]
-  );
-
-  const filledWidth = width ? clamp(((score - 1) / 9) * width, 0, width) : 0;
   const scoreColor = getScoreColor(score);
 
   return (
@@ -106,33 +71,15 @@ const ScoreSlider = ({ label, score, onScoreChange }: ScoreSliderProps) => {
       </View>
 
       {/* Slider */}
-      <View
-        className="h-3 rounded-full bg-[#F1F5F9]"
-        onLayout={handleLayout}
-        ref={trackRef}
-        {...panResponder.panHandlers}
-      >
-        <View
-          className="h-full rounded-full"
-          style={{ width: filledWidth, backgroundColor: scoreColor }}
-        />
-        {/* Thumb */}
-        {width > 0 && (
-          <View
-            className="absolute h-5 w-5 rounded-full bg-white -top-1"
-            style={{
-              left: filledWidth - 10,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
-              borderWidth: 2,
-              borderColor: scoreColor,
-            }}
-          />
-        )}
-      </View>
+      <HardenedSlider
+        value={score}
+        min={1}
+        max={10}
+        step={1}
+        fillColor={scoreColor}
+        accessibilityLabel={`${label} score`}
+        onChange={(next) => onScoreChange(next)}
+      />
 
       {/* Scale Labels */}
       <View className="flex-row justify-between mt-2 px-1">

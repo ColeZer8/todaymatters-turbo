@@ -11,12 +11,14 @@ import {
   MessageCircle,
   MoonStar,
   Play,
+  RefreshCw,
   Settings,
   Sparkles,
   Target,
 } from 'lucide-react-native';
-import { Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Alert, InteractionManager, Platform } from 'react-native';
+import { useRouter, useRootNavigationState } from 'expo-router';
+import Constants from 'expo-constants';
 import { ProfileTemplate } from '@/components/templates';
 import { DatePickerPopup } from '@/components/molecules';
 import { useDemoStore, useAuthStore, useOnboardingStore, useReviewTimeStore } from '@/stores';
@@ -73,6 +75,8 @@ const INITIATIVES: ProfileItem[] = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const navigationState = useRootNavigationState();
+  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const setDemoActive = useDemoStore((state) => state.setActive);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -80,6 +84,16 @@ export default function ProfileScreen() {
   const fullName = useOnboardingStore((s) => s.fullName);
   const setFullName = useOnboardingStore((s) => s.setFullName);
   const requestAutoAssignAll = useReviewTimeStore((s) => s.requestAutoAssignAll);
+
+  // Redirect to sign-in if user becomes unauthenticated
+  useEffect(() => {
+    if (!isNavigationReady) return;
+    if (!isAuthenticated) {
+      InteractionManager.runAfterInteractions(() => {
+        router.replace('/');
+      });
+    }
+  }, [isAuthenticated, isNavigationReady, router]);
 
   const handleStartDemo = () => {
     setDemoActive(true);
@@ -248,12 +262,16 @@ export default function ProfileScreen() {
   ];
 
   // Build menu items - include Demo Mode in development builds
+  // Always show dev menu in preview builds (check via Constants.executionEnvironment)
+  const isPreviewBuild = Constants.executionEnvironment === 'standalone';
+  const showDevMenu = __DEV__ || !appConfig.env.isProd || isPreviewBuild;
+  
   const menuItems = [
     { id: 'account-settings', label: 'Account Settings', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'subscription', label: 'Subscription', icon: CreditCard },
     // Demo Mode - visible in development and preview builds (not production)
-    ...(__DEV__ || !appConfig.env.isProd
+    ...(showDevMenu
       ? [
           {
             id: 'demo-mode',
@@ -309,6 +327,94 @@ export default function ProfileScreen() {
             icon: Calendar,
             onPress: handleDevAutoAssignReview,
           },
+          {
+            id: 'dev-check-update',
+            label: '🔄 Check for Update',
+            icon: Calendar,
+            onPress: async () => {
+              const { checkAndApplyUpdate, isUpdateEnabled, getUpdateInfo, getUpdateDiagnostics } = await import('@/lib/updates');
+              const enabled = isUpdateEnabled();
+              const info = getUpdateInfo();
+              const diagnostics = getUpdateDiagnostics();
+              
+              const diagnosticText = `Dev Mode: ${diagnostics.isDev ? 'Yes' : 'No'}
+EAS Build: ${diagnostics.isEasBuild ? 'Yes' : 'No'}
+Updates Enabled: ${diagnostics.updatesEnabled ? 'Yes' : 'No'}
+Channel: ${diagnostics.channel}
+Runtime: ${diagnostics.runtimeVersion}
+Update ID: ${diagnostics.updateId}
+Embedded Launch: ${diagnostics.isEmbeddedLaunch ? 'Yes' : 'No'}
+Environment: ${diagnostics.executionEnvironment}
+Update URL: ${diagnostics.updateUrl}`;
+              
+              Alert.alert(
+                'Update Diagnostics',
+                diagnosticText,
+                [
+                  { text: 'OK' },
+                  ...(enabled
+                    ? [
+                        {
+                          text: 'Check Now',
+                          onPress: async () => {
+                            const result = await checkAndApplyUpdate();
+                            Alert.alert(
+                              result.applied ? 'Update Applied' : 'No Update',
+                              result.applied
+                                ? 'App will reload with the latest update.'
+                                : result.error || 'You are on the latest version.'
+                            );
+                          },
+                        },
+                      ]
+                    : []),
+                ]
+              );
+            },
+          },
+        ]
+      : []),
+    // Always show update check in standalone builds (even if dev menu is hidden)
+    ...(isPreviewBuild && !showDevMenu
+      ? [
+          {
+            id: 'check-update',
+            label: '🔄 Check for Update',
+            icon: RefreshCw,
+            onPress: async () => {
+              const { checkAndApplyUpdate, getUpdateDiagnostics } = await import('@/lib/updates');
+              const diagnostics = getUpdateDiagnostics();
+              
+              const diagnosticText = `Updates Enabled: ${diagnostics.updatesEnabled ? 'Yes' : 'No'}
+Channel: ${diagnostics.channel}
+Runtime: ${diagnostics.runtimeVersion}
+Update ID: ${diagnostics.updateId}`;
+              
+              Alert.alert(
+                'Update Status',
+                diagnosticText,
+                [
+                  { text: 'OK' },
+                  ...(diagnostics.updatesEnabled
+                    ? [
+                        {
+                          text: 'Check Now',
+                          onPress: async () => {
+                            const result = await checkAndApplyUpdate();
+                            Alert.alert(
+                              result.applied ? 'Update Applied' : 'No Update',
+                              result.applied
+                                ? 'App will reload with the latest update.'
+                                : result.error || 'You are on the latest version.'
+                            );
+                          },
+                        },
+                      ]
+                    : []),
+                ]
+              );
+            },
+          },
         ]
       : []),
     {
@@ -316,11 +422,30 @@ export default function ProfileScreen() {
       label: 'Log Out',
       icon: LogOut,
       onPress: async () => {
+        if (__DEV__) {
+          console.log('🔴 Logout button pressed');
+        }
         try {
+          // Sign out - this clears the session and updates auth state
+          if (__DEV__) {
+            console.log('🔴 Calling signOut()...');
+          }
           await signOut();
-          // Navigate to sign-in screen after successful logout
-          router.replace('/');
+          
+          if (__DEV__) {
+            console.log('🔴 SignOut completed, navigating to sign-in...');
+          }
+          
+          // Force navigation to sign-in screen
+          // Use a small delay to ensure auth state has updated
+          setTimeout(() => {
+            if (__DEV__) {
+              console.log('🔴 Navigating to /');
+            }
+            router.replace('/');
+          }, 100);
         } catch (error) {
+          console.error('❌ Logout error:', error);
           Alert.alert('Error', error instanceof Error ? error.message : 'Failed to sign out. Please try again.');
         }
       },

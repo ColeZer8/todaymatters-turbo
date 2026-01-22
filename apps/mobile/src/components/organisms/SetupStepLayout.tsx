@@ -1,8 +1,17 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView as RNScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView as RNScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -34,7 +43,22 @@ export const SetupStepLayout = ({
   const isAndroid = Platform.OS === 'android';
   const isIos = Platform.OS === 'ios';
   const ScrollView = RNScrollView;
-  const shouldPinFooter = isAndroid && !!footer;
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = isIos ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = isIos ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [isIos]);
+
+  const shouldRenderFooter = !!footer && !isKeyboardVisible;
+  // Pin footer across platforms so it stays fixed near bottom (no "riding up")
+  const shouldPinFooter = shouldRenderFooter;
   const keyboardBehavior = isIos ? 'padding' : undefined;
 
   return (
@@ -57,8 +81,8 @@ export const SetupStepLayout = ({
               style={styles.scroll}
               contentContainerStyle={[
                 styles.scrollContent,
-                // Android: reserve space for the pinned footer so content doesn't sit underneath it.
-                shouldPinFooter ? { paddingBottom: 32 + ANDROID_FOOTER_SPACE + insets.bottom } : null,
+                // Reserve space for the pinned footer so content doesn't sit underneath it.
+                shouldPinFooter ? { paddingBottom: 32 + PINNED_FOOTER_SPACE + insets.bottom } : null,
               ]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -127,13 +151,12 @@ export const SetupStepLayout = ({
 
             <View style={styles.flexSpacer} />
 
-              {/* iOS keeps footer inside ScrollView (existing behavior) */}
-              {!shouldPinFooter && footer ? <View style={[styles.contentWidth, styles.footer]}>{footer}</View> : null}
+              {/* Footer is pinned below (prevents jumpy behavior on device) */}
             </ScrollView>
 
-            {/* Android: pin footer to bottom so it doesn't bounce/scroll ("ping pong") */}
+            {/* Pin footer to bottom so it doesn't bounce/scroll */}
             {shouldPinFooter ? (
-              <View style={[styles.androidFooter, { paddingBottom: 12 + insets.bottom }]}>
+              <View style={[styles.pinnedFooter, { paddingBottom: 12 + insets.bottom }]}>
                 <View style={styles.contentWidth}>{footer}</View>
               </View>
             ) : null}
@@ -144,7 +167,7 @@ export const SetupStepLayout = ({
   );
 };
 
-const ANDROID_FOOTER_SPACE = 176;
+const PINNED_FOOTER_SPACE = 176;
 
 const styles = StyleSheet.create({
   gradient: {
@@ -217,7 +240,7 @@ const styles = StyleSheet.create({
   footer: {
     // paddingBottom: 8, // Removed to match SetupQuestionsTemplate
   },
-  androidFooter: {
+  pinnedFooter: {
     position: 'absolute',
     left: 0,
     right: 0,

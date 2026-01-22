@@ -36,8 +36,8 @@ Enable the Email provider in your Supabase Dashboard.
 ### 1. Go to Authentication Providers Settings
 
 1. Open your Supabase Dashboard: https://supabase.com/dashboard
-2. Select your project (project ref: `ysyiyzdtftctvdk` based on the error URL)
-3. Navigate to: **Authentication** → **Providers** (or go directly to: https://supabase.com/dashboard/project/ysyiyzdtftctvdk/auth/providers)
+2. Select your project (project ref: `bqbbuysyiyzdtftctvdk`)
+3. Navigate to: **Authentication** → **Providers** (or go directly to: https://supabase.com/dashboard/project/bqbbuysyiyzdtftctvdk/auth/providers)
 
 ### 2. Enable Email Provider
 
