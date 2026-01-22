@@ -345,8 +345,8 @@ export const AddEventTemplate = ({
                         </View>
                     )}
 
-                    {/* Inline Start Time Picker */}
-                    {showStartTimePicker && !allDay && (
+                    {/* Inline Start Time Picker (iOS) or Modal (Android) */}
+                    {showStartTimePicker && !allDay && Platform.OS === 'ios' && (
                         <View className="bg-white">
                             <View className="h-[1px] bg-[#E5E5EA]" />
                             <DateTimePicker
@@ -358,6 +358,15 @@ export const AddEventTemplate = ({
                                 style={{ height: 200 }}
                             />
                         </View>
+                    )}
+                    {/* Android time picker - renders as modal */}
+                    {showStartTimePicker && !allDay && Platform.OS === 'android' && (
+                        <DateTimePicker
+                            value={startTime}
+                            mode="time"
+                            display="default"
+                            onChange={onStartTimeChange}
+                        />
                     )}
 
                     <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
@@ -376,7 +385,8 @@ export const AddEventTemplate = ({
                                     </Text>
                                 </View>
                             </Pressable>
-                            {showEndTimePicker && (
+                            {/* End time picker - iOS inline */}
+                            {showEndTimePicker && Platform.OS === 'ios' && (
                                 <View className="bg-white">
                                     <View className="h-[1px] bg-[#E5E5EA]" />
                                     <DateTimePicker
@@ -388,6 +398,15 @@ export const AddEventTemplate = ({
                                         style={{ height: 200 }}
                                     />
                                 </View>
+                            )}
+                            {/* End time picker - Android modal */}
+                            {showEndTimePicker && Platform.OS === 'android' && (
+                                <DateTimePicker
+                                    value={endTime}
+                                    mode="time"
+                                    display="default"
+                                    onChange={onEndTimeChange}
+                                />
                             )}
                         </>
                     )}
