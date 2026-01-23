@@ -14,6 +14,7 @@ import { useInsightsSync, useLocationSamplesSync, useOnboardingSync } from "@/li
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
 import { checkAndApplyUpdate, isUpdateEnabled, getUpdateInfo } from "@/lib/updates";
+import { installGlobalErrorHandlers, logger } from "@/lib/logger";
 
 // Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
 void registerIosLocationBackgroundTaskAsync();
@@ -40,30 +41,26 @@ export default function Layout() {
       unsubscribeAuth = await initialize();
     };
 
+    installGlobalErrorHandlers();
+
     run();
     const cleanupLinks = handleAuthCallback();
     const cleanupGoogleOAuth = handleGoogleServicesOAuthCallback({
       onStart: () => setGoogleOAuthProcessing(true),
       onResult: (result) => {
         setGoogleOAuthResult(result);
-        if (__DEV__) {
-          console.log("🔗 Google services OAuth result:", result);
-        }
+        logger.debug("Google services OAuth result", result);
       },
     });
 
     // Load onboarding state from Supabase once after auth is ready.
     // This makes onboarding truly "server-backed" (app can be reinstalled and state restored).
-    if (__DEV__) {
-      console.log("🔍 Onboarding sync: waiting for authentication...");
-    }
+    logger.debug("Onboarding sync: waiting for authentication...");
 
     // Verify auth and data after initialization (for debugging)
-    if (__DEV__) {
-      setTimeout(() => {
-        verifyAuthAndData().catch(console.error);
-      }, 2000); // Wait 2 seconds for auth to initialize
-    }
+    setTimeout(() => {
+      verifyAuthAndData().catch((error) => logger.error("verifyAuthAndData failed", error));
+    }, 2000); // Wait 2 seconds for auth to initialize
 
     return () => {
       cleanupLinks();
@@ -107,14 +104,10 @@ export default function Layout() {
         const session = useAuthStore.getState().session;
         if (session) {
           try {
-            if (__DEV__) {
-              console.log('🔄 App returned to foreground, refreshing session...');
-            }
+            logger.debug("App returned to foreground, refreshing session...");
             await refreshSession();
           } catch (error) {
-            if (__DEV__) {
-              console.error('⚠️ Failed to refresh session on foreground:', error);
-            }
+            logger.warn("Failed to refresh session on foreground", error);
             // Error handling is done in refreshSession - user will be signed out if needed
           }
         }
@@ -122,19 +115,13 @@ export default function Layout() {
         // Check for EAS updates (only in production builds)
         if (isUpdateEnabled()) {
           try {
-            if (__DEV__) {
-              console.log('🔄 Checking for EAS updates...');
-            }
+            logger.debug("Checking for EAS updates...");
             const updateInfo = getUpdateInfo();
-            if (__DEV__ && updateInfo) {
-              console.log('📦 Update info:', updateInfo);
-            }
+            if (updateInfo) logger.debug("Update info", updateInfo);
             // Note: Automatic checking is handled by expo-updates with checkAutomatically: 'ON_LOAD'
             // This is just for manual checking if needed
           } catch (error) {
-            if (__DEV__) {
-              console.error('⚠️ Failed to check for updates:', error);
-            }
+            logger.warn("Failed to check for updates", error);
           }
         }
       }

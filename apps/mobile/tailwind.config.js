@@ -1,6 +1,23 @@
 module.exports = {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
+  // In production builds, Tailwind's content scanning can miss class names that are
+  // passed via variables (e.g. `className={\`...\${config.bgColor}\`}`), even when the
+  // values are defined locally. Safelist the small set we use for icon chips/toggles.
+  safelist: [
+    "bg-blue-500",
+    "bg-violet-500",
+    "bg-amber-500",
+    "bg-emerald-500",
+    "bg-pink-500",
+    "bg-red-500",
+    "bg-orange-500",
+    "bg-slate-300",
+    "border-blue-600",
+    "bg-blue-600",
+    "border-slate-300",
+    "bg-white",
+  ],
   theme: {
     extend: {
       colors: {

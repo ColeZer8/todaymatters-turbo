@@ -44,8 +44,25 @@ const ENV = {
   },
 };
 
+function resolveAppEnvName() {
+  const allowed = new Set(['development', 'staging', 'production']);
+
+  // Explicit override always wins (works for local `APP_ENV=... expo run:*` too).
+  const explicit = process.env.APP_ENV;
+  if (explicit && allowed.has(explicit)) return explicit;
+
+  // If not explicitly set, infer based on EAS build profile so preview/dev builds
+  // behave like local development by default (unless you override via APP_ENV).
+  const easProfile = process.env.EAS_BUILD_PROFILE;
+  if (easProfile === 'production') return 'production';
+  if (easProfile === 'preview') return 'development';
+  if (easProfile === 'development-device' || easProfile === 'development-simulator') return 'development';
+
+  return 'development';
+}
+
 const getEnvVars = () => {
-  const env = process.env.APP_ENV || 'development';
+  const env = resolveAppEnvName();
   return ENV[env] || ENV.development;
 };
 
@@ -162,7 +179,7 @@ export default {
       },
       // Add environment-specific variables
       ...getEnvVars(),
-      appEnv: process.env.APP_ENV || 'development',
+      appEnv: resolveAppEnvName(),
     },
     // EAS Update configuration - updates are enabled via channels in eas.json
     updates: {
