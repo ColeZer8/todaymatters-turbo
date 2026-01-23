@@ -77,9 +77,9 @@ We may update this Privacy Policy from time to time. We will notify you of any c
 ## Contact Us
 
 If you have any questions about this Privacy Policy, please contact us at:
-- Email: [your-email@example.com]
+- Email: [cole@thedatagroup.cloud]
 - Through the App: Settings → Support
 
 ---
 
-**Note**: This is a basic privacy policy template. You should review it with legal counsel before publishing, especially if you plan to launch publicly or handle sensitive data in specific jurisdictions.
+
