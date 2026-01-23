@@ -4,14 +4,15 @@
 
 ## How to Delete Your Account
 
-To permanently delete your Today Matters account and all associated data:
+To permanently delete your Today Matters account and all associated data, please contact us:
 
-1. Open the **Today Matters** app on your device
-2. Navigate to **Profile** (bottom navigation)
-3. Tap **Settings** (or the settings icon)
-4. Scroll to **Account** section
-5. Tap **Delete Account**
-6. Confirm the deletion when prompted
+**Email:** cole@thedatagroup.cloud
+
+Please include the following in your request:
+- Your account email address
+- Confirmation that you want to permanently delete your account and all associated data
+
+We will process your deletion request within 7 business days and confirm once your account and data have been permanently removed.
 
 ## What Gets Deleted
 
