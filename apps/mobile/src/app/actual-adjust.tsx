@@ -332,21 +332,12 @@ export default function ActualAdjustScreen() {
         }
       }
 
-      if (note.trim() && !nextSuggestion) {
-        Alert.alert(
-          'AI needed',
-          'Please add a brief note so we can classify this correctly.',
-        );
-        setIsSaving(false);
-        return;
-      }
-
       const didUseAi = Boolean(nextSuggestion);
       const title =
         didUseAi ? (nextSuggestion?.title || titleInput || 'Actual') : titleInput || 'Actual';
       const description = didUseAi
         ? (nextSuggestion?.description || '')
-        : (note.trim() || event.description || '');
+        : (note.trim() || '');
       const finalCategory = nextSuggestion?.category ?? selectedCategory;
       const linkedGoal = selectedGoalId?.startsWith('goal:') ? selectedGoalId.slice(5) : null;
       const linkedInitiative = selectedGoalId?.startsWith('initiative:') ? selectedGoalId.slice(11) : null;
