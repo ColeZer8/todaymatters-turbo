@@ -18,6 +18,52 @@ export function getDisplayNameFromFromAddress(fromAddress: string | null): strin
   return trimmed;
 }
 
+export function getGmailHeaderValue(meta: unknown, headerName: string): string | null {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  const raw = (meta as Record<string, unknown>).raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const normalized = headerName.trim().toLowerCase();
+
+  const searchHeaders = (headers: unknown): string | null => {
+    if (!Array.isArray(headers)) return null;
+    for (const entry of headers) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const name = (entry as Record<string, unknown>).name;
+      const value = (entry as Record<string, unknown>).value;
+      if (typeof name === 'string' && typeof value === 'string' && name.trim().toLowerCase() === normalized) {
+        return value.trim();
+      }
+    }
+    return null;
+  };
+
+  const rawRecord = raw as Record<string, unknown>;
+  const direct = rawRecord[normalized];
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+  const payload = rawRecord.payload as Record<string, unknown> | undefined;
+  const fromPayload = searchHeaders(payload?.headers);
+  if (fromPayload) return fromPayload;
+
+  const headers = rawRecord.headers;
+  return searchHeaders(headers);
+}
+
+export function getGmailFromAddress(meta: unknown): string | null {
+  const fromValue = getGmailHeaderValue(meta, 'From');
+  if (fromValue) return fromValue;
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+  const raw = (meta as Record<string, unknown>).raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const fallback = (raw as Record<string, unknown>).from;
+  return typeof fallback === 'string' ? fallback : null;
+}
+
+export function getGmailSubject(meta: unknown): string | null {
+  return getGmailHeaderValue(meta, 'Subject');
+}
+
 export function getInitialsFromName(name: string): string {
   const parts = name
     .trim()

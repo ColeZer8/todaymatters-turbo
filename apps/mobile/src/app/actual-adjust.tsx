@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { ActualAdjustTemplate } from '@/components/templates/ActualAdjustTemplate';
+import { TimePickerModal } from '@/components/organisms';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
 import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
@@ -93,14 +94,16 @@ export default function ActualAdjustScreen() {
     };
   }, [actualEvents, params]);
 
-  const normalizedStartMinutes = useMemo(() => Math.max(0, Math.round(event.startMinutes)), [event.startMinutes]);
-  const normalizedDuration = useMemo(() => Math.max(1, Math.round(event.duration)), [event.duration]);
+  const [startMinutes, setStartMinutes] = useState(() => Math.max(0, Math.round(event.startMinutes)));
+  const [durationMinutes, setDurationMinutes] = useState(() => Math.max(1, Math.round(event.duration)));
+  const [isSleepStartPickerOpen, setIsSleepStartPickerOpen] = useState(false);
+  const [isSleepEndPickerOpen, setIsSleepEndPickerOpen] = useState(false);
 
   const timeLabel = useMemo(() => {
-    const start = formatMinutesToTime(normalizedStartMinutes);
-    const end = formatMinutesToTime(normalizedStartMinutes + normalizedDuration);
+    const start = formatMinutesToTime(startMinutes);
+    const end = formatMinutesToTime(startMinutes + durationMinutes);
     return `${start} – ${end}`;
-  }, [normalizedDuration, normalizedStartMinutes]);
+  }, [durationMinutes, startMinutes]);
 
   const helperText = useMemo(() => {
     const kind = event.meta?.kind;
@@ -120,7 +123,7 @@ export default function ActualAdjustScreen() {
 
     if (kind === 'screen_time') {
       const appLabel = topApp ? ` on ${topApp}` : '';
-      const minutesLabel = `${normalizedDuration} min`;
+      const minutesLabel = `${durationMinutes} min`;
       return `We marked this as ${event.title} because you were on your phone${appLabel} for ${minutesLabel} between ${timeLabel}. Describe what really happened and Today Matters will sort and title it!`;
     }
 
@@ -129,7 +132,7 @@ export default function ActualAdjustScreen() {
     }
 
     return `We marked this as ${event.title} between ${timeLabel}. Describe what really happened and Today Matters will sort and title it!`;
-  }, [event.meta, event.title, normalizedDuration, timeLabel]);
+  }, [durationMinutes, event.meta, event.title, timeLabel]);
 
   const evidenceRows = useMemo(() => {
     const meta = event.meta;
@@ -231,8 +234,21 @@ export default function ActualAdjustScreen() {
   const [note, setNote] = useState('');
   const [isBig3, setIsBig3] = useState(Boolean(event.isBig3));
   const [titleInput, setTitleInput] = useState(event.title || 'Actual');
-  const [selectedValue, setSelectedValue] = useState<string | null>(null);
-  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [selectedValue, setSelectedValue] = useState<string | null>(
+    typeof event.meta?.value_label === 'string' ? event.meta.value_label : null,
+  );
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(() => {
+    if (typeof event.meta?.goal_title === 'string' && event.meta.goal_title.trim()) {
+      return `goal:${event.meta.goal_title}`;
+    }
+    if (typeof event.meta?.initiative_title === 'string' && event.meta.initiative_title.trim()) {
+      return `initiative:${event.meta.initiative_title}`;
+    }
+    return null;
+  });
+  const [goalContribution, setGoalContribution] = useState<number | null>(
+    typeof event.meta?.goal_contribution === 'number' ? event.meta.goal_contribution : null,
+  );
   const [suggestion, setSuggestion] = useState<{
     category: EventCategory;
     title?: string;
@@ -244,7 +260,20 @@ export default function ActualAdjustScreen() {
 
   useEffect(() => {
     setTitleInput(event.title || 'Actual');
-  }, [event.title]);
+    setStartMinutes(Math.max(0, Math.round(event.startMinutes)));
+    setDurationMinutes(Math.max(1, Math.round(event.duration)));
+    setSelectedValue(typeof event.meta?.value_label === 'string' ? event.meta.value_label : null);
+    if (typeof event.meta?.goal_title === 'string' && event.meta.goal_title.trim()) {
+      setSelectedGoalId(`goal:${event.meta.goal_title}`);
+    } else if (typeof event.meta?.initiative_title === 'string' && event.meta.initiative_title.trim()) {
+      setSelectedGoalId(`initiative:${event.meta.initiative_title}`);
+    } else {
+      setSelectedGoalId(null);
+    }
+    setGoalContribution(
+      typeof event.meta?.goal_contribution === 'number' ? event.meta.goal_contribution : null,
+    );
+  }, [event.duration, event.meta, event.startMinutes, event.title]);
 
   const valuesOptions = useMemo(() => {
     const valueLabels = coreValues.filter((value) => value.isSelected).map((value) => value.label);
@@ -280,9 +309,9 @@ export default function ActualAdjustScreen() {
         title: event.title,
         description: event.description ?? '',
         source: 'actual_adjust',
-        startTime: formatMinutesToTime(normalizedStartMinutes),
-        endTime: formatMinutesToTime(normalizedStartMinutes + normalizedDuration),
-        durationMinutes: normalizedDuration,
+        startTime: formatMinutesToTime(startMinutes),
+        endTime: formatMinutesToTime(startMinutes + durationMinutes),
+        durationMinutes: durationMinutes,
         activityDetected: null,
         location: event.location ?? null,
         note,
@@ -297,14 +326,24 @@ export default function ActualAdjustScreen() {
       confidence: ai.confidence,
       reason: ai.reason,
     };
-  }, [event, note, normalizedDuration, normalizedStartMinutes, selectedCategory, selectedDateYmd]);
+  }, [event, note, durationMinutes, startMinutes, selectedCategory, selectedDateYmd]);
+
+  const handleSelectGoal = useCallback(
+    (value: string | null) => {
+      setSelectedGoalId(value);
+      if (!value || value !== selectedGoalId) {
+        setGoalContribution(null);
+      }
+    },
+    [selectedGoalId]
+  );
 
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      const start = ymdMinutesToDate(selectedDateYmd, normalizedStartMinutes);
+      const start = ymdMinutesToDate(selectedDateYmd, startMinutes);
       const end = new Date(start);
-      end.setMinutes(end.getMinutes() + normalizedDuration);
+      end.setMinutes(end.getMinutes() + durationMinutes);
 
       let nextSuggestion = suggestion;
       if (!nextSuggestion && note.trim()) {
@@ -351,6 +390,7 @@ export default function ActualAdjustScreen() {
         value_label: selectedValue ?? null,
         goal_title: linkedGoal,
         initiative_title: linkedInitiative,
+        goal_contribution: goalContribution ?? null,
         note: note.trim() || null,
         ai: nextSuggestion ? { confidence: nextSuggestion.confidence, reason: nextSuggestion.reason } : undefined,
         learnedFrom:
@@ -431,8 +471,9 @@ export default function ActualAdjustScreen() {
     createActual,
     event,
     isBig3,
-    normalizedDuration,
-    normalizedStartMinutes,
+    durationMinutes,
+    startMinutes,
+    goalContribution,
     selectedGoalId,
     selectedValue,
     note,
@@ -455,12 +496,16 @@ export default function ActualAdjustScreen() {
         title={event.title}
         titleValue={titleInput}
         timeLabel={timeLabel}
+        sleepStartLabel={formatMinutesToTime(startMinutes)}
+        sleepEndLabel={formatMinutesToTime(startMinutes + durationMinutes)}
+        isSleep={selectedCategory === 'sleep'}
         selectedCategory={selectedCategory}
         isBig3={isBig3}
         values={valuesOptions}
         selectedValue={selectedValue}
         linkedGoals={linkedGoals}
         selectedGoalId={selectedGoalId}
+        goalContribution={goalContribution}
         note={note}
         helperText={helperText}
         evidenceRows={evidenceRows}
@@ -476,19 +521,56 @@ export default function ActualAdjustScreen() {
               title: titleInput,
               description: event.description,
               category: event.category,
-              startMinutes: String(normalizedStartMinutes),
-              duration: String(normalizedDuration),
+              startMinutes: String(startMinutes),
+              duration: String(durationMinutes),
               meta: event.meta ? JSON.stringify(event.meta) : undefined,
               location: event.location ?? undefined,
             },
           });
         }}
+        onEditSleepStart={() => setIsSleepStartPickerOpen(true)}
+        onEditSleepEnd={() => setIsSleepEndPickerOpen(true)}
         onChangeTitle={setTitleInput}
         onChangeNote={setNote}
         onToggleBig3={setIsBig3}
         onSelectCategory={setSelectedCategory}
         onSelectValue={setSelectedValue}
-        onSelectGoal={setSelectedGoalId}
+        onSelectGoal={handleSelectGoal}
+        onSelectGoalContribution={setGoalContribution}
+      />
+      <TimePickerModal
+        visible={isSleepStartPickerOpen}
+        label="Sleep start"
+        initialTime={ymdMinutesToDate(selectedDateYmd, startMinutes)}
+        onConfirm={(time) => {
+          const nextMinutes = time.getHours() * 60 + time.getMinutes();
+          const currentEnd = startMinutes + durationMinutes;
+          if (nextMinutes >= currentEnd) {
+            setStartMinutes(nextMinutes);
+            setDurationMinutes(60);
+            setIsSleepStartPickerOpen(false);
+            return;
+          }
+          setStartMinutes(nextMinutes);
+          setDurationMinutes(Math.max(1, currentEnd - nextMinutes));
+          setIsSleepStartPickerOpen(false);
+        }}
+        onClose={() => setIsSleepStartPickerOpen(false)}
+      />
+      <TimePickerModal
+        visible={isSleepEndPickerOpen}
+        label="Sleep end"
+        initialTime={ymdMinutesToDate(selectedDateYmd, startMinutes + durationMinutes)}
+        onConfirm={(time) => {
+          const nextMinutes = time.getHours() * 60 + time.getMinutes();
+          if (nextMinutes <= startMinutes) {
+            Alert.alert('Sleep end time must be after the start time.');
+            return;
+          }
+          setDurationMinutes(Math.max(1, nextMinutes - startMinutes));
+          setIsSleepEndPickerOpen(false);
+        }}
+        onClose={() => setIsSleepEndPickerOpen(false)}
       />
     </>
   );

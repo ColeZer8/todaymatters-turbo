@@ -9,6 +9,7 @@ import {
 } from './queue';
 import type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
+import { supabase } from '@/lib/supabase/client';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
@@ -187,5 +188,87 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: 
 
   const remaining = (await peekPendingAndroidLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;
   return { uploaded, remaining };
+}
+
+/**
+ * Diagnostic function to check why Android background location might not be working.
+ * Returns detailed status of all prerequisites and identifies blocking issues.
+ */
+export async function getAndroidLocationDiagnostics(): Promise<{
+  support: AndroidLocationSupportStatus;
+  locationModule: boolean;
+  servicesEnabled: boolean;
+  foregroundPermission: string;
+  backgroundPermission: string;
+  taskStarted: boolean;
+  pendingSamples: number;
+  errors: string[];
+  canStart: boolean;
+}> {
+  const errors: string[] = [];
+  const diagnostics = {
+    support: getAndroidLocationSupportStatus(),
+    locationModule: false,
+    servicesEnabled: false,
+    foregroundPermission: 'unknown',
+    backgroundPermission: 'unknown',
+    taskStarted: false,
+    pendingSamples: 0,
+    errors,
+    canStart: false,
+  };
+
+  if (diagnostics.support !== 'available') {
+    errors.push(`Support status: ${diagnostics.support} (expected: 'available')`);
+    return diagnostics;
+  }
+
+  const Location = await loadExpoLocationAsync();
+  if (!Location) {
+    errors.push('Location module not loaded - native module missing or not available');
+    return diagnostics;
+  }
+  diagnostics.locationModule = true;
+
+  diagnostics.servicesEnabled = await Location.hasServicesEnabledAsync();
+  if (!diagnostics.servicesEnabled) {
+    errors.push('Location services disabled on device - enable in Settings > Location');
+  }
+
+  const fg = await Location.getForegroundPermissionsAsync();
+  diagnostics.foregroundPermission = fg.status;
+  if (fg.status !== 'granted') {
+    errors.push(`Foreground permission: ${fg.status} (required: 'granted')`);
+  }
+
+  const bg = await getBackgroundPermissionsSafeAsync(Location);
+  diagnostics.backgroundPermission = bg.status;
+  if (bg.status !== 'granted') {
+    errors.push(`Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`);
+  }
+
+  diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  if (!diagnostics.taskStarted && errors.length === 0) {
+    errors.push('Task not started despite all checks passing - unknown reason');
+  }
+
+  // Check pending samples
+  try {
+    const sessionResult = await supabase.auth.getSession();
+    const userId = sessionResult.data.session?.user?.id;
+    if (userId) {
+      const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
+      diagnostics.pendingSamples = pending.length;
+      if (pending.length > 0 && !diagnostics.taskStarted) {
+        errors.push(`Found ${pending.length} pending samples but task not started - samples may be stale`);
+      }
+    }
+  } catch (error) {
+    errors.push(`Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  diagnostics.canStart = errors.length === 0 && !diagnostics.taskStarted;
+
+  return diagnostics;
 }
 

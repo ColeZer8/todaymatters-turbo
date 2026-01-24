@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores';
 import {
   getAndroidInsightsSupportStatus,
   getUsageAccessAuthorizationStatusSafeAsync,
+  openUsageAccessSettingsSafeAsync,
 } from '@/lib/android-insights';
 import {
   getIosInsightsSupportStatus,
@@ -129,10 +130,11 @@ export default function PermissionsScreen() {
     const status = await getUsageAccessAuthorizationStatusSafeAsync();
     if (status === 'authorized') return true;
 
-    await Linking.openSettings();
+    // Open the specific Usage Access settings screen (not general Settings)
+    await openUsageAccessSettingsSafeAsync();
     Alert.alert(
       'Screen Time access required',
-      'Open App data and enable Screen Time (Usage Access) for TodayMatters, then return and try again.'
+      'Enable "Usage access" for TodayMatters in the settings screen that just opened, then return to the app.'
     );
     return false;
   }, []);

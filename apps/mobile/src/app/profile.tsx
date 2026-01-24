@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Activity,
   Bell,
@@ -63,16 +63,6 @@ type AccentTone = 'blue' | 'purple';
 
 type ProfileItem = { id: string; label: string; icon: LucideIcon; accent?: AccentTone };
 
-const GOALS: ProfileItem[] = [
-  { id: 'goal-1', label: 'Launch MVP', icon: Target, accent: 'blue' },
-  { id: 'goal-2', label: 'Run 5k', icon: Target, accent: 'blue' },
-];
-
-const INITIATIVES: ProfileItem[] = [
-  { id: 'initiative-1', label: 'Q4 Strategy', icon: Briefcase, accent: 'purple' },
-  { id: 'initiative-2', label: 'Team Hiring', icon: Briefcase, accent: 'purple' },
-];
-
 export default function ProfileScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -83,6 +73,10 @@ export default function ProfileScreen() {
   const signOut = useAuthStore((state) => state.signOut);
   const fullName = useOnboardingStore((s) => s.fullName);
   const setFullName = useOnboardingStore((s) => s.setFullName);
+  const goals = useOnboardingStore((s) => s.goals);
+  const initiatives = useOnboardingStore((s) => s.initiatives);
+  const setGoalsStore = useOnboardingStore((s) => s.setGoals);
+  const setInitiativesStore = useOnboardingStore((s) => s.setInitiatives);
   const requestAutoAssignAll = useReviewTimeStore((s) => s.requestAutoAssignAll);
 
   // Redirect to sign-in if user becomes unauthenticated
@@ -458,9 +452,23 @@ Update ID: ${diagnostics.updateId}`;
   const [draftFullName, setDraftFullName] = useState(fullName);
   const [coreValues, setCoreValues] = useState<string[]>([]);
   const [newValueText, setNewValueText] = useState('');
-  const [goals, setGoals] = useState<ProfileItem[]>(GOALS);
+  const goalItems = useMemo<ProfileItem[]>(
+    () =>
+      goals
+        .map((goal) => goal.trim())
+        .filter(Boolean)
+        .map((goal) => ({ id: goal, label: goal, icon: Target, accent: 'blue' })),
+    [goals]
+  );
   const [newGoalText, setNewGoalText] = useState('');
-  const [initiatives, setInitiatives] = useState<ProfileItem[]>(INITIATIVES);
+  const initiativeItems = useMemo<ProfileItem[]>(
+    () =>
+      initiatives
+        .map((initiative) => initiative.trim())
+        .filter(Boolean)
+        .map((initiative) => ({ id: initiative, label: initiative, icon: Briefcase, accent: 'purple' })),
+    [initiatives]
+  );
   const [newInitiativeText, setNewInitiativeText] = useState('');
   const [isLoadingValues, setIsLoadingValues] = useState(false);
   const [hasLoadedValues, setHasLoadedValues] = useState(false);
@@ -631,29 +639,23 @@ Update ID: ${diagnostics.updateId}`;
   const handleAddGoal = () => {
     const next = newGoalText.trim();
     if (!next) return;
-    setGoals((prev) => [
-      ...prev,
-      { id: `goal-${Date.now()}`, label: next, icon: Target, accent: 'blue' },
-    ]);
+    setGoalsStore(Array.from(new Set([...goals, next])));
     setNewGoalText('');
   };
 
   const handleRemoveGoal = (id: string) => {
-    setGoals((prev) => prev.filter((item) => item.id !== id));
+    setGoalsStore(goals.filter((goal) => goal !== id));
   };
 
   const handleAddInitiative = () => {
     const next = newInitiativeText.trim();
     if (!next) return;
-    setInitiatives((prev) => [
-      ...prev,
-      { id: `initiative-${Date.now()}`, label: next, icon: Briefcase, accent: 'purple' },
-    ]);
+    setInitiativesStore(Array.from(new Set([...initiatives, next])));
     setNewInitiativeText('');
   };
 
   const handleRemoveInitiative = (id: string) => {
-    setInitiatives((prev) => prev.filter((item) => item.id !== id));
+    setInitiativesStore(initiatives.filter((initiative) => initiative !== id));
   };
 
   return (
@@ -663,8 +665,8 @@ Update ID: ${diagnostics.updateId}`;
         role="Professional"
         badgeLabel="Pro Member"
         coreValues={coreValues}
-        goals={goals}
-        initiatives={initiatives}
+        goals={goalItems}
+        initiatives={initiativeItems}
         menuItems={menuItems}
         nameValue={draftFullName}
         onChangeName={setDraftFullName}

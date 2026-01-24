@@ -1,4 +1,4 @@
-import type { CalendarEventMeta, ScheduledEvent } from '@/stores';
+import type { CalendarEventMeta, ScheduledEvent, EventCategory } from '@/stores';
 import type {
   EvidenceBundle,
   HealthDailyRow,
@@ -29,6 +29,7 @@ const SLEEP_MAX_START_OFFSET_MINUTES = 120;
 const SLEEP_MIN_REMAINING_MINUTES = 30;
 const SLEEP_OVERRIDE_MIN_COVERAGE = 0.7;
 const SLEEP_OVERRIDE_MIN_MINUTES = 60;
+const LOCATION_MIN_BLOCK_MINUTES = 10;
 
 interface BuildActualDisplayEventsInput {
   ymd: string;
@@ -75,6 +76,23 @@ interface SleepOverrideInterval {
   topAppName: string | null;
 }
 
+interface ScreenTimeOverlapInfo {
+  totalMinutes: number;
+  topApp: string | null;
+  isDistraction: boolean;
+  isProductive: boolean;
+}
+
+interface LocationReplacementContext {
+  ymd: string;
+  locationBlocks: LocationBlock[];
+  usageSummary?: UsageSummary | null;
+  screenTimeSessions?: ScreenTimeSessionRow[] | null;
+  appCategoryOverrides?: AppCategoryOverrides;
+  dataQuality: ReturnType<typeof buildDataQualityMetrics>;
+  minMinutes: number;
+}
+
 export function buildActualDisplayEvents({
   ymd,
   plannedEvents,
@@ -92,6 +110,13 @@ export function buildActualDisplayEvents({
   confidenceThreshold = 0.6,
   allowAutoSuggestions = true,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
+  const todayYmd = (() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  })();
   const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly) : [];
   const dataQuality = buildDataQualityMetrics({ evidence, usageSummary });
   const plannedSorted = [...plannedEvents].sort((a, b) => a.startMinutes - b.startMinutes);
@@ -138,6 +163,20 @@ export function buildActualDisplayEvents({
     
     results.push(event);
     occupied.push({ start, end });
+  };
+
+  const removeSleepOverlaps = (start: number, end: number) => {
+    for (let i = results.length - 1; i >= 0; i -= 1) {
+      const existing = results[i];
+      if (existing.category !== 'sleep') continue;
+      const source = existing.meta?.source;
+      if (source === 'user' || source === 'actual_adjust') continue;
+      if (!intervalsOverlap(start, end, existing.startMinutes, existing.startMinutes + existing.duration)) {
+        continue;
+      }
+      results.splice(i, 1);
+      occupied.splice(i, 1);
+    }
   };
 
   if (derivedActualEvents && derivedActualEvents.length > 0) {
@@ -187,10 +226,11 @@ export function buildActualDisplayEvents({
     for (const block of actualBlocks) {
       const duration = Math.max(1, block.endMinutes - block.startMinutes);
       if (duration < minEvidenceBlockMinutes) continue;
+      const isScreenTimeBlock = block.source === 'screen_time';
       const meta: CalendarEventMeta = {
         category: block.category,
         source: 'evidence',
-        kind: 'evidence_block',
+        kind: isScreenTimeBlock ? 'screen_time' : 'evidence_block',
         confidence: block.confidence ?? 0.55,
         dataQuality,
         evidence: {
@@ -199,7 +239,7 @@ export function buildActualDisplayEvents({
           topApp: block.evidence.screenTime?.topApps[0]?.app ?? null,
         },
       };
-      addIfFree({
+      const nextEvent: ScheduledEvent = {
         id: `${DERIVED_EVIDENCE_PREFIX}${block.id}`,
         title: block.title,
         description: block.description ?? '',
@@ -207,11 +247,48 @@ export function buildActualDisplayEvents({
         duration,
         category: block.category,
         meta,
-      });
+      };
+
+      if (isScreenTimeBlock) {
+        const start = nextEvent.startMinutes;
+        const end = start + nextEvent.duration;
+        const overlapsSleep = results.some(
+          (event) =>
+            event.category === 'sleep' &&
+            intervalsOverlap(start, end, event.startMinutes, event.startMinutes + event.duration),
+        );
+        const overlapsLocation = locationBlocks.some((block) =>
+          intervalsOverlap(start, end, block.startMinutes, block.endMinutes),
+        );
+        if (overlapsSleep) {
+          removeSleepOverlaps(start, end);
+          addIfFree(nextEvent);
+          continue;
+        }
+        if (overlapsLocation) {
+          continue;
+        }
+      }
+
+      addIfFree(nextEvent);
     }
   }
 
+  const hasEvidence =
+    Boolean(usageSummary) ||
+    Boolean(evidence?.locationHourly?.length) ||
+    Boolean(evidence?.screenTimeSessions?.length) ||
+    Boolean(evidence?.healthDaily) ||
+    actualBlocks.length > 0 ||
+    (derivedActualEvents?.length ?? 0) > 0 ||
+    actualEvents.length > 0;
+
+  const shouldDerivePlanned = ymd <= todayYmd || hasEvidence;
+
   for (const planned of plannedSorted) {
+    if (!shouldDerivePlanned) {
+      break;
+    }
     let plannedForDerivation = planned;
     let sleepAdjustment: SleepStartAdjustment | null = null;
     const isSleepOverridden =
@@ -299,6 +376,15 @@ export function buildActualDisplayEvents({
     healthDaily: evidence?.healthDaily ?? null,
     dataQuality,
   });
+  const withLocationFilled = replaceUnknownWithLocationEvidence(withSleepFilled, {
+    ymd,
+    locationBlocks,
+    usageSummary,
+    screenTimeSessions: evidence?.screenTimeSessions ?? null,
+    appCategoryOverrides,
+    dataQuality,
+    minMinutes: minEvidenceBlockMinutes,
+  });
   const allowGapFilling = gapFillingPreference !== 'manual';
   const allowProductiveFill = gapFillingPreference === 'aggressive';
   const allowTransitions = gapFillingPreference === 'aggressive';
@@ -311,12 +397,12 @@ export function buildActualDisplayEvents({
 
   const withProductiveFilled = allowProductiveFill
     ? replaceUnknownWithProductiveUsage(
-        withSleepFilled,
+        withLocationFilled,
         usageSummary,
         minEvidenceBlockMinutes,
         appCategoryOverrides,
       )
-    : withSleepFilled;
+    : withLocationFilled;
   const withTransitions = allowTransitions
     ? replaceUnknownWithTransitions(withProductiveFilled, {
         locationBlocks,
@@ -360,14 +446,27 @@ export function buildActualDisplayEvents({
  */
 function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
   const sorted = [...events].sort((a, b) => {
+    const aMeta = a.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
+    const bMeta = b.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
+
+    const aIsUserActual = Boolean(aMeta?.actual) || aMeta?.source === 'user' || aMeta?.source === 'actual_adjust';
+    const bIsUserActual = Boolean(bMeta?.actual) || bMeta?.source === 'user' || bMeta?.source === 'actual_adjust';
+    if (aIsUserActual && !bIsUserActual) return -1;
+    if (!aIsUserActual && bIsUserActual) return 1;
+
+    const aIsDerived = aMeta?.source === 'derived';
+    const bIsDerived = bMeta?.source === 'derived';
+    if (!aIsDerived && bIsDerived) return -1;
+    if (aIsDerived && !bIsDerived) return 1;
+
     // Sort by priority: non-unknown events first, then by confidence, then by start time
     if (a.category !== 'unknown' && b.category === 'unknown') return -1;
     if (a.category === 'unknown' && b.category !== 'unknown') return 1;
-    
-    const aConfidence = (a.meta as { confidence?: number } | undefined)?.confidence ?? 0;
-    const bConfidence = (b.meta as { confidence?: number } | undefined)?.confidence ?? 0;
+
+    const aConfidence = aMeta?.confidence ?? 0;
+    const bConfidence = bMeta?.confidence ?? 0;
     if (aConfidence !== bConfidence) return bConfidence - aConfidence; // Higher confidence first
-    
+
     return a.startMinutes - b.startMinutes;
   });
 
@@ -828,6 +927,104 @@ function replaceUnknownWithSleepSchedule(
   return mergeAdjacentUnknowns(updated);
 }
 
+function replaceUnknownWithLocationEvidence(
+  events: ScheduledEvent[],
+  context: LocationReplacementContext,
+): ScheduledEvent[] {
+  const { locationBlocks, minMinutes } = context;
+  if (locationBlocks.length === 0) return events;
+
+  const sorted = [...events].sort((a, b) => a.startMinutes - b.startMinutes);
+  const updated: ScheduledEvent[] = [];
+  let unknownCounter = 0;
+
+  for (const event of sorted) {
+    if (event.category !== 'unknown') {
+      updated.push(event);
+      continue;
+    }
+
+    const start = clampMinutes(event.startMinutes);
+    const end = clampMinutes(event.startMinutes + event.duration);
+    if (end <= start) continue;
+
+    const startLocation = findLocationLabelAtMinute(locationBlocks, start);
+    const endLocation = findLocationLabelAtMinute(locationBlocks, Math.max(start, end - 1));
+    const startLabel = startLocation.label?.trim() ?? null;
+    const endLabel = endLocation.label?.trim() ?? null;
+    const gapMinutes = end - start;
+
+    const canCommute =
+      startLabel &&
+      endLabel &&
+      startLabel.toLowerCase() !== endLabel.toLowerCase() &&
+      gapMinutes >= 15 &&
+      gapMinutes <= 90;
+
+    if (canCommute) {
+      updated.push(
+        buildCommuteEvent({
+          startMinutes: start,
+          duration: gapMinutes,
+          fromLabel: startLabel,
+          toLabel: endLabel,
+          context,
+        }),
+      );
+      continue;
+    }
+
+    const overlaps = locationBlocks
+      .filter((block) => intervalsOverlap(start, end, block.startMinutes, block.endMinutes))
+      .sort((a, b) => a.startMinutes - b.startMinutes);
+
+    if (overlaps.length === 0) {
+      updated.push(event);
+      continue;
+    }
+
+    let cursor = start;
+    for (const block of overlaps) {
+      const overlapStart = Math.max(cursor, block.startMinutes, start);
+      const overlapEnd = Math.min(end, block.endMinutes);
+      if (overlapEnd <= overlapStart) continue;
+
+      const duration = overlapEnd - overlapStart;
+      if (duration < minMinutes) {
+        updated.push(buildUnknownEvent(overlapStart, duration, unknownCounter++));
+        cursor = Math.max(cursor, overlapEnd);
+        continue;
+      }
+
+      const locationLabel = block.placeLabel?.trim() ?? '';
+      const placeCategory = block.placeCategory?.trim() ?? null;
+      if (!locationLabel && !placeCategory) {
+        updated.push(buildUnknownEvent(overlapStart, duration, unknownCounter++));
+        cursor = Math.max(cursor, overlapEnd);
+        continue;
+      }
+
+      updated.push(
+        buildLocationEvent({
+          startMinutes: overlapStart,
+          duration,
+          locationLabel: locationLabel || placeCategory || 'Unknown location',
+          placeCategory,
+          context,
+          uniqueId: unknownCounter++,
+        }),
+      );
+      cursor = Math.max(cursor, overlapEnd);
+    }
+
+    if (cursor < end) {
+      updated.push(buildUnknownEvent(cursor, end - cursor, unknownCounter++));
+    }
+  }
+
+  return mergeAdjacentUnknowns(updated);
+}
+
 function replaceUnknownWithProductiveUsage(
   events: ScheduledEvent[],
   usageSummary: UsageSummary | null | undefined,
@@ -1022,6 +1219,164 @@ function attachDataQuality(
   });
 }
 
+function buildCommuteEvent(options: {
+  startMinutes: number;
+  duration: number;
+  fromLabel: string;
+  toLabel: string;
+  context: LocationReplacementContext;
+}): ScheduledEvent {
+  const { startMinutes, duration, fromLabel, toLabel, context } = options;
+  const screenTime = getScreenTimeOverlapInfo({
+    ymd: context.ymd,
+    startMinutes,
+    endMinutes: startMinutes + duration,
+    usageSummary: context.usageSummary,
+    screenTimeSessions: context.screenTimeSessions,
+    appCategoryOverrides: context.appCategoryOverrides,
+  });
+  const description = buildLocationDescription({
+    base: `${fromLabel} → ${toLabel}`,
+    screenTime,
+  });
+  const meta: CalendarEventMeta = {
+    category: 'comm',
+    source: 'derived',
+    kind: 'transition_commute',
+    confidence: 0.5,
+    dataQuality: context.dataQuality,
+    evidence: {
+      locationLabel: `${fromLabel} → ${toLabel}`,
+      screenTimeMinutes: screenTime?.totalMinutes,
+      topApp: screenTime?.topApp ?? null,
+    },
+  };
+
+  return {
+    id: `${DERIVED_EVIDENCE_PREFIX}commute_${startMinutes}_${duration}`,
+    title: 'Driving',
+    description,
+    startMinutes,
+    duration,
+    category: 'comm',
+    meta,
+  };
+}
+
+function buildLocationEvent(options: {
+  startMinutes: number;
+  duration: number;
+  locationLabel: string;
+  placeCategory: string | null;
+  context: LocationReplacementContext;
+  uniqueId: number;
+}): ScheduledEvent {
+  const { startMinutes, duration, locationLabel, placeCategory, context, uniqueId } = options;
+  const resolved = resolveLocationDetails(locationLabel, placeCategory);
+  const screenTime = getScreenTimeOverlapInfo({
+    ymd: context.ymd,
+    startMinutes,
+    endMinutes: startMinutes + duration,
+    usageSummary: context.usageSummary,
+    screenTimeSessions: context.screenTimeSessions,
+    appCategoryOverrides: context.appCategoryOverrides,
+  });
+  const description = buildLocationDescription({
+    base: resolved.description,
+    screenTime,
+  });
+  const meta: CalendarEventMeta = {
+    category: resolved.category,
+    source: 'derived',
+    kind: 'location_inferred',
+    confidence: 0.45,
+    dataQuality: context.dataQuality,
+    evidence: {
+      locationLabel,
+      placeCategory,
+      screenTimeMinutes: screenTime?.totalMinutes,
+      topApp: screenTime?.topApp ?? null,
+    },
+  };
+
+  return {
+    id: `${DERIVED_EVIDENCE_PREFIX}location_${startMinutes}_${duration}_${uniqueId}`,
+    title: resolved.title,
+    description,
+    location: locationLabel,
+    startMinutes,
+    duration,
+    category: resolved.category,
+    meta,
+  };
+}
+
+function resolveLocationDetails(locationLabel: string, placeCategory: string | null): {
+  title: string;
+  description: string;
+  category: EventCategory;
+} {
+  const raw = [locationLabel, placeCategory].find(Boolean) ?? 'Location';
+  const label = formatPlaceLabel(raw);
+  const category = mapPlaceToCategory(locationLabel, placeCategory);
+  const description = placeCategory && formatPlaceLabel(placeCategory) !== label ? formatPlaceLabel(placeCategory) : '';
+  return { title: label, description, category };
+}
+
+function formatPlaceLabel(value: string): string {
+  const cleaned = value.replace(/[_-]+/g, ' ').trim();
+  if (!cleaned) return 'Location';
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function mapPlaceToCategory(locationLabel: string, placeCategory: string | null): EventCategory {
+  const combined = `${locationLabel} ${placeCategory ?? ''}`.toLowerCase();
+  if (combined.includes('coffee') || combined.includes('cafe') || combined.includes('restaurant') || combined.includes('diner') || combined.includes('food') || combined.includes('bar')) {
+    return 'meal';
+  }
+  if (combined.includes('gym') || combined.includes('fitness') || combined.includes('workout') || combined.includes('yoga') || combined.includes('park')) {
+    return 'health';
+  }
+  if (combined.includes('office') || combined.includes('work') || combined.includes('cowork') || combined.includes('studio') || combined.includes('school') || combined.includes('university')) {
+    return 'work';
+  }
+  if (combined.includes('church') || combined.includes('chapel') || combined.includes('temple')) {
+    return 'routine';
+  }
+  if (combined.includes('home')) {
+    return 'family';
+  }
+  if (combined.includes('bank') || combined.includes('finance')) {
+    return 'finance';
+  }
+  if (combined.includes('airport') || combined.includes('station') || combined.includes('transit') || combined.includes('travel')) {
+    return 'travel';
+  }
+  return 'free';
+}
+
+function buildLocationDescription(options: { base: string; screenTime: ScreenTimeOverlapInfo | null }): string {
+  const parts: string[] = [];
+  const base = options.base.trim();
+  if (base) parts.push(base);
+  const screenTime = options.screenTime;
+  if (screenTime && screenTime.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
+    const minutes = Math.round(screenTime.totalMinutes);
+    if (screenTime.isDistraction) {
+      parts.push(`Distracted: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+    } else if (screenTime.isProductive) {
+      parts.push(`Productive: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+    } else {
+      parts.push(`Phone use: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+    }
+  }
+  return parts.join(' • ');
+}
+
 interface SleepInterruptionSummary {
   interruptionCount: number;
   interruptionMinutes: number;
@@ -1071,6 +1426,73 @@ function buildSleepInterruptionSummaryFromSessions(
     interruptionMinutes,
     topAppName,
   };
+}
+
+function getScreenTimeOverlapInfo(options: {
+  ymd: string;
+  startMinutes: number;
+  endMinutes: number;
+  usageSummary?: UsageSummary | null;
+  screenTimeSessions?: ScreenTimeSessionRow[] | null;
+  appCategoryOverrides?: AppCategoryOverrides;
+}): ScreenTimeOverlapInfo | null {
+  const { ymd, startMinutes, endMinutes, usageSummary, screenTimeSessions, appCategoryOverrides } = options;
+  if (endMinutes <= startMinutes) return null;
+
+  if (screenTimeSessions && screenTimeSessions.length > 0) {
+    const overlap = buildScreenTimeOverlapFromSessions(screenTimeSessions, ymd, startMinutes, endMinutes);
+    if (!overlap || overlap.totalMinutes <= 0) return null;
+    const classification = overlap.topApp ? classifyAppUsage(overlap.topApp, appCategoryOverrides) : null;
+    return {
+      totalMinutes: overlap.totalMinutes,
+      topApp: overlap.topApp,
+      isDistraction: classification?.isDistraction ?? false,
+      isProductive: classification?.isProductive ?? false,
+    };
+  }
+
+  if (usageSummary) {
+    const usageInfo = getUsageOverlapInfo(usageSummary, startMinutes, endMinutes, appCategoryOverrides);
+    if (!usageInfo) return null;
+    return {
+      totalMinutes: usageInfo.totalMinutes,
+      topApp: usageInfo.topApp,
+      isDistraction: usageInfo.isDistraction,
+      isProductive: usageInfo.isProductive,
+    };
+  }
+
+  return null;
+}
+
+function buildScreenTimeOverlapFromSessions(
+  sessions: ScreenTimeSessionRow[],
+  ymd: string,
+  startMinutes: number,
+  endMinutes: number,
+): { totalMinutes: number; topApp: string | null } | null {
+  if (endMinutes <= startMinutes || sessions.length === 0) return null;
+  const dayStart = ymdToDate(ymd);
+  const appUsage = new Map<string, number>();
+
+  for (const session of sessions) {
+    const sessionStart = parseDbTimestamp(session.started_at);
+    const sessionEnd = parseDbTimestamp(session.ended_at);
+    const sessionStartMinutes = (sessionStart.getTime() - dayStart.getTime()) / 60_000;
+    const sessionEndMinutes = (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
+    const overlapStart = Math.max(startMinutes, sessionStartMinutes);
+    const overlapEnd = Math.min(endMinutes, sessionEndMinutes);
+    if (overlapEnd <= overlapStart) continue;
+    const overlapMinutes = overlapEnd - overlapStart;
+    const appName = session.display_name || session.app_id;
+    const current = appUsage.get(appName) ?? 0;
+    appUsage.set(appName, current + overlapMinutes);
+  }
+
+  if (appUsage.size === 0) return null;
+  const totalMinutes = Array.from(appUsage.values()).reduce((sum, minutes) => sum + minutes, 0);
+  const topApp = Array.from(appUsage.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return { totalMinutes, topApp };
 }
 
 function buildSleepInterruptionSummary(

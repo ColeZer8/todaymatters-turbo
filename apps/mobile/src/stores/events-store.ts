@@ -23,6 +23,13 @@ export interface CalendarEventMeta {
   category: EventCategory;
   isBig3?: boolean;
   location?: string | null;
+  value_label?: string | null;
+  goal_title?: string | null;
+  initiative_title?: string | null;
+  goal_contribution?: number | null;
+  note?: string | null;
+  source_provider?: string | null;
+  external_id?: string | null;
   source?: 'user' | 'system' | 'evidence' | 'derived';
   plannedEventId?: string;
   kind?:
@@ -36,7 +43,8 @@ export interface CalendarEventMeta {
     | 'evidence_block'
     | 'transition_commute'
     | 'transition_prep'
-    | 'transition_wind_down';
+    | 'transition_wind_down'
+    | 'location_inferred';
   startYmd?: string;
   actual?: boolean;
   tags?: string[];

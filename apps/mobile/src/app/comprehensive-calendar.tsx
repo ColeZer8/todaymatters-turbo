@@ -179,7 +179,18 @@ export default function ComprehensiveCalendarScreen() {
         const sourceId = event.meta?.source_id;
         if (!sourceId || typeof sourceId !== 'string') continue;
         if (!sourceId.startsWith('derived_actual:') && !sourceId.startsWith('derived_evidence:')) continue;
-        const hasOverlap = events.some((other) => other.id !== event.id && overlaps(event, other));
+        const hasOverlap = events.some((other) => {
+          if (other.id === event.id) return false;
+          const otherSourceId = other.meta?.source_id;
+          if (!otherSourceId || typeof otherSourceId !== 'string') return false;
+          if (!otherSourceId.startsWith('derived_actual:') && !otherSourceId.startsWith('derived_evidence:')) {
+            return false;
+          }
+          if (!overlaps(event, other)) return false;
+          const eventKind = event.meta?.kind;
+          const otherKind = other.meta?.kind;
+          return Boolean(eventKind && otherKind && eventKind === otherKind);
+        });
         if (hasOverlap) {
           toRemove.push(event.id);
         }
@@ -410,12 +421,13 @@ export default function ComprehensiveCalendarScreen() {
       const result = verificationResults.get(event.id);
       return result?.status === 'contradicted' || result?.status === 'distracted';
     });
-    if (flagged.length === 0) return;
-    const alertKey = flagged.map((event) => event.id).join('|');
+    const actionable = flagged.filter((event) => event.category !== 'sleep');
+    if (actionable.length === 0) return;
+    const alertKey = actionable.map((event) => event.id).join('|');
     if (alertKey === lastAlertRef.current) return;
     lastAlertRef.current = alertKey;
-    const preview = flagged.slice(0, 3).map((event) => event.title).join(', ');
-    const suffix = flagged.length > 3 ? '…' : '';
+    const preview = actionable.slice(0, 3).map((event) => event.title).join(', ');
+    const suffix = actionable.length > 3 ? '…' : '';
     Alert.alert('Verification alert', `We found conflicts for: ${preview}${suffix}`);
   }, [plannedEvents, userPreferences.verificationAlerts, verificationResults]);
 

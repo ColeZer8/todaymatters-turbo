@@ -5,6 +5,9 @@ import { fetchGmailEmailEvents } from '@/lib/supabase/services';
 import {
     formatCommunicationTime,
     formatCommunicationTimestamp,
+    getDisplayNameFromFromAddress,
+    getGmailFromAddress,
+    getGmailSubject,
     getInitialsFromName,
 } from '@/lib/communication/communication-utils';
 
@@ -24,23 +27,31 @@ export default function CommunicationScreen() {
 
         (async () => {
             try {
-                const rows = await fetchGmailEmailEvents(userId, { limit: 75, includeRead: true });
+                const rows = await fetchGmailEmailEvents(userId, {
+                    limit: 75,
+                    includeRead: true,
+                    includeArchived: false,
+                    sinceHours: 24,
+                });
                 if (cancelled) return;
 
                 const mapped: Communication[] = rows.map((row) => {
-                    const subject = row.title?.trim() || '(No subject)';
+                    const subject =
+                        row.title?.trim() || getGmailSubject(row.meta) || '(No subject)';
+                    const fromAddress = getGmailFromAddress(row.meta);
+                    const senderName = getDisplayNameFromFromAddress(fromAddress);
                     const message = subject;
                     const time = formatCommunicationTime(row.created_at);
                     const receivedAt = formatCommunicationTimestamp(row.created_at);
 
                     return {
                         id: row.id,
-                        name: 'Gmail',
+                        name: senderName,
                         message,
                         time,
                         receivedAt,
                         unread: isGmailUnreadFromMeta(row.meta),
-                        initials: getInitialsFromName('Gmail'),
+                        initials: getInitialsFromName(senderName),
                         source: 'gmail',
                     };
                 });

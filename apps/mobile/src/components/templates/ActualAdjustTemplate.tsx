@@ -15,12 +15,16 @@ export interface ActualAdjustTemplateProps {
   title: string;
   titleValue: string;
   timeLabel: string;
+  sleepStartLabel?: string;
+  sleepEndLabel?: string;
+  isSleep?: boolean;
   selectedCategory: EventCategory;
   isBig3: boolean;
   values: string[];
   selectedValue: string | null;
   linkedGoals: Array<{ id: string; label: string }>;
   selectedGoalId: string | null;
+  goalContribution: number | null;
   note: string;
   helperText: string;
   evidenceRows?: Array<{ label: string; value: string }>;
@@ -29,12 +33,15 @@ export interface ActualAdjustTemplateProps {
   onCancel: () => void;
   onSave: () => void;
   onSplit?: () => void;
+  onEditSleepStart?: () => void;
+  onEditSleepEnd?: () => void;
   onChangeTitle: (value: string) => void;
   onChangeNote: (value: string) => void;
   onToggleBig3: (value: boolean) => void;
   onSelectCategory: (value: EventCategory) => void;
   onSelectValue: (value: string | null) => void;
   onSelectGoal: (value: string | null) => void;
+  onSelectGoalContribution: (value: number | null) => void;
 }
 
 const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
@@ -51,12 +58,16 @@ export const ActualAdjustTemplate = ({
   title,
   titleValue,
   timeLabel,
+  sleepStartLabel,
+  sleepEndLabel,
+  isSleep = false,
   selectedCategory,
   isBig3,
   values,
   selectedValue,
   linkedGoals,
   selectedGoalId,
+  goalContribution,
   note,
   helperText,
   evidenceRows = [],
@@ -65,12 +76,15 @@ export const ActualAdjustTemplate = ({
   onCancel,
   onSave,
   onSplit,
+  onEditSleepStart,
+  onEditSleepEnd,
   onChangeTitle,
   onChangeNote,
   onToggleBig3,
   onSelectCategory,
   onSelectValue,
   onSelectGoal,
+  onSelectGoalContribution,
 }: ActualAdjustTemplateProps) => {
   const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(false);
   const insets = useSafeAreaInsets();
@@ -129,6 +143,37 @@ export const ActualAdjustTemplate = ({
             </Pressable>
           )}
         </View>
+
+        {isSleep && (
+          <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+            <Text className="text-[13px] font-semibold text-[#111827]">Sleep timing</Text>
+            <Text className="mt-1 text-[12px] text-[#64748B]">
+              Adjust the start and end time to match when you actually slept.
+            </Text>
+            <View className="mt-3 flex-row gap-3">
+              <Pressable
+                onPress={onEditSleepStart}
+                className="flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <Text className="text-[11px] font-semibold text-[#64748B]">Start</Text>
+                <Text className="mt-1 text-[14px] font-semibold text-[#111827]">
+                  {sleepStartLabel ?? 'Set time'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onEditSleepEnd}
+                className="flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3"
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <Text className="text-[11px] font-semibold text-[#64748B]">End</Text>
+                <Text className="mt-1 text-[14px] font-semibold text-[#111827]">
+                  {sleepEndLabel ?? 'Set time'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
           <View className="flex-row items-center justify-between">
@@ -236,6 +281,42 @@ export const ActualAdjustTemplate = ({
             })}
           </View>
         </View>
+
+        {selectedGoalId && (
+          <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+            <Text className="text-[13px] font-semibold text-[#111827]">Contribution</Text>
+            <Text className="mt-1 text-[12px] text-[#64748B]">
+              How much did this activity contribute to that goal?
+            </Text>
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              {[
+                { label: 'Not set', value: null },
+                { label: 'Partial (50%)', value: 50 },
+                { label: 'Complete (100%)', value: 100 },
+              ].map((option) => {
+                const isSelected = goalContribution === option.value;
+                return (
+                  <Pressable
+                    key={option.label}
+                    onPress={() => onSelectGoalContribution(option.value)}
+                    className={`rounded-full border px-3 py-2 ${
+                      isSelected ? 'border-[#6366F1] bg-[#EEF2FF]' : 'border-[#E2E8F0] bg-white'
+                    }`}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
+                    <Text
+                      className={`text-[12px] font-semibold ${
+                        isSelected ? 'text-[#4338CA]' : 'text-[#64748B]'
+                      }`}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <View className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
           <Text className="text-[13px] font-semibold text-[#111827]">Tell us what really happened</Text>

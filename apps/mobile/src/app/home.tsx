@@ -175,7 +175,12 @@ function HomeScreenInner() {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchGmailEmailEvents(user.id, { includeRead: false, limit: 30 });
+        const rows = await fetchGmailEmailEvents(user.id, {
+          includeRead: false,
+          includeArchived: false,
+          sinceHours: 24,
+          limit: 30,
+        });
         if (cancelled) return;
 
         const count = rows.length;
