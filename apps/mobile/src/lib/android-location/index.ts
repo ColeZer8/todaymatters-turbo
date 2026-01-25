@@ -110,24 +110,35 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
 }
 
 export async function startAndroidBackgroundLocationAsync(): Promise<void> {
+  console.log('📍 [AndroidLocation] startAndroidBackgroundLocationAsync called');
+
   const support = getAndroidLocationSupportStatus();
+  console.log(`📍 [AndroidLocation] support status: ${support}`);
   if (support !== 'available') return;
 
   const Location = await loadExpoLocationAsync();
-  if (!Location) return;
+  if (!Location) {
+    console.log('📍 [AndroidLocation] Location module not loaded');
+    return;
+  }
+  console.log('📍 [AndroidLocation] Location module loaded');
 
   const servicesEnabled = await Location.hasServicesEnabledAsync();
+  console.log(`📍 [AndroidLocation] servicesEnabled: ${servicesEnabled}`);
   if (!servicesEnabled) return;
 
   // IMPORTANT: Do not auto-request permissions here; onboarding should drive prompts.
   const fg = await Location.getForegroundPermissionsAsync();
   const bg = await getBackgroundPermissionsSafeAsync(Location);
+  console.log(`📍 [AndroidLocation] foreground permission: ${fg.status}, background permission: ${bg.status}`);
   if (fg.status !== 'granted') return;
   if (bg.status !== 'granted') return;
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  console.log(`📍 [AndroidLocation] alreadyStarted: ${alreadyStarted}`);
   if (alreadyStarted) return;
 
+  console.log('📍 [AndroidLocation] Starting location updates...');
   await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
     accuracy: Location.Accuracy.Balanced,
     distanceInterval: 40,
@@ -140,6 +151,7 @@ export async function startAndroidBackgroundLocationAsync(): Promise<void> {
       notificationColor: '#2563EB',
     },
   });
+  console.log('📍 [AndroidLocation] Location updates started successfully');
 }
 
 export async function stopAndroidBackgroundLocationAsync(): Promise<void> {
@@ -193,6 +205,7 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: 
 /**
  * Diagnostic function to check why Android background location might not be working.
  * Returns detailed status of all prerequisites and identifies blocking issues.
+ * Logs detailed info for production debugging.
  */
 export async function getAndroidLocationDiagnostics(): Promise<{
   support: AndroidLocationSupportStatus;
@@ -205,6 +218,8 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   errors: string[];
   canStart: boolean;
 }> {
+  console.log('📍 [AndroidLocation] === DIAGNOSTICS START ===');
+
   const errors: string[] = [];
   const diagnostics = {
     support: getAndroidLocationSupportStatus(),
@@ -218,36 +233,47 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     canStart: false,
   };
 
+  console.log(`📍 [AndroidLocation] Support status: ${diagnostics.support}`);
+
   if (diagnostics.support !== 'available') {
     errors.push(`Support status: ${diagnostics.support} (expected: 'available')`);
+    console.log(`📍 [AndroidLocation] RETURNING EARLY - support not available`);
+    console.log('📍 [AndroidLocation] === DIAGNOSTICS END ===');
     return diagnostics;
   }
 
   const Location = await loadExpoLocationAsync();
   if (!Location) {
     errors.push('Location module not loaded - native module missing or not available');
+    console.log(`📍 [AndroidLocation] Location module FAILED to load`);
+    console.log('📍 [AndroidLocation] === DIAGNOSTICS END ===');
     return diagnostics;
   }
   diagnostics.locationModule = true;
+  console.log(`📍 [AndroidLocation] Location module loaded: true`);
 
   diagnostics.servicesEnabled = await Location.hasServicesEnabledAsync();
+  console.log(`📍 [AndroidLocation] Services enabled: ${diagnostics.servicesEnabled}`);
   if (!diagnostics.servicesEnabled) {
     errors.push('Location services disabled on device - enable in Settings > Location');
   }
 
   const fg = await Location.getForegroundPermissionsAsync();
   diagnostics.foregroundPermission = fg.status;
+  console.log(`📍 [AndroidLocation] Foreground permission: ${fg.status}, canAskAgain: ${fg.canAskAgain}`);
   if (fg.status !== 'granted') {
     errors.push(`Foreground permission: ${fg.status} (required: 'granted')`);
   }
 
   const bg = await getBackgroundPermissionsSafeAsync(Location);
   diagnostics.backgroundPermission = bg.status;
+  console.log(`📍 [AndroidLocation] Background permission: ${bg.status}, canAskAgain: ${bg.canAskAgain}`);
   if (bg.status !== 'granted') {
     errors.push(`Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`);
   }
 
   diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  console.log(`📍 [AndroidLocation] Task started: ${diagnostics.taskStarted}`);
   if (!diagnostics.taskStarted && errors.length === 0) {
     errors.push('Task not started despite all checks passing - unknown reason');
   }
@@ -256,18 +282,26 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   try {
     const sessionResult = await supabase.auth.getSession();
     const userId = sessionResult.data.session?.user?.id;
+    console.log(`📍 [AndroidLocation] User ID for samples check: ${userId ? userId.substring(0, 8) + '...' : 'null'}`);
     if (userId) {
       const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
       diagnostics.pendingSamples = pending.length;
+      console.log(`📍 [AndroidLocation] Pending samples: ${pending.length}`);
       if (pending.length > 0 && !diagnostics.taskStarted) {
         errors.push(`Found ${pending.length} pending samples but task not started - samples may be stale`);
       }
     }
   } catch (error) {
-    errors.push(`Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    errors.push(`Failed to check pending samples: ${errorMsg}`);
+    console.log(`📍 [AndroidLocation] Pending samples check FAILED: ${errorMsg}`);
   }
 
   diagnostics.canStart = errors.length === 0 && !diagnostics.taskStarted;
+
+  console.log(`📍 [AndroidLocation] Can start: ${diagnostics.canStart}`);
+  console.log(`📍 [AndroidLocation] Errors: ${errors.length > 0 ? errors.join(', ') : 'none'}`);
+  console.log('📍 [AndroidLocation] === DIAGNOSTICS END ===');
 
   return diagnostics;
 }

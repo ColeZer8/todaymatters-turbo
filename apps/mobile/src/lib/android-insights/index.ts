@@ -3,11 +3,13 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import {
   getUsageAccessAuthorizationStatusAsync,
   getUsageSummaryAsync,
+  getUsageStatsDiagnosticsAsync,
   isAndroidInsightsNativeModuleAvailable,
   openUsageAccessSettingsAsync,
   type UsageAccessAuthorizationStatus,
   type UsageRangeKey,
   type UsageSummary,
+  type UsageStatsDiagnostics,
   // Health Connect (stubbed for now)
   getHealthAuthorizationStatusAsync,
   getHealthSummaryAsync,
@@ -26,6 +28,7 @@ export {
   type UsageAccessAuthorizationStatus,
   type UsageRangeKey,
   type UsageSummary,
+  type UsageStatsDiagnostics,
   type HealthSummary,
   type HealthAuthorizationStatus,
   type WorkoutSummary,
@@ -156,6 +159,16 @@ export async function getUsageSummarySafeAsync(range: UsageRangeKey): Promise<Us
   const support = getAndroidInsightsSupportStatus();
   if (support !== 'available') return null;
   return await getUsageSummaryAsync(range);
+}
+
+/**
+ * Get comprehensive diagnostics for debugging usage stats issues in production.
+ * Logs detailed information to Android logcat and returns a structured response.
+ */
+export async function getUsageStatsDiagnosticsSafeAsync(): Promise<UsageStatsDiagnostics | null> {
+  const support = getAndroidInsightsSupportStatus();
+  if (support !== 'available') return null;
+  return await getUsageStatsDiagnosticsAsync();
 }
 
 

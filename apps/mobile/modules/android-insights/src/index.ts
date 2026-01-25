@@ -70,6 +70,38 @@ export interface WorkoutSummary {
 
 export type HealthAuthorizationStatus = 'notDetermined' | 'denied' | 'authorized';
 
+export interface UsageStatsDiagnostics {
+  diagnosticsVersion: number;
+  timestamp: string;
+  buildSdkInt: number;
+  buildRelease: string;
+  buildManufacturer: string;
+  buildModel: string;
+  minSdkRequired: number;
+  sdkSupported: boolean;
+  reactContextAvailable: boolean;
+  packageName?: string;
+  processUid?: number;
+  appOpsMode?: number;
+  appOpsModeString?: string;
+  usageAccessGranted?: boolean;
+  appOpsError?: string;
+  usageStatsManagerAvailable?: boolean;
+  dailyStatsCount?: number;
+  bestStatsCount?: number;
+  weeklyStatsCount?: number;
+  usageEventsCount?: number;
+  foregroundEventsCount?: number;
+  backgroundEventsCount?: number;
+  queryEventsError?: string;
+  appsWithForegroundTime?: number;
+  topAppPackage?: string;
+  topAppForegroundMs?: number;
+  topAppLastTimeUsed?: number;
+  usageStatsError?: string;
+  errors: string[];
+}
+
 interface AndroidInsightsNativeModule {
   // Health Connect (scaffolded; implemented in follow-up)
   isHealthConnectAvailable(): Promise<boolean>;
@@ -84,6 +116,9 @@ interface AndroidInsightsNativeModule {
   getUsageAccessAuthorizationStatus(): Promise<UsageAccessAuthorizationStatus>;
   openUsageAccessSettings(): Promise<void>;
   getUsageSummaryJson(range: UsageRangeKey): Promise<string | null>;
+
+  // Diagnostics
+  getUsageStatsDiagnostics(): Promise<string>;
 }
 
 const NativeModule = requireOptionalNativeModule<AndroidInsightsNativeModule>('AndroidInsights');
@@ -164,6 +199,18 @@ export async function getUsageSummaryAsync(range: UsageRangeKey): Promise<UsageS
   const json = await requireAndroidInsightsMethod('getUsageSummaryJson')(range);
   if (!json) return null;
   return JSON.parse(json) as UsageSummary;
+}
+
+/**
+ * Get comprehensive diagnostics for debugging usage stats issues.
+ * This function is designed to work in production builds and logs detailed
+ * information to Android logcat as well as returning a structured response.
+ */
+export async function getUsageStatsDiagnosticsAsync(): Promise<UsageStatsDiagnostics | null> {
+  if (!NativeModule) return null;
+  const json = await requireAndroidInsightsMethod('getUsageStatsDiagnostics')();
+  if (!json) return null;
+  return JSON.parse(json) as UsageStatsDiagnostics;
 }
 
 

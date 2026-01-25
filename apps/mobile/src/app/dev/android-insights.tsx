@@ -9,6 +9,7 @@ import {
   getTodayStepCountAsync,
   getUsageAccessAuthorizationStatusSafeAsync,
   getUsageSummarySafeAsync,
+  getUsageStatsDiagnosticsSafeAsync,
   openHealthConnectSettingsSafeAsync,
   openUsageAccessSettingsSafeAsync,
   requestHealthConnectAuthorizationSafeAsync,
@@ -17,6 +18,7 @@ import {
   type UsageAccessAuthorizationStatus,
   type UsageRangeKey,
   type UsageSummary,
+  type UsageStatsDiagnostics,
 } from '@/lib/android-insights';
 
 export default function AndroidInsightsDevScreen() {
@@ -32,6 +34,7 @@ export default function AndroidInsightsDevScreen() {
   const [usageStatus, setUsageStatus] = useState<UsageAccessAuthorizationStatus>('unsupported');
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [usageRange, setUsageRange] = useState<UsageRangeKey>('today');
+  const [usageDiagnostics, setUsageDiagnostics] = useState<UsageStatsDiagnostics | null>(null);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -113,6 +116,16 @@ export default function AndroidInsightsDevScreen() {
     }
   }, [usageRange]);
 
+  const onRunDiagnostics = useCallback(async () => {
+    setErrorMessage(null);
+    try {
+      const diagnostics = await getUsageStatsDiagnosticsSafeAsync();
+      setUsageDiagnostics(diagnostics);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   return (
     <>
       <Stack.Screen options={{ title: 'Android Insights (Dev)', headerShown: true }} />
@@ -189,6 +202,52 @@ export default function AndroidInsightsDevScreen() {
                   Total seconds: {usageSummary?.totalSeconds ?? '—'} · Top apps: {usageSummary?.topApps?.length ?? 0}
                 </Text>
               </View>
+            </View>
+
+            <View className="mt-6 rounded-2xl bg-slate-950/60 p-4">
+              <Text className="text-sm font-semibold text-white">Production Diagnostics</Text>
+              <Text className="mt-1 text-xs text-slate-400">
+                Comprehensive diagnostics for debugging production issues.
+                Also logs to Android logcat with tag "AndroidInsights".
+              </Text>
+              <View className="mt-3 gap-2">
+                <GradientButton label="Run diagnostics" onPress={onRunDiagnostics} disabled={!canUseNative} />
+              </View>
+
+              {usageDiagnostics ? (
+                <View className="mt-4">
+                  <Text className="text-xs text-slate-400">
+                    Device: {usageDiagnostics.buildManufacturer} {usageDiagnostics.buildModel}
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-400">
+                    Android {usageDiagnostics.buildRelease} (SDK {usageDiagnostics.buildSdkInt})
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-400">
+                    Package: {usageDiagnostics.packageName ?? '—'}
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-400">
+                    Usage access granted: {usageDiagnostics.usageAccessGranted ? 'YES' : 'NO'} ({usageDiagnostics.appOpsModeString ?? '—'})
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-400">
+                    Daily stats: {usageDiagnostics.dailyStatsCount ?? '—'} · Events: {usageDiagnostics.usageEventsCount ?? '—'}
+                  </Text>
+                  <Text className="mt-1 text-xs text-slate-400">
+                    Apps with foreground time: {usageDiagnostics.appsWithForegroundTime ?? '—'}
+                  </Text>
+                  {usageDiagnostics.topAppPackage ? (
+                    <Text className="mt-1 text-xs text-slate-400">
+                      Top app: {usageDiagnostics.topAppPackage} ({Math.round((usageDiagnostics.topAppForegroundMs ?? 0) / 60000)}m)
+                    </Text>
+                  ) : null}
+                  {usageDiagnostics.errors && usageDiagnostics.errors.length > 0 ? (
+                    <Text className="mt-2 text-xs text-amber-200">
+                      Issues: {usageDiagnostics.errors.join(' · ')}
+                    </Text>
+                  ) : (
+                    <Text className="mt-2 text-xs text-green-300">No issues detected</Text>
+                  )}
+                </View>
+              ) : null}
             </View>
           </View>
 

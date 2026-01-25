@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
@@ -31,6 +32,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+private const val TAG = "AndroidInsights"
 
 class AndroidInsightsModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -91,22 +94,56 @@ class AndroidInsightsModule : Module() {
     AsyncFunction("getUsageSummaryJson") { range: String ->
       getUsageSummaryJson(range)
     }
+
+    // Diagnostic function for production debugging
+    AsyncFunction("getUsageStatsDiagnostics") {
+      getUsageStatsDiagnostics()
+    }
   }
 
   private fun getUsageAccessAuthorizationStatus(): String {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return "unsupported"
-    val reactContext = appContext.reactContext ?: return "unknown"
+    Log.d(TAG, "getUsageAccessAuthorizationStatus called")
+    Log.d(TAG, "  Build.VERSION.SDK_INT=${Build.VERSION.SDK_INT}")
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+      Log.w(TAG, "  Returning 'unsupported' - SDK version too low")
+      return "unsupported"
+    }
+
+    val reactContext = appContext.reactContext
+    if (reactContext == null) {
+      Log.e(TAG, "  Returning 'unknown' - reactContext is null")
+      return "unknown"
+    }
+
+    Log.d(TAG, "  packageName=${reactContext.packageName}")
+    Log.d(TAG, "  uid=${android.os.Process.myUid()}")
 
     return try {
       val appOps = reactContext.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
       val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        Log.d(TAG, "  Using unsafeCheckOpNoThrow (SDK >= Q)")
         appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), reactContext.packageName)
       } else {
+        Log.d(TAG, "  Using deprecated checkOpNoThrow (SDK < Q)")
         @Suppress("DEPRECATION")
         appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), reactContext.packageName)
       }
-      if (mode == AppOpsManager.MODE_ALLOWED) "authorized" else "denied"
-    } catch (_: Throwable) {
+
+      val modeStr = when (mode) {
+        AppOpsManager.MODE_ALLOWED -> "MODE_ALLOWED"
+        AppOpsManager.MODE_IGNORED -> "MODE_IGNORED"
+        AppOpsManager.MODE_ERRORED -> "MODE_ERRORED"
+        AppOpsManager.MODE_DEFAULT -> "MODE_DEFAULT"
+        else -> "MODE_UNKNOWN($mode)"
+      }
+      Log.d(TAG, "  AppOps mode=$modeStr ($mode)")
+
+      val result = if (mode == AppOpsManager.MODE_ALLOWED) "authorized" else "denied"
+      Log.d(TAG, "  Returning '$result'")
+      result
+    } catch (e: Throwable) {
+      Log.e(TAG, "  Exception checking usage access: ${e.javaClass.simpleName}: ${e.message}", e)
       "unknown"
     }
   }
@@ -120,16 +157,40 @@ class AndroidInsightsModule : Module() {
   }
 
   private fun getUsageSummaryJson(range: String): String? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return null
-    val reactContext = appContext.reactContext ?: return null
+    Log.d(TAG, "getUsageSummaryJson called with range='$range'")
+
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+      Log.w(TAG, "  Returning null - SDK version too low")
+      return null
+    }
+
+    val reactContext = appContext.reactContext
+    if (reactContext == null) {
+      Log.e(TAG, "  Returning null - reactContext is null")
+      return null
+    }
 
     // If we don't have permission, return null (caller can show CTA).
-    if (getUsageAccessAuthorizationStatus() != "authorized") return null
+    val authStatus = getUsageAccessAuthorizationStatus()
+    if (authStatus != "authorized") {
+      Log.w(TAG, "  Returning null - usage access not authorized (status=$authStatus)")
+      return null
+    }
 
     val (startMs, endMs) = getRangeMillis(range)
+    Log.d(TAG, "  Range: startMs=$startMs (${isoFromMillis(startMs)}), endMs=$endMs (${isoFromMillis(endMs)})")
 
     val usageStatsManager = reactContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-    val stats: List<UsageStats> = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs) ?: emptyList()
+    Log.d(TAG, "  UsageStatsManager obtained")
+
+    val stats: List<UsageStats> = try {
+      val result = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs) ?: emptyList()
+      Log.d(TAG, "  queryUsageStats returned ${result.size} records")
+      result
+    } catch (e: Throwable) {
+      Log.e(TAG, "  queryUsageStats EXCEPTION: ${e.javaClass.simpleName}: ${e.message}", e)
+      emptyList()
+    }
 
     val pm = reactContext.packageManager
     val appArray = JSONArray()
@@ -138,10 +199,14 @@ class AndroidInsightsModule : Module() {
       .filter { it.totalTimeInForeground > 0 }
       .associateBy { it.packageName }
 
+    Log.d(TAG, "  Filtered to ${byPackage.size} packages with foreground time")
+
     var totalSeconds = 0L
     for (u in byPackage.values) {
       totalSeconds += (u.totalTimeInForeground / 1000L).coerceAtLeast(0L)
     }
+
+    Log.d(TAG, "  Total foreground time: ${totalSeconds}s (${totalSeconds / 60}m)")
 
     // Sort by foreground time desc, take top 10
     val top = byPackage.values
@@ -201,6 +266,11 @@ class AndroidInsightsModule : Module() {
     out.put("hourlyBucketsSeconds", hourlyArray)
     out.put("hourlyByApp", hourlyByAppJson)
     out.put("sessions", sessions)
+
+    Log.d(TAG, "  Returning JSON with totalSeconds=$totalSeconds, topApps=${appArray.length()}, sessions=${sessions.length()}")
+    if (totalSeconds == 0L) {
+      Log.w(TAG, "  WARNING: Total seconds is 0 - no usage data found!")
+    }
     return out.toString()
   }
 
@@ -800,6 +870,168 @@ class AndroidInsightsModule : Module() {
       out.put("errors", JSONObject.NULL)
     }
 
+    return out.toString()
+  }
+
+  /**
+   * Comprehensive diagnostics function for debugging production issues.
+   * Returns detailed information about permission states, API responses, and potential issues.
+   */
+  private fun getUsageStatsDiagnostics(): String {
+    Log.d(TAG, "=== USAGE STATS DIAGNOSTICS START ===")
+
+    val out = JSONObject()
+    val errors = mutableListOf<String>()
+
+    // Basic device info
+    out.put("diagnosticsVersion", 1)
+    out.put("timestamp", isoNow())
+    out.put("buildSdkInt", Build.VERSION.SDK_INT)
+    out.put("buildRelease", Build.VERSION.RELEASE)
+    out.put("buildManufacturer", Build.MANUFACTURER)
+    out.put("buildModel", Build.MODEL)
+    out.put("minSdkRequired", Build.VERSION_CODES.LOLLIPOP)
+    out.put("sdkSupported", Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+
+    Log.d(TAG, "Device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+
+    val reactContext = appContext.reactContext
+    if (reactContext == null) {
+      out.put("reactContextAvailable", false)
+      errors.add("reactContext is null - native module initialization issue")
+      Log.e(TAG, "reactContext is NULL")
+    } else {
+      out.put("reactContextAvailable", true)
+      out.put("packageName", reactContext.packageName)
+      out.put("processUid", android.os.Process.myUid())
+
+      Log.d(TAG, "Package: ${reactContext.packageName}, UID: ${android.os.Process.myUid()}")
+
+      // Check AppOps permission
+      try {
+        val appOps = reactContext.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), reactContext.packageName)
+        } else {
+          @Suppress("DEPRECATION")
+          appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), reactContext.packageName)
+        }
+
+        val modeStr = when (mode) {
+          AppOpsManager.MODE_ALLOWED -> "MODE_ALLOWED"
+          AppOpsManager.MODE_IGNORED -> "MODE_IGNORED"
+          AppOpsManager.MODE_ERRORED -> "MODE_ERRORED"
+          AppOpsManager.MODE_DEFAULT -> "MODE_DEFAULT"
+          else -> "MODE_UNKNOWN($mode)"
+        }
+
+        out.put("appOpsMode", mode)
+        out.put("appOpsModeString", modeStr)
+        out.put("usageAccessGranted", mode == AppOpsManager.MODE_ALLOWED)
+
+        Log.d(TAG, "AppOps USAGE_STATS mode: $modeStr ($mode), granted=${mode == AppOpsManager.MODE_ALLOWED}")
+
+        if (mode != AppOpsManager.MODE_ALLOWED) {
+          errors.add("Usage Access permission not granted (mode=$modeStr). User must enable in Settings > Apps > Special access > Usage access")
+        }
+      } catch (e: Throwable) {
+        out.put("appOpsError", e.message ?: e.javaClass.simpleName)
+        errors.add("Failed to check AppOps: ${e.javaClass.simpleName}: ${e.message}")
+        Log.e(TAG, "AppOps check EXCEPTION", e)
+      }
+
+      // Try to query usage stats
+      try {
+        val usageStatsManager = reactContext.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        out.put("usageStatsManagerAvailable", true)
+
+        val now = System.currentTimeMillis()
+        val oneDayAgo = now - (24 * 60 * 60 * 1000)
+
+        Log.d(TAG, "Querying usage stats for last 24h: ${isoFromMillis(oneDayAgo)} to ${isoFromMillis(now)}")
+
+        // Try INTERVAL_DAILY
+        val dailyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, oneDayAgo, now) ?: emptyList()
+        out.put("dailyStatsCount", dailyStats.size)
+        Log.d(TAG, "INTERVAL_DAILY returned ${dailyStats.size} records")
+
+        // Try INTERVAL_BEST
+        val bestStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_BEST, oneDayAgo, now) ?: emptyList()
+        out.put("bestStatsCount", bestStats.size)
+        Log.d(TAG, "INTERVAL_BEST returned ${bestStats.size} records")
+
+        // Try INTERVAL_WEEKLY (might have more historical data)
+        val weeklyStats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_WEEKLY, oneDayAgo, now) ?: emptyList()
+        out.put("weeklyStatsCount", weeklyStats.size)
+        Log.d(TAG, "INTERVAL_WEEKLY returned ${weeklyStats.size} records")
+
+        // Try queryEvents
+        try {
+          val events = usageStatsManager.queryEvents(oneDayAgo, now)
+          var eventCount = 0
+          var foregroundCount = 0
+          var backgroundCount = 0
+          val event = UsageEvents.Event()
+
+          while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            eventCount++
+            when (event.eventType) {
+              UsageEvents.Event.MOVE_TO_FOREGROUND, UsageEvents.Event.ACTIVITY_RESUMED -> foregroundCount++
+              UsageEvents.Event.MOVE_TO_BACKGROUND, UsageEvents.Event.ACTIVITY_PAUSED -> backgroundCount++
+            }
+          }
+
+          out.put("usageEventsCount", eventCount)
+          out.put("foregroundEventsCount", foregroundCount)
+          out.put("backgroundEventsCount", backgroundCount)
+
+          Log.d(TAG, "queryEvents: total=$eventCount, foreground=$foregroundCount, background=$backgroundCount")
+
+          if (eventCount == 0 && dailyStats.isEmpty()) {
+            errors.add("Both queryEvents and queryUsageStats returned empty data. This could mean: (1) Permission just granted and no data collected yet, (2) No app usage in time range, (3) System-level issue with usage stats service")
+          }
+        } catch (e: Throwable) {
+          out.put("queryEventsError", e.message ?: e.javaClass.simpleName)
+          errors.add("queryEvents failed: ${e.javaClass.simpleName}: ${e.message}")
+          Log.e(TAG, "queryEvents EXCEPTION", e)
+        }
+
+        // Check for any usage at all in the daily stats
+        val nonZeroApps = dailyStats.filter { it.totalTimeInForeground > 0 }
+        out.put("appsWithForegroundTime", nonZeroApps.size)
+
+        if (nonZeroApps.isNotEmpty()) {
+          val topApp = nonZeroApps.maxByOrNull { it.totalTimeInForeground }
+          if (topApp != null) {
+            out.put("topAppPackage", topApp.packageName)
+            out.put("topAppForegroundMs", topApp.totalTimeInForeground)
+            out.put("topAppLastTimeUsed", topApp.lastTimeUsed)
+            Log.d(TAG, "Top app: ${topApp.packageName} with ${topApp.totalTimeInForeground}ms foreground")
+          }
+        } else if (dailyStats.isNotEmpty()) {
+          Log.w(TAG, "Got ${dailyStats.size} stats but none have foreground time!")
+        }
+
+      } catch (e: Throwable) {
+        out.put("usageStatsManagerAvailable", false)
+        out.put("usageStatsError", e.message ?: e.javaClass.simpleName)
+        errors.add("UsageStatsManager failed: ${e.javaClass.simpleName}: ${e.message}")
+        Log.e(TAG, "UsageStatsManager EXCEPTION", e)
+      }
+    }
+
+    if (errors.isNotEmpty()) {
+      val arr = JSONArray()
+      errors.forEach { arr.put(it) }
+      out.put("errors", arr)
+      Log.w(TAG, "Diagnostics found ${errors.size} issues: $errors")
+    } else {
+      out.put("errors", JSONArray())
+      Log.d(TAG, "Diagnostics completed with no issues")
+    }
+
+    Log.d(TAG, "=== USAGE STATS DIAGNOSTICS END ===")
     return out.toString()
   }
 }
