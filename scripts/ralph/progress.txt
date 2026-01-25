@@ -704,3 +704,40 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
 
 ---
+
+## 2026-01-24 - US-023: Use App Mappings in Cross-Reference Logic
+- **What was implemented:**
+  - Added `AppMapping` type import to `actual-display-events.ts`
+  - Added `appMappings` parameter to `BuildActualDisplayEventsInput` interface
+  - Created `findAppMapping()` function for case-insensitive partial matching:
+    - Checks if app name contains mapped app name or vice versa
+    - Returns matching `AppMapping` or null
+  - Created `checkAppDistraction()` function that:
+    - First checks user's custom app mappings
+    - Returns user's `is_distraction` flag if mapping exists
+    - Falls back to default `DISTRACTION_APPS` list if no mapping
+    - Returns `AppDistractionResult` with isDistraction, activityType, and isUserMapped flag
+  - Updated `detectDistractionDuringActivity()` to:
+    - Accept `appMappings` parameter
+    - Use `checkAppDistraction()` instead of direct `appMatchesList()` call
+    - User's custom distraction settings now override default DISTRACTION_APPS list
+  - Updated `buildPlannedActualEvent()` to accept and pass `appMappings`
+  - Updated `comprehensive-calendar.tsx` to:
+    - Import `fetchAppMappings` and `AppMapping` type
+    - Add `appMappings` state with useState
+    - Load mappings via useEffect when userId changes
+    - Pass mappings to `buildActualDisplayEvents()`
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added types, functions, updated distraction detection
+  - `apps/mobile/src/app/comprehensive-calendar.tsx` - Load and pass app mappings
+
+- **Learnings for future iterations:**
+  - Follow the same pattern as location mappings (US-022) for consistency
+  - Use case-insensitive partial matching for app names (e.g., "instagram" matches "Instagram")
+  - User's custom `is_distraction` flag should override the default DISTRACTION_APPS list
+  - This allows users to mark work apps (like Slack) as distractions, or remove social apps from the distraction list
+  - The `checkAppDistraction()` wrapper provides clean abstraction for mapping lookup + fallback
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
+
+---
