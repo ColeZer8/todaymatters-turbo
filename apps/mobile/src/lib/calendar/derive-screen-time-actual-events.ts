@@ -39,6 +39,17 @@ interface SleepStartAdjustment {
   screenTimeBlock: ScheduledEvent | null;
 }
 
+interface MidSleepScreenTimeInfo {
+  totalMinutes: number;
+  topAppName: string | null;
+  sessions: Array<{
+    startMinutes: number;
+    endMinutes: number;
+    durationMinutes: number;
+    appName: string;
+  }>;
+}
+
 export function deriveActualEventsFromScreenTime({
   existingActualEvents,
   screenTimeSummary,
@@ -77,6 +88,11 @@ export function deriveActualEventsFromScreenTime({
     const topAppLabel = distractionInfo.topApps.length > 0 ? distractionInfo.topApps[0].appName : null;
 
     if (event.category === 'sleep') {
+      // Track description modifications for sleep events
+      let sleepDescription = event.description;
+      let adjustedEvent = event;
+
+      // First, handle sleep start adjustment (staying up late scrolling)
       const sleepAdjustment = buildSleepStartScreenTimeAdjustment({
         screenTimeSummary,
         sleepEvent: event,
@@ -85,7 +101,7 @@ export function deriveActualEventsFromScreenTime({
         mergeGapMinutes: 5,
       });
       if (sleepAdjustment) {
-        const nextDescription = buildSleepLateDescription({
+        sleepDescription = buildSleepLateDescription({
           distractedMinutes: sleepAdjustment.screenTimeMinutes,
           topAppName: sleepAdjustment.topAppName,
         });
@@ -104,43 +120,52 @@ export function deriveActualEventsFromScreenTime({
             sleepLateBlocks.push(sleepAdjustment.screenTimeBlock);
           }
         }
-        return {
+        adjustedEvent = {
           ...event,
           startMinutes: sleepAdjustment.sleepStartMinutes,
           duration: sleepAdjustment.sleepDurationMinutes,
-          description: nextDescription,
         };
-      }
-
-      // Fallback: interpret phone time as "sleep started late" and (when possible) represent it
-      // as a Screen Time block immediately before sleep (only if it won't overlap other non-digital events).
-      const nextDescription = buildSleepLateDescription({
-        distractedMinutes: distractionInfo.totalMinutes,
-        topAppName: topAppLabel,
-      });
-      const preSleepBlock = buildPreSleepScreenTimeBlock({
-        screenTimeSummary,
-        sleepEvent: event,
-        distractedMinutes: distractionInfo.totalMinutes,
-        topAppName: topAppLabel,
-      });
-      if (preSleepBlock) {
-        const overlapsNonDigital = baseActualEvents
-          .filter((e) => e.category !== 'digital' && e.id !== event.id)
-          .some((e) =>
-            intervalsOverlap(
-              preSleepBlock.startMinutes,
-              preSleepBlock.startMinutes + preSleepBlock.duration,
-              e.startMinutes,
-              e.startMinutes + e.duration,
-            ),
-          );
-        if (!overlapsNonDigital) {
-          sleepLateBlocks.push(preSleepBlock);
+      } else if (distractionInfo.totalMinutes >= distractionThresholdMinutes) {
+        // Fallback: interpret phone time as "sleep started late"
+        sleepDescription = buildSleepLateDescription({
+          distractedMinutes: distractionInfo.totalMinutes,
+          topAppName: topAppLabel,
+        });
+        const preSleepBlock = buildPreSleepScreenTimeBlock({
+          screenTimeSummary,
+          sleepEvent: event,
+          distractedMinutes: distractionInfo.totalMinutes,
+          topAppName: topAppLabel,
+        });
+        if (preSleepBlock) {
+          const overlapsNonDigital = baseActualEvents
+            .filter((e) => e.category !== 'digital' && e.id !== event.id)
+            .some((e) =>
+              intervalsOverlap(
+                preSleepBlock.startMinutes,
+                preSleepBlock.startMinutes + preSleepBlock.duration,
+                e.startMinutes,
+                e.startMinutes + e.duration,
+              ),
+            );
+          if (!overlapsNonDigital) {
+            sleepLateBlocks.push(preSleepBlock);
+          }
         }
       }
 
-      return { ...event, description: nextDescription };
+      // US-011: Check for mid-sleep phone usage (brief phone checks during sleep)
+      // This is separate from "staying up late" - it's phone usage in the MIDDLE of sleep
+      const midSleepInfo = detectMidSleepScreenTime(screenTimeSummary, adjustedEvent);
+      if (midSleepInfo && midSleepInfo.totalMinutes > 0) {
+        // Short usage (<=10 min): embed in sleep description, don't create separate block
+        if (midSleepInfo.totalMinutes <= distractionThresholdMinutes) {
+          sleepDescription = buildSleepWithPhoneDescription(sleepDescription, midSleepInfo);
+        }
+        // Long usage (>10 min) will be handled by US-012 (separate block creation)
+      }
+
+      return { ...adjustedEvent, description: sleepDescription };
     }
 
     const nextDescription = buildDistractedDescription(event, distractedLabel, topAppLabel);
@@ -637,6 +662,101 @@ function buildSleepLateDescription(options: { distractedMinutes: number; topAppN
     return `Started late (Stayed up scrolling on ${topAppName}, ${distractedLabel})`;
   }
   return `Started late (Stayed up scrolling, ${distractedLabel})`;
+}
+
+/**
+ * Detect screen time that occurs in the MIDDLE of sleep (not at the start).
+ * This is different from "staying up late" - it's brief phone usage during sleep hours.
+ *
+ * @param screenTimeSummary - Screen time data for the day
+ * @param sleepEvent - The sleep event to check
+ * @param bufferMinutes - Minutes after sleep start to consider as "mid-sleep" vs "staying up late"
+ * @returns Info about mid-sleep phone usage, or null if none detected
+ */
+function detectMidSleepScreenTime(
+  screenTimeSummary: ScreenTimeSummary,
+  sleepEvent: ScheduledEvent,
+  bufferMinutes: number = 30,
+): MidSleepScreenTimeInfo | null {
+  if (!screenTimeSummary.appSessions || screenTimeSummary.appSessions.length === 0) {
+    return null;
+  }
+
+  const sleepStart = clampMinutes(sleepEvent.startMinutes);
+  const sleepEnd = clampMinutes(sleepEvent.startMinutes + sleepEvent.duration);
+  if (sleepEnd <= sleepStart) return null;
+
+  // Only look for sessions that start AFTER the initial sleep period + buffer
+  // This distinguishes "mid-sleep phone usage" from "staying up late"
+  const midSleepStart = sleepStart + bufferMinutes;
+  // Also exclude screen time in the last 30 min of sleep (waking up to alarm)
+  const midSleepEnd = Math.max(midSleepStart, sleepEnd - 30);
+
+  if (midSleepEnd <= midSleepStart) return null;
+
+  const midSleepSessions: Array<{
+    startMinutes: number;
+    endMinutes: number;
+    durationMinutes: number;
+    appName: string;
+  }> = [];
+
+  for (const session of screenTimeSummary.appSessions) {
+    const sessionStartMs = new Date(session.startedAtIso).getTime();
+    const sessionEndMs = new Date(session.endedAtIso).getTime();
+    const sessionStartMinutes = Math.floor(sessionStartMs / (60 * 1000)) % (24 * 60);
+    const sessionEndMinutes = Math.floor(sessionEndMs / (60 * 1000)) % (24 * 60);
+
+    // Check if session overlaps with mid-sleep period
+    const overlapStart = Math.max(midSleepStart, sessionStartMinutes);
+    const overlapEnd = Math.min(midSleepEnd, sessionEndMinutes);
+    if (overlapEnd <= overlapStart) continue;
+
+    midSleepSessions.push({
+      startMinutes: overlapStart,
+      endMinutes: overlapEnd,
+      durationMinutes: overlapEnd - overlapStart,
+      appName: session.displayName,
+    });
+  }
+
+  if (midSleepSessions.length === 0) return null;
+
+  const totalMinutes = midSleepSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+
+  // Find the app with most usage during mid-sleep
+  const appUsage: Record<string, number> = {};
+  for (const session of midSleepSessions) {
+    appUsage[session.appName] = (appUsage[session.appName] ?? 0) + session.durationMinutes;
+  }
+  const topAppName = Object.entries(appUsage)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  return {
+    totalMinutes,
+    topAppName,
+    sessions: midSleepSessions,
+  };
+}
+
+/**
+ * Build a description for sleep with embedded short phone usage.
+ * Format: "Sleep (phone: X min)" or "Sleep (phone: X min on AppName)"
+ */
+function buildSleepWithPhoneDescription(
+  originalDescription: string | undefined,
+  midSleepInfo: MidSleepScreenTimeInfo,
+): string {
+  const minuteLabel = formatMinuteLabel(midSleepInfo.totalMinutes);
+  const phoneNote = midSleepInfo.topAppName
+    ? `phone: ${minuteLabel} on ${midSleepInfo.topAppName}`
+    : `phone: ${minuteLabel}`;
+
+  if (originalDescription && originalDescription.length > 0) {
+    // If there's already a description (like "Started late..."), append the phone note
+    return `${originalDescription} (${phoneNote})`;
+  }
+  return `Sleep (${phoneNote})`;
 }
 
 function buildSleepSessionIntervals(options: {
