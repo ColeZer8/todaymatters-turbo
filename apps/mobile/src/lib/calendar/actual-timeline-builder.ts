@@ -44,8 +44,8 @@ export function getEventPriority(event: ScheduledEvent): EventPriority {
   const source = meta?.source;
   const kind = meta?.kind;
 
-  // Priority 1: User-edited actual events
-  if (source === 'user' || source === 'actual_adjust') {
+  // Priority 1: User-edited actual events (including user_input from unknown gap selections)
+  if (source === 'user' || source === 'actual_adjust' || source === 'user_input') {
     return EventPriority.UserEdited;
   }
 

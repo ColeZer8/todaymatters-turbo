@@ -579,7 +579,7 @@ export function buildActualDisplayEvents({
       const existing = results[i];
       if (existing.category !== 'sleep') continue;
       const source = existing.meta?.source;
-      if (source === 'user' || source === 'actual_adjust') continue;
+      if (source === 'user' || source === 'actual_adjust' || source === 'user_input') continue;
       if (!intervalsOverlap(start, end, existing.startMinutes, existing.startMinutes + existing.duration)) {
         continue;
       }

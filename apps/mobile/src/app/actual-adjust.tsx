@@ -409,10 +409,15 @@ export default function ActualAdjustScreen() {
       const linkedGoal = selectedGoalId?.startsWith('goal:') ? selectedGoalId.slice(5) : null;
       const linkedInitiative = selectedGoalId?.startsWith('initiative:') ? selectedGoalId.slice(11) : null;
 
+      // Determine source: 'user_input' for unknown gap selections (US-015)
+      // This distinguishes user-entered data from AI-driven or system-derived events
+      const isFromUnknownGap = event.meta?.kind === 'unknown_gap';
+      const eventSource: CalendarEventMeta['source'] = isFromUnknownGap ? 'user_input' : 'actual_adjust';
+
       const meta = {
         category: finalCategory,
         isBig3,
-        source: 'actual_adjust',
+        source: eventSource,
         actual: true,
         tags: ['actual'],
         value_label: selectedValue ?? null,
