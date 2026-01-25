@@ -10,6 +10,12 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - Calendar orchestration is in `apps/mobile/src/app/comprehensive-calendar.tsx`
 - Rendering with absolute positioning is in `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
 - Known duplicate key issue at ComprehensiveCalendarTemplate.tsx lines 552-559
+- Android native module for insights: `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt`
+- Use `Log.d(TAG, ...)` for production logging in Kotlin (logcat tag: "AndroidInsights")
+- TypeScript wrapper in `apps/mobile/modules/android-insights/src/index.ts`
+- Library wrapper with safe functions in `apps/mobile/src/lib/android-insights/index.ts`
+- Dev screen for Android insights at `apps/mobile/src/app/dev/android-insights.tsx`
+- Pre-existing TypeScript errors in codebase - don't expect clean typecheck
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -18,5 +24,44 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Permissions**: All granted (Usage Access, Location)
 - **Symptom**: Nothing being pulled despite permissions granted
 - **Priority**: HIGHEST - US-001 and US-002 must be completed first
+
+---
+
+## 2026-01-24 - US-001: CRITICAL: Debug Android Production Evidence Data Pull Failure
+- **What was implemented:**
+  - Added comprehensive production-safe logging to Android Usage Stats API calls
+  - Created `getUsageStatsDiagnostics()` function in Kotlin that returns:
+    - Device info (manufacturer, model, SDK version)
+    - AppOps permission status with mode string
+    - Usage stats counts from multiple intervals (daily, best, weekly)
+    - Usage events count (foreground/background)
+    - Top app with foreground time
+    - Error collection
+  - Exposed diagnostics through TypeScript layer (`getUsageStatsDiagnosticsAsync`)
+  - Added diagnostics UI to dev/android-insights screen
+  - Enhanced Android location diagnostics with detailed logging
+
+- **Files changed:**
+  - `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt` - Added logging, diagnostics function
+  - `apps/mobile/modules/android-insights/src/index.ts` - Added TypeScript types and exports
+  - `apps/mobile/src/lib/android-insights/index.ts` - Added safe wrapper function
+  - `apps/mobile/src/app/dev/android-insights.tsx` - Added diagnostics UI
+  - `apps/mobile/src/lib/android-location/index.ts` - Added logging to location startup and diagnostics
+
+- **Learnings for future iterations:**
+  - Use `android.util.Log` with a constant TAG for production-visible logging in Kotlin
+  - Logcat tag "AndroidInsights" can be filtered on device: `adb logcat -s AndroidInsights`
+  - AppOps mode values: MODE_ALLOWED=0, MODE_IGNORED=1, MODE_ERRORED=2, MODE_DEFAULT=3
+  - `queryUsageStats` can return empty list even with permission if:
+    1. Permission was just granted (no data collected yet)
+    2. No app usage in the time range
+    3. System-level issue with usage stats service
+  - The codebase has many pre-existing TypeScript errors - don't expect clean typecheck
+
+- **Next steps:**
+  - Deploy to Play Console internal testing
+  - Run diagnostics on physical device
+  - Check logcat output for root cause
+  - Implement fix based on findings (US-002)
 
 ---
