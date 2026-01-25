@@ -8,6 +8,7 @@ import {
   ListChecks,
   LogOut,
   LucideIcon,
+  MapPin,
   MessageCircle,
   MoonStar,
   Play,
@@ -278,6 +279,12 @@ export default function ProfileScreen() {
       label: 'Ideal Day',
       icon: Calendar,
       onPress: () => router.push('/settings/ideal-day'),
+    },
+    {
+      id: 'location-mappings',
+      label: 'Location Mappings',
+      icon: MapPin,
+      onPress: () => router.push('/settings/location-mappings'),
     },
   ];
 
