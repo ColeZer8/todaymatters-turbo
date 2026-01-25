@@ -16,6 +16,9 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - Library wrapper with safe functions in `apps/mobile/src/lib/android-insights/index.ts`
 - Dev screen for Android insights at `apps/mobile/src/app/dev/android-insights.tsx`
 - Pre-existing TypeScript errors in codebase - don't expect clean typecheck
+- **Screen time sync**: `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` - syncs iOS and Android data to Supabase
+- **Insights sync hook**: `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` - orchestrates sync on app active
+- When comparing iOS vs Android sync, always check if all data fields are being synced (sessions, hourly, daily)
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -63,5 +66,32 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Run diagnostics on physical device
   - Check logcat output for root cause
   - Implement fix based on findings (US-002)
+
+---
+
+## 2026-01-24 - US-002: Fix Android Production Build Evidence Collection
+- **What was implemented:**
+  - Added Android session syncing to `screen-time-sync.ts` - previously sessions were not being synced to Supabase
+  - Added hourly data syncing for Android (matches iOS behavior)
+  - Added production-safe logging throughout the sync pipeline for debugging
+  - Handle null/empty usage summary gracefully with status tracking
+  - Updated dev screen to show session counts and recent sessions
+
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` - Added `mapAndroidUsageSessions()`, hourly sync, session sync, logging
+  - `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` - Added production logging, handle null summary case
+  - `apps/mobile/src/app/dev/android-insights.tsx` - Show session counts and recent sessions in usage summary UI
+
+- **Root Cause Analysis:**
+  - Android sessions were not being synced to Supabase - `syncAndroidUsageSummary` was calling `await replaceAppSessions(dailyId, [])` which always cleared sessions
+  - The native Kotlin module WAS producing sessions in `buildUsageHourlyBucketsSeconds()` via `queryEvents()`
+  - The TypeScript `UsageSummary` type already included `sessions?: Array<{...}>`
+  - The sync code just never used them
+
+- **Learnings for future iterations:**
+  - Android screen time sync was incomplete compared to iOS - always compare platform implementations
+  - Silent failures in production are hard to debug - add console.log even in production for critical paths
+  - The `screen_time_app_sessions` table is critical for actual timeline derivation
+  - When debugging data flow issues, trace the entire pipeline from native → TypeScript → Supabase
 
 ---
