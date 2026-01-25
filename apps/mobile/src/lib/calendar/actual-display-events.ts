@@ -33,6 +33,7 @@ const SLEEP_OVERRIDE_MIN_MINUTES = 60;
 const LOCATION_MIN_BLOCK_MINUTES = 10;
 const LATE_ARRIVAL_MIN_MINUTES = 5; // Minimum late threshold to consider it a "late arrival"
 const LATE_ARRIVAL_MAX_MINUTES = 60; // Maximum lateness before it's considered a different activity
+const DIFFERENT_ACTIVITY_MIN_DURATION = 10; // Minimum duration for a different activity block
 
 /**
  * Information about a late arrival to a planned event.
@@ -133,6 +134,143 @@ function detectLateArrival(
   }
 
   return null;
+}
+
+/**
+ * Information about a different activity detected during a planned event.
+ * This occurs when evidence shows the user did something entirely different
+ * than what they had planned (e.g., planned gym but location shows McDonald's).
+ */
+interface DifferentActivityInfo {
+  /** The actual activity label (e.g., "McDonald's", "Coffee Shop") */
+  activityLabel: string;
+  /** The inferred category based on the location */
+  activityCategory: EventCategory;
+  /** The original planned category */
+  plannedCategory: EventCategory;
+  /** Evidence source that detected the different activity */
+  evidenceSource: 'location' | 'screen_time';
+  /** The place label from location evidence */
+  placeLabel: string;
+  /** The place category from location evidence (e.g., "fast_food", "cafe") */
+  placeCategory: string | null;
+  /** Start time of the different activity (in minutes from midnight) */
+  startMinutes: number;
+  /** End time of the different activity (in minutes from midnight) */
+  endMinutes: number;
+}
+
+/**
+ * Detect if the user did a different activity than planned based on evidence.
+ *
+ * Uses location evidence to determine if the user was at a completely different
+ * place than expected for the planned activity. Returns info about the actual
+ * activity so we can create a separate "actual" block showing reality.
+ *
+ * Examples:
+ * - Planned "Go to gym" but location shows McDonald's → different activity
+ * - Planned "Work" but location shows at gym → different activity
+ *
+ * @param planned - The planned event
+ * @param locationBlocks - Location blocks for the day
+ * @param verification - Verification result for the event
+ * @returns DifferentActivityInfo if different activity detected, null otherwise
+ */
+function detectDifferentActivity(
+  planned: ScheduledEvent,
+  locationBlocks: LocationBlock[],
+  verification: VerificationResult | null,
+): DifferentActivityInfo | null {
+  const plannedStart = planned.startMinutes;
+  const plannedEnd = planned.startMinutes + planned.duration;
+  const plannedCategory = planned.category;
+
+  // Check if verification already detected location mismatch
+  const locationEvidence = verification?.evidence.location;
+  if (locationEvidence && !locationEvidence.matchesExpected && locationEvidence.placeLabel) {
+    // Location evidence shows user was somewhere different than expected
+    const actualCategory = mapPlaceToCategory(
+      locationEvidence.placeLabel,
+      locationEvidence.placeCategory,
+    );
+
+    // Only consider it a "different activity" if the category actually differs
+    // and it's not just a minor location variation
+    if (actualCategory !== plannedCategory) {
+      return {
+        activityLabel: locationEvidence.placeLabel,
+        activityCategory: actualCategory,
+        plannedCategory,
+        evidenceSource: 'location',
+        placeLabel: locationEvidence.placeLabel,
+        placeCategory: locationEvidence.placeCategory,
+        startMinutes: plannedStart,
+        endMinutes: plannedEnd,
+      };
+    }
+  }
+
+  // Check location blocks during the planned time to find conflicting locations
+  const overlappingBlocks = locationBlocks.filter((block) =>
+    intervalsOverlap(plannedStart, plannedEnd, block.startMinutes, block.endMinutes),
+  );
+
+  if (overlappingBlocks.length === 0) return null;
+
+  // Find the dominant location block (longest overlap)
+  let dominantBlock: LocationBlock | null = null;
+  let maxOverlap = 0;
+
+  for (const block of overlappingBlocks) {
+    const overlapStart = Math.max(plannedStart, block.startMinutes);
+    const overlapEnd = Math.min(plannedEnd, block.endMinutes);
+    const overlap = overlapEnd - overlapStart;
+
+    if (overlap > maxOverlap && overlap >= DIFFERENT_ACTIVITY_MIN_DURATION) {
+      maxOverlap = overlap;
+      dominantBlock = block;
+    }
+  }
+
+  if (!dominantBlock) return null;
+
+  // Check if this location suggests a different activity category
+  const actualCategory = mapPlaceToCategory(
+    dominantBlock.placeLabel,
+    dominantBlock.placeCategory,
+  );
+
+  // If the planned event has a specific location, check if they match
+  if (planned.location) {
+    const plannedLocationLower = planned.location.toLowerCase();
+    const actualLocationLower = dominantBlock.placeLabel.toLowerCase();
+
+    // If locations roughly match, no different activity
+    if (
+      plannedLocationLower.includes(actualLocationLower) ||
+      actualLocationLower.includes(plannedLocationLower)
+    ) {
+      return null;
+    }
+  }
+
+  // Only flag as different activity if category differs
+  if (actualCategory === plannedCategory) return null;
+
+  // Calculate actual overlap time range
+  const overlapStart = Math.max(plannedStart, dominantBlock.startMinutes);
+  const overlapEnd = Math.min(plannedEnd, dominantBlock.endMinutes);
+
+  return {
+    activityLabel: dominantBlock.placeLabel,
+    activityCategory: actualCategory,
+    plannedCategory,
+    evidenceSource: 'location',
+    placeLabel: dominantBlock.placeLabel,
+    placeCategory: dominantBlock.placeCategory,
+    startMinutes: overlapStart,
+    endMinutes: overlapEnd,
+  };
 }
 
 /**
@@ -597,6 +735,78 @@ function buildPlannedActualEvent(options: {
   const plannedStartMinutes = clampMinutes(planned.startMinutes);
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
   if (plannedEnd <= plannedStartMinutes) return null;
+
+  // Detect if user did a completely different activity than planned
+  // This takes precedence over late arrival detection
+  const differentActivity = detectDifferentActivity(planned, locationBlocks, verification);
+
+  // If user did a different activity, create a block showing reality instead
+  if (differentActivity) {
+    const resolved = resolveLocationDetails(
+      differentActivity.placeLabel,
+      differentActivity.placeCategory,
+    );
+    const screenTime = usageSummary
+      ? getUsageOverlapInfo(
+          usageSummary,
+          differentActivity.startMinutes,
+          differentActivity.endMinutes,
+          appCategoryOverrides,
+        )
+      : null;
+
+    // Build description showing what actually happened
+    const descriptionParts: string[] = [];
+    descriptionParts.push(`Instead of: ${planned.title}`);
+    if (differentActivity.placeCategory) {
+      descriptionParts.push(formatPlaceLabel(differentActivity.placeCategory));
+    }
+    if (screenTime && screenTime.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
+      descriptionParts.push(
+        `Phone: ${Math.round(screenTime.totalMinutes)} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`,
+      );
+    }
+
+    const meta: CalendarEventMeta = {
+      category: differentActivity.activityCategory,
+      source: 'evidence',
+      plannedEventId: planned.id,
+      confidence: 0.85, // High confidence since we have location evidence
+      kind: 'different_activity',
+      evidence: {
+        locationLabel: differentActivity.placeLabel,
+        screenTimeMinutes: screenTime ? Math.round(screenTime.totalMinutes) : undefined,
+        topApp: screenTime?.topApp ?? null,
+        differentActivity: {
+          plannedTitle: planned.title,
+          plannedCategory: planned.category,
+          actualLabel: differentActivity.activityLabel,
+          actualCategory: differentActivity.activityCategory,
+          evidenceSource: differentActivity.evidenceSource,
+          placeLabel: differentActivity.placeLabel,
+          placeCategory: differentActivity.placeCategory,
+        },
+      },
+      dataQuality,
+    };
+
+    return {
+      id: generateDerivedId(
+        DERIVED_EVIDENCE_PREFIX,
+        'different_activity',
+        differentActivity.startMinutes,
+        differentActivity.endMinutes,
+        planned.id.slice(0, 8),
+      ),
+      title: resolved.title,
+      description: descriptionParts.join(' • '),
+      location: differentActivity.placeLabel,
+      startMinutes: differentActivity.startMinutes,
+      duration: differentActivity.endMinutes - differentActivity.startMinutes,
+      category: differentActivity.activityCategory,
+      meta,
+    };
+  }
 
   // Detect late arrival based on location evidence
   const lateArrival = detectLateArrival(planned, locationBlocks, verification);

@@ -45,7 +45,8 @@ export interface CalendarEventMeta {
     | 'transition_prep'
     | 'transition_wind_down'
     | 'location_inferred'
-    | 'late_arrival';
+    | 'late_arrival'
+    | 'different_activity';
   startYmd?: string;
   actual?: boolean;
   tags?: string[];
@@ -81,6 +82,23 @@ export interface CalendarEventMeta {
       actualStartMinutes: number;
       /** Evidence source that detected the late arrival */
       evidenceSource: 'location' | 'screen_time';
+    };
+    /** Different activity information when user did something different than planned */
+    differentActivity?: {
+      /** The title of the planned event */
+      plannedTitle: string;
+      /** The planned event category */
+      plannedCategory: EventCategory;
+      /** The actual activity label (e.g., place name) */
+      actualLabel: string;
+      /** The actual activity category inferred from location */
+      actualCategory: EventCategory;
+      /** Evidence source that detected the different activity */
+      evidenceSource: 'location' | 'screen_time';
+      /** The place label from location evidence */
+      placeLabel: string;
+      /** The place category from location evidence (e.g., "fast_food", "cafe") */
+      placeCategory: string | null;
     };
   };
   evidenceFusion?: {
