@@ -18,3 +18,4 @@ export * from './review-time-suggestions';
 export * from './user-places';
 export * from './actual-evidence-events';
 export * from './location-mappings';
+export * from './app-mappings';
