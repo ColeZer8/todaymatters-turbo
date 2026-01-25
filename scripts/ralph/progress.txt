@@ -27,6 +27,7 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Re-derivation Prevention**: `buildActualDisplayEvents` tracks saved derived events by source_id and time+kind to skip re-derivation
 - **Evidence Priority Order**: UserPlanned(1) > Location(2) > ScreenTime(3) > Pattern(4) > Health(5) - defined in `EvidenceSourcePriority` enum in `evidence-fusion.ts`
 - **Contextual Screen Time**: Use `isContextualScreenTime()` to check if screen time is expected for an activity (e.g., calculator at work) - contextual usage doesn't override location
+- **User Input Source**: Use `source: 'user_input'` for events created from unknown gap selections to distinguish from derived/system sources. These get highest priority (UserEdited) in timeline builder.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -449,5 +450,34 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - For current day filtering: `ymd === todayYmd ? currentMinutes : undefined` - past days get full coverage
   - Quick-select UI uses blue styling to differentiate from other sections
   - Existing pre-existing TypeScript errors (42+) are unrelated to changes
+
+---
+
+## 2026-01-24 - US-015: Persist Unknown Gap Selections to Supabase
+- **What was implemented:**
+  - Added `'user_input'` source type to `CalendarEventMeta` to distinguish user-entered data from derived/system sources
+  - Added `'actual_adjust'` to the source type union for TypeScript type safety (was already used but not in the type)
+  - Modified `actual-adjust.tsx` to set `source: 'user_input'` when saving from an unknown gap event (when `event.meta?.kind === 'unknown_gap'`)
+  - Updated `actual-display-events.ts` to preserve `user_input` events during sleep overlap removal (same treatment as `user` and `actual_adjust`)
+  - Updated `actual-timeline-builder.ts` to give `user_input` events highest priority (UserEdited), preventing them from being split by lower-priority events
+
+- **How persistence works:**
+  - When user selects an unknown gap suggestion in ActualAdjustTemplate, the form is populated
+  - On save, `createActual()` is called which persists to Supabase via `tm.events` table
+  - Event has `source: 'user_input'` in meta, stored in Supabase
+  - On app restart, `fetchActualCalendarEventsForDay()` loads the event from Supabase
+  - `buildActualDisplayEvents()` adds loaded events to `occupied` array, preventing `fillUnknownGaps()` from creating new unknown blocks at that time range
+
+- **Files changed:**
+  - `apps/mobile/src/stores/events-store.ts` - Added `'user_input'` and `'actual_adjust'` to source type union
+  - `apps/mobile/src/app/actual-adjust.tsx` - Added logic to detect unknown gap and set `source: 'user_input'`
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added `'user_input'` to sleep overlap preservation check
+  - `apps/mobile/src/lib/calendar/actual-timeline-builder.ts` - Added `'user_input'` to UserEdited priority check
+
+- **Learnings for future iterations:**
+  - The `CalendarEventMeta.source` type union should include all sources that are actually used in the codebase
+  - User-entered events get highest priority in the timeline builder, preventing them from being split
+  - Persistence relies on the existing actual events flow - no new Supabase tables or APIs needed
+  - Duplication prevention is automatic: loaded events occupy their time range, blocking new unknown gap derivation
 
 ---
