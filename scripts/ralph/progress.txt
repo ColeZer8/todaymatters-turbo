@@ -509,3 +509,29 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to new changes - verify with `grep` for specific file
 
 ---
+
+## 2026-01-24 - US-017: Show Confidence Score in Event Detail View
+- **What was implemented:**
+  - Enhanced confidence display in `actual-adjust.tsx` to show confidence score for derived events only
+  - Added `isDerivedEvent` check that looks at source (`derived`, `evidence`, `system`) and kind (all derived kinds)
+  - Confidence value is determined from multiple possible sources in priority order:
+    1. `evidenceFusion.confidence` - from evidence fusion system
+    2. `meta.confidence` - direct confidence field
+    3. `verificationReport.confidence` - from verification engine
+    4. `patternSummary.confidence` - from pattern recognition
+    5. `ai.confidence` - from AI categorization
+  - Added "Based on" row that explains what evidence sources contributed to the confidence:
+    - Location, screen time, sleep data, pattern history, verification, and evidence fusion sources
+    - Shows count of sources (e.g., "3 sources: location, screen time, pattern history")
+  - For AI-categorized events (non-derived), shows "AI confidence" with optional reasoning
+
+- **Files changed:**
+  - `apps/mobile/src/app/actual-adjust.tsx` - Enhanced evidenceRows useMemo with comprehensive confidence display
+
+- **Learnings for future iterations:**
+  - Confidence can come from multiple meta fields: `confidence`, `evidenceFusion.confidence`, `verificationReport.confidence`, `patternSummary.confidence`, `ai.confidence`
+  - Use `isDerivedEvent` check to differentiate between user-created and system-derived events
+  - Multiple evidence sources = higher confidence (shown in "Based on" explanation)
+  - The confidence display is only visible in event detail view (on tap), not inline on timeline (meeting AC requirement)
+
+---
