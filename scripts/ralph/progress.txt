@@ -481,3 +481,31 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Duplication prevention is automatic: loaded events occupy their time range, blocking new unknown gap derivation
 
 ---
+
+## 2026-01-24 - US-016: Show Evidence in Event Detail View
+- **What was implemented:**
+  - Enhanced the `evidenceRows` useMemo in `actual-adjust.tsx` to show rich evidence details
+  - **Location evidence**: Now shows address with time range (e.g., "123 Main St from 9:00 – 10:30 AM")
+  - **Screen time evidence**: Shows total minutes with time range and per-app breakdown
+  - **Late arrival evidence**: Shows planned vs actual arrival times and detection source
+  - **Different activity evidence**: Shows planned event vs actual location with place category
+  - **Distraction evidence**: Shows total distraction time and per-app usage breakdown
+  - Added context indicator when screen time occurred during sleep
+  - Organized evidence display into logical sections with comments for maintainability
+  - Added `startMinutes` and `durationMinutes` to useMemo dependencies for accurate time formatting
+
+- **Files changed:**
+  - `apps/mobile/src/app/actual-adjust.tsx` - Enhanced evidenceRows useMemo with formatted evidence display
+
+- **Learnings for future iterations:**
+  - The event detail view is in `actual-adjust.tsx`, displayed when tapping events in the calendar
+  - Evidence metadata has many fields already populated from earlier US implementations:
+    - `lateArrival` from US-009
+    - `differentActivity` from US-010
+    - `distraction` from US-013
+    - `duringSleep` from US-012
+  - The `formatMinutesToTime()` helper is already available in the file for time formatting
+  - Event's own `startMinutes` and `duration` provide the time range for evidence display
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to new changes - verify with `grep` for specific file
+
+---
