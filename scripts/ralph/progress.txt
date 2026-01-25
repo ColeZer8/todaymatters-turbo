@@ -28,6 +28,9 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Evidence Priority Order**: UserPlanned(1) > Location(2) > ScreenTime(3) > Pattern(4) > Health(5) - defined in `EvidenceSourcePriority` enum in `evidence-fusion.ts`
 - **Contextual Screen Time**: Use `isContextualScreenTime()` to check if screen time is expected for an activity (e.g., calculator at work) - contextual usage doesn't override location
 - **User Input Source**: Use `source: 'user_input'` for events created from unknown gap selections to distinguish from derived/system sources. These get highest priority (UserEdited) in timeline builder.
+- **Sparse Location Detection**: Use `detectSparseLocationData()` to check if location coverage is <30% or <6 hours - common on Android due to battery optimization
+- **Evidence Availability**: Use `assessEvidenceAvailability()` to get overall data availability and confidence multiplier for the day
+- **Sparse Location Fallback**: Use `fillSparseLocationGapsWithScreenTime()` to fill unknown gaps with screen time data when location is sparse
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -774,6 +777,54 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - TypeScript's strict type checking requires exact kind values - use existing kind enums like 'location_inferred' instead of inventing new ones like 'location'
   - The `buildNonOverlappingTimeline()` from ActualTimelineBuilder handles overlap resolution
   - Fusion metadata helps UI components understand where events came from for display/debugging
+  - Pre-existing TypeScript errors (35) in codebase are unrelated to these changes
+
+---
+
+## 2026-01-24 - US-025: Android Evidence Pipeline - Sparse Location Fallback
+- **What was implemented:**
+  - Created `SparseLocationMetrics` interface to track location data sparseness:
+    - totalSamples, hoursCovered, expectedHours, coverageRatio, isSparse
+    - gapHours (array of hours without data), avgAccuracyMeters, platformNotes
+  - Created `EvidenceAvailability` interface to assess overall evidence availability:
+    - hasLocation, locationIsSparse, sparseLocationMetrics
+    - hasScreenTime, screenTimeSessionCount, screenTimeMinutes
+    - hasHealthData, hasSleepData, hasUsageSummary
+    - confidenceMultiplier, confidenceNotes, platform
+  - Created `detectSparseLocationData()` function:
+    - Analyzes location rows to detect sparse coverage (<30% or <6 hours)
+    - Identifies gap hours and calculates average accuracy
+    - Adds platform-specific notes for debugging
+  - Created `assessEvidenceAvailability()` function:
+    - Assesses all evidence sources (location, screen time, health, usage summary)
+    - Calculates overall confidence multiplier based on data availability
+    - Android-specific: boosts confidence when usage summary compensates for sparse location
+  - Created `logEvidenceAvailability()` function for debugging:
+    - Logs all available evidence sources and their status
+    - Shows confidence percentage and sparse location details
+  - Created `calculateAdjustedConfidence()` function:
+    - Adjusts event confidence based on evidence availability and source type
+    - Screen time confidence boosted on Android with usage summary
+    - Location events have reduced confidence when location data is sparse
+    - Unknown gaps have reduced confidence when data is incomplete
+  - Created `fillSparseLocationGapsWithScreenTime()` function:
+    - Finds unknown gaps in timeline when location is sparse
+    - Creates screen time fallback events from usage summary data
+    - Adds `sparseLocationFallback: true` flag to evidence metadata
+  - Integrated evidence availability assessment into `buildActualDisplayEvents()`:
+    - Calls `assessEvidenceAvailability()` and logs results
+    - Applies sparse location fallback after gap filling
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added ~490 lines of sparse location handling
+  - `apps/mobile/src/stores/events-store.ts` - Added `sparseLocationFallback` flag to evidence interface
+
+- **Learnings for future iterations:**
+  - Android location data is often sparse due to battery optimization - need fallback strategies
+  - `EvidenceAvailability` provides centralized assessment of all data sources
+  - Confidence multipliers compound: base_confidence * availability_multiplier * source_adjustment
+  - Screen time data from Android usage summary is reliable even when location is sparse
+  - The `sparseLocationFallback` flag helps UI distinguish fallback events for display
   - Pre-existing TypeScript errors (35) in codebase are unrelated to these changes
 
 ---
