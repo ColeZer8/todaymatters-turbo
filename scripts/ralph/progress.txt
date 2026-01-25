@@ -25,6 +25,8 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Event Priority Order**: UserEdited(1) > SupabaseActual(2) > DerivedEvidence(3) > ScreenTime(4) > Unknown(5)
 - **Duplicate Cleanup**: Use `cleanupDuplicateDerivedEvents()` from `calendar-events.ts` to remove duplicates while preserving oldest
 - **Re-derivation Prevention**: `buildActualDisplayEvents` tracks saved derived events by source_id and time+kind to skip re-derivation
+- **Evidence Priority Order**: UserPlanned(1) > Location(2) > ScreenTime(3) > Pattern(4) > Health(5) - defined in `EvidenceSourcePriority` enum in `evidence-fusion.ts`
+- **Contextual Screen Time**: Use `isContextualScreenTime()` to check if screen time is expected for an activity (e.g., calculator at work) - contextual usage doesn't override location
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -222,5 +224,39 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Double-tracking by both source_id AND time+kind provides robust duplicate detection
   - Production logging (using console.log) helps debug sync issues on physical devices
   - When cleaning up duplicates, always prefer keeping the oldest record for data consistency
+
+---
+
+## 2026-01-24 - US-008: Implement Evidence Priority Resolution
+- **What was implemented:**
+  - Added `EvidenceSourcePriority` enum with explicit priority ordering:
+    1. UserPlanned (highest) - user's intended activity
+    2. Location - physical presence as strongest evidence
+    3. ScreenTime - intentionality check
+    4. Pattern - historical behavior
+    5. Health (lowest) - workout/sleep data
+  - Added `priority` field to `EvidenceFusionSource` interface
+  - Added `isContextual` flag to detect expected screen time usage (e.g., calculator at work)
+  - Added `isContextualScreenTime()` function to check if screen time is expected for the planned activity:
+    - Work/digital/meeting activities: productive apps (email, slack, docs, etc.) are contextual
+    - Health activities: fitness/music apps are contextual
+  - Added `primarySource` and `primarySourcePriority` fields to `EvidenceFusionResult`
+  - Updated `SOURCE_WEIGHTS` to reflect new priority order
+  - Updated `resolveConflict()` to use priority-based resolution:
+    - Location wins when it contradicts the plan
+    - Screen time only overrides when significant (>=20 min) AND non-contextual
+    - Patterns require high confidence (>=0.8) to win
+  - Added confidence boost when location confirms the plan
+  - Exported `EvidenceSourcePriority` from calendar index.ts
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/evidence-fusion.ts` - Added priority system, contextual screen time check, enhanced fusion logic
+  - `apps/mobile/src/lib/calendar/index.ts` - Added export for evidence-fusion
+
+- **Learnings for future iterations:**
+  - Evidence priority determines which source is most trustworthy for actual timeline
+  - Contextual screen time (work apps during work) shouldn't override location evidence
+  - The `primarySource` field helps UI components show which evidence determined the event
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
 
 ---
