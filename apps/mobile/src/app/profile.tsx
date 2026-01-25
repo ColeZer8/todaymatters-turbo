@@ -51,7 +51,7 @@ import {
   openUsageAccessSettingsSafeAsync,
 } from '@/lib/android-insights';
 import { flushPendingLocationSamplesToSupabaseAsync } from '@/lib/ios-location';
-import { flushPendingAndroidLocationSamplesToSupabaseAsync } from '@/lib/android-location';
+import { flushPendingAndroidLocationSamplesToSupabaseAsync, getAndroidLocationDiagnostics } from '@/lib/android-location';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
 import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
 import appConfig from '@/lib/config';
@@ -188,6 +188,32 @@ export default function ProfileScreen() {
     }
   }, [user?.id]);
 
+  const handleDevAndroidLocationDiagnostics = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Android diagnostics', 'This diagnostic is only available on Android devices.');
+      return;
+    }
+    try {
+      const diagnostics = await getAndroidLocationDiagnostics();
+      const summary = [
+        `Support: ${diagnostics.support}`,
+        `Location module: ${diagnostics.locationModule ? 'yes' : 'no'}`,
+        `Services enabled: ${diagnostics.servicesEnabled ? 'yes' : 'no'}`,
+        `Foreground permission: ${diagnostics.foregroundPermission}`,
+        `Background permission: ${diagnostics.backgroundPermission}`,
+        `Task started: ${diagnostics.taskStarted ? 'yes' : 'no'}`,
+        `Pending samples: ${diagnostics.pendingSamples}`,
+      ].join('\n');
+      const errors = diagnostics.errors.length > 0 ? `\n\nBlocking issues:\n- ${diagnostics.errors.join('\n- ')}` : '';
+      Alert.alert('Android Location Diagnostics', `${summary}${errors}`);
+    } catch (error) {
+      Alert.alert(
+        'Android diagnostics failed',
+        error instanceof Error ? error.message : 'Unknown error while running diagnostics.'
+      );
+    }
+  }, []);
+
   const handleDevRequestLocation = useCallback(async () => {
     try {
       if (Platform.OS === 'ios') {
@@ -261,7 +287,8 @@ export default function ProfileScreen() {
   const isPreviewBuild = Constants.executionEnvironment === 'standalone';
   const isStoreClient = Constants.executionEnvironment === 'storeClient';
   // Show dev menu if: dev mode, not production env, standalone build (preview), or store client
-  const showDevMenu = __DEV__ || !appConfig.env.isProd || isPreviewBuild || isStoreClient;
+  const showDevMenu =
+    __DEV__ || !appConfig.env.isProd || isPreviewBuild || isStoreClient || appConfig.features.enableTestingMenu;
   
   const menuItems = [
     { id: 'account-settings', label: 'Account Settings', icon: Settings },
@@ -299,6 +326,12 @@ export default function ProfileScreen() {
             label: '🧪 Location Samples (dev)',
             icon: Calendar,
             onPress: () => router.push('/dev/location'),
+          },
+          {
+            id: 'dev-android-location-diagnostics',
+            label: '🧪 Android Location Diagnostics (dev)',
+            icon: Calendar,
+            onPress: handleDevAndroidLocationDiagnostics,
           },
           {
             id: 'dev-sync-health',

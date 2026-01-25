@@ -1,3 +1,22 @@
 # Ralph Progress Log
 Started: Thu Jan 22 14:33:52 CST 2026
+Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
+---
+
+## Codebase Patterns
+- Evidence data is fetched in `apps/mobile/src/lib/supabase/services/evidence-data.ts`
+- Actual event derivation happens in `apps/mobile/src/lib/calendar/actual-display-events.ts`
+- Screen time derivation is in `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts`
+- Calendar orchestration is in `apps/mobile/src/app/comprehensive-calendar.tsx`
+- Rendering with absolute positioning is in `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
+- Known duplicate key issue at ComprehensiveCalendarTemplate.tsx lines 552-559
+
+## Critical Issue - Android Physical Device
+- **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
+- **Works**: Android simulator
+- **Fails**: Physical Android device via Play Console internal testing (production build)
+- **Permissions**: All granted (Usage Access, Location)
+- **Symptom**: Nothing being pulled despite permissions granted
+- **Priority**: HIGHEST - US-001 and US-002 must be completed first
+
 ---

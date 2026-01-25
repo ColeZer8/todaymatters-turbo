@@ -179,6 +179,7 @@ export default {
       },
       // Add environment-specific variables
       ...getEnvVars(),
+      enableTestingMenu: process.env.EXPO_PUBLIC_ENABLE_TEST_MENU === 'true',
       appEnv: resolveAppEnvName(),
     },
     // EAS Update configuration - updates are enabled via channels in eas.json

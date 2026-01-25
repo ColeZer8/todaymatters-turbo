@@ -1,0 +1,384 @@
+{
+  "project": "TodayMatters Calendar",
+  "branchName": "ralph/calendar-actual-timeline-fix",
+  "description": "Fix the calendar Actual timeline to be accurate, non-overlapping, and reliable. CRITICAL: Evidence data not pulling on physical Android devices in production (Play Console internal testing) - works on simulator but fails on real devices despite permissions granted.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "CRITICAL: Debug Android Production Evidence Data Pull Failure",
+      "description": "As a user on a physical Android device, I need evidence data (location, screen time) to be pulled correctly so my actual timeline works. Currently works on Android simulator but fails on physical devices running production builds via Play Console internal testing. All permissions are granted but nothing is being pulled.",
+      "acceptanceCriteria": [
+        "Add comprehensive logging to evidence data fetch in production builds",
+        "Log permission states at runtime (Usage Access, Location) with actual granted status",
+        "Log raw responses from Android Usage Stats API and Location APIs",
+        "Log any errors or empty responses with full context",
+        "Test on physical Android device via Play Console internal testing",
+        "Document findings in progress.txt for root cause analysis",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "HIGHEST PRIORITY - Blocking all other actual timeline features on physical devices"
+    },
+    {
+      "id": "US-002",
+      "title": "Fix Android Production Build Evidence Collection",
+      "description": "As a developer, I need to fix whatever is preventing evidence data collection on physical Android devices in production so users can see their actual timeline.",
+      "acceptanceCriteria": [
+        "Based on US-001 findings, implement fix for evidence data collection",
+        "Handle any production-specific configurations (ProGuard, release signing, etc.)",
+        "Verify Usage Access permission works in production build",
+        "Verify Location permission works in production build",
+        "Evidence data appears in dev screens on physical Android device",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Depends on US-001 investigation findings"
+    },
+    {
+      "id": "US-003",
+      "title": "Generate Unique Deterministic Event IDs",
+      "description": "As a developer, I need every derived event to have a unique ID so React renders correctly without duplicate key warnings.",
+      "acceptanceCriteria": [
+        "Derived event IDs use format: derived:{type}:{startMinutes}:{endMinutes}:{source}",
+        "Fix derived_actual:sleep_interrupted_60_8 duplicate issue in derive-screen-time-actual-events.ts",
+        "Add uniqueness validation before rendering - log warning if duplicates found",
+        "No React duplicate key warnings in console",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Fixes ComprehensiveCalendarTemplate.tsx lines 552-559 duplicate key error"
+    },
+    {
+      "id": "US-004",
+      "title": "Create ActualTimelineBuilder with Overlap Split Algorithm",
+      "description": "As a user, I want the actual timeline to never show overlapping events so I can clearly see my day.",
+      "acceptanceCriteria": [
+        "Create ActualTimelineBuilder class in apps/mobile/src/lib/calendar/actual-timeline-builder.ts",
+        "Implement split algorithm: when events overlap, split lower-priority event around higher-priority",
+        "Priority order: (1) User-edited actual, (2) Supabase actual (non-derived), (3) Derived from evidence, (4) Screen time, (5) Unknown",
+        "Export and use in actual-display-events.ts",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add Unit Test for Overlap Elimination",
+      "description": "As a developer, I need tests to verify no two events overlap in the final timeline output.",
+      "acceptanceCriteria": [
+        "Create test file for ActualTimelineBuilder",
+        "Test: two overlapping events result in split/non-overlapping output",
+        "Test: priority order is respected when splitting",
+        "Test: edge cases (exact same time, partial overlap, contained event)",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Integrate ActualTimelineBuilder into Display Pipeline",
+      "description": "As a user, I want the no-overlap invariant enforced in the actual calendar display.",
+      "acceptanceCriteria": [
+        "Replace overlap handling in buildActualDisplayEvents with ActualTimelineBuilder",
+        "Remove old dedup/overlap logic that was producing overlaps",
+        "Verify no overlapping events render in ComprehensiveCalendarTemplate",
+        "Visual inspection: events line up without stacking",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Fix Actual Data Persistence - Prevent Prior Day Erasure",
+      "description": "As a user, I want my actual data from previous days to persist and not be erased.",
+      "acceptanceCriteria": [
+        "Investigate syncDerivedActualEvents for erasure bug",
+        "Add logging to trace actual event lifecycle (create, sync, retrieve)",
+        "Ensure derived events synced to Supabase are not re-derived and duplicated",
+        "Prior day actual events remain intact after app restart",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement Evidence Priority Resolution",
+      "description": "As a user, I want my actual timeline to reflect reality using the best available evidence with correct priority.",
+      "acceptanceCriteria": [
+        "Resolution order: (1) User's ideal/planned event, (2) Location data, (3) Screen time as intentionality check",
+        "Screen time within expected context (e.g., calculator at work) doesnt override location",
+        "Location is primary source when available; screen time confirms/adjusts",
+        "Add priority field to evidence fusion logic in actual-display-events.ts",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Cross-Reference Planned Events with Evidence - Shifting",
+      "description": "As a user, I want planned events to be reconciled with actual evidence showing late arrivals.",
+      "acceptanceCriteria": [
+        "For each planned event, check evidence timestamps",
+        "If evidence shows late arrival: create actual block with shifted start time",
+        "Add 'arrived X min late' in actual event description",
+        "Planned events are never modified - actual timeline shows reality",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Cross-Reference Planned Events with Evidence - Different Activity",
+      "description": "As a user, I want to see what I actually did when it differs from planned.",
+      "acceptanceCriteria": [
+        "If evidence shows different activity than planned: create actual block showing reality",
+        "Example: 'Go to gym' planned + McDonald's location = create 'Fast food' actual with location evidence",
+        "Keep planned event visible for comparison",
+        "Actual block includes evidence source in metadata",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Handle Screen Time Inside Sleep - Embed Short Usage",
+      "description": "As a user, I want brief phone usage during sleep to be noted on the sleep block.",
+      "acceptanceCriteria": [
+        "Screen time <=10 min during sleep: embed in sleep block description",
+        "Format: 'Sleep (phone: 5 min)' or similar",
+        "Do not create separate block for short screen time",
+        "Update derive-screen-time-actual-events.ts logic",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Handle Screen Time Inside Sleep - Separate Long Usage",
+      "description": "As a user, I want longer phone usage during sleep to be a separate event.",
+      "acceptanceCriteria": [
+        "Screen time >10 min during sleep: create separate 'Screen Time' block",
+        "Split sleep block around the screen time block",
+        "Sleep block shows total duration excluding screen time interruptions >10 min",
+        "Use ActualTimelineBuilder for split logic",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Detect and Annotate Distractions",
+      "description": "As a user, I want to see when I was distracted from my planned activity.",
+      "acceptanceCriteria": [
+        "If planned work + location is work but distraction app used: add 'distracted' note",
+        "Distraction <10 min: note on same block (e.g., 'Work (distracted 5 min)')",
+        "Distraction >10 min: create separate distraction block",
+        "Default distraction apps: social media, games",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Fill Unknown Gaps with Interactive Prompts",
+      "description": "As a user, I want gaps in my actual timeline to prompt me with suggestions.",
+      "acceptanceCriteria": [
+        "Unknown gaps show interactive 'What were you doing?' prompt",
+        "Suggestions inferred from planned events for that time slot",
+        "User can select from suggestions or enter custom activity",
+        "Unknown blocks only appear for past time, never future",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Persist Unknown Gap Selections to Supabase",
+      "description": "As a user, I want my unknown gap selections to be saved permanently.",
+      "acceptanceCriteria": [
+        "Selected activity from unknown prompt persisted to Supabase as actual event",
+        "Event includes source: 'user_input' to distinguish from derived",
+        "Persisted events load correctly on app restart",
+        "No duplication on subsequent loads",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Show Evidence in Event Detail View",
+      "description": "As a user, I want to see the evidence that informed an actual event when I tap on it.",
+      "acceptanceCriteria": [
+        "Event detail view shows source evidence (location data, screen time sessions)",
+        "Evidence formatted clearly (e.g., 'Location: 123 Main St from 9:00-10:30 AM')",
+        "Screen time details show apps and durations",
+        "Only show for events that have evidence metadata",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Show Confidence Score in Event Detail View",
+      "description": "As a user, I want to see how confident the system is about derived events.",
+      "acceptanceCriteria": [
+        "Event detail view shows confidence score for derived events",
+        "Only visible on tap/expand, not inline on timeline",
+        "Format: 'Confidence: 85%' or similar",
+        "Confidence based on evidence strength (multiple sources = higher)",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Create User Location Mappings Schema",
+      "description": "As a developer, I need to store user-defined location mappings in Supabase.",
+      "acceptanceCriteria": [
+        "Create location_mappings table: id, user_id, location_address, activity_name, created_at",
+        "Add Supabase migration",
+        "Create TypeScript types for location mappings",
+        "Add CRUD functions in supabase services",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Create User App Mappings Schema",
+      "description": "As a developer, I need to store user-defined app mappings in Supabase.",
+      "acceptanceCriteria": [
+        "Create app_mappings table: id, user_id, app_name, activity_type, is_distraction, created_at",
+        "Add Supabase migration",
+        "Create TypeScript types for app mappings",
+        "Add CRUD functions in supabase services",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Create Location Mappings Settings UI",
+      "description": "As a user, I want to map locations to activities so the system can infer correctly.",
+      "acceptanceCriteria": [
+        "Settings screen for managing location mappings",
+        "User can add new mapping (location address to activity name)",
+        "User can edit/delete existing mappings",
+        "Mappings load from and save to Supabase",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Create App Mappings Settings UI",
+      "description": "As a user, I want to map apps to activity types so the system can infer correctly.",
+      "acceptanceCriteria": [
+        "Settings screen for managing app mappings",
+        "User can map app to activity type",
+        "User can mark app as distraction",
+        "Mappings load from and save to Supabase",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Use Location Mappings in Cross-Reference Logic",
+      "description": "As a user, I want the system to use my location mappings when inferring activities.",
+      "acceptanceCriteria": [
+        "Cross-reference logic loads user's location mappings",
+        "When location matches a mapping, use the mapped activity name",
+        "Fallback to raw location if no mapping exists",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Use App Mappings in Cross-Reference Logic",
+      "description": "As a user, I want the system to use my app mappings when inferring activities and distractions.",
+      "acceptanceCriteria": [
+        "Cross-reference logic loads user's app mappings",
+        "When app matches a mapping, use the mapped activity type",
+        "When app is marked as distraction, flag accordingly",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Consolidate Evidence Fusion Pipeline",
+      "description": "As a developer, I need a single pipeline that fuses all evidence sources before rendering.",
+      "acceptanceCriteria": [
+        "Create unified evidence fusion in actual-display-events.ts",
+        "Pipeline: merge evidence blocks + screen time + planned cross-ref into single ordered list",
+        "Each event has unique ID and attached metadata for description rendering",
+        "Pipeline runs once per render cycle, not multiple times",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Android Evidence Pipeline - Sparse Location Fallback",
+      "description": "As an Android user, I need the pipeline to handle sparse location data gracefully.",
+      "acceptanceCriteria": [
+        "When location is sparse, fallback to screen time + unknown with confidence tags",
+        "Add confidence indicators based on evidence availability",
+        "Log evidence source availability for debugging",
+        "Handle Android-specific data formats and timing",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

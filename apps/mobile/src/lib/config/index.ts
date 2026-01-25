@@ -40,6 +40,7 @@ interface AppConfig {
     enableDebugLogs: boolean;
     enableCrashlytics: boolean;
     enableAnalytics: boolean;
+    enableTestingMenu: boolean;
   };
 }
 
@@ -71,6 +72,10 @@ const appConfig: AppConfig = {
     enableDebugLogs: appEnv !== 'production',
     enableCrashlytics: appEnv !== 'development',
     enableAnalytics: appEnv === 'production',
+    enableTestingMenu:
+      config.enableTestingMenu === true ||
+      config.enableTestingMenu === 'true' ||
+      readPublicEnv('EXPO_PUBLIC_ENABLE_TEST_MENU') === 'true',
   },
 };
 
