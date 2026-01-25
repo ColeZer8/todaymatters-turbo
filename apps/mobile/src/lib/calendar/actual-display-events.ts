@@ -31,6 +31,109 @@ const SLEEP_MIN_REMAINING_MINUTES = 30;
 const SLEEP_OVERRIDE_MIN_COVERAGE = 0.7;
 const SLEEP_OVERRIDE_MIN_MINUTES = 60;
 const LOCATION_MIN_BLOCK_MINUTES = 10;
+const LATE_ARRIVAL_MIN_MINUTES = 5; // Minimum late threshold to consider it a "late arrival"
+const LATE_ARRIVAL_MAX_MINUTES = 60; // Maximum lateness before it's considered a different activity
+
+/**
+ * Information about a late arrival to a planned event.
+ */
+interface LateArrivalInfo {
+  /** How many minutes late the user arrived */
+  lateMinutes: number;
+  /** The actual start time (in minutes from midnight) */
+  actualStartMinutes: number;
+  /** Evidence source that detected the late arrival */
+  evidenceSource: 'location' | 'screen_time';
+  /** The place label where they arrived (if location-based) */
+  placeLabel?: string;
+}
+
+/**
+ * Detect if the user arrived late to a planned event based on evidence.
+ *
+ * Uses location evidence as primary source - checks when the user actually
+ * arrived at the expected location vs when the event was planned.
+ *
+ * @param planned - The planned event
+ * @param locationBlocks - Location blocks for the day
+ * @param verification - Verification result for the event (may contain timing info)
+ * @returns LateArrivalInfo if late arrival detected, null otherwise
+ */
+function detectLateArrival(
+  planned: ScheduledEvent,
+  locationBlocks: LocationBlock[],
+  verification: VerificationResult | null,
+): LateArrivalInfo | null {
+  const plannedStart = planned.startMinutes;
+  const plannedEnd = planned.startMinutes + planned.duration;
+
+  // First check if verification already detected late timing
+  if (verification?.timing?.lateMinutes && verification.timing.lateMinutes >= LATE_ARRIVAL_MIN_MINUTES) {
+    const lateMinutes = verification.timing.lateMinutes;
+    if (lateMinutes <= LATE_ARRIVAL_MAX_MINUTES) {
+      return {
+        lateMinutes,
+        actualStartMinutes: plannedStart + lateMinutes,
+        evidenceSource: 'location',
+        placeLabel: verification.evidence.location?.placeLabel ?? undefined,
+      };
+    }
+  }
+
+  // Check location evidence - find when user actually arrived at expected location
+  const locationEvidence = verification?.evidence.location;
+  if (locationEvidence?.matchesExpected && locationEvidence.placeLabel) {
+    // Find the first location block that matches the expected location and starts after planned start
+    const matchingBlock = locationBlocks.find((block) => {
+      const labelMatches =
+        block.placeLabel.toLowerCase() === locationEvidence.placeLabel?.toLowerCase();
+      const categoryMatches =
+        block.placeCategory?.toLowerCase() === locationEvidence.placeCategory?.toLowerCase();
+      const startsAfterPlanned = block.startMinutes > plannedStart;
+      const startsBeforePlannedEnd = block.startMinutes < plannedEnd;
+
+      return (labelMatches || categoryMatches) && startsAfterPlanned && startsBeforePlannedEnd;
+    });
+
+    if (matchingBlock) {
+      const lateMinutes = matchingBlock.startMinutes - plannedStart;
+      if (lateMinutes >= LATE_ARRIVAL_MIN_MINUTES && lateMinutes <= LATE_ARRIVAL_MAX_MINUTES) {
+        return {
+          lateMinutes,
+          actualStartMinutes: matchingBlock.startMinutes,
+          evidenceSource: 'location',
+          placeLabel: matchingBlock.placeLabel,
+        };
+      }
+    }
+  }
+
+  // For events with a specific location, check if any location block shows arrival later
+  if (planned.location) {
+    const matchingBlock = locationBlocks.find((block) => {
+      const labelMatches = block.placeLabel.toLowerCase().includes(planned.location!.toLowerCase()) ||
+        planned.location!.toLowerCase().includes(block.placeLabel.toLowerCase());
+      const startsAfterPlanned = block.startMinutes > plannedStart;
+      const startsBeforePlannedEnd = block.startMinutes < plannedEnd;
+
+      return labelMatches && startsAfterPlanned && startsBeforePlannedEnd;
+    });
+
+    if (matchingBlock) {
+      const lateMinutes = matchingBlock.startMinutes - plannedStart;
+      if (lateMinutes >= LATE_ARRIVAL_MIN_MINUTES && lateMinutes <= LATE_ARRIVAL_MAX_MINUTES) {
+        return {
+          lateMinutes,
+          actualStartMinutes: matchingBlock.startMinutes,
+          evidenceSource: 'location',
+          placeLabel: matchingBlock.placeLabel,
+        };
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * Generate a unique deterministic event ID.
@@ -491,9 +594,15 @@ function buildPlannedActualEvent(options: {
     dataQuality,
     appCategoryOverrides,
   } = options;
-  const startMinutes = clampMinutes(planned.startMinutes);
+  const plannedStartMinutes = clampMinutes(planned.startMinutes);
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
-  if (plannedEnd <= startMinutes) return null;
+  if (plannedEnd <= plannedStartMinutes) return null;
+
+  // Detect late arrival based on location evidence
+  const lateArrival = detectLateArrival(planned, locationBlocks, verification);
+
+  // If late arrival detected, shift the actual start time
+  const startMinutes = lateArrival ? lateArrival.actualStartMinutes : plannedStartMinutes;
 
   const nextPlannedStart = plannedEvents.find((e) => e.startMinutes > planned.startMinutes)?.startMinutes;
   const maxEnd = nextPlannedStart !== undefined ? Math.min(nextPlannedStart, 24 * 60) : 24 * 60;
@@ -521,6 +630,7 @@ function buildPlannedActualEvent(options: {
     extendedMinutes: Math.max(0, actualEnd - plannedEnd),
     locationLabel: matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
     usageInfo,
+    lateArrival,
   });
 
   const sleepQuality = buildSleepQualityMetrics(healthDaily ?? null);
@@ -625,12 +735,22 @@ function buildPlannedActualEvent(options: {
             }
           : undefined,
       conflicts: conflicts.length > 0 ? conflicts : undefined,
+      lateArrival: lateArrival
+        ? {
+            lateMinutes: lateArrival.lateMinutes,
+            plannedStartMinutes: plannedStartMinutes,
+            actualStartMinutes: lateArrival.actualStartMinutes,
+            evidenceSource: lateArrival.evidenceSource,
+          }
+        : undefined,
     },
     evidenceFusion: fusion,
     kind:
-      planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
-        ? 'sleep_late'
-        : 'planned_actual',
+      lateArrival
+        ? 'late_arrival'
+        : planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+          ? 'sleep_late'
+          : 'planned_actual',
   };
 
   return {
@@ -650,12 +770,18 @@ function buildActualDescription(options: {
   extendedMinutes: number;
   locationLabel: string | null;
   usageInfo: UsageOverlapInfo | null;
+  lateArrival?: LateArrivalInfo | null;
 }): string {
-  const { planned, verification, extendedMinutes, locationLabel, usageInfo } = options;
+  const { planned, verification, extendedMinutes, locationLabel, usageInfo, lateArrival } = options;
   const parts: string[] = [];
 
   if (planned.description?.trim()) {
     parts.push(planned.description.trim());
+  }
+
+  // Add late arrival annotation if detected
+  if (lateArrival) {
+    parts.push(`Arrived ${Math.round(lateArrival.lateMinutes)} min late`);
   }
 
   if (planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {

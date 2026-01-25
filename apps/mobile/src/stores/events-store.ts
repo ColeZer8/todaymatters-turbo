@@ -44,7 +44,8 @@ export interface CalendarEventMeta {
     | 'transition_commute'
     | 'transition_prep'
     | 'transition_wind_down'
-    | 'location_inferred';
+    | 'location_inferred'
+    | 'late_arrival';
   startYmd?: string;
   actual?: boolean;
   tags?: string[];
@@ -70,6 +71,17 @@ export interface CalendarEventMeta {
       qualityScore?: number | null;
     };
     conflicts?: Array<{ source: 'location' | 'screen_time' | 'health' | 'pattern'; detail: string }>;
+    /** Late arrival information when user arrived late to a planned event */
+    lateArrival?: {
+      /** How many minutes late the user arrived */
+      lateMinutes: number;
+      /** The planned start time (in minutes from midnight) */
+      plannedStartMinutes: number;
+      /** The actual start time (in minutes from midnight) */
+      actualStartMinutes: number;
+      /** Evidence source that detected the late arrival */
+      evidenceSource: 'location' | 'screen_time';
+    };
   };
   evidenceFusion?: {
     confidence: number;
