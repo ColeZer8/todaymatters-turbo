@@ -668,3 +668,39 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
 
 ---
+
+## 2026-01-24 - US-022: Use Location Mappings in Cross-Reference Logic
+- **What was implemented:**
+  - Added `LocationMapping` type import to `actual-display-events.ts`
+  - Added `locationMappings` parameter to `BuildActualDisplayEventsInput` interface
+  - Created `findLocationMapping()` function for case-insensitive partial matching:
+    - Checks if location label contains mapped address or vice versa
+    - Returns matching `LocationMapping` or null
+  - Created `mapLocationToActivity()` function that:
+    - Checks user's custom mappings first
+    - Returns user-defined activity name if mapping exists
+    - Falls back to default `mapPlaceToCategory()` inference if no mapping
+    - Returns `LocationActivityResult` with activityName, category, and isUserMapped flag
+  - Updated `detectDifferentActivity()` to accept and use `locationMappings`:
+    - Uses `mapLocationToActivity()` instead of direct `mapPlaceToCategory()` call
+    - Activity label is now user's custom name if mapping exists
+    - Category is inferred from user's activity name
+  - Updated `buildPlannedActualEvent()` to pass `locationMappings` through
+  - Updated `buildActualDisplayEvents()` to accept and pass `locationMappings`
+  - Updated `comprehensive-calendar.tsx` to:
+    - Import `fetchLocationMappings` and `LocationMapping` type
+    - Add `locationMappings` state with useState
+    - Load mappings via useEffect when userId changes
+    - Pass mappings to `buildActualDisplayEvents()`
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added types, functions, updated cross-reference logic
+  - `apps/mobile/src/app/comprehensive-calendar.tsx` - Load and pass location mappings
+
+- **Learnings for future iterations:**
+  - Use case-insensitive partial matching for location addresses (e.g., "Main St" matches "123 Main St")
+  - User mappings should take priority over default inference
+  - The `mapLocationToActivity()` wrapper provides clean abstraction for mapping lookup + fallback
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
+
+---
