@@ -352,3 +352,34 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - App sessions provide precise timing needed for mid-sleep detection
 
 ---
+
+## 2026-01-24 - US-012: Handle Screen Time Inside Sleep - Separate Long Usage
+- **What was implemented:**
+  - Created `SleepProcessingResult` interface for returning split sleep segments and screen time blocks
+  - Created `buildMidSleepScreenTimeBlocks()` function that:
+    - Creates separate screen time blocks for long phone usage (>10 min) during sleep
+    - Merges adjacent sessions within 5 min gap to avoid creating too many blocks
+    - Splits the sleep event around screen time blocks
+    - Ensures minimum 15 min for sleep segments to be meaningful
+  - Created `mergeMidSleepSessions()` to combine adjacent phone sessions
+  - Created `generateSleepSegmentId()` for unique split segment IDs
+  - Created `buildSplitSleepDescription()` that shows:
+    - First segment: "Sleep (Xh total, interrupted Y min)"
+    - Subsequent segments: "Sleep (continued)"
+  - Added `duringSleep: true` flag to evidence metadata for mid-sleep screen time blocks
+  - Modified main sleep handling to:
+    - Return split sleep segments when long mid-sleep usage detected
+    - Add screen time blocks and additional sleep segments to output
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts` - Added SleepProcessingResult, buildMidSleepScreenTimeBlocks(), mergeMidSleepSessions(), generateSleepSegmentId(), buildSplitSleepDescription(), modified sleep handling
+  - `apps/mobile/src/stores/events-store.ts` - Added `duringSleep` flag to evidence interface
+
+- **Learnings for future iterations:**
+  - Sleep splitting uses the ActualTimelineBuilder PATTERN but not the class directly (sleep has higher priority than screen time normally)
+  - Adjacent screen time sessions should be merged to avoid fragmenting sleep into many small segments
+  - Minimum segment duration (15 min) prevents creating meaningless tiny sleep blocks
+  - The first sleep segment gets the summary annotation, subsequent ones say "continued"
+  - Multiple sleep segments and screen time blocks are combined by adding extras to sleepLateBlocks array
+
+---
