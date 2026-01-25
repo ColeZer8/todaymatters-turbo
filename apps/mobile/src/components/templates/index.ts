@@ -31,3 +31,4 @@ export { DemoCarouselTemplate } from './DemoCarouselTemplate';
 export { ScreenTimeAnalyticsTemplate } from './ScreenTimeAnalyticsTemplate';
 export { HealthKitDashboardTemplate } from './HealthKitDashboardTemplate';
 export { LocationMappingsTemplate, type LocationMappingItem } from './LocationMappingsTemplate';
+export { AppMappingsTemplate, type AppMappingItem } from './AppMappingsTemplate';

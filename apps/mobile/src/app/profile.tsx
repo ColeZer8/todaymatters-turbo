@@ -14,6 +14,7 @@ import {
   Play,
   RefreshCw,
   Settings,
+  Smartphone,
   Sparkles,
   Target,
 } from 'lucide-react-native';
@@ -285,6 +286,12 @@ export default function ProfileScreen() {
       label: 'Location Mappings',
       icon: MapPin,
       onPress: () => router.push('/settings/location-mappings'),
+    },
+    {
+      id: 'app-mappings',
+      label: 'App Mappings',
+      icon: Smartphone,
+      onPress: () => router.push('/settings/app-mappings'),
     },
   ];
 
