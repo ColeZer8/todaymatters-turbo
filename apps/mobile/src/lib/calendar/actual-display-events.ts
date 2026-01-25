@@ -17,6 +17,7 @@ import {
   getPatternSuggestionForRange,
   type PatternIndex,
 } from './pattern-recognition';
+import { buildNonOverlappingTimeline } from './actual-timeline-builder';
 
 export const DERIVED_ACTUAL_PREFIX = 'derived_actual:';
 export const DERIVED_EVIDENCE_PREFIX = 'derived_evidence:';
@@ -438,12 +439,15 @@ export function buildActualDisplayEvents({
     : withPrepWindDown;
   const withQuality = attachDataQuality(withPatternFilled, dataQuality);
 
-  // Final deduplication pass: remove any overlapping events, keeping the first one encountered
-  const deduplicated = removeOverlappingEvents(mergeAdjacentSleep(withQuality));
+  // Final overlap resolution pass: use ActualTimelineBuilder to split overlapping events
+  // rather than removing them entirely. This preserves more information by splitting
+  // lower-priority events around higher-priority ones.
+  const withMergedSleep = mergeAdjacentSleep(withQuality);
+  const nonOverlapping = buildNonOverlappingTimeline(withMergedSleep, 1);
 
-  // CRITICAL: Always ensure gaps are filled with unknown events, even after deduplication
+  // CRITICAL: Always ensure gaps are filled with unknown events, even after overlap resolution
   // This guarantees there's always something in the "actual" column
-  const withGapsFilled = fillUnknownGaps(deduplicated);
+  const withGapsFilled = fillUnknownGaps(nonOverlapping);
 
   return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
 }
