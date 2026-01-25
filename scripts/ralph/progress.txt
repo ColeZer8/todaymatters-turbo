@@ -741,3 +741,39 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
 
 ---
+
+## 2026-01-24 - US-024: Consolidate Evidence Fusion Pipeline
+- **What was implemented:**
+  - Created unified `runEvidenceFusionPipeline()` function that merges all evidence sources:
+    - user_actual (user-created/edited events)
+    - supabase_derived (previously synced derived events)
+    - evidence_block (verification engine blocks)
+    - screen_time (screen time derived events)
+    - planned_crossref (late arrival, different activity, distraction)
+    - location (location-derived events)
+    - sleep (sleep-derived events)
+    - pattern (pattern-suggested events)
+  - Added comprehensive type definitions:
+    - `EvidenceSourceType` enum for all evidence source types
+    - `EvidenceFusionMetadata` interface for tracking fusion details per event
+    - `EvidenceItem` interface for internal pipeline processing
+    - `EvidenceFusionPipelineInput/Result` interfaces for pipeline I/O
+  - Priority ordering: UserActual(1) > SupabaseDerived(2) > PlannedCrossref(3) > EvidenceBlock(4) > Location(5) > ScreenTime(6) > Sleep(7) > Pattern(8) > Unknown(9)
+  - Each event gets fusion metadata attached: sourceType, fusionId, fusedAt, confidence, evidenceDescription, isDerived, contributingSources
+  - Added `logFusionPipelineStats()` for debugging fusion operations
+  - Updated `buildActualDisplayEvents()` to use the new pipeline at final consolidation step
+  - Extended `CalendarEventMeta.evidenceFusion` type with new metadata fields
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added ~470 lines of evidence fusion pipeline code
+  - `apps/mobile/src/stores/events-store.ts` - Extended evidenceFusion type with new fields
+
+- **Learnings for future iterations:**
+  - The pipeline runs ONCE per render cycle for efficiency (all evidence gathered, then processed)
+  - Use `classifyEventSource()` to determine event source type from metadata (fallback logic based on id prefix, kind, source)
+  - TypeScript's strict type checking requires exact kind values - use existing kind enums like 'location_inferred' instead of inventing new ones like 'location'
+  - The `buildNonOverlappingTimeline()` from ActualTimelineBuilder handles overlap resolution
+  - Fusion metadata helps UI components understand where events came from for display/debugging
+  - Pre-existing TypeScript errors (35) in codebase are unrelated to these changes
+
+---
