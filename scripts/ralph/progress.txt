@@ -19,6 +19,8 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Screen time sync**: `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` - syncs iOS and Android data to Supabase
 - **Insights sync hook**: `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` - orchestrates sync on app active
 - When comparing iOS vs Android sync, always check if all data fields are being synced (sessions, hourly, daily)
+- **Derived Event ID Format**: Use `derived:{type}:{startMinutes}:{endMinutes}:{source}` for deterministic unique IDs
+- **Screen Time Event ID Format**: Use `st:{type}:{startMinutes}:{endMinutes}:{source}` for screen time derived events
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -93,5 +95,28 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Silent failures in production are hard to debug - add console.log even in production for critical paths
   - The `screen_time_app_sessions` table is critical for actual timeline derivation
   - When debugging data flow issues, trace the entire pipeline from native → TypeScript → Supabase
+
+---
+
+## 2026-01-24 - US-003: Generate Unique Deterministic Event IDs
+- **What was implemented:**
+  - Created `generateDerivedId()` helper function in `actual-display-events.ts` for consistent ID format
+  - Created `generateScreenTimeId()` helper function in `derive-screen-time-actual-events.ts`
+  - Updated all derived event ID generation to use format: `{prefix}{type}:{startMinutes}:{endMinutes}:{source}`
+  - Added uniqueness validation in `ComprehensiveCalendarTemplate.tsx` using useMemo
+  - Deduplicates events before rendering with warning log when duplicates found
+  - Fixes React duplicate key warnings
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added helper, updated 9 ID generation points
+  - `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts` - Added helper, updated 5 ID generation points
+  - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` - Added deduplication with warning log
+
+- **Learnings for future iterations:**
+  - Event IDs should include both start AND end minutes to prevent collisions
+  - Including a source identifier (app name, event ID, etc.) adds extra uniqueness
+  - Pre-render validation with console.warn helps catch issues early
+  - The ID format `{type}:{startMinutes}:{endMinutes}:{source}` is deterministic and debuggable
+  - Codebase has 42+ pre-existing TypeScript errors - changes don't need to clear all errors, just not introduce new ones
 
 ---
