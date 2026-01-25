@@ -129,6 +129,8 @@ export interface CalendarEventMeta {
       /** Optional location from the planned event */
       location?: string | null;
     }>;
+    /** Whether this event was created as a fallback due to sparse location data (US-025) */
+    sparseLocationFallback?: boolean;
   };
   evidenceFusion?: {
     confidence: number;

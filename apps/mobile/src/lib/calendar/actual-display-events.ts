@@ -39,6 +39,487 @@ const LATE_ARRIVAL_MAX_MINUTES = 60; // Maximum lateness before it's considered 
 const DIFFERENT_ACTIVITY_MIN_DURATION = 10; // Minimum duration for a different activity block
 
 // ============================================================================
+// US-025: SPARSE LOCATION FALLBACK AND EVIDENCE AVAILABILITY
+// ============================================================================
+
+/** Thresholds for sparse location detection */
+const SPARSE_LOCATION_MIN_COVERAGE_RATIO = 0.3; // Less than 30% coverage = sparse
+const SPARSE_LOCATION_MIN_HOURS = 6; // Minimum hours expected for a full day
+const ANDROID_LOCATION_SAMPLE_INTERVAL_MINUTES = 60; // Android location samples are hourly
+
+/**
+ * Metrics about location data sparseness.
+ * Used to detect when location data is insufficient and fallback logic is needed.
+ */
+export interface SparseLocationMetrics {
+  /** Total location samples available for the day */
+  totalSamples: number;
+  /** Total hours covered by location data */
+  hoursCovered: number;
+  /** Expected hours for a full day (typically 16-18 waking hours) */
+  expectedHours: number;
+  /** Coverage ratio (hoursCovered / expectedHours) */
+  coverageRatio: number;
+  /** Whether location data is considered sparse */
+  isSparse: boolean;
+  /** Hours with gaps in location data */
+  gapHours: number[];
+  /** Average accuracy of location samples (if available) */
+  avgAccuracyMeters: number | null;
+  /** Platform-specific notes */
+  platformNotes: string[];
+}
+
+/**
+ * Evidence availability assessment for the day.
+ * Used to determine confidence levels and fallback strategies.
+ */
+export interface EvidenceAvailability {
+  /** Whether location data is available */
+  hasLocation: boolean;
+  /** Whether location data is sparse (partial coverage) */
+  locationIsSparse: boolean;
+  /** Sparse location metrics (null if no location data) */
+  sparseLocationMetrics: SparseLocationMetrics | null;
+  /** Whether screen time data is available */
+  hasScreenTime: boolean;
+  /** Number of screen time sessions */
+  screenTimeSessionCount: number;
+  /** Total screen time minutes for the day */
+  screenTimeMinutes: number;
+  /** Whether health data is available */
+  hasHealthData: boolean;
+  /** Whether sleep data is available in health data */
+  hasSleepData: boolean;
+  /** Whether usage summary (Android) is available */
+  hasUsageSummary: boolean;
+  /** Overall confidence multiplier based on evidence availability (0-1) */
+  confidenceMultiplier: number;
+  /** Reasons for confidence adjustment */
+  confidenceNotes: string[];
+  /** Platform (android/ios) */
+  platform: 'android' | 'ios' | 'unknown';
+}
+
+/**
+ * Detects sparse location data for a given day.
+ * Android devices often have intermittent location data due to battery optimization.
+ *
+ * @param locationRows - Location hourly rows from Supabase
+ * @param expectedWakingHours - Expected waking hours (default 16)
+ * @returns SparseLocationMetrics
+ */
+export function detectSparseLocationData(
+  locationRows: LocationHourlyRow[],
+  expectedWakingHours = 16,
+): SparseLocationMetrics {
+  const platformNotes: string[] = [];
+
+  if (!locationRows || locationRows.length === 0) {
+    return {
+      totalSamples: 0,
+      hoursCovered: 0,
+      expectedHours: expectedWakingHours,
+      coverageRatio: 0,
+      isSparse: true,
+      gapHours: Array.from({ length: 24 }, (_, i) => i),
+      avgAccuracyMeters: null,
+      platformNotes: ['No location data available'],
+    };
+  }
+
+  // Extract unique hours covered
+  const hourSet = new Set<number>();
+  let totalAccuracy = 0;
+  let accuracyCount = 0;
+
+  for (const row of locationRows) {
+    const hourStart = new Date(row.hour_start);
+    const hour = hourStart.getHours();
+    hourSet.add(hour);
+
+    if (row.avg_accuracy_m !== null && row.avg_accuracy_m > 0) {
+      totalAccuracy += row.avg_accuracy_m;
+      accuracyCount++;
+    }
+  }
+
+  const hoursCovered = hourSet.size;
+  const coverageRatio = hoursCovered / expectedWakingHours;
+  const isSparse = coverageRatio < SPARSE_LOCATION_MIN_COVERAGE_RATIO || hoursCovered < SPARSE_LOCATION_MIN_HOURS;
+
+  // Find gap hours (hours without data)
+  const gapHours: number[] = [];
+  for (let h = 6; h <= 23; h++) { // Check typical waking hours (6 AM to 11 PM)
+    if (!hourSet.has(h)) {
+      gapHours.push(h);
+    }
+  }
+
+  const avgAccuracyMeters = accuracyCount > 0 ? Math.round(totalAccuracy / accuracyCount) : null;
+
+  // Add platform-specific notes
+  if (isSparse) {
+    if (hoursCovered < SPARSE_LOCATION_MIN_HOURS) {
+      platformNotes.push(`Only ${hoursCovered} hours of location data (expected ${expectedWakingHours})`);
+    }
+    if (coverageRatio < 0.5) {
+      platformNotes.push('Less than 50% location coverage - consider enabling background location');
+    }
+    if (gapHours.length > 6) {
+      platformNotes.push(`${gapHours.length} hours missing location data`);
+    }
+  }
+
+  if (avgAccuracyMeters !== null && avgAccuracyMeters > 100) {
+    platformNotes.push(`Low location accuracy (avg ${avgAccuracyMeters}m) - GPS may be off`);
+  }
+
+  return {
+    totalSamples: locationRows.length,
+    hoursCovered,
+    expectedHours: expectedWakingHours,
+    coverageRatio,
+    isSparse,
+    gapHours,
+    avgAccuracyMeters,
+    platformNotes,
+  };
+}
+
+/**
+ * Assesses overall evidence availability for a day.
+ * Used to determine confidence levels and fallback strategies.
+ *
+ * @param options - Evidence sources to assess
+ * @returns EvidenceAvailability assessment
+ */
+export function assessEvidenceAvailability(options: {
+  evidence?: EvidenceBundle | null;
+  usageSummary?: UsageSummary | null;
+  ymd: string;
+}): EvidenceAvailability {
+  const { evidence, usageSummary } = options;
+  const confidenceNotes: string[] = [];
+
+  // Detect platform from data sources
+  const platform: 'android' | 'ios' | 'unknown' =
+    usageSummary ? 'android' : evidence?.screenTimeSessions?.length ? 'ios' : 'unknown';
+
+  // Location assessment
+  const hasLocation = Boolean(evidence?.locationHourly?.length);
+  const sparseLocationMetrics = hasLocation
+    ? detectSparseLocationData(evidence!.locationHourly)
+    : null;
+  const locationIsSparse = sparseLocationMetrics?.isSparse ?? true;
+
+  // Screen time assessment
+  const screenTimeSessionCount = evidence?.screenTimeSessions?.length ?? 0;
+  const hasScreenTime = screenTimeSessionCount > 0 || Boolean(usageSummary?.totalSeconds);
+  let screenTimeMinutes = 0;
+
+  if (evidence?.screenTimeSessions) {
+    screenTimeMinutes = evidence.screenTimeSessions.reduce(
+      (sum, s) => sum + Math.round(s.duration_seconds / 60),
+      0,
+    );
+  } else if (usageSummary) {
+    screenTimeMinutes = Math.round(usageSummary.totalSeconds / 60);
+  }
+
+  // Health data assessment
+  const hasHealthData = Boolean(evidence?.healthDaily);
+  const hasSleepData = Boolean(evidence?.healthDaily?.sleep_asleep_seconds);
+
+  // Usage summary (Android-specific)
+  const hasUsageSummary = Boolean(usageSummary);
+
+  // Calculate confidence multiplier based on evidence availability
+  let confidenceMultiplier = 1.0;
+
+  if (!hasLocation) {
+    confidenceMultiplier *= 0.6;
+    confidenceNotes.push('No location data - reduced confidence');
+  } else if (locationIsSparse) {
+    confidenceMultiplier *= 0.75;
+    confidenceNotes.push('Sparse location data - slightly reduced confidence');
+  }
+
+  if (!hasScreenTime) {
+    confidenceMultiplier *= 0.8;
+    confidenceNotes.push('No screen time data');
+  }
+
+  if (!hasHealthData) {
+    confidenceMultiplier *= 0.95;
+    confidenceNotes.push('No health data');
+  }
+
+  // Android-specific: usage summary provides good signal even without location
+  if (platform === 'android' && hasUsageSummary) {
+    if (locationIsSparse) {
+      // Boost confidence when we have usage data to compensate for sparse location
+      confidenceMultiplier = Math.min(1.0, confidenceMultiplier * 1.15);
+      confidenceNotes.push('Usage summary available - confidence boosted');
+    }
+  }
+
+  return {
+    hasLocation,
+    locationIsSparse,
+    sparseLocationMetrics,
+    hasScreenTime,
+    screenTimeSessionCount,
+    screenTimeMinutes,
+    hasHealthData,
+    hasSleepData,
+    hasUsageSummary,
+    confidenceMultiplier,
+    confidenceNotes,
+    platform,
+  };
+}
+
+/**
+ * Logs evidence availability for debugging.
+ * Helps diagnose why evidence-based timeline may be incomplete.
+ */
+export function logEvidenceAvailability(
+  availability: EvidenceAvailability,
+  ymd: string,
+): void {
+  const sources: string[] = [];
+  if (availability.hasLocation) {
+    sources.push(availability.locationIsSparse ? 'location(sparse)' : 'location');
+  }
+  if (availability.hasScreenTime) {
+    sources.push(`screenTime(${availability.screenTimeSessionCount} sessions, ${availability.screenTimeMinutes} min)`);
+  }
+  if (availability.hasHealthData) {
+    sources.push(availability.hasSleepData ? 'health+sleep' : 'health');
+  }
+  if (availability.hasUsageSummary) {
+    sources.push('usageSummary');
+  }
+
+  console.log(
+    `[EvidenceAvailability] ${ymd} [${availability.platform}]: ` +
+    `${sources.length > 0 ? sources.join(', ') : 'no evidence'} ` +
+    `(confidence: ${Math.round(availability.confidenceMultiplier * 100)}%)`
+  );
+
+  // Log sparse location details if relevant
+  if (availability.sparseLocationMetrics?.isSparse) {
+    const metrics = availability.sparseLocationMetrics;
+    console.log(
+      `[EvidenceAvailability] Sparse location: ${metrics.hoursCovered}/${metrics.expectedHours} hours ` +
+      `(${Math.round(metrics.coverageRatio * 100)}% coverage), ` +
+      `gaps at hours: ${metrics.gapHours.slice(0, 5).join(', ')}${metrics.gapHours.length > 5 ? '...' : ''}`
+    );
+  }
+
+  // Log any confidence notes
+  if (availability.confidenceNotes.length > 0) {
+    console.log(`[EvidenceAvailability] Notes: ${availability.confidenceNotes.join('; ')}`);
+  }
+}
+
+/**
+ * Calculates adjusted confidence for an event based on evidence availability.
+ * Used when creating derived events to reflect uncertainty from sparse data.
+ *
+ * @param baseConfidence - The base confidence from the derivation logic
+ * @param availability - Evidence availability assessment
+ * @param sourceType - The primary evidence source for this event
+ * @returns Adjusted confidence value (0-1)
+ */
+export function calculateAdjustedConfidence(
+  baseConfidence: number,
+  availability: EvidenceAvailability,
+  sourceType: EvidenceSourceType,
+): number {
+  let adjusted = baseConfidence * availability.confidenceMultiplier;
+
+  // Additional adjustments based on source type and availability
+  switch (sourceType) {
+    case 'location':
+      if (availability.locationIsSparse) {
+        // Location events have lower confidence when location data is sparse
+        adjusted *= 0.85;
+      }
+      break;
+
+    case 'screen_time':
+      // Screen time is more reliable on Android with usage summary
+      if (availability.platform === 'android' && availability.hasUsageSummary) {
+        adjusted = Math.min(1.0, adjusted * 1.1);
+      }
+      // If no location but has screen time, screen time confidence is slightly boosted as primary source
+      if (!availability.hasLocation && availability.hasScreenTime) {
+        adjusted = Math.min(1.0, adjusted * 1.05);
+      }
+      break;
+
+    case 'unknown':
+      // Unknown gaps have lower confidence when we have sparse data
+      // (could be actual activity that wasn't captured)
+      if (availability.locationIsSparse || !availability.hasScreenTime) {
+        adjusted *= 0.7;
+      }
+      break;
+
+    case 'pattern':
+      // Pattern suggestions need good historical data to be reliable
+      if (availability.confidenceMultiplier < 0.8) {
+        adjusted *= 0.9;
+      }
+      break;
+  }
+
+  // Clamp to valid range
+  return Math.max(0.1, Math.min(1.0, adjusted));
+}
+
+/**
+ * Creates a fallback screen-time-based event for sparse location gaps.
+ * Used when location data is missing but screen time data is available.
+ */
+function createScreenTimeFallbackEvent(
+  startMinutes: number,
+  endMinutes: number,
+  usageSummary: UsageSummary,
+  appCategoryOverrides?: AppCategoryOverrides,
+  availability?: EvidenceAvailability,
+): ScheduledEvent | null {
+  // Get screen time data for this time range
+  const hourStart = Math.floor(startMinutes / 60);
+  const hourEnd = Math.ceil(endMinutes / 60);
+  let totalSeconds = 0;
+  const appUsage: Record<string, number> = {};
+
+  // Check hourlyByApp for the time range
+  if (usageSummary.hourlyByApp) {
+    for (let h = hourStart; h < hourEnd; h++) {
+      for (const [app, hours] of Object.entries(usageSummary.hourlyByApp)) {
+        const hourData = hours as Record<number, number>;
+        if (hourData[h]) {
+          totalSeconds += hourData[h];
+          appUsage[app] = (appUsage[app] || 0) + hourData[h];
+        }
+      }
+    }
+  } else if (usageSummary.hourlyBucketsSeconds) {
+    // Fallback to bucket data
+    for (let h = hourStart; h < hourEnd; h++) {
+      if (usageSummary.hourlyBucketsSeconds[h]) {
+        totalSeconds += usageSummary.hourlyBucketsSeconds[h];
+      }
+    }
+  }
+
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes < MIN_EVIDENCE_BLOCK_MINUTES) {
+    return null;
+  }
+
+  // Find top app
+  const topApp = Object.entries(appUsage).sort((a, b) => b[1] - a[1])[0];
+  const topAppName = topApp?.[0] || null;
+
+  // Classify the app usage if we have overrides
+  const category = topAppName && appCategoryOverrides
+    ? classifyAppUsage(topAppName, appCategoryOverrides)?.category ?? 'digital'
+    : 'digital';
+
+  const baseConfidence = 0.5; // Lower base confidence for fallback events
+  const adjustedConfidence = availability
+    ? calculateAdjustedConfidence(baseConfidence, availability, 'screen_time')
+    : baseConfidence;
+
+  const meta: CalendarEventMeta = {
+    category,
+    source: 'derived',
+    kind: 'screen_time',
+    confidence: adjustedConfidence,
+    evidence: {
+      screenTimeMinutes: totalMinutes,
+      topApp: topAppName,
+      locationLabel: null,
+      sparseLocationFallback: true, // Flag indicating this is a fallback event
+    },
+  };
+
+  return {
+    id: `st:fallback:${startMinutes}:${endMinutes}:${Date.now()}`,
+    title: topAppName ? `Phone (${topAppName})` : 'Phone Usage',
+    description: `${totalMinutes} min screen time • Fallback due to sparse location`,
+    startMinutes,
+    duration: endMinutes - startMinutes,
+    category,
+    meta,
+  };
+}
+
+/**
+ * Fills gaps in timeline with screen time fallback events when location is sparse.
+ * Only creates events where we have screen time data as evidence.
+ *
+ * @param events - Current timeline events
+ * @param usageSummary - Android usage summary
+ * @param availability - Evidence availability assessment
+ * @param appCategoryOverrides - App category overrides
+ * @returns Events with sparse location gaps filled where possible
+ */
+export function fillSparseLocationGapsWithScreenTime(
+  events: ScheduledEvent[],
+  usageSummary: UsageSummary | null,
+  availability: EvidenceAvailability,
+  appCategoryOverrides?: AppCategoryOverrides,
+): ScheduledEvent[] {
+  // Only apply fallback when location is sparse and we have usage data
+  if (!availability.locationIsSparse || !usageSummary) {
+    return events;
+  }
+
+  console.log('[SparseLocationFallback] Applying screen time fallback for sparse location data');
+
+  const result: ScheduledEvent[] = [...events];
+  const occupied = events.map((e) => ({
+    start: e.startMinutes,
+    end: e.startMinutes + e.duration,
+  }));
+
+  // Find unknown gaps that could be filled with screen time
+  const unknownGaps = events.filter((e) => e.meta?.kind === 'unknown_gap');
+
+  for (const gap of unknownGaps) {
+    const gapStart = gap.startMinutes;
+    const gapEnd = gap.startMinutes + gap.duration;
+
+    const fallbackEvent = createScreenTimeFallbackEvent(
+      gapStart,
+      gapEnd,
+      usageSummary,
+      appCategoryOverrides,
+      availability,
+    );
+
+    if (fallbackEvent) {
+      // Replace the unknown gap with the screen time fallback
+      const gapIndex = result.findIndex((e) => e.id === gap.id);
+      if (gapIndex >= 0) {
+        result[gapIndex] = fallbackEvent;
+        console.log(
+          `[SparseLocationFallback] Filled gap ${gapStart}-${gapEnd} with screen time: ${fallbackEvent.title}`
+        );
+      }
+    }
+  }
+
+  return result;
+}
+
+// ============================================================================
 // EVIDENCE FUSION PIPELINE (US-024)
 // ============================================================================
 
@@ -954,6 +1435,11 @@ export function buildActualDisplayEvents({
   })();
   const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly) : [];
   const dataQuality = buildDataQualityMetrics({ evidence, usageSummary });
+
+  // US-025: Assess evidence availability and detect sparse location data
+  const evidenceAvailability = assessEvidenceAvailability({ evidence, usageSummary, ymd });
+  logEvidenceAvailability(evidenceAvailability, ymd);
+
   const plannedSorted = [...plannedEvents].sort((a, b) => a.startMinutes - b.startMinutes);
 
   const sleepOverrideIntervals = buildSleepScheduleIntervals(plannedSorted);
@@ -1348,7 +1834,15 @@ export function buildActualDisplayEvents({
   // Pass planned events for suggestions and current time for past-time filtering (US-014)
   const withGapsFilled = fillUnknownGaps(fusionResult.events, plannedSorted, currentMinutes);
 
-  return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
+  // US-025: Apply sparse location fallback - fill unknown gaps with screen time when location is sparse
+  const withSparseLocationFallback = fillSparseLocationGapsWithScreenTime(
+    withGapsFilled,
+    usageSummary ?? null,
+    evidenceAvailability,
+    appCategoryOverrides,
+  );
+
+  return withSparseLocationFallback.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
 /**
