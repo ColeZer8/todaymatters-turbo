@@ -535,3 +535,33 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - The confidence display is only visible in event detail view (on tap), not inline on timeline (meeting AC requirement)
 
 ---
+
+## 2026-01-24 - US-018: Create User Location Mappings Schema
+- **What was implemented:**
+  - Created Supabase migration `20260124_create_tm_location_mappings.sql` with:
+    - `tm.location_mappings` table: id, user_id, location_address, activity_name, created_at, updated_at
+    - Unique constraint on (user_id, location_address) to prevent duplicate mappings
+    - Indexes for user_id and (user_id, location_address) lookups
+    - Auto-update trigger for updated_at column
+    - Row Level Security policies for select/insert/update/delete own data
+  - Created TypeScript service `location-mappings.ts` with:
+    - `LocationMapping` interface for row type
+    - `LocationMappingInsert` and `LocationMappingUpdate` interfaces for inputs
+    - CRUD functions: fetchLocationMappings, fetchLocationMappingById, fetchLocationMappingByAddress
+    - createLocationMapping, updateLocationMapping, deleteLocationMapping
+    - upsertLocationMapping for create-or-update by address
+  - Exported from services/index.ts
+
+- **Files changed:**
+  - `supabase/migrations/20260124_create_tm_location_mappings.sql` - New migration file
+  - `apps/mobile/src/lib/supabase/services/location-mappings.ts` - New TypeScript service with types and CRUD
+  - `apps/mobile/src/lib/supabase/services/index.ts` - Added export
+
+- **Learnings for future iterations:**
+  - Use `tmSchema()` helper for accessing tm schema tables (pattern from other services)
+  - Include `updated_at` field for tracking when mappings were last modified
+  - Use `maybeSingle()` for lookups that might not find a result
+  - Upsert with `onConflict` is useful for "save or update" scenarios
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
+
+---
