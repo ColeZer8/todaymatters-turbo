@@ -8,6 +8,7 @@ import type {
 import type { UsageSummary } from '@/lib/android-insights';
 import type { ActualBlock, VerificationResult } from './verification-engine';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
+import { appMatchesList, DISTRACTION_APPS } from './verification-rules';
 import { buildSleepQualityMetrics } from './sleep-analysis';
 import { buildDataQualityMetrics } from './data-quality';
 import { buildEvidenceFusion } from './evidence-fusion';
@@ -270,6 +271,142 @@ function detectDifferentActivity(
     placeCategory: dominantBlock.placeCategory,
     startMinutes: overlapStart,
     endMinutes: overlapEnd,
+  };
+}
+
+/**
+ * Information about distraction during a planned activity (US-013).
+ * Detected when user is at expected location but using distraction apps.
+ */
+interface DistractionInfo {
+  /** Total minutes spent on distraction apps */
+  totalMinutes: number;
+  /** The planned event that was interrupted */
+  plannedTitle: string;
+  /** The planned event category */
+  plannedCategory: EventCategory;
+  /** The top distraction app used */
+  topApp: string | null;
+  /** All distraction apps and their usage minutes */
+  apps: Array<{ appName: string; minutes: number }>;
+  /** Start time of the distraction period (for long distractions) */
+  startMinutes: number;
+  /** End time of the distraction period (for long distractions) */
+  endMinutes: number;
+}
+
+/**
+ * Detect distraction app usage during a planned activity (US-013).
+ *
+ * This specifically looks for usage of known distraction apps (social media, games)
+ * during a planned event where the user is at the expected location.
+ *
+ * Examples:
+ * - Planned "Work" + at office + using Instagram = distraction detected
+ * - Planned "Family" + at home + using TikTok = distraction detected
+ *
+ * @param planned - The planned event
+ * @param usageSummary - Android usage summary data
+ * @param appCategoryOverrides - User's custom app categorizations
+ * @returns DistractionInfo if distraction detected, null otherwise
+ */
+function detectDistractionDuringActivity(
+  planned: ScheduledEvent,
+  usageSummary: UsageSummary | null | undefined,
+  appCategoryOverrides?: AppCategoryOverrides,
+): DistractionInfo | null {
+  // Don't detect distraction for digital activities - screen time is expected
+  if (planned.category === 'digital') return null;
+
+  // Don't detect distraction for sleep - handled separately
+  if (planned.category === 'sleep') return null;
+
+  if (!usageSummary) return null;
+
+  const plannedStart = clampMinutes(planned.startMinutes);
+  const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
+  if (plannedEnd <= plannedStart) return null;
+
+  const appIdToName = new Map(
+    usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+  );
+
+  // Track distraction app usage only
+  const distractionAppUsage = new Map<string, number>();
+
+  // Calculate distraction app usage from sessions (most accurate)
+  if (usageSummary.sessions && usageSummary.sessions.length > 0) {
+    for (const session of usageSummary.sessions) {
+      const start = new Date(session.startIso);
+      const end = new Date(session.endIso);
+      const sessionStart = start.getHours() * 60 + start.getMinutes();
+      const sessionEnd = end.getHours() * 60 + end.getMinutes();
+
+      // Calculate overlap with planned event
+      const overlapStart = Math.max(plannedStart, sessionStart);
+      const overlapEnd = Math.min(plannedEnd, sessionEnd);
+      if (overlapEnd <= overlapStart) continue;
+
+      const appName = appIdToName.get(session.packageName) ?? session.packageName;
+
+      // Check if this is a distraction app
+      if (!appMatchesList(appName, DISTRACTION_APPS)) continue;
+
+      const overlapMinutes = overlapEnd - overlapStart;
+      const current = distractionAppUsage.get(appName) ?? 0;
+      distractionAppUsage.set(appName, current + overlapMinutes);
+    }
+  } else if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
+    // Fallback to hourly data
+    const startHour = Math.floor(plannedStart / 60);
+    const endHour = Math.floor((plannedEnd - 1) / 60);
+
+    for (let hour = startHour; hour <= endHour; hour++) {
+      const hourStart = hour * 60;
+      const hourEnd = hourStart + 60;
+      const overlapMinutes = Math.max(0, Math.min(plannedEnd, hourEnd) - Math.max(plannedStart, hourStart));
+      if (overlapMinutes <= 0) continue;
+
+      const fraction = overlapMinutes / 60;
+
+      for (const [appId, hours] of Object.entries(usageSummary.hourlyByApp)) {
+        const seconds = hours[hour] ?? 0;
+        if (seconds <= 0) continue;
+
+        const appName = appIdToName.get(appId) ?? appId;
+
+        // Check if this is a distraction app
+        if (!appMatchesList(appName, DISTRACTION_APPS)) continue;
+
+        const current = distractionAppUsage.get(appName) ?? 0;
+        distractionAppUsage.set(appName, current + (seconds / 60) * fraction);
+      }
+    }
+  }
+
+  if (distractionAppUsage.size === 0) return null;
+
+  // Calculate totals
+  const sorted = Array.from(distractionAppUsage.entries())
+    .map(([appName, minutes]) => ({ appName, minutes: Math.round(minutes) }))
+    .filter((app) => app.minutes > 0)
+    .sort((a, b) => b.minutes - a.minutes);
+
+  const totalMinutes = sorted.reduce((sum, app) => sum + app.minutes, 0);
+
+  // No significant distraction detected
+  if (totalMinutes < 1) return null;
+
+  const topApp = sorted[0]?.appName ?? null;
+
+  return {
+    totalMinutes,
+    plannedTitle: planned.title,
+    plannedCategory: planned.category,
+    topApp,
+    apps: sorted,
+    startMinutes: plannedStart,
+    endMinutes: plannedEnd,
   };
 }
 
@@ -611,7 +748,7 @@ export function buildActualDisplayEvents({
     }
 
     const verification = verificationResults?.get(planned.id) ?? null;
-    const derived = buildPlannedActualEvent({
+    const derivedResult = buildPlannedActualEvent({
       planned: plannedForDerivation,
       verification,
       plannedEvents: plannedSorted,
@@ -623,8 +760,15 @@ export function buildActualDisplayEvents({
       dataQuality,
       appCategoryOverrides,
     });
-    if (!derived) continue;
-    addIfFree(derived, 1);
+    if (!derivedResult) continue;
+
+    // Add the main derived event
+    addIfFree(derivedResult.mainEvent, 1);
+
+    // US-013: Add any separate distraction blocks for long distractions
+    for (const distractionBlock of derivedResult.distractionBlocks) {
+      addIfFree(distractionBlock, 1);
+    }
   }
 
   const sleepOverrideApplied = sleepOverrideIntervals.length > 0;
@@ -708,6 +852,17 @@ export function buildActualDisplayEvents({
   return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
+/**
+ * Result of building a planned actual event.
+ * May include the main event plus separate distraction blocks for long distractions.
+ */
+interface PlannedActualResult {
+  /** The main derived actual event */
+  mainEvent: ScheduledEvent;
+  /** Separate distraction blocks for long distractions (>10 min) */
+  distractionBlocks: ScheduledEvent[];
+}
+
 function buildPlannedActualEvent(options: {
   planned: ScheduledEvent;
   verification: VerificationResult | null;
@@ -719,7 +874,7 @@ function buildPlannedActualEvent(options: {
   ymd: string;
   dataQuality: ReturnType<typeof buildDataQualityMetrics>;
   appCategoryOverrides?: AppCategoryOverrides;
-}): ScheduledEvent | null {
+}): PlannedActualResult | null {
   const {
     planned,
     verification,
@@ -790,7 +945,7 @@ function buildPlannedActualEvent(options: {
       dataQuality,
     };
 
-    return {
+    const mainEvent: ScheduledEvent = {
       id: generateDerivedId(
         DERIVED_EVIDENCE_PREFIX,
         'different_activity',
@@ -806,6 +961,8 @@ function buildPlannedActualEvent(options: {
       category: differentActivity.activityCategory,
       meta,
     };
+
+    return { mainEvent, distractionBlocks: [] };
   }
 
   // Detect late arrival based on location evidence
@@ -834,6 +991,12 @@ function buildPlannedActualEvent(options: {
     ? getUsageOverlapInfo(usageSummary, startMinutes, actualEnd, appCategoryOverrides)
     : null;
 
+  // US-013: Detect distraction app usage during this activity
+  // Only applies when user is at expected location (not a "different activity")
+  const distractionInfo = detectDistractionDuringActivity(planned, usageSummary, appCategoryOverrides);
+  const distractionBlocks: ScheduledEvent[] = [];
+
+  // Build description, including distraction annotation for short distractions
   const description = buildActualDescription({
     planned,
     verification,
@@ -841,7 +1004,21 @@ function buildPlannedActualEvent(options: {
     locationLabel: matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
     usageInfo,
     lateArrival,
+    distractionInfo, // US-013: Pass distraction info for annotation
   });
+
+  // US-013: For long distractions (>10 min), create separate distraction blocks
+  if (distractionInfo && distractionInfo.totalMinutes > DISTRACTION_THRESHOLD_MINUTES) {
+    const distractionBlock = buildDistractionBlock({
+      distractionInfo,
+      planned,
+      ymd,
+      dataQuality,
+    });
+    if (distractionBlock) {
+      distractionBlocks.push(distractionBlock);
+    }
+  }
 
   const sleepQuality = buildSleepQualityMetrics(healthDaily ?? null);
 
@@ -953,6 +1130,17 @@ function buildPlannedActualEvent(options: {
             evidenceSource: lateArrival.evidenceSource,
           }
         : undefined,
+      // US-013: Add distraction evidence for short distractions (<= threshold)
+      distraction:
+        distractionInfo && distractionInfo.totalMinutes > 0 && distractionInfo.totalMinutes <= DISTRACTION_THRESHOLD_MINUTES
+          ? {
+              totalMinutes: distractionInfo.totalMinutes,
+              plannedTitle: distractionInfo.plannedTitle,
+              plannedCategory: distractionInfo.plannedCategory,
+              topApp: distractionInfo.topApp,
+              apps: distractionInfo.apps,
+            }
+          : undefined,
     },
     evidenceFusion: fusion,
     kind:
@@ -963,7 +1151,7 @@ function buildPlannedActualEvent(options: {
           : 'planned_actual',
   };
 
-  return {
+  const mainEvent: ScheduledEvent = {
     ...planned,
     id: `${DERIVED_ACTUAL_PREFIX}${planned.id}`,
     description,
@@ -972,6 +1160,8 @@ function buildPlannedActualEvent(options: {
     location: planned.location ?? matchingLocation?.placeLabel ?? planned.location,
     meta,
   };
+
+  return { mainEvent, distractionBlocks };
 }
 
 function buildActualDescription(options: {
@@ -981,8 +1171,9 @@ function buildActualDescription(options: {
   locationLabel: string | null;
   usageInfo: UsageOverlapInfo | null;
   lateArrival?: LateArrivalInfo | null;
+  distractionInfo?: DistractionInfo | null;
 }): string {
-  const { planned, verification, extendedMinutes, locationLabel, usageInfo, lateArrival } = options;
+  const { planned, verification, extendedMinutes, locationLabel, usageInfo, lateArrival, distractionInfo } = options;
   const parts: string[] = [];
 
   if (planned.description?.trim()) {
@@ -992,6 +1183,13 @@ function buildActualDescription(options: {
   // Add late arrival annotation if detected
   if (lateArrival) {
     parts.push(`Arrived ${Math.round(lateArrival.lateMinutes)} min late`);
+  }
+
+  // US-013: Add short distraction annotation (<= 10 min)
+  // Long distractions (>10 min) get their own separate block
+  if (distractionInfo && distractionInfo.totalMinutes > 0 && distractionInfo.totalMinutes <= DISTRACTION_THRESHOLD_MINUTES) {
+    const appNote = distractionInfo.topApp ? ` on ${distractionInfo.topApp}` : '';
+    parts.push(`Distracted ${Math.round(distractionInfo.totalMinutes)} min${appNote}`);
   }
 
   if (planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
@@ -1039,6 +1237,82 @@ function buildActualDescription(options: {
   }
 
   return parts.join(' • ');
+}
+
+/**
+ * Build a separate distraction block for long distractions (>10 min) (US-013).
+ * This creates a standalone event showing the distraction period during a planned activity.
+ */
+function buildDistractionBlock(options: {
+  distractionInfo: DistractionInfo;
+  planned: ScheduledEvent;
+  ymd: string;
+  dataQuality: ReturnType<typeof buildDataQualityMetrics>;
+}): ScheduledEvent | null {
+  const { distractionInfo, planned, dataQuality } = options;
+
+  // Only create separate blocks for long distractions
+  if (distractionInfo.totalMinutes <= DISTRACTION_THRESHOLD_MINUTES) {
+    return null;
+  }
+
+  // Calculate distraction duration, clamped to reasonable bounds
+  const duration = Math.min(distractionInfo.totalMinutes, planned.duration);
+  if (duration < DISTRACTION_THRESHOLD_MINUTES) {
+    return null;
+  }
+
+  // Build description showing what apps were used
+  const appList = distractionInfo.apps
+    .slice(0, 3)
+    .map((app) => `${app.appName} (${app.minutes} min)`)
+    .join(', ');
+
+  const description = distractionInfo.topApp
+    ? `Distracted during ${planned.title} • ${appList}`
+    : `Distracted during ${planned.title}`;
+
+  const meta: CalendarEventMeta = {
+    category: 'digital',
+    source: 'derived',
+    plannedEventId: planned.id,
+    kind: 'distraction',
+    confidence: 0.8, // High confidence since we have app usage data
+    dataQuality,
+    evidence: {
+      screenTimeMinutes: Math.round(distractionInfo.totalMinutes),
+      topApp: distractionInfo.topApp,
+      distraction: {
+        totalMinutes: distractionInfo.totalMinutes,
+        plannedTitle: distractionInfo.plannedTitle,
+        plannedCategory: distractionInfo.plannedCategory,
+        topApp: distractionInfo.topApp,
+        apps: distractionInfo.apps,
+      },
+    },
+  };
+
+  // Place the distraction block at the start of the planned event
+  // In a more sophisticated implementation, we could use session timestamps
+  // to place it more precisely, but for now this is a reasonable default
+  const startMinutes = distractionInfo.startMinutes;
+  const endMinutes = startMinutes + duration;
+
+  return {
+    id: generateDerivedId(
+      DERIVED_EVIDENCE_PREFIX,
+      'distraction',
+      startMinutes,
+      endMinutes,
+      planned.id.slice(0, 8),
+    ),
+    title: 'Distraction',
+    description,
+    startMinutes,
+    duration,
+    category: 'digital',
+    meta,
+  };
 }
 
 function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[]): LocationBlock[] {

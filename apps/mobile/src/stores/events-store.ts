@@ -46,7 +46,8 @@ export interface CalendarEventMeta {
     | 'transition_wind_down'
     | 'location_inferred'
     | 'late_arrival'
-    | 'different_activity';
+    | 'different_activity'
+    | 'distraction';
   startYmd?: string;
   actual?: boolean;
   tags?: string[];
@@ -101,6 +102,19 @@ export interface CalendarEventMeta {
       placeLabel: string;
       /** The place category from location evidence (e.g., "fast_food", "cafe") */
       placeCategory: string | null;
+    };
+    /** Distraction information when user was distracted during a planned activity (US-013) */
+    distraction?: {
+      /** Total minutes of distraction app usage */
+      totalMinutes: number;
+      /** The planned event title */
+      plannedTitle: string;
+      /** The planned event category */
+      plannedCategory: EventCategory;
+      /** The top distraction app used */
+      topApp: string | null;
+      /** All distraction apps and their usage minutes */
+      apps: Array<{ appName: string; minutes: number }>;
     };
   };
   evidenceFusion?: {
