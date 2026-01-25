@@ -23,6 +23,8 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
 - **Screen Time Event ID Format**: Use `st:{type}:{startMinutes}:{endMinutes}:{source}` for screen time derived events
 - **Overlap Resolution**: Use `buildNonOverlappingTimeline()` from `actual-timeline-builder.ts` to resolve overlaps by splitting events
 - **Event Priority Order**: UserEdited(1) > SupabaseActual(2) > DerivedEvidence(3) > ScreenTime(4) > Unknown(5)
+- **Duplicate Cleanup**: Use `cleanupDuplicateDerivedEvents()` from `calendar-events.ts` to remove duplicates while preserving oldest
+- **Re-derivation Prevention**: `buildActualDisplayEvents` tracks saved derived events by source_id and time+kind to skip re-derivation
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -190,5 +192,35 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - ComprehensiveCalendarTemplate.tsx deduplicates by event ID (for React keys), while ActualTimelineBuilder deduplicates by time range (for visual overlap)
   - When cleaning up old code, verify nothing else uses it with grep before removing
   - Pre-existing TypeScript errors (42+) are unrelated to changes - only check for NEW errors introduced
+
+---
+
+## 2026-01-24 - US-007: Fix Actual Data Persistence - Prevent Prior Day Erasure
+- **What was implemented:**
+  - Added comprehensive production logging to trace actual event lifecycle:
+    - `fetchActualCalendarEventsForDay` logs fetch with event counts and derived event counts
+    - `syncDerivedActualEvents` logs sync operations with skip/insert counts
+    - `comprehensive-calendar.tsx` logs load and cleanup operations
+  - Created `hasSyncedDerivedEventsForDay()` function to check if a day already has synced derived events
+  - Created `cleanupDuplicateDerivedEvents()` function that:
+    - Groups events by time range and kind
+    - Keeps the oldest event in each group (determined by `created_at`)
+    - Removes duplicates deterministically rather than arbitrarily
+  - Enhanced `buildActualDisplayEvents` to prevent re-derivation:
+    - Tracks saved derived events by both source_id and time+kind key
+    - Skips re-derivation when matching saved events already exist
+  - Updated `comprehensive-calendar.tsx` cleanup logic to use the new deterministic cleanup function
+
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/calendar-events.ts` - Added logging, hasSyncedDerivedEventsForDay(), cleanupDuplicateDerivedEvents(), enhanced syncDerivedActualEvents()
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Enhanced duplicate detection with source_id tracking
+  - `apps/mobile/src/app/comprehensive-calendar.tsx` - Updated cleanup logic to use cleanupDuplicateDerivedEvents()
+
+- **Learnings for future iterations:**
+  - Prior day erasure was caused by non-deterministic cleanup: the old logic would remove overlapping derived events arbitrarily
+  - The fix ensures oldest events are preserved by using `created_at` ordering
+  - Double-tracking by both source_id AND time+kind provides robust duplicate detection
+  - Production logging (using console.log) helps debug sync issues on physical devices
+  - When cleaning up duplicates, always prefer keeping the oldest record for data consistency
 
 ---
