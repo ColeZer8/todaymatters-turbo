@@ -289,3 +289,38 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Location blocks have `startMinutes` in minutes-from-midnight which matches planned event format
 
 ---
+
+## 2026-01-24 - US-010: Cross-Reference Planned Events with Evidence - Different Activity
+- **What was implemented:**
+  - Created `DifferentActivityInfo` interface to track when user did something different than planned
+  - Created `detectDifferentActivity()` function that:
+    - First checks verification location evidence for mismatches (`!matchesExpected`)
+    - Falls back to finding dominant location block during planned time
+    - Uses `mapPlaceToCategory()` to infer activity category from location
+    - Only flags as different if inferred category differs from planned category
+    - Returns start/end times, place label/category, and evidence source
+  - Modified `buildPlannedActualEvent()` to handle different activity:
+    - Checks for different activity BEFORE late arrival detection
+    - Creates evidence-based actual block with inferred title and category
+    - Sets description as "Instead of: [planned title] • [place category]"
+    - Uses `kind: 'different_activity'` for UI differentiation
+    - Sets `source: 'evidence'` to indicate it came from location data
+  - Updated CalendarEventMeta in events-store.ts:
+    - Added `'different_activity'` to the kind union type
+    - Added `differentActivity` field to evidence interface with full context:
+      - plannedTitle, plannedCategory, actualLabel, actualCategory
+      - evidenceSource, placeLabel, placeCategory
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added DifferentActivityInfo interface, detectDifferentActivity() function, modified buildPlannedActualEvent()
+  - `apps/mobile/src/stores/events-store.ts` - Added `different_activity` kind, added `differentActivity` evidence field
+
+- **Learnings for future iterations:**
+  - Different activity detection takes precedence over late arrival (mutually exclusive scenarios)
+  - Use `mapPlaceToCategory()` to infer event category from location (meal, health, work, etc.)
+  - The `intervalsOverlap()` helper is useful for finding location blocks during a time range
+  - `DIFFERENT_ACTIVITY_MIN_DURATION` (10 min) prevents flagging brief location visits as "different activity"
+  - Planned events remain visible in planned column - only actual column shows the reality
+  - Evidence source metadata (`differentActivity.evidenceSource`) helps UI show where the info came from
+
+---
