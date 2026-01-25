@@ -142,22 +142,92 @@ export default function ActualAdjustScreen() {
     const meta = event.meta;
     if (!meta) return [];
     const rows: Array<{ label: string; value: string }> = [];
+
+    // --- Location Evidence (US-016) ---
+    // Format: "123 Main St from 9:00-10:30 AM"
+    if (meta.evidence?.locationLabel) {
+      const locationTime = `${formatMinutesToTime(startMinutes)} – ${formatMinutesToTime(startMinutes + durationMinutes)}`;
+      rows.push({ label: 'Location', value: `${meta.evidence.locationLabel} from ${locationTime}` });
+    }
+
+    // --- Screen Time Evidence (US-016) ---
+    // Show total screen time with time range
+    if (meta.evidence?.screenTimeMinutes !== undefined) {
+      const screenTimeRange = `${formatMinutesToTime(startMinutes)} – ${formatMinutesToTime(startMinutes + durationMinutes)}`;
+      rows.push({
+        label: 'Screen time',
+        value: `${Math.round(meta.evidence.screenTimeMinutes)} min (${screenTimeRange})`,
+      });
+    }
+    // Show top app with detail
+    if (meta.evidence?.topApp) {
+      rows.push({ label: 'Top app', value: meta.evidence.topApp });
+    }
+    // Show if screen time occurred during sleep
+    if (meta.evidence?.duringSleep) {
+      rows.push({ label: 'Context', value: 'Phone usage during sleep' });
+    }
+
+    // --- Late Arrival Evidence (US-016) ---
+    if (meta.evidence?.lateArrival) {
+      const late = meta.evidence.lateArrival;
+      const plannedTime = formatMinutesToTime(late.plannedStartMinutes);
+      const actualTime = formatMinutesToTime(late.actualStartMinutes);
+      rows.push({
+        label: 'Late arrival',
+        value: `${late.lateMinutes} min late (planned ${plannedTime}, arrived ${actualTime})`,
+      });
+      rows.push({
+        label: 'Detected by',
+        value: late.evidenceSource === 'location' ? 'Location data' : 'Screen time data',
+      });
+    }
+
+    // --- Different Activity Evidence (US-016) ---
+    if (meta.evidence?.differentActivity) {
+      const diff = meta.evidence.differentActivity;
+      rows.push({
+        label: 'Planned',
+        value: diff.plannedTitle,
+      });
+      rows.push({
+        label: 'Actual location',
+        value: diff.placeLabel + (diff.placeCategory ? ` (${diff.placeCategory.replace(/_/g, ' ')})` : ''),
+      });
+      rows.push({
+        label: 'Detected by',
+        value: diff.evidenceSource === 'location' ? 'Location data' : 'Screen time data',
+      });
+    }
+
+    // --- Distraction Evidence (US-016) ---
+    if (meta.evidence?.distraction) {
+      const dist = meta.evidence.distraction;
+      rows.push({
+        label: 'Distraction',
+        value: `${dist.totalMinutes} min during "${dist.plannedTitle}"`,
+      });
+      // Show per-app breakdown
+      if (dist.apps && dist.apps.length > 0) {
+        const appDetails = dist.apps
+          .map((app) => `${app.appName} (${app.minutes} min)`)
+          .join(', ');
+        rows.push({ label: 'Apps used', value: appDetails });
+      }
+    }
+
+    // --- Confidence ---
     if (typeof meta.confidence === 'number') {
       rows.push({ label: 'Confidence', value: `${Math.round(meta.confidence * 100)}%` });
     } else if (meta.ai?.confidence !== undefined) {
       rows.push({ label: 'AI confidence', value: `${Math.round(meta.ai.confidence * 100)}%` });
     }
+
+    // --- Event Kind & Source ---
     if (meta.kind) rows.push({ label: 'Kind', value: meta.kind.replace(/_/g, ' ') });
-    if (meta.source) rows.push({ label: 'Source', value: meta.source });
-    if (meta.evidence?.locationLabel) {
-      rows.push({ label: 'Location', value: meta.evidence.locationLabel });
-    }
-    if (meta.evidence?.screenTimeMinutes !== undefined) {
-      rows.push({ label: 'Screen time', value: `${Math.round(meta.evidence.screenTimeMinutes)} min` });
-    }
-    if (meta.evidence?.topApp) {
-      rows.push({ label: 'Top app', value: meta.evidence.topApp });
-    }
+    if (meta.source) rows.push({ label: 'Source', value: meta.source.replace(/_/g, ' ') });
+
+    // --- Sleep Evidence ---
     if (meta.evidence?.sleep?.interruptions !== undefined) {
       rows.push({ label: 'Interruptions', value: `${meta.evidence.sleep.interruptions}` });
     }
@@ -197,6 +267,8 @@ export default function ActualAdjustScreen() {
     if (meta.evidence?.sleep?.heartRateAvgBpm !== undefined && meta.evidence.sleep.heartRateAvgBpm !== null) {
       rows.push({ label: 'Avg HR', value: `${meta.evidence.sleep.heartRateAvgBpm} bpm` });
     }
+
+    // --- Conflicts & Verification ---
     if (meta.evidence?.conflicts && meta.evidence.conflicts.length > 0) {
       rows.push({
         label: 'Conflicts',
@@ -212,12 +284,16 @@ export default function ActualAdjustScreen() {
         value: meta.verificationReport.discrepancies.map((item) => item.actual).join(', '),
       });
     }
+
+    // --- Evidence Fusion ---
     if (meta.evidenceFusion?.sources && meta.evidenceFusion.sources.length > 0) {
       rows.push({
         label: 'Evidence sources',
         value: meta.evidenceFusion.sources.map((item) => item.type.replace(/_/g, ' ')).join(', '),
       });
     }
+
+    // --- Data Quality ---
     if (meta.dataQuality) {
       if (meta.dataQuality.freshnessMinutes !== undefined && meta.dataQuality.freshnessMinutes !== null) {
         rows.push({ label: 'Data freshness', value: `${meta.dataQuality.freshnessMinutes} min` });
@@ -232,7 +308,7 @@ export default function ActualAdjustScreen() {
       });
     }
     return rows;
-  }, [event.meta]);
+  }, [event.meta, startMinutes, durationMinutes]);
 
   const [selectedCategory, setSelectedCategory] = useState<EventCategory>(event.category);
   const [note, setNote] = useState('');
