@@ -45,6 +45,7 @@ import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/se
 import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
 import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
 import { fetchLocationMappings, type LocationMapping } from '@/lib/supabase/services/location-mappings';
+import { fetchAppMappings, type AppMapping } from '@/lib/supabase/services/app-mappings';
 import { DEFAULT_USER_PREFERENCES } from '@/stores/user-preferences-store';
 import { supabase } from '@/lib/supabase/client';
 
@@ -83,6 +84,8 @@ export default function ComprehensiveCalendarScreen() {
   const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
   // US-022: User's custom location-to-activity mappings
   const [locationMappings, setLocationMappings] = useState<LocationMapping[]>([]);
+  // US-023: User's custom app-to-activity mappings
+  const [appMappings, setAppMappings] = useState<AppMapping[]>([]);
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
@@ -246,6 +249,32 @@ export default function ComprehensiveCalendarScreen() {
         }
         if (!cancelled) {
           setLocationMappings([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // US-023: Load user's app mappings for activity inference and distraction detection
+  useEffect(() => {
+    if (!userId) {
+      setAppMappings([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const mappings = await fetchAppMappings(userId);
+        if (cancelled) return;
+        setAppMappings(mappings);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[Calendar] Failed to load app mappings:', error);
+        }
+        if (!cancelled) {
+          setAppMappings([]);
         }
       }
     })();
@@ -511,10 +540,12 @@ export default function ComprehensiveCalendarScreen() {
       confidenceThreshold: userPreferences.confidenceThreshold,
       allowAutoSuggestions: userPreferences.autoSuggestEvents,
       locationMappings, // US-022: User's custom location-to-activity mappings
+      appMappings, // US-023: User's custom app-to-activity mappings
     });
   }, [
     actualBlocks,
     appCategoryOverrides,
+    appMappings, // US-023
     derivedActualEvents,
     displayActualEvents,
     evidence,

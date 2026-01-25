@@ -6,6 +6,7 @@ import type {
   ScreenTimeSessionRow,
 } from '@/lib/supabase/services/evidence-data';
 import type { LocationMapping } from '@/lib/supabase/services/location-mappings';
+import type { AppMapping } from '@/lib/supabase/services/app-mappings';
 import type { UsageSummary } from '@/lib/android-insights';
 import type { ActualBlock, VerificationResult } from './verification-engine';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
@@ -310,19 +311,27 @@ interface DistractionInfo {
  * This specifically looks for usage of known distraction apps (social media, games)
  * during a planned event where the user is at the expected location.
  *
+ * US-023: Now checks user's custom app mappings first - if user has marked an app
+ * as a distraction (or explicitly NOT a distraction), that takes precedence over
+ * the default DISTRACTION_APPS list.
+ *
  * Examples:
  * - Planned "Work" + at office + using Instagram = distraction detected
  * - Planned "Family" + at home + using TikTok = distraction detected
+ * - User mapped "Slack" as distraction = Slack usage during work = distraction
+ * - User mapped "Instagram" as NOT distraction = Instagram usage = not distraction
  *
  * @param planned - The planned event
  * @param usageSummary - Android usage summary data
  * @param appCategoryOverrides - User's custom app categorizations
+ * @param appMappings - User's custom app mappings (US-023)
  * @returns DistractionInfo if distraction detected, null otherwise
  */
 function detectDistractionDuringActivity(
   planned: ScheduledEvent,
   usageSummary: UsageSummary | null | undefined,
   appCategoryOverrides?: AppCategoryOverrides,
+  appMappings?: AppMapping[],
 ): DistractionInfo | null {
   // Don't detect distraction for digital activities - screen time is expected
   if (planned.category === 'digital') return null;
@@ -358,8 +367,9 @@ function detectDistractionDuringActivity(
 
       const appName = appIdToName.get(session.packageName) ?? session.packageName;
 
-      // Check if this is a distraction app
-      if (!appMatchesList(appName, DISTRACTION_APPS)) continue;
+      // US-023: Check if this is a distraction app using user's custom mappings first
+      const distractionCheck = checkAppDistraction(appName, appMappings);
+      if (!distractionCheck.isDistraction) continue;
 
       const overlapMinutes = overlapEnd - overlapStart;
       const current = distractionAppUsage.get(appName) ?? 0;
@@ -384,8 +394,9 @@ function detectDistractionDuringActivity(
 
         const appName = appIdToName.get(appId) ?? appId;
 
-        // Check if this is a distraction app
-        if (!appMatchesList(appName, DISTRACTION_APPS)) continue;
+        // US-023: Check if this is a distraction app using user's custom mappings first
+        const distractionCheck = checkAppDistraction(appName, appMappings);
+        if (!distractionCheck.isDistraction) continue;
 
         const current = distractionAppUsage.get(appName) ?? 0;
         distractionAppUsage.set(appName, current + (seconds / 60) * fraction);
@@ -452,6 +463,8 @@ interface BuildActualDisplayEventsInput {
   allowAutoSuggestions?: boolean;
   /** User's custom location-to-activity mappings (US-022) */
   locationMappings?: LocationMapping[];
+  /** User's custom app-to-activity mappings (US-023) */
+  appMappings?: AppMapping[];
 }
 
 interface LocationBlock {
@@ -515,6 +528,7 @@ export function buildActualDisplayEvents({
   confidenceThreshold = 0.6,
   allowAutoSuggestions = true,
   locationMappings,
+  appMappings,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
   const todayYmd = (() => {
     const now = new Date();
@@ -772,6 +786,7 @@ export function buildActualDisplayEvents({
       dataQuality,
       appCategoryOverrides,
       locationMappings, // US-022: Pass user's location mappings
+      appMappings, // US-023: Pass user's app mappings
     });
     if (!derivedResult) continue;
 
@@ -894,6 +909,8 @@ function buildPlannedActualEvent(options: {
   appCategoryOverrides?: AppCategoryOverrides;
   /** User's custom location mappings (US-022) */
   locationMappings?: LocationMapping[];
+  /** User's custom app mappings (US-023) */
+  appMappings?: AppMapping[];
 }): PlannedActualResult | null {
   const {
     planned,
@@ -907,6 +924,7 @@ function buildPlannedActualEvent(options: {
     dataQuality,
     appCategoryOverrides,
     locationMappings,
+    appMappings,
   } = options;
   const plannedStartMinutes = clampMinutes(planned.startMinutes);
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
@@ -1015,7 +1033,8 @@ function buildPlannedActualEvent(options: {
 
   // US-013: Detect distraction app usage during this activity
   // Only applies when user is at expected location (not a "different activity")
-  const distractionInfo = detectDistractionDuringActivity(planned, usageSummary, appCategoryOverrides);
+  // US-023: Now uses user's custom app mappings for distraction detection
+  const distractionInfo = detectDistractionDuringActivity(planned, usageSummary, appCategoryOverrides, appMappings);
   const distractionBlocks: ScheduledEvent[] = [];
 
   // Build description, including distraction annotation for short distractions
@@ -2018,6 +2037,79 @@ function findLocationMapping(
   }
 
   return null;
+}
+
+/**
+ * Find a matching app mapping from user's custom mappings (US-023).
+ * Uses case-insensitive partial matching - if the app name contains the mapped app name
+ * or vice versa, it's considered a match.
+ *
+ * @param appName - The app name from screen time data (e.g., "Instagram", "TikTok")
+ * @param appMappings - User's custom app mappings
+ * @returns The matching AppMapping or null if no match
+ */
+function findAppMapping(
+  appName: string,
+  appMappings: AppMapping[] | undefined,
+): AppMapping | null {
+  if (!appMappings || appMappings.length === 0) return null;
+
+  const nameLower = appName.toLowerCase().trim();
+  if (!nameLower) return null;
+
+  for (const mapping of appMappings) {
+    const mappedNameLower = mapping.app_name.toLowerCase().trim();
+    if (!mappedNameLower) continue;
+
+    // Check for partial match in either direction
+    if (nameLower.includes(mappedNameLower) || mappedNameLower.includes(nameLower)) {
+      return mapping;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if an app is considered a distraction (US-023).
+ * First checks user's custom app mappings, then falls back to default DISTRACTION_APPS list.
+ *
+ * @param appName - The app name to check
+ * @param appMappings - User's custom app mappings
+ * @returns Object with isDistraction flag and optional activityType from user mapping
+ */
+interface AppDistractionResult {
+  /** Whether the app is considered a distraction */
+  isDistraction: boolean;
+  /** User-defined activity type if mapping exists */
+  activityType: string | null;
+  /** Whether this result came from a user mapping */
+  isUserMapped: boolean;
+}
+
+function checkAppDistraction(
+  appName: string,
+  appMappings: AppMapping[] | undefined,
+): AppDistractionResult {
+  // First check user's custom mappings
+  const mapping = findAppMapping(appName, appMappings);
+
+  if (mapping) {
+    // User has a custom mapping for this app - use their distraction flag
+    return {
+      isDistraction: mapping.is_distraction,
+      activityType: mapping.activity_type,
+      isUserMapped: true,
+    };
+  }
+
+  // No user mapping - fall back to default DISTRACTION_APPS list
+  const isDefaultDistraction = appMatchesList(appName, DISTRACTION_APPS);
+  return {
+    isDistraction: isDefaultDistraction,
+    activityType: null,
+    isUserMapped: false,
+  };
 }
 
 /**
