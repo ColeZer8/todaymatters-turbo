@@ -364,6 +364,7 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
 }
 
 export async function fetchActualCalendarEventsForDay(userId: string, ymd: string): Promise<ScheduledEvent[]> {
+  console.log(`[Supabase] fetchActualCalendarEventsForDay: Fetching actual events for ${ymd}`);
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
@@ -401,6 +402,15 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
       .map((row) => rowToScheduledEventForDayFromPublic(row as PublicEventRow, dayStart, dayEnd))
       .filter((e): e is ScheduledEvent => !!e);
 
+    // Count derived events for logging
+    const derivedCount = tmEvents.filter((e) => {
+      const sourceId = e.meta?.source_id;
+      return typeof sourceId === 'string' &&
+        (sourceId.startsWith('derived_actual:') || sourceId.startsWith('derived_evidence:'));
+    }).length;
+
+    console.log(`[Supabase] fetchActualCalendarEventsForDay: Found ${tmEvents.length} tm events (${derivedCount} derived), ${externalEvents.length} external events for ${ymd}`);
+
     const seen = new Set<string>();
     const merged: ScheduledEvent[] = [];
 
@@ -419,6 +429,7 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
 
     return merged.sort((a, b) => a.startMinutes - b.startMinutes);
   } catch (error) {
+    console.log(`[Supabase] fetchActualCalendarEventsForDay: Error fetching events for ${ymd}:`, error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -790,13 +801,135 @@ export interface SyncDerivedActualEventsInput {
 }
 
 /**
+ * Check if a day already has synced derived actual events.
+ * This helps prevent re-derivation for prior days that have already been processed.
+ */
+export async function hasSyncedDerivedEventsForDay(userId: string, ymd: string): Promise<boolean> {
+  try {
+    const dayStart = ymdToLocalDayStart(ymd);
+    const dayEnd = addDays(dayStart, 1);
+    const startIso = dayStart.toISOString();
+    const endIso = dayEnd.toISOString();
+
+    const { data, error } = await supabase
+      .schema('tm')
+      .from('events')
+      .select('id, meta')
+      .eq('user_id', userId)
+      .eq('type', ACTUAL_EVENT_TYPE)
+      .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso)
+      .limit(10);
+
+    if (error) {
+      console.log(`[Supabase] Error checking synced events for ${ymd}:`, error.message);
+      return false;
+    }
+
+    // Check if any events have source_id starting with derived prefixes
+    const hasDerived = (data ?? []).some((row) => {
+      const meta = row.meta as Record<string, Json> | null;
+      const sourceId = meta?.source_id;
+      if (typeof sourceId !== 'string') return false;
+      return sourceId.startsWith('derived_actual:') || sourceId.startsWith('derived_evidence:');
+    });
+
+    console.log(`[Supabase] hasSyncedDerivedEventsForDay(${ymd}): ${hasDerived} (checked ${data?.length ?? 0} events)`);
+    return hasDerived;
+  } catch (error) {
+    console.log(`[Supabase] Error checking synced events for ${ymd}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Clean up duplicate derived events for a day by keeping the oldest event of each kind at each time range.
+ * Returns the IDs of events that were deleted.
+ */
+export async function cleanupDuplicateDerivedEvents(userId: string, ymd: string): Promise<string[]> {
+  try {
+    const dayStart = ymdToLocalDayStart(ymd);
+    const dayEnd = addDays(dayStart, 1);
+    const startIso = dayStart.toISOString();
+    const endIso = dayEnd.toISOString();
+
+    const { data: existing, error: fetchError } = await supabase
+      .schema('tm')
+      .from('events')
+      .select('id, scheduled_start, scheduled_end, meta, created_at')
+      .eq('user_id', userId)
+      .eq('type', ACTUAL_EVENT_TYPE)
+      .lt('scheduled_start', endIso)
+      .gt('scheduled_end', startIso)
+      .order('created_at', { ascending: true }); // Oldest first
+
+    if (fetchError) throw handleSupabaseError(fetchError);
+    if (!existing || existing.length === 0) return [];
+
+    // Group events by time range and kind, keeping the oldest one
+    const groupedByTimeAndKind = new Map<string, typeof existing>();
+    for (const row of existing) {
+      const meta = row.meta as Record<string, Json> | null;
+      const sourceId = meta?.source_id;
+      if (typeof sourceId !== 'string') continue;
+      if (!sourceId.startsWith('derived_actual:') && !sourceId.startsWith('derived_evidence:')) continue;
+
+      const startMs = new Date(row.scheduled_start!).getTime();
+      const endMs = new Date(row.scheduled_end!).getTime();
+      const kind = meta?.kind ?? 'unknown';
+      const key = `${startMs}:${endMs}:${kind}`;
+
+      if (!groupedByTimeAndKind.has(key)) {
+        groupedByTimeAndKind.set(key, []);
+      }
+      groupedByTimeAndKind.get(key)!.push(row);
+    }
+
+    // Find duplicates to remove (all except the oldest in each group)
+    const toRemove: string[] = [];
+    for (const [key, rows] of groupedByTimeAndKind) {
+      if (rows.length > 1) {
+        // Keep the first (oldest), remove the rest
+        for (let i = 1; i < rows.length; i++) {
+          toRemove.push(rows[i].id);
+        }
+        console.log(`[Supabase] Found ${rows.length} duplicate events for ${key}, keeping oldest, removing ${rows.length - 1}`);
+      }
+    }
+
+    if (toRemove.length === 0) return [];
+
+    console.log(`[Supabase] Cleaning up ${toRemove.length} duplicate derived events for ${ymd}`);
+
+    const { error: deleteError } = await supabase
+      .schema('tm')
+      .from('events')
+      .delete()
+      .in('id', toRemove);
+
+    if (deleteError) throw handleSupabaseError(deleteError);
+
+    console.log(`[Supabase] ✅ Successfully removed ${toRemove.length} duplicate derived events`);
+    return toRemove;
+  } catch (error) {
+    console.log(`[Supabase] ❌ Error cleaning up duplicate derived events:`, error);
+    return [];
+  }
+}
+
+/**
  * Automatically saves derived actual events to Supabase.
  * Only saves events that don't already exist (checked by source_id in meta).
+ *
+ * IMPORTANT: This function is designed to be idempotent - calling it multiple times
+ * with the same events will not create duplicates.
  */
 export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInput): Promise<ScheduledEvent[]> {
   const { userId, ymd, derivedEvents } = input;
-  
+
   if (derivedEvents.length === 0) return [];
+
+  console.log(`[Supabase] syncDerivedActualEvents: Starting sync for ${ymd} with ${derivedEvents.length} derived events`);
 
   try {
     const dayStart = ymdToLocalDayStart(ymd);
@@ -816,24 +949,31 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
     if (fetchError) throw handleSupabaseError(fetchError);
 
+    console.log(`[Supabase] syncDerivedActualEvents: Found ${existing?.length ?? 0} existing events for ${ymd}`);
+
     const existingSourceIds = new Set<string>();
+    const existingTimeRangeKeys = new Set<string>();
     if (existing) {
       for (const row of existing) {
         const meta = row.meta as Record<string, Json> | null;
         if (meta?.source_id && typeof meta.source_id === 'string') {
           existingSourceIds.add(meta.source_id);
         }
-        // Also check for derived events by checking if meta.source is 'derived' and matching time ranges
-        if (meta?.source === 'derived' && meta?.kind) {
-          const start = new Date(row.scheduled_start).getTime();
-          const end = new Date(row.scheduled_end).getTime();
-          existingSourceIds.add(`derived_${start}_${end}_${meta.kind}`);
+        // Also check for derived events by matching time ranges and kind
+        const sourceId = meta?.source_id;
+        if (typeof sourceId === 'string' &&
+            (sourceId.startsWith('derived_actual:') || sourceId.startsWith('derived_evidence:'))) {
+          const start = new Date(row.scheduled_start!).getTime();
+          const end = new Date(row.scheduled_end!).getTime();
+          const kind = meta?.kind ?? 'unknown';
+          existingTimeRangeKeys.add(`${start}:${end}:${kind}`);
         }
       }
     }
 
     const inserts: Array<Record<string, unknown>> = [];
     const savedEvents: ScheduledEvent[] = [];
+    let skippedCount = 0;
 
     for (const event of derivedEvents) {
       // Skip if this is not a derived event (already saved)
@@ -843,9 +983,10 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
       // Create a source_id based on the event's derived ID
       const sourceId = event.id;
-      
-      // Check if we already have this event saved
+
+      // Check if we already have this event saved by source_id
       if (existingSourceIds.has(sourceId)) {
+        skippedCount++;
         continue;
       }
 
@@ -854,11 +995,16 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
       startDate.setHours(Math.floor(event.startMinutes / 60), event.startMinutes % 60, 0, 0);
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + event.duration);
-      
-      const timeRangeKey = `derived_${startDate.getTime()}_${endDate.getTime()}_${event.meta?.kind ?? 'unknown'}`;
-      if (existingSourceIds.has(timeRangeKey)) {
+
+      const timeRangeKey = `${startDate.getTime()}:${endDate.getTime()}:${event.meta?.kind ?? 'unknown'}`;
+      if (existingTimeRangeKeys.has(timeRangeKey)) {
+        skippedCount++;
         continue;
       }
+
+      // Mark as occupied to prevent duplicate inserts within this batch
+      existingSourceIds.add(sourceId);
+      existingTimeRangeKeys.add(timeRangeKey);
 
       const meta: Record<string, Json> = {
         category: event.category,
@@ -891,11 +1037,9 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
       });
     }
 
-    if (inserts.length === 0) return [];
+    console.log(`[Supabase] syncDerivedActualEvents: Skipped ${skippedCount} events (already exist), inserting ${inserts.length} new events`);
 
-    if (__DEV__) {
-      console.log(`[Supabase] Syncing ${inserts.length} derived actual events for ${ymd}`);
-    }
+    if (inserts.length === 0) return [];
 
     const { data: inserted, error: insertError } = await supabase
       .schema('tm')
@@ -915,15 +1059,11 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
       }
     }
 
-    if (__DEV__) {
-      console.log(`[Supabase] ✅ Successfully synced ${savedEvents.length} derived actual events`);
-    }
+    console.log(`[Supabase] syncDerivedActualEvents: ✅ Successfully synced ${savedEvents.length} derived actual events for ${ymd}`);
 
     return savedEvents;
   } catch (error) {
-    if (__DEV__) {
-      console.error('[Supabase] ❌ Error syncing derived actual events:', error);
-    }
+    console.log(`[Supabase] syncDerivedActualEvents: ❌ Error syncing derived actual events for ${ymd}:`, error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }

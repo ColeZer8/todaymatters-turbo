@@ -147,36 +147,51 @@ export function buildActualDisplayEvents({
     end: event.startMinutes + event.duration,
   }));
 
-  // Track saved derived events by their source_id to avoid duplicates
+  // Track saved derived events by their source_id and time range to avoid duplicates
+  // This prevents re-derivation of events that were previously saved to Supabase
+  const savedDerivedEventSourceIds = new Set<string>();
   const savedDerivedEventKeys = new Set<string>();
+  let savedDerivedCount = 0;
+
   for (const event of filteredActualEvents) {
-    const meta = event.meta as Record<string, unknown> | undefined;
+    const meta = event.meta as unknown as Record<string, unknown> | undefined;
     if (meta?.source_id && typeof meta.source_id === 'string') {
       // Check if this is a saved derived event
       if (meta.source_id.startsWith('derived_actual:') || meta.source_id.startsWith('derived_evidence:')) {
-        // Create a key based on time range and kind to detect duplicates
+        savedDerivedCount++;
+        // Track both the exact source_id and a time+kind key for flexible matching
+        savedDerivedEventSourceIds.add(meta.source_id);
         const key = `${event.startMinutes}_${event.startMinutes + event.duration}_${meta.kind ?? 'unknown'}`;
         savedDerivedEventKeys.add(key);
       }
     }
   }
 
+  if (savedDerivedCount > 0) {
+    console.log(`[ActualDisplay] Found ${savedDerivedCount} saved derived events for ${ymd}, will skip re-derivation`);
+  }
+
   const addIfFree = (event: ScheduledEvent, minOverlapMinutes = 1) => {
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
     if (end <= start) return;
-    
+
     // Check for overlap with existing events
     if (hasOverlap(start, end, occupied, minOverlapMinutes)) return;
-    
-    // For derived events, check if we already have a saved version with the same time range
+
+    // For derived events, check if we already have a saved version
     if (event.id.startsWith('derived_actual:') || event.id.startsWith('derived_evidence:')) {
+      // First check by exact source_id match
+      if (savedDerivedEventSourceIds.has(event.id)) {
+        return; // Skip - we already have this exact event saved
+      }
+      // Then check by time range and kind
       const key = `${start}_${end}_${event.meta?.kind ?? 'unknown'}`;
       if (savedDerivedEventKeys.has(key)) {
         return; // Skip - we already have this event saved
       }
     }
-    
+
     results.push(event);
     occupied.push({ start, end });
   };

@@ -36,7 +36,7 @@ import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-
 import {
   ensurePlannedSleepScheduleForDay,
   syncDerivedActualEvents,
-  deleteActualCalendarEventsByIds,
+  cleanupDuplicateDerivedEvents,
 } from '@/lib/supabase/services/calendar-events';
 import { useVerification } from '@/lib/calendar/use-verification';
 import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
@@ -164,50 +164,28 @@ export default function ComprehensiveCalendarScreen() {
     if (!userId) return;
     let cancelled = false;
     (async () => {
+      console.log(`[Calendar] Loading actual events for ${selectedDateYmd}`);
       const events = await loadActualForDay(selectedDateYmd);
       if (cancelled) return;
+      console.log(`[Calendar] Loaded ${events.length} actual events for ${selectedDateYmd}`);
       setActualEventsForDate(selectedDateYmd, events);
+
+      // Clean up duplicate derived events using the new function that preserves the oldest
       if (cleanupRef.current.has(selectedDateYmd)) return;
       cleanupRef.current.add(selectedDateYmd);
-      const toRemove: string[] = [];
-      const overlaps = (a: ScheduledEvent, b: ScheduledEvent) => {
-        const start = Math.max(a.startMinutes, b.startMinutes);
-        const end = Math.min(a.startMinutes + a.duration, b.startMinutes + b.duration);
-        return end > start;
-      };
-      for (const event of events) {
-        const sourceId = event.meta?.source_id;
-        if (!sourceId || typeof sourceId !== 'string') continue;
-        if (!sourceId.startsWith('derived_actual:') && !sourceId.startsWith('derived_evidence:')) continue;
-        const hasOverlap = events.some((other) => {
-          if (other.id === event.id) return false;
-          const otherSourceId = other.meta?.source_id;
-          if (!otherSourceId || typeof otherSourceId !== 'string') return false;
-          if (!otherSourceId.startsWith('derived_actual:') && !otherSourceId.startsWith('derived_evidence:')) {
-            return false;
-          }
-          if (!overlaps(event, other)) return false;
-          const eventKind = event.meta?.kind;
-          const otherKind = other.meta?.kind;
-          return Boolean(eventKind && otherKind && eventKind === otherKind);
-        });
-        if (hasOverlap) {
-          toRemove.push(event.id);
-        }
-      }
-      if (toRemove.length > 0) {
-        try {
-          await deleteActualCalendarEventsByIds(userId, toRemove);
+
+      try {
+        const removedIds = await cleanupDuplicateDerivedEvents(userId, selectedDateYmd);
+        if (cancelled) return;
+        if (removedIds.length > 0) {
+          console.log(`[Calendar] Cleaned up ${removedIds.length} duplicate derived events for ${selectedDateYmd}`);
+          // Refresh the events after cleanup
+          const refreshedEvents = await loadActualForDay(selectedDateYmd);
           if (cancelled) return;
-          setActualEventsForDate(
-            selectedDateYmd,
-            events.filter((item) => !toRemove.includes(item.id))
-          );
-        } catch (error) {
-          if (__DEV__) {
-            console.warn('[Calendar] Failed cleanup of derived overlaps:', error);
-          }
+          setActualEventsForDate(selectedDateYmd, refreshedEvents);
         }
+      } catch (error) {
+        console.warn('[Calendar] Failed cleanup of derived duplicates:', error);
       }
     })();
     return () => {
