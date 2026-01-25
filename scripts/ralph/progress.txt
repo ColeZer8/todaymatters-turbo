@@ -631,3 +631,40 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
 
 ---
+
+## 2026-01-24 - US-021: Create App Mappings Settings UI
+- **What was implemented:**
+  - Created `AppMappingsTemplate.tsx` component with:
+    - List of app mappings showing app name, activity type, and distraction status
+    - "Add App Mapping" button at top
+    - Edit and delete buttons for each mapping
+    - Modal for add/edit with app name, activity type, and "Mark as Distraction" toggle
+    - Empty state with Smartphone icon and helpful messaging
+    - Loading state handling
+    - Delete confirmation alert
+    - Red "Distraction" badge for apps marked as distractions
+  - Created `app-mappings.tsx` settings screen that:
+    - Loads mappings from Supabase on mount
+    - Handles add/edit/delete operations via Supabase services (from US-019)
+    - Optimistic updates for smooth UX
+    - Error handling with user-friendly alerts
+  - Added navigation from Profile screen:
+    - Added Smartphone icon import
+    - Added "App Mappings" entry to personalizationItems array
+    - Routes to `/settings/app-mappings`
+  - Exported template from templates/index.ts
+
+- **Files changed:**
+  - `apps/mobile/src/components/templates/AppMappingsTemplate.tsx` - New template component
+  - `apps/mobile/src/components/templates/index.ts` - Added export
+  - `apps/mobile/src/app/settings/app-mappings.tsx` - New settings screen
+  - `apps/mobile/src/app/profile.tsx` - Added Smartphone icon, navigation entry
+
+- **Learnings for future iterations:**
+  - Follow the same pattern as LocationMappingsTemplate for consistency
+  - Supabase services from US-019 (app_mappings CRUD) are directly reusable
+  - The `is_distraction` boolean is shown as a red "Distraction" badge for visibility
+  - Switch component uses trackColor and thumbColor for custom styling
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
+
+---
