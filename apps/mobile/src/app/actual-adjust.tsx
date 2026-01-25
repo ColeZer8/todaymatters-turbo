@@ -128,6 +128,10 @@ export default function ActualAdjustScreen() {
     }
 
     if (kind === 'unknown_gap') {
+      const suggestions = event.meta?.evidence?.unknownGapSuggestions;
+      if (suggestions && suggestions.length > 0) {
+        return `What were you doing between ${timeLabel}? Select from suggestions below or describe what happened.`;
+      }
       return `We marked this as Unknown because we didn't have enough data between ${timeLabel}. Describe what really happened and Today Matters will sort and title it!`;
     }
 
@@ -299,6 +303,30 @@ export default function ActualAdjustScreen() {
       .map((initiative) => ({ id: `initiative:${initiative}`, label: initiative }));
     return [...goalOptions, ...initiativeOptions];
   }, [goals, initiatives]);
+
+  // Unknown gap suggestions from planned events (US-014)
+  const unknownGapSuggestions = useMemo(() => {
+    const suggestions = event.meta?.evidence?.unknownGapSuggestions;
+    if (!suggestions || suggestions.length === 0) return [];
+    return suggestions.map((s) => ({
+      id: s.plannedEventId,
+      title: s.title,
+      category: s.category,
+      location: s.location ?? null,
+      overlapRatio: s.overlapRatio,
+    }));
+  }, [event.meta?.evidence?.unknownGapSuggestions]);
+
+  const handleSelectUnknownGapSuggestion = useCallback(
+    (suggestion: { id: string; title: string; category: EventCategory; location: string | null }) => {
+      // Apply the suggestion to the form
+      setTitleInput(suggestion.title);
+      setSelectedCategory(suggestion.category);
+      // Add a note indicating this came from a planned event
+      setNote(`Followed my plan: ${suggestion.title}`);
+    },
+    [],
+  );
 
   const resolveAiSuggestion = useCallback(async () => {
     if (!note.trim()) return null;
@@ -510,9 +538,11 @@ export default function ActualAdjustScreen() {
         helperText={helperText}
         evidenceRows={evidenceRows}
         suggestion={suggestion}
+        unknownGapSuggestions={unknownGapSuggestions}
         isSaving={isSaving}
         onCancel={() => router.back()}
         onSave={handleSave}
+        onSelectUnknownGapSuggestion={handleSelectUnknownGapSuggestion}
         onSplit={() => {
           router.push({
             pathname: '/actual-split',

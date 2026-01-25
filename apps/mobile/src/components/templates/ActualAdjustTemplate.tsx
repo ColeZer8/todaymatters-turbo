@@ -11,6 +11,15 @@ export interface ActualAdjustSuggestion {
   reason?: string;
 }
 
+/** Suggestion from a planned event for unknown gap (US-014) */
+export interface UnknownGapSuggestion {
+  id: string;
+  title: string;
+  category: EventCategory;
+  location: string | null;
+  overlapRatio: number;
+}
+
 export interface ActualAdjustTemplateProps {
   title: string;
   titleValue: string;
@@ -29,9 +38,13 @@ export interface ActualAdjustTemplateProps {
   helperText: string;
   evidenceRows?: Array<{ label: string; value: string }>;
   suggestion?: ActualAdjustSuggestion | null;
+  /** Suggestions from planned events for unknown gaps (US-014) */
+  unknownGapSuggestions?: UnknownGapSuggestion[];
   isSaving: boolean;
   onCancel: () => void;
   onSave: () => void;
+  /** Handler for selecting a suggestion from planned events (US-014) */
+  onSelectUnknownGapSuggestion?: (suggestion: UnknownGapSuggestion) => void;
   onSplit?: () => void;
   onEditSleepStart?: () => void;
   onEditSleepEnd?: () => void;
@@ -72,9 +85,11 @@ export const ActualAdjustTemplate = ({
   helperText,
   evidenceRows = [],
   suggestion,
+  unknownGapSuggestions = [],
   isSaving,
   onCancel,
   onSave,
+  onSelectUnknownGapSuggestion,
   onSplit,
   onEditSleepStart,
   onEditSleepEnd,
@@ -143,6 +158,31 @@ export const ActualAdjustTemplate = ({
             </Pressable>
           )}
         </View>
+
+        {/* Unknown gap suggestions from planned events (US-014) */}
+        {unknownGapSuggestions.length > 0 && onSelectUnknownGapSuggestion && (
+          <View className="mt-4 rounded-2xl border border-[#DBEAFE] bg-[#EFF6FF] px-4 py-4">
+            <Text className="text-[13px] font-semibold text-[#1E40AF]">What were you doing?</Text>
+            <Text className="mt-1 text-[12px] text-[#3B82F6]">
+              Select from your planned events or enter a custom activity below
+            </Text>
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              {unknownGapSuggestions.slice(0, 4).map((sug) => (
+                <Pressable
+                  key={sug.id}
+                  onPress={() => onSelectUnknownGapSuggestion(sug)}
+                  className="rounded-full border border-[#3B82F6] bg-white px-4 py-2"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Text className="text-[12px] font-semibold text-[#1D4ED8]">{sug.title}</Text>
+                  {sug.location && (
+                    <Text className="text-[10px] text-[#64748B]">{sug.location}</Text>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
 
         {isSleep && (
           <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">

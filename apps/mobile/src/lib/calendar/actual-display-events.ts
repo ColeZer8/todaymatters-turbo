@@ -784,7 +784,11 @@ export function buildActualDisplayEvents({
       })
     : results;
 
-  const withUnknowns = fillUnknownGaps(filteredResults);
+  // Calculate current time in minutes for past-time filtering (US-014)
+  // Only apply the filter for today's date - past days should show all unknowns
+  const now = new Date();
+  const currentMinutes = ymd === todayYmd ? now.getHours() * 60 + now.getMinutes() : undefined;
+  const withUnknowns = fillUnknownGaps(filteredResults, plannedSorted, currentMinutes);
   const withSleepFilled = replaceUnknownWithSleepSchedule(withUnknowns, sleepOverrideIntervals, {
     ymd,
     usageSummary,
@@ -847,7 +851,8 @@ export function buildActualDisplayEvents({
 
   // CRITICAL: Always ensure gaps are filled with unknown events, even after overlap resolution
   // This guarantees there's always something in the "actual" column
-  const withGapsFilled = fillUnknownGaps(nonOverlapping);
+  // Pass planned events for suggestions and current time for past-time filtering (US-014)
+  const withGapsFilled = fillUnknownGaps(nonOverlapping, plannedSorted, currentMinutes);
 
   return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
 }
@@ -1422,7 +1427,18 @@ function parseDbTimestamp(timestamp: string): Date {
   return new Date(timestamp + 'Z');
 }
 
-function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
+/**
+ * Fill gaps in the timeline with unknown events, including suggestions from planned events.
+ *
+ * @param events - The events to fill gaps between
+ * @param plannedEvents - Planned events to use for generating suggestions (US-014)
+ * @param currentMinutes - Current time in minutes from midnight (for past-time filtering)
+ */
+function fillUnknownGaps(
+  events: ScheduledEvent[],
+  plannedEvents?: ScheduledEvent[],
+  currentMinutes?: number,
+): ScheduledEvent[] {
   const sorted = [...events].sort((a, b) => a.startMinutes - b.startMinutes);
   const filled: ScheduledEvent[] = [];
   let cursor = 0;
@@ -1433,18 +1449,30 @@ function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
     const end = clampMinutes(event.startMinutes + event.duration);
     if (start > cursor) {
       const gapDuration = Math.max(1, start - cursor);
-      filled.push(buildUnknownEvent(cursor, gapDuration, unknownCounter++));
+      // Only create unknown gaps for past time (US-014 requirement)
+      // If currentMinutes is provided, only show unknowns up to current time
+      if (currentMinutes === undefined || cursor < currentMinutes) {
+        const actualDuration =
+          currentMinutes !== undefined ? Math.min(gapDuration, Math.max(0, currentMinutes - cursor)) : gapDuration;
+        if (actualDuration > 0) {
+          filled.push(buildUnknownEvent(cursor, actualDuration, unknownCounter++, plannedEvents));
+        }
+      }
     }
     filled.push(event);
     cursor = Math.max(cursor, end);
   }
 
+  // Fill gap at end of day, but only for past time
   if (cursor < 24 * 60) {
-    const gapDuration = Math.max(1, 24 * 60 - cursor);
-    filled.push(buildUnknownEvent(cursor, gapDuration, unknownCounter++));
+    const maxEnd = currentMinutes !== undefined ? Math.min(24 * 60, currentMinutes) : 24 * 60;
+    if (cursor < maxEnd) {
+      const gapDuration = Math.max(1, maxEnd - cursor);
+      filled.push(buildUnknownEvent(cursor, gapDuration, unknownCounter++, plannedEvents));
+    }
   }
 
-  return mergeAdjacentUnknowns(filled);
+  return mergeAdjacentUnknowns(filled, plannedEvents);
 }
 
 interface SleepInterruptionContext {
@@ -2200,12 +2228,82 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
   };
 }
 
-function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: number): ScheduledEvent {
+/**
+ * Suggestion for an unknown gap based on a planned event (US-014).
+ */
+interface UnknownGapSuggestion {
+  /** The suggested event title */
+  title: string;
+  /** The suggested event category */
+  category: EventCategory;
+  /** The planned event ID this suggestion is based on */
+  plannedEventId: string;
+  /** How much of the unknown gap overlaps with this planned event (0-1) */
+  overlapRatio: number;
+  /** Optional location from the planned event */
+  location?: string | null;
+}
+
+/**
+ * Find planned events that overlap with a given time range and generate suggestions.
+ */
+function findPlannedEventSuggestions(
+  startMinutes: number,
+  duration: number,
+  plannedEvents: ScheduledEvent[],
+): UnknownGapSuggestion[] {
+  const endMinutes = startMinutes + duration;
+  const suggestions: UnknownGapSuggestion[] = [];
+
+  for (const planned of plannedEvents) {
+    const plannedEnd = planned.startMinutes + planned.duration;
+
+    // Check for overlap
+    const overlapStart = Math.max(startMinutes, planned.startMinutes);
+    const overlapEnd = Math.min(endMinutes, plannedEnd);
+    const overlapMinutes = Math.max(0, overlapEnd - overlapStart);
+
+    if (overlapMinutes > 0) {
+      const overlapRatio = overlapMinutes / duration;
+
+      // Only suggest if there's meaningful overlap (at least 20%)
+      if (overlapRatio >= 0.2) {
+        suggestions.push({
+          title: planned.title,
+          category: planned.category,
+          plannedEventId: planned.id,
+          overlapRatio,
+          location: planned.location ?? null,
+        });
+      }
+    }
+  }
+
+  // Sort by overlap ratio descending (most relevant first)
+  return suggestions.sort((a, b) => b.overlapRatio - a.overlapRatio);
+}
+
+function buildUnknownEvent(
+  startMinutes: number,
+  duration: number,
+  uniqueId?: number,
+  plannedEvents?: ScheduledEvent[],
+): ScheduledEvent {
+  // Find suggestions from planned events
+  const suggestions = plannedEvents ? findPlannedEventSuggestions(startMinutes, duration, plannedEvents) : [];
+
+  // Build description based on suggestions
+  const hasSuggestions = suggestions.length > 0;
+  const description = hasSuggestions
+    ? `What were you doing? • ${suggestions.slice(0, 2).map((s) => s.title).join(', ')}`
+    : 'Tap to assign';
+
   const meta: CalendarEventMeta = {
     category: 'unknown',
     source: 'derived',
     kind: 'unknown_gap',
     confidence: 0.2,
+    evidence: hasSuggestions ? { unknownGapSuggestions: suggestions } : undefined,
   };
 
   const endMinutes = startMinutes + duration;
@@ -2214,7 +2312,7 @@ function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: nu
   return {
     id: generateDerivedId(DERIVED_ACTUAL_PREFIX, 'unknown', startMinutes, endMinutes, uniqueSuffix),
     title: 'Unknown',
-    description: 'Tap to assign',
+    description,
     startMinutes,
     duration,
     category: 'unknown',
@@ -2222,7 +2320,7 @@ function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: nu
   };
 }
 
-function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
+function mergeAdjacentUnknowns(events: ScheduledEvent[], plannedEvents?: ScheduledEvent[]): ScheduledEvent[] {
   const merged: ScheduledEvent[] = [];
   let unknownCounter = 0;
 
@@ -2238,6 +2336,18 @@ function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
       last.duration += event.duration;
       const endMinutes = last.startMinutes + last.duration;
       last.id = generateDerivedId(DERIVED_ACTUAL_PREFIX, 'unknown', last.startMinutes, endMinutes, `merged_${unknownCounter++}`);
+
+      // Recalculate suggestions for the merged time range (US-014)
+      if (plannedEvents) {
+        const suggestions = findPlannedEventSuggestions(last.startMinutes, last.duration, plannedEvents);
+        if (suggestions.length > 0) {
+          last.description = `What were you doing? • ${suggestions.slice(0, 2).map((s) => s.title).join(', ')}`;
+          last.meta = {
+            ...last.meta,
+            evidence: { ...last.meta?.evidence, unknownGapSuggestions: suggestions },
+          };
+        }
+      }
       continue;
     }
 

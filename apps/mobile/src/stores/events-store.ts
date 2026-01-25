@@ -116,6 +116,19 @@ export interface CalendarEventMeta {
       /** All distraction apps and their usage minutes */
       apps: Array<{ appName: string; minutes: number }>;
     };
+    /** Suggestions for unknown gap based on planned events (US-014) */
+    unknownGapSuggestions?: Array<{
+      /** The suggested event title */
+      title: string;
+      /** The suggested event category */
+      category: EventCategory;
+      /** The planned event ID this suggestion is based on */
+      plannedEventId: string;
+      /** How much of the unknown gap overlaps with this planned event (0-1) */
+      overlapRatio: number;
+      /** Optional location from the planned event */
+      location?: string | null;
+    }>;
   };
   evidenceFusion?: {
     confidence: number;
