@@ -595,3 +595,39 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
 
 ---
+
+## 2026-01-24 - US-020: Create Location Mappings Settings UI
+- **What was implemented:**
+  - Created `LocationMappingsTemplate.tsx` component with:
+    - List of location mappings with address and activity name
+    - "Add Location Mapping" button at top
+    - Edit and delete buttons for each mapping
+    - Modal for add/edit with location address and activity name fields
+    - Empty state with helpful messaging
+    - Loading state handling
+    - Delete confirmation alert
+  - Created `location-mappings.tsx` settings screen that:
+    - Loads mappings from Supabase on mount
+    - Handles add/edit/delete operations via Supabase services
+    - Optimistic updates for smooth UX
+    - Error handling with user-friendly alerts
+  - Added navigation from Profile screen:
+    - Added MapPin icon import
+    - Added "Location Mappings" entry to personalizationItems array
+    - Routes to `/settings/location-mappings`
+  - Exported template from templates/index.ts
+
+- **Files changed:**
+  - `apps/mobile/src/components/templates/LocationMappingsTemplate.tsx` - New template component
+  - `apps/mobile/src/components/templates/index.ts` - Added export
+  - `apps/mobile/src/app/settings/location-mappings.tsx` - New settings screen
+  - `apps/mobile/src/app/profile.tsx` - Added navigation entry
+
+- **Learnings for future iterations:**
+  - Settings screens follow pattern: screen wraps template, template handles UI, screen handles data/logic
+  - Use `SafeAreaView` from `react-native-safe-area-context` for proper safe area handling
+  - Modal with `animationType="slide"` and `transparent` gives native-feeling bottom sheet
+  - Supabase services already exist for location_mappings CRUD - use them directly
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
+
+---
