@@ -216,11 +216,82 @@ export default function ActualAdjustScreen() {
       }
     }
 
-    // --- Confidence ---
-    if (typeof meta.confidence === 'number') {
-      rows.push({ label: 'Confidence', value: `${Math.round(meta.confidence * 100)}%` });
+    // --- Confidence Score (US-017) ---
+    // Show confidence with explanation of what factors contributed to it
+    // Only for derived events (not user-created events)
+    const isDerivedEvent =
+      meta.source === 'derived' ||
+      meta.source === 'evidence' ||
+      meta.source === 'system' ||
+      meta.kind?.includes('derived') ||
+      meta.kind === 'screen_time' ||
+      meta.kind === 'sleep_interrupted' ||
+      meta.kind === 'sleep_late' ||
+      meta.kind === 'unknown_gap' ||
+      meta.kind === 'pattern_gap' ||
+      meta.kind === 'evidence_block' ||
+      meta.kind === 'location_inferred' ||
+      meta.kind === 'late_arrival' ||
+      meta.kind === 'different_activity' ||
+      meta.kind === 'distraction';
+
+    // Determine confidence value from available sources
+    let confidenceValue: number | undefined;
+    let confidenceSource: string | undefined;
+
+    if (meta.evidenceFusion?.confidence !== undefined) {
+      confidenceValue = meta.evidenceFusion.confidence;
+      confidenceSource = 'evidence_fusion';
+    } else if (typeof meta.confidence === 'number') {
+      confidenceValue = meta.confidence;
+      confidenceSource = 'meta';
+    } else if (meta.verificationReport?.confidence !== undefined) {
+      confidenceValue = meta.verificationReport.confidence;
+      confidenceSource = 'verification';
+    } else if (meta.patternSummary?.confidence !== undefined) {
+      confidenceValue = meta.patternSummary.confidence;
+      confidenceSource = 'pattern';
     } else if (meta.ai?.confidence !== undefined) {
+      confidenceValue = meta.ai.confidence;
+      confidenceSource = 'ai';
+    }
+
+    // Show confidence for derived events
+    if (isDerivedEvent && confidenceValue !== undefined) {
+      rows.push({
+        label: 'Confidence',
+        value: `${Math.round(confidenceValue * 100)}%`,
+      });
+
+      // Explain what the confidence is based on (multiple sources = higher confidence)
+      const evidenceSources: string[] = [];
+      if (meta.evidence?.locationLabel) evidenceSources.push('location');
+      if (meta.evidence?.screenTimeMinutes !== undefined) evidenceSources.push('screen time');
+      if (meta.evidence?.sleep) evidenceSources.push('sleep data');
+      if (meta.patternSummary) evidenceSources.push('pattern history');
+      if (meta.verificationReport) evidenceSources.push('verification');
+      if (meta.evidenceFusion?.sources) {
+        for (const src of meta.evidenceFusion.sources) {
+          const srcLabel = src.type.replace(/_/g, ' ');
+          if (!evidenceSources.includes(srcLabel)) {
+            evidenceSources.push(srcLabel);
+          }
+        }
+      }
+
+      if (evidenceSources.length > 0) {
+        const sourceLabel = evidenceSources.length === 1 ? 'source' : 'sources';
+        rows.push({
+          label: 'Based on',
+          value: `${evidenceSources.length} ${sourceLabel}: ${evidenceSources.join(', ')}`,
+        });
+      }
+    } else if (meta.ai?.confidence !== undefined) {
+      // For AI-categorized events, show AI confidence separately
       rows.push({ label: 'AI confidence', value: `${Math.round(meta.ai.confidence * 100)}%` });
+      if (meta.ai.reason) {
+        rows.push({ label: 'AI reasoning', value: meta.ai.reason });
+      }
     }
 
     // --- Event Kind & Source ---
