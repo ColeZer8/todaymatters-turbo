@@ -324,3 +324,31 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Evidence source metadata (`differentActivity.evidenceSource`) helps UI show where the info came from
 
 ---
+
+## 2026-01-24 - US-011: Handle Screen Time Inside Sleep - Embed Short Usage
+- **What was implemented:**
+  - Added `MidSleepScreenTimeInfo` interface to track phone usage during sleep
+  - Created `detectMidSleepScreenTime()` function that:
+    - Identifies screen time sessions in the MIDDLE of sleep (30+ min after start, 30+ min before end)
+    - Distinguishes from "staying up late" which is handled separately
+    - Returns total minutes and top app used during mid-sleep phone checks
+  - Created `buildSleepWithPhoneDescription()` function that formats embedded phone usage:
+    - Format: "Sleep (phone: X min)" or "Sleep (phone: X min on AppName)"
+    - Appends to existing description if one exists
+  - Modified sleep event handling in `deriveActualEventsFromScreenTime()`:
+    - First handles sleep start adjustment (staying up late scrolling)
+    - Then checks for mid-sleep phone usage
+    - Short usage (<=10 min): embeds in description, no separate block
+    - Long usage (>10 min): left for US-012 to create separate blocks
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts` - Added MidSleepScreenTimeInfo interface, detectMidSleepScreenTime(), buildSleepWithPhoneDescription(), modified sleep handling
+
+- **Learnings for future iterations:**
+  - Mid-sleep phone usage is different from "staying up late" - needs separate detection
+  - Buffer zones (30 min from start/end) prevent false positives from alarm checks or falling asleep with phone
+  - The distractionThresholdMinutes (default 10) serves as the cutoff for embedded vs separate blocks
+  - Sleep descriptions can be chained: "Started late (...) (phone: X min)" for multiple annotations
+  - App sessions provide precise timing needed for mid-sleep detection
+
+---
