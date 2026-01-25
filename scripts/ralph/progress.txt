@@ -151,3 +151,26 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - The `minDurationMinutes` parameter prevents creating tiny split segments
 
 ---
+
+## 2026-01-24 - US-005: Add Unit Test for Overlap Elimination
+- **What was implemented:**
+  - Created comprehensive test file `actual-timeline-builder.test.ts` with 32 tests
+  - Tests for `getEventPriority()` function covering all 5 priority levels
+  - Tests for overlap resolution: two events overlapping get split into non-overlapping result
+  - Tests for priority preservation: higher priority events remain intact, lower get split
+  - Edge case tests: exact same time, partial overlap at start/end, contained event, adjacent events
+  - Tests for invalid inputs: zero duration, negative duration events are skipped
+  - Tests for `minDurationMinutes` filtering of tiny segments
+  - Tests for `validate()`, `clear()`, and `eventCount` methods
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-timeline-builder.test.ts` - New test file with 32 tests
+
+- **Learnings for future iterations:**
+  - Use `createTestEvent()` helper for creating minimal test events with required fields
+  - Use `hasOverlaps()` helper to validate no two events overlap in result
+  - Test priority order: UserEdited(1) > SupabaseActual(2) > DerivedEvidence(3) > ScreenTime(4) > Unknown(5)
+  - Pre-existing TypeScript errors in codebase - verify new files don't add errors, not that all errors are fixed
+  - Jest tests use `@/stores` path alias which works with project's jest config
+
+---
