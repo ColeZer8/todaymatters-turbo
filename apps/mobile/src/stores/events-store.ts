@@ -139,6 +139,13 @@ export interface CalendarEventMeta {
       conflict: string;
       resolution: 'source1_wins' | 'source2_wins' | 'compromise' | 'unresolved';
     }>;
+    /** US-024: Unified pipeline metadata */
+    sourceType?: 'user_actual' | 'supabase_derived' | 'evidence_block' | 'screen_time' | 'planned_crossref' | 'location' | 'sleep' | 'pattern' | 'unknown';
+    fusionId?: string;
+    fusedAt?: number;
+    evidenceDescription?: string;
+    isDerived?: boolean;
+    contributingSources?: Array<'user_actual' | 'supabase_derived' | 'evidence_block' | 'screen_time' | 'planned_crossref' | 'location' | 'sleep' | 'pattern' | 'unknown'>;
   };
   dataQuality?: {
     freshnessMinutes?: number | null;

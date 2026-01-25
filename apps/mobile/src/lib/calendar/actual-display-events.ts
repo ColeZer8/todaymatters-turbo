@@ -38,6 +38,421 @@ const LATE_ARRIVAL_MIN_MINUTES = 5; // Minimum late threshold to consider it a "
 const LATE_ARRIVAL_MAX_MINUTES = 60; // Maximum lateness before it's considered a different activity
 const DIFFERENT_ACTIVITY_MIN_DURATION = 10; // Minimum duration for a different activity block
 
+// ============================================================================
+// EVIDENCE FUSION PIPELINE (US-024)
+// ============================================================================
+
+/**
+ * Evidence source types that can contribute to the actual timeline.
+ */
+export type EvidenceSourceType =
+  | 'user_actual'        // User-created/edited actual events
+  | 'supabase_derived'   // Previously synced derived events from Supabase
+  | 'evidence_block'     // Evidence blocks from verification engine
+  | 'screen_time'        // Screen time derived events
+  | 'planned_crossref'   // Cross-referenced from planned events
+  | 'location'           // Location-derived events
+  | 'sleep'              // Sleep-derived events
+  | 'pattern'            // Pattern-suggested events
+  | 'unknown';           // Gap-filling unknown events
+
+/**
+ * Metadata attached to each fused evidence event.
+ * Tracks the source, confidence, and evidence chain for display/debugging.
+ */
+export interface EvidenceFusionMetadata {
+  /** The primary source that created this event */
+  sourceType: EvidenceSourceType;
+  /** Unique identifier for the evidence chain */
+  fusionId: string;
+  /** Timestamp when this fusion was computed */
+  fusedAt: number;
+  /** Confidence score from 0-1 */
+  confidence: number;
+  /** Human-readable description of evidence sources */
+  evidenceDescription: string;
+  /** Whether this event was derived vs user-entered */
+  isDerived: boolean;
+  /** Contributing evidence sources */
+  contributingSources: EvidenceSourceType[];
+}
+
+/**
+ * A single evidence item in the fusion pipeline.
+ */
+interface EvidenceItem {
+  /** The event data */
+  event: ScheduledEvent;
+  /** Source type for prioritization */
+  sourceType: EvidenceSourceType;
+  /** Priority for overlap resolution (lower = higher priority) */
+  priority: number;
+  /** Confidence score */
+  confidence: number;
+}
+
+/**
+ * Input for the evidence fusion pipeline.
+ */
+interface EvidenceFusionPipelineInput {
+  /** Date for the timeline (YYYY-MM-DD) */
+  ymd: string;
+  /** User-created actual events (highest priority) */
+  userActualEvents: ScheduledEvent[];
+  /** Previously synced derived events from Supabase */
+  savedDerivedEvents: ScheduledEvent[];
+  /** Evidence blocks from verification engine */
+  evidenceBlocks: ScheduledEvent[];
+  /** Screen time derived events */
+  screenTimeEvents: ScheduledEvent[];
+  /** Cross-referenced events from planned events (late arrival, different activity, etc.) */
+  plannedCrossrefEvents: ScheduledEvent[];
+  /** Location-derived events */
+  locationEvents: ScheduledEvent[];
+  /** Sleep-derived events */
+  sleepEvents: ScheduledEvent[];
+  /** Pattern-suggested events */
+  patternEvents: ScheduledEvent[];
+}
+
+/**
+ * Output from the evidence fusion pipeline.
+ */
+interface EvidenceFusionPipelineResult {
+  /** Final fused events in chronological order */
+  events: ScheduledEvent[];
+  /** Processing stats for debugging */
+  stats: {
+    inputCounts: Record<EvidenceSourceType, number>;
+    outputCount: number;
+    duplicatesRemoved: number;
+    overlapsResolved: number;
+    fusionTimestamp: number;
+  };
+}
+
+/**
+ * Priority mapping for evidence sources.
+ * Lower number = higher priority (wins in overlap resolution).
+ */
+const EVIDENCE_SOURCE_PRIORITY: Record<EvidenceSourceType, number> = {
+  user_actual: 1,          // User-created/edited events are highest priority
+  supabase_derived: 2,     // Previously saved derived events
+  planned_crossref: 3,     // Cross-referenced from planned (late arrival, different activity)
+  evidence_block: 4,       // Verification engine evidence blocks
+  location: 5,             // Location-derived events
+  screen_time: 6,          // Screen time events
+  sleep: 7,                // Sleep events
+  pattern: 8,              // Pattern suggestions
+  unknown: 9,              // Gap filling (lowest priority)
+};
+
+/**
+ * Generates a unique fusion ID for an evidence item.
+ */
+function generateFusionId(sourceType: EvidenceSourceType, event: ScheduledEvent): string {
+  return `fusion:${sourceType}:${event.startMinutes}:${event.startMinutes + event.duration}:${event.id.slice(0, 8)}`;
+}
+
+/**
+ * Attaches evidence fusion metadata to an event.
+ */
+function attachFusionMetadata(
+  event: ScheduledEvent,
+  sourceType: EvidenceSourceType,
+  confidence: number,
+  contributingSources: EvidenceSourceType[],
+): ScheduledEvent {
+  const fusionMeta: EvidenceFusionMetadata = {
+    sourceType,
+    fusionId: generateFusionId(sourceType, event),
+    fusedAt: Date.now(),
+    confidence,
+    evidenceDescription: buildEvidenceDescription(sourceType, event),
+    isDerived: sourceType !== 'user_actual',
+    contributingSources,
+  };
+
+  return {
+    ...event,
+    meta: {
+      ...event.meta,
+      evidenceFusion: fusionMeta,
+    } as CalendarEventMeta,
+  };
+}
+
+/**
+ * Builds a human-readable description of the evidence source.
+ */
+function buildEvidenceDescription(sourceType: EvidenceSourceType, event: ScheduledEvent): string {
+  const meta = event.meta;
+  const parts: string[] = [];
+
+  switch (sourceType) {
+    case 'user_actual':
+      parts.push('User created/edited');
+      break;
+    case 'supabase_derived':
+      parts.push('Previously derived');
+      break;
+    case 'evidence_block':
+      parts.push('Verification evidence');
+      if (meta?.evidence?.locationLabel) {
+        parts.push(`at ${meta.evidence.locationLabel}`);
+      }
+      break;
+    case 'screen_time':
+      parts.push('Screen time');
+      if (meta?.evidence?.topApp) {
+        parts.push(`on ${meta.evidence.topApp}`);
+      }
+      break;
+    case 'planned_crossref':
+      if (meta?.kind === 'late_arrival') {
+        parts.push('Late arrival detected');
+      } else if (meta?.kind === 'different_activity') {
+        parts.push('Different activity detected');
+      } else if (meta?.kind === 'distraction') {
+        parts.push('Distraction detected');
+      } else {
+        parts.push('Cross-referenced with planned');
+      }
+      break;
+    case 'location':
+      parts.push('Location');
+      if (meta?.evidence?.locationLabel) {
+        parts.push(`at ${meta.evidence.locationLabel}`);
+      }
+      break;
+    case 'sleep':
+      parts.push('Sleep schedule');
+      break;
+    case 'pattern':
+      parts.push('Pattern suggestion');
+      break;
+    case 'unknown':
+      parts.push('Unknown gap');
+      break;
+  }
+
+  return parts.join(' ');
+}
+
+/**
+ * Classifies an event into an evidence source type based on its metadata.
+ */
+function classifyEventSource(event: ScheduledEvent): EvidenceSourceType {
+  const meta = event.meta;
+  const source = meta?.source;
+  const kind = meta?.kind;
+  const id = event.id;
+
+  // User-created/edited events
+  if (source === 'user' || source === 'actual_adjust' || source === 'user_input') {
+    return 'user_actual';
+  }
+
+  // Previously saved derived events
+  if (id.startsWith(DERIVED_ACTUAL_PREFIX) || id.startsWith(DERIVED_EVIDENCE_PREFIX)) {
+    if (source === 'evidence') {
+      return 'evidence_block';
+    }
+    return 'supabase_derived';
+  }
+
+  // Cross-referenced from planned events
+  if (kind === 'late_arrival' || kind === 'different_activity' || kind === 'distraction') {
+    return 'planned_crossref';
+  }
+
+  // Evidence blocks
+  if (kind === 'evidence_block' || source === 'evidence') {
+    return 'evidence_block';
+  }
+
+  // Screen time events
+  if (kind === 'screen_time' || id.startsWith('st:') || id.startsWith('st_')) {
+    return 'screen_time';
+  }
+
+  // Location events - check for location_inferred kind or presence of location evidence
+  if (kind === 'location_inferred' || meta?.evidence?.locationLabel) {
+    return 'location';
+  }
+
+  // Sleep events
+  if (event.category === 'sleep') {
+    return 'sleep';
+  }
+
+  // Pattern suggestions - check for pattern_gap kind
+  if (kind === 'pattern_gap') {
+    return 'pattern';
+  }
+
+  // Unknown gaps
+  if (kind === 'unknown_gap') {
+    return 'unknown';
+  }
+
+  // Default to evidence block for derived events
+  if (meta?.source === 'derived' || meta?.source === 'system') {
+    return 'evidence_block';
+  }
+
+  return 'user_actual'; // Default to user actual for unclassified
+}
+
+/**
+ * Runs the unified evidence fusion pipeline.
+ *
+ * This pipeline:
+ * 1. Collects all evidence from different sources
+ * 2. Assigns priorities based on source type
+ * 3. Resolves overlaps by splitting lower-priority events
+ * 4. Attaches fusion metadata to each event
+ * 5. Returns a single ordered list of non-overlapping events
+ *
+ * The pipeline runs ONCE per render cycle for efficiency.
+ */
+export function runEvidenceFusionPipeline(input: EvidenceFusionPipelineInput): EvidenceFusionPipelineResult {
+  const fusionTimestamp = Date.now();
+  const allItems: EvidenceItem[] = [];
+
+  // Helper to add items with source classification
+  const addItems = (events: ScheduledEvent[], defaultSourceType: EvidenceSourceType) => {
+    for (const event of events) {
+      // Skip invalid events
+      if (event.duration <= 0) continue;
+
+      // Classify the actual source type (may differ from default based on metadata)
+      const sourceType = classifyEventSource(event) || defaultSourceType;
+      const priority = EVIDENCE_SOURCE_PRIORITY[sourceType];
+      const confidence = (event.meta as CalendarEventMeta | undefined)?.confidence ?? 0.5;
+
+      allItems.push({
+        event,
+        sourceType,
+        priority,
+        confidence,
+      });
+    }
+  };
+
+  // Track input counts for stats
+  const inputCounts: Record<EvidenceSourceType, number> = {
+    user_actual: 0,
+    supabase_derived: 0,
+    evidence_block: 0,
+    screen_time: 0,
+    planned_crossref: 0,
+    location: 0,
+    sleep: 0,
+    pattern: 0,
+    unknown: 0,
+  };
+
+  // Add all evidence sources
+  inputCounts.user_actual = input.userActualEvents.length;
+  addItems(input.userActualEvents, 'user_actual');
+
+  inputCounts.supabase_derived = input.savedDerivedEvents.length;
+  addItems(input.savedDerivedEvents, 'supabase_derived');
+
+  inputCounts.evidence_block = input.evidenceBlocks.length;
+  addItems(input.evidenceBlocks, 'evidence_block');
+
+  inputCounts.screen_time = input.screenTimeEvents.length;
+  addItems(input.screenTimeEvents, 'screen_time');
+
+  inputCounts.planned_crossref = input.plannedCrossrefEvents.length;
+  addItems(input.plannedCrossrefEvents, 'planned_crossref');
+
+  inputCounts.location = input.locationEvents.length;
+  addItems(input.locationEvents, 'location');
+
+  inputCounts.sleep = input.sleepEvents.length;
+  addItems(input.sleepEvents, 'sleep');
+
+  inputCounts.pattern = input.patternEvents.length;
+  addItems(input.patternEvents, 'pattern');
+
+  // Sort by priority (ascending) then by start time
+  allItems.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority;
+    }
+    return a.event.startMinutes - b.event.startMinutes;
+  });
+
+  // Remove exact duplicates (same ID)
+  const seenIds = new Set<string>();
+  const deduped: EvidenceItem[] = [];
+  let duplicatesRemoved = 0;
+
+  for (const item of allItems) {
+    if (seenIds.has(item.event.id)) {
+      duplicatesRemoved++;
+      continue;
+    }
+    seenIds.add(item.event.id);
+    deduped.push(item);
+  }
+
+  // Use the ActualTimelineBuilder for overlap resolution
+  // It already handles splitting lower-priority events around higher-priority ones
+  const eventsForBuilder = deduped.map((item) => {
+    // Attach fusion metadata before sending to builder
+    const contributingSources: EvidenceSourceType[] = [item.sourceType];
+    return attachFusionMetadata(item.event, item.sourceType, item.confidence, contributingSources);
+  });
+
+  // Build non-overlapping timeline
+  const resolved = buildNonOverlappingTimeline(eventsForBuilder, 1);
+  const overlapsResolved = eventsForBuilder.length - resolved.length;
+
+  // Sort final result by start time
+  const sortedResult = resolved.sort((a, b) => a.startMinutes - b.startMinutes);
+
+  return {
+    events: sortedResult,
+    stats: {
+      inputCounts,
+      outputCount: sortedResult.length,
+      duplicatesRemoved,
+      overlapsResolved: Math.max(0, overlapsResolved),
+      fusionTimestamp,
+    },
+  };
+}
+
+/**
+ * Logs fusion pipeline stats for debugging.
+ */
+export function logFusionPipelineStats(stats: EvidenceFusionPipelineResult['stats'], ymd: string): void {
+  const totalInputs = Object.values(stats.inputCounts).reduce((sum, count) => sum + count, 0);
+  console.log(
+    `[EvidenceFusion] ${ymd}: ` +
+    `${totalInputs} inputs → ${stats.outputCount} outputs ` +
+    `(${stats.duplicatesRemoved} duplicates, ${stats.overlapsResolved} overlaps resolved)`
+  );
+
+  // Log non-zero source counts
+  const nonZeroSources = Object.entries(stats.inputCounts)
+    .filter(([, count]) => count > 0)
+    .map(([source, count]) => `${source}:${count}`)
+    .join(', ');
+
+  if (nonZeroSources) {
+    console.log(`[EvidenceFusion] Sources: ${nonZeroSources}`);
+  }
+}
+
+// ============================================================================
+// END EVIDENCE FUSION PIPELINE
+// ============================================================================
+
 /**
  * Information about a late arrival to a planned event.
  */
@@ -875,12 +1290,63 @@ export function buildActualDisplayEvents({
   // rather than removing them entirely. This preserves more information by splitting
   // lower-priority events around higher-priority ones.
   const withMergedSleep = mergeAdjacentSleep(withQuality);
-  const nonOverlapping = buildNonOverlappingTimeline(withMergedSleep, 1);
+
+  // US-024: Run unified evidence fusion pipeline for final consolidation
+  // This ensures all evidence sources are merged into a single ordered list
+  // with proper metadata attached and overlaps resolved consistently.
+  const fusionInput: EvidenceFusionPipelineInput = {
+    ymd,
+    userActualEvents: withMergedSleep.filter(
+      (e) => e.meta?.source === 'user' || e.meta?.source === 'actual_adjust' || e.meta?.source === 'user_input'
+    ),
+    savedDerivedEvents: withMergedSleep.filter(
+      (e) => (e.id.startsWith(DERIVED_ACTUAL_PREFIX) || e.id.startsWith(DERIVED_EVIDENCE_PREFIX)) &&
+             e.meta?.source !== 'evidence'
+    ),
+    evidenceBlocks: withMergedSleep.filter(
+      (e) => e.meta?.kind === 'evidence_block' || e.meta?.source === 'evidence'
+    ),
+    screenTimeEvents: withMergedSleep.filter(
+      (e) => e.meta?.kind === 'screen_time' || e.id.startsWith('st:') || e.id.startsWith('st_')
+    ),
+    plannedCrossrefEvents: withMergedSleep.filter(
+      (e) => e.meta?.kind === 'late_arrival' || e.meta?.kind === 'different_activity' || e.meta?.kind === 'distraction'
+    ),
+    locationEvents: withMergedSleep.filter(
+      (e) => e.meta?.kind === 'location_inferred' && !e.meta?.source
+    ),
+    sleepEvents: withMergedSleep.filter((e) => e.category === 'sleep'),
+    patternEvents: withMergedSleep.filter(
+      (e) => e.meta?.kind === 'pattern_gap'
+    ),
+  };
+
+  // Collect events that don't fit any specific category (unknown gaps, etc.)
+  const categorizedIds = new Set([
+    ...fusionInput.userActualEvents.map((e) => e.id),
+    ...fusionInput.savedDerivedEvents.map((e) => e.id),
+    ...fusionInput.evidenceBlocks.map((e) => e.id),
+    ...fusionInput.screenTimeEvents.map((e) => e.id),
+    ...fusionInput.plannedCrossrefEvents.map((e) => e.id),
+    ...fusionInput.locationEvents.map((e) => e.id),
+    ...fusionInput.sleepEvents.map((e) => e.id),
+    ...fusionInput.patternEvents.map((e) => e.id),
+  ]);
+
+  // Add uncategorized events to user_actual (they'll be classified properly by the pipeline)
+  const uncategorized = withMergedSleep.filter((e) => !categorizedIds.has(e.id));
+  fusionInput.userActualEvents = [...fusionInput.userActualEvents, ...uncategorized];
+
+  // Run the unified evidence fusion pipeline
+  const fusionResult = runEvidenceFusionPipeline(fusionInput);
+
+  // Log fusion stats for debugging
+  logFusionPipelineStats(fusionResult.stats, ymd);
 
   // CRITICAL: Always ensure gaps are filled with unknown events, even after overlap resolution
   // This guarantees there's always something in the "actual" column
   // Pass planned events for suggestions and current time for past-time filtering (US-014)
-  const withGapsFilled = fillUnknownGaps(nonOverlapping, plannedSorted, currentMinutes);
+  const withGapsFilled = fillUnknownGaps(fusionResult.events, plannedSorted, currentMinutes);
 
   return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
 }
@@ -1063,7 +1529,7 @@ function buildPlannedActualEvent(options: {
 
   const sleepQuality = buildSleepQualityMetrics(healthDaily ?? null);
 
-  const conflicts: Array<{ source: 'location' | 'screen_time' | 'health'; detail: string }> = [];
+  const conflicts: Array<{ source: 'location' | 'screen_time' | 'health' | 'pattern'; detail: string }> = [];
   if (planned.category === 'work' && usageInfo?.isDistraction) {
     conflicts.push({ source: 'screen_time', detail: 'Distraction apps during work' });
   }
