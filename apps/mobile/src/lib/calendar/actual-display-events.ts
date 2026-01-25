@@ -452,67 +452,6 @@ export function buildActualDisplayEvents({
   return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
-/**
- * Removes overlapping events, keeping the first event encountered for each time slot.
- * Only removes events if there's significant overlap (more than 10 minutes) to avoid
- * removing events that just touch at boundaries or have minor overlaps.
- * This ensures no visual overlaps in the calendar display while preserving events.
- * 
- * Priority: Keep events in this order:
- * 1. Events from Supabase (already saved)
- * 2. Derived events with higher confidence
- * 3. Unknown events (lowest priority - can be replaced)
- */
-function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
-  const sorted = [...events].sort((a, b) => {
-    const aMeta = a.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
-    const bMeta = b.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
-
-    const aIsUserActual = Boolean(aMeta?.actual) || aMeta?.source === 'user' || aMeta?.source === 'actual_adjust';
-    const bIsUserActual = Boolean(bMeta?.actual) || bMeta?.source === 'user' || bMeta?.source === 'actual_adjust';
-    if (aIsUserActual && !bIsUserActual) return -1;
-    if (!aIsUserActual && bIsUserActual) return 1;
-
-    const aIsDerived = aMeta?.source === 'derived';
-    const bIsDerived = bMeta?.source === 'derived';
-    if (!aIsDerived && bIsDerived) return -1;
-    if (aIsDerived && !bIsDerived) return 1;
-
-    // Sort by priority: non-unknown events first, then by confidence, then by start time
-    if (a.category !== 'unknown' && b.category === 'unknown') return -1;
-    if (a.category === 'unknown' && b.category !== 'unknown') return 1;
-
-    const aConfidence = aMeta?.confidence ?? 0;
-    const bConfidence = bMeta?.confidence ?? 0;
-    if (aConfidence !== bConfidence) return bConfidence - aConfidence; // Higher confidence first
-
-    return a.startMinutes - b.startMinutes;
-  });
-
-  const result: ScheduledEvent[] = [];
-  const occupied: Array<{ start: number; end: number }> = [];
-
-  for (const event of sorted) {
-    const start = event.startMinutes;
-    const end = event.startMinutes + event.duration;
-    
-    // Check for significant overlap (more than 10 minutes) with any existing event
-    const hasSignificantOverlap = occupied.some((interval) => {
-      const overlapStart = Math.max(start, interval.start);
-      const overlapEnd = Math.min(end, interval.end);
-      const overlapMinutes = overlapEnd - overlapStart;
-      return overlapMinutes > 10; // Only consider it overlapping if more than 10 minutes
-    });
-
-    if (!hasSignificantOverlap) {
-      result.push(event);
-      occupied.push({ start, end });
-    }
-  }
-
-  return result;
-}
-
 function buildPlannedActualEvent(options: {
   planned: ScheduledEvent;
   verification: VerificationResult | null;
