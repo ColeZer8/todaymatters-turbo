@@ -174,3 +174,21 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Jest tests use `@/stores` path alias which works with project's jest config
 
 ---
+
+## 2026-01-24 - US-006: Integrate ActualTimelineBuilder into Display Pipeline
+- **What was implemented:**
+  - Verified that `buildNonOverlappingTimeline` from `ActualTimelineBuilder` is already integrated in `buildActualDisplayEvents()` at line 446
+  - Removed the unused `removeOverlappingEvents` function (61 lines of dead code) that was no longer being called
+  - The integration was completed in US-004, this story cleaned up the remaining dead code
+  - Verified ComprehensiveCalendarTemplate.tsx has ID-based deduplication for React key uniqueness (separate concern from time overlap)
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Removed unused `removeOverlappingEvents` function
+
+- **Learnings for future iterations:**
+  - The overlap handling with ActualTimelineBuilder was integrated during US-004 along with creating the class
+  - ComprehensiveCalendarTemplate.tsx deduplicates by event ID (for React keys), while ActualTimelineBuilder deduplicates by time range (for visual overlap)
+  - When cleaning up old code, verify nothing else uses it with grep before removing
+  - Pre-existing TypeScript errors (42+) are unrelated to changes - only check for NEW errors introduced
+
+---
