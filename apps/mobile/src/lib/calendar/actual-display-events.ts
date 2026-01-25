@@ -5,6 +5,7 @@ import type {
   LocationHourlyRow,
   ScreenTimeSessionRow,
 } from '@/lib/supabase/services/evidence-data';
+import type { LocationMapping } from '@/lib/supabase/services/location-mappings';
 import type { UsageSummary } from '@/lib/android-insights';
 import type { ActualBlock, VerificationResult } from './verification-engine';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
@@ -168,6 +169,9 @@ interface DifferentActivityInfo {
  * place than expected for the planned activity. Returns info about the actual
  * activity so we can create a separate "actual" block showing reality.
  *
+ * US-022: Now uses user's custom location mappings to infer activity names.
+ * If user has mapped "123 Main St" to "Gym", the activity label will be "Gym".
+ *
  * Examples:
  * - Planned "Go to gym" but location shows McDonald's → different activity
  * - Planned "Work" but location shows at gym → different activity
@@ -175,12 +179,14 @@ interface DifferentActivityInfo {
  * @param planned - The planned event
  * @param locationBlocks - Location blocks for the day
  * @param verification - Verification result for the event
+ * @param locationMappings - User's custom location-to-activity mappings
  * @returns DifferentActivityInfo if different activity detected, null otherwise
  */
 function detectDifferentActivity(
   planned: ScheduledEvent,
   locationBlocks: LocationBlock[],
   verification: VerificationResult | null,
+  locationMappings?: LocationMapping[],
 ): DifferentActivityInfo | null {
   const plannedStart = planned.startMinutes;
   const plannedEnd = planned.startMinutes + planned.duration;
@@ -190,17 +196,19 @@ function detectDifferentActivity(
   const locationEvidence = verification?.evidence.location;
   if (locationEvidence && !locationEvidence.matchesExpected && locationEvidence.placeLabel) {
     // Location evidence shows user was somewhere different than expected
-    const actualCategory = mapPlaceToCategory(
+    // US-022: Use user's location mappings to get activity name
+    const locationActivity = mapLocationToActivity(
       locationEvidence.placeLabel,
       locationEvidence.placeCategory,
+      locationMappings,
     );
 
     // Only consider it a "different activity" if the category actually differs
     // and it's not just a minor location variation
-    if (actualCategory !== plannedCategory) {
+    if (locationActivity.category !== plannedCategory) {
       return {
-        activityLabel: locationEvidence.placeLabel,
-        activityCategory: actualCategory,
+        activityLabel: locationActivity.activityName,
+        activityCategory: locationActivity.category,
         plannedCategory,
         evidenceSource: 'location',
         placeLabel: locationEvidence.placeLabel,
@@ -235,10 +243,11 @@ function detectDifferentActivity(
 
   if (!dominantBlock) return null;
 
-  // Check if this location suggests a different activity category
-  const actualCategory = mapPlaceToCategory(
+  // US-022: Use user's location mappings to get activity name and category
+  const locationActivity = mapLocationToActivity(
     dominantBlock.placeLabel,
     dominantBlock.placeCategory,
+    locationMappings,
   );
 
   // If the planned event has a specific location, check if they match
@@ -256,15 +265,15 @@ function detectDifferentActivity(
   }
 
   // Only flag as different activity if category differs
-  if (actualCategory === plannedCategory) return null;
+  if (locationActivity.category === plannedCategory) return null;
 
   // Calculate actual overlap time range
   const overlapStart = Math.max(plannedStart, dominantBlock.startMinutes);
   const overlapEnd = Math.min(plannedEnd, dominantBlock.endMinutes);
 
   return {
-    activityLabel: dominantBlock.placeLabel,
-    activityCategory: actualCategory,
+    activityLabel: locationActivity.activityName,
+    activityCategory: locationActivity.category,
     plannedCategory,
     evidenceSource: 'location',
     placeLabel: dominantBlock.placeLabel,
@@ -441,6 +450,8 @@ interface BuildActualDisplayEventsInput {
   gapFillingPreference?: 'conservative' | 'aggressive' | 'manual';
   confidenceThreshold?: number;
   allowAutoSuggestions?: boolean;
+  /** User's custom location-to-activity mappings (US-022) */
+  locationMappings?: LocationMapping[];
 }
 
 interface LocationBlock {
@@ -503,6 +514,7 @@ export function buildActualDisplayEvents({
   gapFillingPreference = 'conservative',
   confidenceThreshold = 0.6,
   allowAutoSuggestions = true,
+  locationMappings,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
   const todayYmd = (() => {
     const now = new Date();
@@ -759,6 +771,7 @@ export function buildActualDisplayEvents({
       ymd,
       dataQuality,
       appCategoryOverrides,
+      locationMappings, // US-022: Pass user's location mappings
     });
     if (!derivedResult) continue;
 
@@ -879,6 +892,8 @@ function buildPlannedActualEvent(options: {
   ymd: string;
   dataQuality: ReturnType<typeof buildDataQualityMetrics>;
   appCategoryOverrides?: AppCategoryOverrides;
+  /** User's custom location mappings (US-022) */
+  locationMappings?: LocationMapping[];
 }): PlannedActualResult | null {
   const {
     planned,
@@ -891,6 +906,7 @@ function buildPlannedActualEvent(options: {
     ymd,
     dataQuality,
     appCategoryOverrides,
+    locationMappings,
   } = options;
   const plannedStartMinutes = clampMinutes(planned.startMinutes);
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
@@ -898,7 +914,8 @@ function buildPlannedActualEvent(options: {
 
   // Detect if user did a completely different activity than planned
   // This takes precedence over late arrival detection
-  const differentActivity = detectDifferentActivity(planned, locationBlocks, verification);
+  // US-022: Pass locationMappings to use user's custom activity names
+  const differentActivity = detectDifferentActivity(planned, locationBlocks, verification, locationMappings);
 
   // If user did a different activity, create a block showing reality instead
   if (differentActivity) {
@@ -1970,6 +1987,84 @@ function mapPlaceToCategory(locationLabel: string, placeCategory: string | null)
     return 'travel';
   }
   return 'free';
+}
+
+/**
+ * Find a matching location mapping from user's custom mappings (US-022).
+ * Uses case-insensitive partial matching - if the location label contains the mapped address
+ * or vice versa, it's considered a match.
+ *
+ * @param locationLabel - The location label from evidence (e.g., "123 Main St")
+ * @param locationMappings - User's custom location mappings
+ * @returns The matching LocationMapping or null if no match
+ */
+function findLocationMapping(
+  locationLabel: string,
+  locationMappings: LocationMapping[] | undefined,
+): LocationMapping | null {
+  if (!locationMappings || locationMappings.length === 0) return null;
+
+  const labelLower = locationLabel.toLowerCase().trim();
+  if (!labelLower) return null;
+
+  for (const mapping of locationMappings) {
+    const mappedAddressLower = mapping.location_address.toLowerCase().trim();
+    if (!mappedAddressLower) continue;
+
+    // Check for partial match in either direction
+    if (labelLower.includes(mappedAddressLower) || mappedAddressLower.includes(labelLower)) {
+      return mapping;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Map a place to an activity using user's custom mappings first, then fall back to default rules (US-022).
+ * This is the main entry point for location-to-activity inference that respects user customizations.
+ *
+ * @param locationLabel - The location label from evidence
+ * @param placeCategory - The place category from location data (may be null)
+ * @param locationMappings - User's custom location mappings
+ * @returns Object with activityName (user-defined or inferred) and category
+ */
+interface LocationActivityResult {
+  /** The activity name - user-defined if mapping exists, otherwise the place label */
+  activityName: string;
+  /** The event category - inferred from mapping activity name or place */
+  category: EventCategory;
+  /** Whether this came from a user mapping */
+  isUserMapped: boolean;
+}
+
+function mapLocationToActivity(
+  locationLabel: string,
+  placeCategory: string | null,
+  locationMappings: LocationMapping[] | undefined,
+): LocationActivityResult {
+  // First check user's custom mappings
+  const mapping = findLocationMapping(locationLabel, locationMappings);
+
+  if (mapping) {
+    // User has a custom mapping for this location - use their activity name
+    const activityName = mapping.activity_name;
+    // Infer category from the user's activity name
+    const category = mapPlaceToCategory(activityName, null);
+    return {
+      activityName,
+      category,
+      isUserMapped: true,
+    };
+  }
+
+  // No user mapping - fall back to default place-to-category logic
+  const category = mapPlaceToCategory(locationLabel, placeCategory);
+  return {
+    activityName: locationLabel,
+    category,
+    isUserMapped: false,
+  };
 }
 
 function buildLocationDescription(options: { base: string; screenTime: ScreenTimeOverlapInfo | null }): string {

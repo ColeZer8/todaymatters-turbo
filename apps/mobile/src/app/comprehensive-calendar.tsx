@@ -44,6 +44,7 @@ import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/a
 import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
 import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
 import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
+import { fetchLocationMappings, type LocationMapping } from '@/lib/supabase/services/location-mappings';
 import { DEFAULT_USER_PREFERENCES } from '@/stores/user-preferences-store';
 import { supabase } from '@/lib/supabase/client';
 
@@ -80,6 +81,8 @@ export default function ComprehensiveCalendarScreen() {
   const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
   const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
   const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
+  // US-022: User's custom location-to-activity mappings
+  const [locationMappings, setLocationMappings] = useState<LocationMapping[]>([]);
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
@@ -224,6 +227,32 @@ export default function ComprehensiveCalendarScreen() {
       cancelled = true;
     };
   }, [setUserPreferences, userId]);
+
+  // US-022: Load user's location mappings for activity inference
+  useEffect(() => {
+    if (!userId) {
+      setLocationMappings([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const mappings = await fetchLocationMappings(userId);
+        if (cancelled) return;
+        setLocationMappings(mappings);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[Calendar] Failed to load location mappings:', error);
+        }
+        if (!cancelled) {
+          setLocationMappings([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId || USE_MOCK_CALENDAR) {
@@ -481,6 +510,7 @@ export default function ComprehensiveCalendarScreen() {
       gapFillingPreference: userPreferences.gapFillingPreference,
       confidenceThreshold: userPreferences.confidenceThreshold,
       allowAutoSuggestions: userPreferences.autoSuggestEvents,
+      locationMappings, // US-022: User's custom location-to-activity mappings
     });
   }, [
     actualBlocks,
@@ -488,6 +518,7 @@ export default function ComprehensiveCalendarScreen() {
     derivedActualEvents,
     displayActualEvents,
     evidence,
+    locationMappings, // US-022
     plannedEvents,
     patternIndex,
     selectedDateYmd,
