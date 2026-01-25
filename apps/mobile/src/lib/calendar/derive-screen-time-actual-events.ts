@@ -1,6 +1,7 @@
 import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights';
 import type { ScheduledEvent } from '@/stores/events-store';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
+import { ActualTimelineBuilder, EventPriority } from './actual-timeline-builder';
 
 /**
  * Generate a unique deterministic event ID for screen time events.
@@ -48,6 +49,17 @@ interface MidSleepScreenTimeInfo {
     durationMinutes: number;
     appName: string;
   }>;
+}
+
+/**
+ * Result of processing a sleep event with screen time.
+ * May include a modified sleep event (or split segments) plus screen time blocks.
+ */
+interface SleepProcessingResult {
+  /** The modified/split sleep event segments */
+  sleepSegments: ScheduledEvent[];
+  /** Screen time blocks that interrupted sleep (>10 min usage) */
+  screenTimeBlocks: ScheduledEvent[];
 }
 
 export function deriveActualEventsFromScreenTime({
@@ -154,15 +166,56 @@ export function deriveActualEventsFromScreenTime({
         }
       }
 
-      // US-011: Check for mid-sleep phone usage (brief phone checks during sleep)
+      // US-011 & US-012: Check for mid-sleep phone usage (brief phone checks during sleep)
       // This is separate from "staying up late" - it's phone usage in the MIDDLE of sleep
       const midSleepInfo = detectMidSleepScreenTime(screenTimeSummary, adjustedEvent);
       if (midSleepInfo && midSleepInfo.totalMinutes > 0) {
-        // Short usage (<=10 min): embed in sleep description, don't create separate block
+        // Short usage (<=10 min): embed in sleep description, don't create separate block (US-011)
         if (midSleepInfo.totalMinutes <= distractionThresholdMinutes) {
           sleepDescription = buildSleepWithPhoneDescription(sleepDescription, midSleepInfo);
+          return { ...adjustedEvent, description: sleepDescription };
         }
-        // Long usage (>10 min) will be handled by US-012 (separate block creation)
+
+        // US-012: Long usage (>10 min): create separate screen time blocks and split sleep
+        const result = buildMidSleepScreenTimeBlocks(adjustedEvent, midSleepInfo, sleepDescription);
+
+        // Add the screen time blocks to sleepLateBlocks (they'll be merged into output)
+        for (const stBlock of result.screenTimeBlocks) {
+          // Check for overlap with other non-digital events before adding
+          const overlapsNonDigital = baseActualEvents
+            .filter((e) => e.category !== 'digital' && e.id !== event.id)
+            .some((e) =>
+              intervalsOverlap(
+                stBlock.startMinutes,
+                stBlock.startMinutes + stBlock.duration,
+                e.startMinutes,
+                e.startMinutes + e.duration,
+              ),
+            );
+          if (!overlapsNonDigital) {
+            sleepLateBlocks.push(stBlock);
+          }
+        }
+
+        // Return the first sleep segment - additional segments will be added below
+        // Note: We need special handling to return multiple sleep segments
+        // For now, return the first segment and add others to a special array
+        if (result.sleepSegments.length === 1) {
+          return result.sleepSegments[0];
+        }
+
+        // Multiple sleep segments: mark first as the replacement, store others
+        // The first segment replaces the original event in distractedActualEvents
+        // Additional segments need to be added separately
+        const firstSegment = result.sleepSegments[0];
+        const additionalSegments = result.sleepSegments.slice(1);
+
+        // Store additional segments to add later
+        for (const segment of additionalSegments) {
+          sleepLateBlocks.push(segment);
+        }
+
+        return firstSegment;
       }
 
       return { ...adjustedEvent, description: sleepDescription };
@@ -757,6 +810,198 @@ function buildSleepWithPhoneDescription(
     return `${originalDescription} (${phoneNote})`;
   }
   return `Sleep (${phoneNote})`;
+}
+
+/**
+ * Build screen time blocks for long mid-sleep phone usage and split the sleep event.
+ * US-012: Screen time >10 min during sleep creates separate blocks and splits sleep.
+ *
+ * @param sleepEvent - The sleep event to process
+ * @param midSleepInfo - Info about mid-sleep phone usage sessions
+ * @param sleepDescription - Current sleep description (may have annotations)
+ * @returns Sleep segments and screen time blocks
+ */
+function buildMidSleepScreenTimeBlocks(
+  sleepEvent: ScheduledEvent,
+  midSleepInfo: MidSleepScreenTimeInfo,
+  sleepDescription: string | undefined,
+): SleepProcessingResult {
+  const sleepStart = clampMinutes(sleepEvent.startMinutes);
+  const sleepEnd = clampMinutes(sleepEvent.startMinutes + sleepEvent.duration);
+
+  // Merge adjacent sessions (within 5 min gap) to avoid creating too many blocks
+  const mergedSessions = mergeMidSleepSessions(midSleepInfo.sessions, 5);
+
+  // Create screen time blocks for each merged session
+  const screenTimeBlocks: ScheduledEvent[] = [];
+  for (const session of mergedSessions) {
+    const clampedDuration = clampDurationMinutes(session.durationMinutes);
+    const description = session.appName ? toScreenTimePhrase(session.appName) : 'Phone use';
+
+    screenTimeBlocks.push({
+      id: generateScreenTimeId('midsleep', session.startMinutes, session.endMinutes, sleepEvent.id),
+      title: 'Screen Time',
+      description,
+      startMinutes: session.startMinutes,
+      duration: clampedDuration,
+      category: 'digital',
+      meta: {
+        category: 'digital',
+        source: 'derived',
+        kind: 'screen_time',
+        confidence: 0.7,
+        evidence: {
+          topApp: session.appName,
+          screenTimeMinutes: session.durationMinutes,
+          duringSleep: true,
+        },
+      },
+    });
+  }
+
+  // Use ActualTimelineBuilder pattern to split sleep around screen time blocks
+  // Sleep has priority 3 (DerivedEvidence), screen time has priority 4 (ScreenTime)
+  // But for this specific case, we want screen time to "win" and split sleep
+  // So we manually compute the split segments
+
+  const sleepSegments: ScheduledEvent[] = [];
+  let segmentIndex = 0;
+  let currentStart = sleepStart;
+
+  // Sort screen time blocks by start time
+  const sortedBlocks = [...screenTimeBlocks].sort((a, b) => a.startMinutes - b.startMinutes);
+
+  for (const block of sortedBlocks) {
+    const blockStart = block.startMinutes;
+    const blockEnd = block.startMinutes + block.duration;
+
+    // Create sleep segment before this block if there's room
+    if (currentStart < blockStart) {
+      const segmentDuration = blockStart - currentStart;
+      if (segmentDuration >= 15) {
+        // Minimum 15 min for a sleep segment to be meaningful
+        sleepSegments.push({
+          ...sleepEvent,
+          id: generateSleepSegmentId(sleepEvent.id, segmentIndex++),
+          startMinutes: currentStart,
+          duration: segmentDuration,
+          description: sleepDescription,
+        });
+      }
+    }
+
+    // Move past this block
+    currentStart = Math.max(currentStart, blockEnd);
+  }
+
+  // Create final sleep segment after all blocks
+  if (currentStart < sleepEnd) {
+    const segmentDuration = sleepEnd - currentStart;
+    if (segmentDuration >= 15) {
+      sleepSegments.push({
+        ...sleepEvent,
+        id: segmentIndex > 0 ? generateSleepSegmentId(sleepEvent.id, segmentIndex) : sleepEvent.id,
+        startMinutes: currentStart,
+        duration: segmentDuration,
+        description: sleepDescription,
+      });
+    }
+  }
+
+  // If no valid sleep segments were created, return original sleep event
+  if (sleepSegments.length === 0) {
+    return {
+      sleepSegments: [{
+        ...sleepEvent,
+        description: sleepDescription,
+      }],
+      screenTimeBlocks,
+    };
+  }
+
+  // Update sleep descriptions to show total duration excluding screen time interruptions
+  const totalSleepMinutes = sleepSegments.reduce((sum, s) => sum + s.duration, 0);
+  const totalInterruptionMinutes = screenTimeBlocks.reduce((sum, s) => sum + s.duration, 0);
+
+  if (sleepSegments.length > 1) {
+    // Multiple segments - annotate with total sleep time
+    const updatedSegments = sleepSegments.map((segment, idx) => ({
+      ...segment,
+      description: buildSplitSleepDescription(
+        sleepDescription,
+        totalSleepMinutes,
+        totalInterruptionMinutes,
+        idx,
+        sleepSegments.length,
+      ),
+    }));
+    return { sleepSegments: updatedSegments, screenTimeBlocks };
+  }
+
+  return { sleepSegments, screenTimeBlocks };
+}
+
+/**
+ * Merge adjacent mid-sleep sessions that are within a gap threshold.
+ */
+function mergeMidSleepSessions(
+  sessions: MidSleepScreenTimeInfo['sessions'],
+  gapMinutes: number,
+): Array<{ startMinutes: number; endMinutes: number; durationMinutes: number; appName: string }> {
+  if (sessions.length === 0) return [];
+
+  const sorted = [...sessions].sort((a, b) => a.startMinutes - b.startMinutes);
+  const merged: Array<{ startMinutes: number; endMinutes: number; durationMinutes: number; appName: string }> = [];
+
+  for (const session of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && session.startMinutes <= last.endMinutes + gapMinutes) {
+      // Merge with previous
+      last.endMinutes = Math.max(last.endMinutes, session.endMinutes);
+      last.durationMinutes = last.endMinutes - last.startMinutes;
+      // Keep the app with longer usage
+      if (session.durationMinutes > (last.durationMinutes - session.durationMinutes)) {
+        last.appName = session.appName;
+      }
+    } else {
+      merged.push({ ...session });
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Generate a unique ID for a split sleep segment.
+ */
+function generateSleepSegmentId(originalId: string, segmentIndex: number): string {
+  return `${originalId}:sleep_seg:${segmentIndex}`;
+}
+
+/**
+ * Build description for split sleep segments.
+ */
+function buildSplitSleepDescription(
+  originalDescription: string | undefined,
+  totalSleepMinutes: number,
+  interruptionMinutes: number,
+  segmentIndex: number,
+  totalSegments: number,
+): string {
+  const totalHours = Math.floor(totalSleepMinutes / 60);
+  const totalMins = totalSleepMinutes % 60;
+  const totalLabel = totalMins > 0 ? `${totalHours}h ${totalMins}m` : `${totalHours}h`;
+
+  const interruptLabel = formatMinuteLabel(interruptionMinutes);
+
+  // First segment gets the summary
+  if (segmentIndex === 0) {
+    const base = originalDescription || 'Sleep';
+    return `${base} (${totalLabel} total, interrupted ${interruptLabel})`;
+  }
+
+  // Subsequent segments just say "Sleep continued"
+  return originalDescription || 'Sleep (continued)';
 }
 
 function buildSleepSessionIntervals(options: {

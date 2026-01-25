@@ -57,6 +57,8 @@ export interface CalendarEventMeta {
     locationLabel?: string | null;
     screenTimeMinutes?: number;
     topApp?: string | null;
+    /** Whether this screen time occurred during a sleep event (US-012) */
+    duringSleep?: boolean;
     sleep?: {
       interruptions?: number;
       interruptionMinutes?: number;
