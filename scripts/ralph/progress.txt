@@ -565,3 +565,33 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
 
 ---
+
+## 2026-01-24 - US-019: Create User App Mappings Schema
+- **What was implemented:**
+  - Created Supabase migration `20260124_create_tm_app_mappings.sql` with:
+    - `tm.app_mappings` table: id, user_id, app_name, activity_type, is_distraction, created_at, updated_at
+    - Unique constraint on (user_id, app_name) to prevent duplicate mappings
+    - Indexes for user_id and (user_id, app_name) lookups
+    - Auto-update trigger for updated_at column
+    - Row Level Security policies for select/insert/update/delete own data
+  - Created TypeScript service `app-mappings.ts` with:
+    - `AppMapping` interface for row type
+    - `AppMappingInsert` and `AppMappingUpdate` interfaces for inputs
+    - CRUD functions: fetchAppMappings, fetchAppMappingById, fetchAppMappingByAppName
+    - createAppMapping, updateAppMapping, deleteAppMapping
+    - upsertAppMapping for create-or-update by app name
+    - fetchDistractionApps for getting all apps marked as distractions
+  - Exported from services/index.ts
+
+- **Files changed:**
+  - `supabase/migrations/20260124_create_tm_app_mappings.sql` - New migration file
+  - `apps/mobile/src/lib/supabase/services/app-mappings.ts` - New TypeScript service with types and CRUD
+  - `apps/mobile/src/lib/supabase/services/index.ts` - Added export
+
+- **Learnings for future iterations:**
+  - Follow the same pattern as location-mappings for consistency
+  - Added `fetchDistractionApps()` helper since distraction detection is a common use case
+  - The `is_distraction` boolean field allows users to customize which apps are considered distractions
+  - Pre-existing TypeScript errors (40+) in codebase are unrelated to changes
+
+---
