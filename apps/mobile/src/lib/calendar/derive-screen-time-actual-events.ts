@@ -2,6 +2,14 @@ import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights
 import type { ScheduledEvent } from '@/stores/events-store';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
 
+/**
+ * Generate a unique deterministic event ID for screen time events.
+ * Format: st:{type}:{startMinutes}:{endMinutes}:{source}
+ */
+function generateScreenTimeId(type: string, startMinutes: number, endMinutes: number, source: string): string {
+  return `st:${type}:${startMinutes}:${endMinutes}:${source}`;
+}
+
 interface DeriveActualEventsFromScreenTimeOptions {
   existingActualEvents: ScheduledEvent[];
   screenTimeSummary: ScreenTimeSummary;
@@ -373,13 +381,15 @@ function deriveBlocksFromSessions(
     const appName = session.displayName;
     const description = toScreenTimePhrase(appName);
     const classification = classifyAppUsage(appName, appCategoryOverrides);
+    const clampedDuration = clampDurationMinutes(sessionDuration);
+    const endMinutes = sessionStartMinutes + clampedDuration;
 
     blocks.push({
-      id: `st_session_${screenTimeSummary.generatedAtIso}_${derivedIndex++}`,
+      id: generateScreenTimeId('session', sessionStartMinutes, endMinutes, appName),
       title: classification.title,
       description,
       startMinutes: sessionStartMinutes,
-      duration: clampDurationMinutes(sessionDuration),
+      duration: clampedDuration,
       category: classification.category,
       meta: {
         category: classification.category,
@@ -444,7 +454,7 @@ function deriveBlocksFromHourlyByApp(
     const classification = classifyAppUsage(appName, appCategoryOverrides);
 
     blocks.push({
-      id: `st_${screenTimeSummary.generatedAtIso}_${startMinutes}_${derivedIndex++}`,
+      id: generateScreenTimeId('hourly', startMinutes, endMinutes, appName),
       title: classification.title,
       description,
       startMinutes,
@@ -494,7 +504,7 @@ function deriveBlocksFromAggregateHourly(
     if (overlapsNonDigital) continue;
 
     blocks.push({
-      id: `st_${screenTimeSummary.generatedAtIso}_${startMinutes}_${derivedIndex++}`,
+      id: generateScreenTimeId('aggregate', startMinutes, endMinutes, topAppName ?? 'phone'),
       title: classification.title,
       description,
       startMinutes,
@@ -533,7 +543,7 @@ function buildPreSleepScreenTimeBlock(options: {
   const description = topAppName ? toScreenTimePhrase(topAppName) : 'Phone use';
 
   return {
-    id: `st_presleep_${screenTimeSummary.generatedAtIso}_${sleepEvent.id}_${startMinutes}`,
+    id: generateScreenTimeId('presleep', startMinutes, endMinutes, sleepEvent.id),
     title: 'Screen Time',
     description,
     startMinutes,
@@ -600,7 +610,7 @@ function buildSleepStartScreenTimeAdjustment(options: {
     screenTimeMinutes: candidate.durationMinutes,
     topAppName: candidate.topAppName,
     screenTimeBlock: {
-      id: `st_sleepstart_${screenTimeSummary.generatedAtIso}_${sleepEvent.id}_${candidate.startMinutes}`,
+      id: generateScreenTimeId('sleepstart', candidate.startMinutes, candidate.endMinutes, sleepEvent.id),
       title: 'Screen Time',
       description: candidate.topAppName ? toScreenTimePhrase(candidate.topAppName) : 'Phone use',
       startMinutes: candidate.startMinutes,

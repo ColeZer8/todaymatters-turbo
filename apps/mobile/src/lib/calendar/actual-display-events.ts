@@ -31,6 +31,21 @@ const SLEEP_OVERRIDE_MIN_COVERAGE = 0.7;
 const SLEEP_OVERRIDE_MIN_MINUTES = 60;
 const LOCATION_MIN_BLOCK_MINUTES = 10;
 
+/**
+ * Generate a unique deterministic event ID.
+ * Format: derived:{type}:{startMinutes}:{endMinutes}:{source}
+ * This ensures uniqueness by including both start and end times plus a source identifier.
+ */
+function generateDerivedId(
+  prefix: string,
+  type: string,
+  startMinutes: number,
+  endMinutes: number,
+  source: string,
+): string {
+  return `${prefix}${type}:${startMinutes}:${endMinutes}:${source}`;
+}
+
 interface BuildActualDisplayEventsInput {
   ymd: string;
   plannedEvents: ScheduledEvent[];
@@ -1252,8 +1267,9 @@ function buildCommuteEvent(options: {
     },
   };
 
+  const endMinutes = startMinutes + duration;
   return {
-    id: `${DERIVED_EVIDENCE_PREFIX}commute_${startMinutes}_${duration}`,
+    id: generateDerivedId(DERIVED_EVIDENCE_PREFIX, 'commute', startMinutes, endMinutes, 'location'),
     title: 'Driving',
     description,
     startMinutes,
@@ -1299,8 +1315,9 @@ function buildLocationEvent(options: {
     },
   };
 
+  const endMinutes = startMinutes + duration;
   return {
-    id: `${DERIVED_EVIDENCE_PREFIX}location_${startMinutes}_${duration}_${uniqueId}`,
+    id: generateDerivedId(DERIVED_EVIDENCE_PREFIX, 'location', startMinutes, endMinutes, `loc_${uniqueId}`),
     title: resolved.title,
     description,
     location: locationLabel,
@@ -1577,7 +1594,7 @@ function buildInterruptedSleepEvent(
   };
 
   return {
-    id: `${DERIVED_ACTUAL_PREFIX}sleep_interrupted_${startMinutes}_${duration}`,
+    id: generateDerivedId(DERIVED_ACTUAL_PREFIX, 'sleep_interrupted', startMinutes, endMinutes, 'sleep'),
     title: 'Sleep',
     description: buildSleepInterruptedDescription(interruptionSummary),
     startMinutes,
@@ -1603,8 +1620,9 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
     },
   };
 
+  const endMinutes = startMinutes + minutes;
   return {
-    id: `${DERIVED_ACTUAL_PREFIX}productive_${startMinutes}_${minutes}`,
+    id: generateDerivedId(DERIVED_ACTUAL_PREFIX, 'productive', startMinutes, endMinutes, topAppName ?? 'unknown'),
     title: 'Productive',
     description: `${durationLabel}${appLabel}`,
     startMinutes,
@@ -1622,10 +1640,11 @@ function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: nu
     confidence: 0.2,
   };
 
-  // Use uniqueId if provided, otherwise fall back to timestamp-based suffix for uniqueness
-  const uniqueSuffix = uniqueId !== undefined ? uniqueId : Date.now();
+  const endMinutes = startMinutes + duration;
+  // Use uniqueId if provided, otherwise fall back to counter-based suffix for uniqueness
+  const uniqueSuffix = uniqueId !== undefined ? String(uniqueId) : 'gap';
   return {
-    id: `${DERIVED_ACTUAL_PREFIX}unknown_${startMinutes}_${duration}_${uniqueSuffix}`,
+    id: generateDerivedId(DERIVED_ACTUAL_PREFIX, 'unknown', startMinutes, endMinutes, uniqueSuffix),
     title: 'Unknown',
     description: 'Tap to assign',
     startMinutes,
@@ -1649,7 +1668,8 @@ function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
     ) {
       // Merge by updating duration and regenerating ID to ensure uniqueness
       last.duration += event.duration;
-      last.id = `${DERIVED_ACTUAL_PREFIX}unknown_${last.startMinutes}_${last.duration}_${unknownCounter++}`;
+      const endMinutes = last.startMinutes + last.duration;
+      last.id = generateDerivedId(DERIVED_ACTUAL_PREFIX, 'unknown', last.startMinutes, endMinutes, `merged_${unknownCounter++}`);
       continue;
     }
 
@@ -2008,7 +2028,7 @@ function deriveUsageSummaryBlocksForInterval(options: {
         appIdToName,
       });
       return {
-        id: `${DERIVED_EVIDENCE_PREFIX}android_sleep_override_${usageSummary.generatedAtIso}_${b.startMinutes}`,
+        id: generateDerivedId(DERIVED_EVIDENCE_PREFIX, 'android_sleep_override', b.startMinutes, b.endMinutes, 'screen'),
         title: 'Screen Time',
         description: topApp ?? 'Phone use',
         startMinutes: b.startMinutes,
@@ -2219,7 +2239,7 @@ function buildSleepStartAdjustmentFromUsageSummary(options: {
     screenTimeMinutes: candidate.durationMinutes,
     topAppName,
     screenTimeBlock: {
-      id: `${DERIVED_EVIDENCE_PREFIX}android_sleep_${usageSummary.generatedAtIso}_${candidate.startMinutes}`,
+      id: generateDerivedId(DERIVED_EVIDENCE_PREFIX, 'android_sleep', candidate.startMinutes, candidate.endMinutes, 'screen'),
       title: 'Screen Time',
       description: topAppName ? toSleepScreenTimePhrase(topAppName) : 'Phone use',
       startMinutes: candidate.startMinutes,
@@ -2354,7 +2374,7 @@ function buildScreenTimeEvent(
     },
   };
   return {
-    id: `${DERIVED_EVIDENCE_PREFIX}android_${generatedAtIso}_${startMinutes}`,
+    id: generateDerivedId(DERIVED_EVIDENCE_PREFIX, 'android', startMinutes, endMinutes, topApp ?? 'screen'),
     title: classification.title,
     description: classification.description,
     startMinutes,

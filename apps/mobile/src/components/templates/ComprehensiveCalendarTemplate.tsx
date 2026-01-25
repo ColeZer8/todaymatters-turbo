@@ -261,7 +261,7 @@ interface ComprehensiveCalendarTemplateProps {
 export const ComprehensiveCalendarTemplate = ({
     selectedDate,
     plannedEvents,
-    actualEvents,
+    actualEvents: rawActualEvents,
     onPrevDay,
     onNextDay,
     onAddEvent,
@@ -271,6 +271,32 @@ export const ComprehensiveCalendarTemplate = ({
     onDeleteActualEvent,
 }: ComprehensiveCalendarTemplateProps) => {
     const router = useRouter();
+
+    // Validate and deduplicate actual events - log warning if duplicates found
+    const actualEvents = useMemo(() => {
+        const seenIds = new Set<string>();
+        const uniqueEvents: ScheduledEvent[] = [];
+        const duplicates: string[] = [];
+
+        for (const event of rawActualEvents) {
+            if (seenIds.has(event.id)) {
+                duplicates.push(event.id);
+            } else {
+                seenIds.add(event.id);
+                uniqueEvents.push(event);
+            }
+        }
+
+        if (duplicates.length > 0) {
+            console.warn(
+                `[ComprehensiveCalendarTemplate] Found ${duplicates.length} duplicate event ID(s):`,
+                duplicates.slice(0, 5).join(', '),
+                duplicates.length > 5 ? `... and ${duplicates.length - 5} more` : ''
+            );
+        }
+
+        return uniqueEvents;
+    }, [rawActualEvents]);
     const insets = useSafeAreaInsets();
     const scrollViewRef = useRef<ScrollView | null>(null);
     const [scrollViewHeight, setScrollViewHeight] = useState(0);
