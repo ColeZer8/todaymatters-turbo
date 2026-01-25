@@ -260,3 +260,32 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Pre-existing TypeScript errors (40+) in codebase are unrelated to these changes
 
 ---
+
+## 2026-01-24 - US-009: Cross-Reference Planned Events with Evidence - Shifting
+- **What was implemented:**
+  - Created `detectLateArrival()` function in `actual-display-events.ts` that:
+    - Checks verification timing data for late arrival
+    - Cross-references location blocks to find when user actually arrived
+    - Compares planned location with actual location evidence timestamps
+    - Returns `LateArrivalInfo` with lateMinutes, actualStartMinutes, and evidenceSource
+  - Modified `buildPlannedActualEvent()` to:
+    - Call `detectLateArrival()` at the start of event processing
+    - Shift actual start time when late arrival detected (actualStartMinutes vs plannedStartMinutes)
+    - Pass late arrival info to description builder
+  - Updated `buildActualDescription()` to add "Arrived X min late" annotation
+  - Added `lateArrival` field to `evidence` metadata in CalendarEventMeta
+  - Added `late_arrival` kind to CalendarEventMeta for UI differentiation
+  - Set late arrival thresholds: min 5 min (to be considered late), max 60 min (before it's a different activity)
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added detectLateArrival(), updated buildPlannedActualEvent() and buildActualDescription()
+  - `apps/mobile/src/stores/events-store.ts` - Added `late_arrival` to kind union, added `lateArrival` to evidence interface
+
+- **Learnings for future iterations:**
+  - The verification engine already has a `timing.lateMinutes` field - check it first before doing custom location analysis
+  - Late arrival detection should be bounded (5-60 min) to distinguish from "different activity entirely"
+  - Planned events are never modified - only the actual timeline block gets the shifted start time
+  - The `kind` field in meta is important for UI components to render appropriate indicators
+  - Location blocks have `startMinutes` in minutes-from-midnight which matches planned event format
+
+---
