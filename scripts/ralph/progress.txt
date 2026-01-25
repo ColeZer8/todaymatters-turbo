@@ -383,3 +383,33 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Multiple sleep segments and screen time blocks are combined by adding extras to sleepLateBlocks array
 
 ---
+
+## 2026-01-24 - US-013: Detect and Annotate Distractions
+- **What was implemented:**
+  - Added `DistractionInfo` interface to track distraction app usage during planned activities
+  - Created `detectDistractionDuringActivity()` function that:
+    - Filters screen time data to only distraction apps (using `DISTRACTION_APPS` list)
+    - Calculates overlap with planned event time range
+    - Returns total minutes, top app, and per-app breakdown
+  - Short distractions (<=10 min): added annotation to event description
+    - Format: "Work • Distracted 5 min on Instagram"
+  - Long distractions (>10 min): creates separate "Distraction" block
+    - Uses `buildDistractionBlock()` function
+    - Sets `kind: 'distraction'` for UI differentiation
+    - Includes detailed app usage in description (e.g., "Instagram (15 min), TikTok (8 min)")
+  - Updated `buildPlannedActualEvent()` to return `PlannedActualResult` with both main event and distraction blocks
+  - Added distraction evidence to `CalendarEventMeta` with app breakdown
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added DistractionInfo interface, detectDistractionDuringActivity(), buildDistractionBlock(), modified buildPlannedActualEvent() and buildActualDescription()
+  - `apps/mobile/src/stores/events-store.ts` - Added 'distraction' kind, added 'distraction' evidence interface
+
+- **Learnings for future iterations:**
+  - Distraction detection uses `DISTRACTION_APPS` from `verification-rules.ts` for consistent app classification
+  - The `appMatchesList()` helper does case-insensitive partial matching
+  - Short vs long distraction threshold is `DISTRACTION_THRESHOLD_MINUTES` (10 min)
+  - `buildPlannedActualEvent()` now returns `{ mainEvent, distractionBlocks }` to support multiple outputs
+  - Different activity detection takes precedence over distraction detection (mutually exclusive)
+  - Distraction blocks are only created when user is at expected location (not "different activity")
+
+---
