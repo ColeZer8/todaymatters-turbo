@@ -413,3 +413,41 @@ Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
   - Distraction blocks are only created when user is at expected location (not "different activity")
 
 ---
+
+## 2026-01-24 - US-014: Fill Unknown Gaps with Interactive Prompts
+- **What was implemented:**
+  - Added `UnknownGapSuggestion` interface for planned event suggestions in unknown gaps
+  - Created `findPlannedEventSuggestions()` function to find planned events that overlap with a gap:
+    - Calculates overlap ratio between gap and planned event
+    - Only suggests events with at least 20% overlap
+    - Returns suggestions sorted by overlap ratio (most relevant first)
+  - Updated `buildUnknownEvent()` to accept planned events and include suggestions in metadata
+  - Updated description to show "What were you doing? • [planned event titles]" when suggestions exist
+  - Modified `fillUnknownGaps()` to pass planned events and current time:
+    - Unknown blocks only appear for past time (respects `currentMinutes` parameter)
+    - For today's date, gaps after current time are not filled with unknown blocks
+    - Past days show all unknowns normally
+  - Updated `mergeAdjacentUnknowns()` to recalculate suggestions after merging
+  - Added `unknownGapSuggestions` field to evidence interface in CalendarEventMeta
+  - Created interactive UI in ActualAdjustTemplate:
+    - Blue card section with "What were you doing?" prompt
+    - Quick-select buttons for up to 4 suggestions from planned events
+    - Shows location if available on the suggestion
+  - Added `handleSelectUnknownGapSuggestion()` in actual-adjust.tsx:
+    - Applies title and category from selected suggestion
+    - Sets note "Followed my plan: [title]"
+
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` - Added UnknownGapSuggestion interface, findPlannedEventSuggestions(), updated buildUnknownEvent(), fillUnknownGaps(), mergeAdjacentUnknowns()
+  - `apps/mobile/src/stores/events-store.ts` - Added unknownGapSuggestions to evidence interface
+  - `apps/mobile/src/app/actual-adjust.tsx` - Added unknownGapSuggestions memo, handleSelectUnknownGapSuggestion handler
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` - Added UnknownGapSuggestion interface, suggestion UI section
+
+- **Learnings for future iterations:**
+  - Overlap ratio is calculated as `overlapMinutes / gapDuration` - more overlap means more relevant suggestion
+  - 20% overlap threshold prevents weak matches from appearing as suggestions
+  - For current day filtering: `ymd === todayYmd ? currentMinutes : undefined` - past days get full coverage
+  - Quick-select UI uses blue styling to differentiate from other sections
+  - Existing pre-existing TypeScript errors (42+) are unrelated to changes
+
+---
