@@ -249,6 +249,41 @@ export async function syncIosScreenTimeSummary(
   });
 }
 
+/**
+ * Map Android usage sessions to the screen_time_app_sessions table format.
+ */
+function mapAndroidUsageSessions(
+  dailyId: string,
+  userId: string,
+  sessions: Array<{
+    packageName: string;
+    startIso: string;
+    endIso: string;
+    durationSeconds: number;
+  }>,
+  topApps: Array<{ packageName: string; displayName: string }>,
+  timezone: string
+): ScreenTimeAppSessionInsert[] {
+  // Build a lookup for display names
+  const packageToName = new Map(topApps.map((app) => [app.packageName, app.displayName]));
+
+  return sessions.map((session) => {
+    const localDate = toLocalDateIso(session.startIso);
+    return {
+      screen_time_daily_id: dailyId,
+      user_id: userId,
+      local_date: localDate,
+      app_id: session.packageName,
+      display_name: packageToName.get(session.packageName) ?? session.packageName,
+      started_at: session.startIso,
+      ended_at: session.endIso,
+      duration_seconds: session.durationSeconds,
+      pickups: null,
+      meta: { timezone } as Json,
+    };
+  });
+}
+
 export async function syncAndroidUsageSummary(
   userId: string,
   summary: UsageSummary,
@@ -256,6 +291,9 @@ export async function syncAndroidUsageSummary(
 ): Promise<void> {
   const localDate = toLocalDateIso(summary.startIso);
   const provider = 'android_digital_wellbeing';
+
+  // Log sync attempt for production debugging
+  console.log(`[ScreenTimeSync] Android sync starting for ${localDate}, totalSeconds=${summary.totalSeconds}, topApps=${summary.topApps.length}, sessions=${summary.sessions?.length ?? 0}`);
 
   const dailyRow: ScreenTimeDailyInsert = {
     user_id: userId,
@@ -271,10 +309,12 @@ export async function syncAndroidUsageSummary(
       generatedAtIso: summary.generatedAtIso,
       startIso: summary.startIso,
       endIso: summary.endIso,
+      sessionsCount: summary.sessions?.length ?? 0,
     } as Json,
   };
 
   const { id: dailyId } = await upsertScreenTimeDaily(dailyRow);
+  console.log(`[ScreenTimeSync] Android daily upserted, id=${dailyId}`);
 
   const appDailyRows = dedupeAppDailyRows(
     summary.topApps.map((app) => ({
@@ -289,8 +329,46 @@ export async function syncAndroidUsageSummary(
     }))
   );
   await replaceAppDaily(dailyId, appDailyRows);
+  console.log(`[ScreenTimeSync] Android app daily replaced, count=${appDailyRows.length}`);
 
-  await replaceAppSessions(dailyId, []);
+  // Sync hourly data if available
+  const hourlyByApp = summary.hourlyByApp ?? null;
+  if (hourlyByApp && Object.keys(hourlyByApp).length > 0) {
+    const packageToName = new Map(summary.topApps.map((app) => [app.packageName, app.displayName]));
+    const hourlyRows: ScreenTimeAppHourlyInsert[] = [];
+    for (const [appId, hourMap] of Object.entries(hourlyByApp)) {
+      for (const [hourKey, seconds] of Object.entries(hourMap)) {
+        const hour = Number(hourKey);
+        if (!Number.isFinite(hour) || hour < 0 || hour > 23) continue;
+        if (!seconds || seconds <= 0) continue;
+        hourlyRows.push({
+          screen_time_daily_id: dailyId,
+          user_id: userId,
+          local_date: localDate,
+          hour,
+          app_id: appId,
+          display_name: packageToName.get(appId) ?? null,
+          duration_seconds: seconds,
+          pickups: null,
+          meta: { timezone } as Json,
+        });
+      }
+    }
+    await replaceAppHourly(dailyId, hourlyRows);
+    console.log(`[ScreenTimeSync] Android hourly replaced, count=${hourlyRows.length}`);
+  }
+
+  // Sync sessions - this is critical for actual timeline derivation
+  const sessions = summary.sessions ?? [];
+  if (sessions.length > 0) {
+    const sessionRows = mapAndroidUsageSessions(dailyId, userId, sessions, summary.topApps, timezone);
+    await replaceAppSessions(dailyId, sessionRows);
+    console.log(`[ScreenTimeSync] Android sessions replaced, count=${sessionRows.length}`);
+  } else {
+    // Still clear any old sessions even if we have none
+    await replaceAppSessions(dailyId, []);
+    console.log(`[ScreenTimeSync] Android sessions cleared (no sessions in summary)`);
+  }
 
   await upsertDataSyncState({
     userId,
@@ -302,4 +380,6 @@ export async function syncAndroidUsageSummary(
     lastSyncStatus: 'ok',
     lastSyncError: null,
   });
+
+  console.log(`[ScreenTimeSync] Android sync completed successfully for ${localDate}`);
 }

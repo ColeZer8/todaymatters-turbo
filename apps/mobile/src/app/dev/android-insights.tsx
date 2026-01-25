@@ -201,6 +201,29 @@ export default function AndroidInsightsDevScreen() {
                 <Text className="text-xs text-slate-400">
                   Total seconds: {usageSummary?.totalSeconds ?? '—'} · Top apps: {usageSummary?.topApps?.length ?? 0}
                 </Text>
+                <Text className="mt-1 text-xs text-slate-400">
+                  Sessions: {usageSummary?.sessions?.length ?? 0}
+                </Text>
+                {usageSummary?.topApps && usageSummary.topApps.length > 0 ? (
+                  <View className="mt-2">
+                    <Text className="text-xs text-slate-300">Top 3 apps:</Text>
+                    {usageSummary.topApps.slice(0, 3).map((app, i) => (
+                      <Text key={i} className="text-xs text-slate-400">
+                        {i + 1}. {app.displayName}: {Math.round(app.durationSeconds / 60)}m
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+                {usageSummary?.sessions && usageSummary.sessions.length > 0 ? (
+                  <View className="mt-2">
+                    <Text className="text-xs text-slate-300">Recent sessions ({usageSummary.sessions.length} total):</Text>
+                    {usageSummary.sessions.slice(-3).map((session, i) => (
+                      <Text key={i} className="text-xs text-slate-400">
+                        • {session.packageName.split('.').pop()}: {session.durationSeconds}s
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             </View>
 

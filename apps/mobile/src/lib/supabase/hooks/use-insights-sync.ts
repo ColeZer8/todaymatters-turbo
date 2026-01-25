@@ -109,8 +109,10 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
 
         if (Platform.OS === 'android') {
           const support = getAndroidInsightsSupportStatus();
+          console.log(`[InsightsSync] Android support status: ${support}`);
           if (support === 'available') {
             const usageStatus = await getUsageAccessAuthorizationStatusSafeAsync();
+            console.log(`[InsightsSync] Android usage access status: ${usageStatus}`);
             if (usageStatus === 'authorized') {
               const canSync = await shouldSyncDataset(
                 userId,
@@ -119,6 +121,7 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
                 'android_digital_wellbeing',
                 intervalMs
               );
+              console.log(`[InsightsSync] Android screen time canSync: ${canSync}`);
               if (canSync) {
                 await upsertDataSyncState({
                   userId,
@@ -130,10 +133,25 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
                   lastSyncError: null,
                 });
                 const summary: UsageSummary | null = await getUsageSummarySafeAsync('today');
+                console.log(`[InsightsSync] Android usage summary: totalSeconds=${summary?.totalSeconds ?? 'null'}, topApps=${summary?.topApps?.length ?? 0}, sessions=${summary?.sessions?.length ?? 0}`);
                 if (summary) {
                   await syncAndroidUsageSummary(userId, summary, timezone);
+                } else {
+                  console.log(`[InsightsSync] Android usage summary is null - no data to sync`);
+                  // Record that we tried but got no data (use 'partial' since we succeeded at checking but found nothing)
+                  await upsertDataSyncState({
+                    userId,
+                    dataset: 'screen_time',
+                    platform: 'android',
+                    provider: 'android_digital_wellbeing',
+                    lastSyncFinishedAt: new Date().toISOString(),
+                    lastSyncStatus: 'partial',
+                    lastSyncError: 'getUsageSummarySafeAsync returned null - no usage data available',
+                  });
                 }
               }
+            } else {
+              console.log(`[InsightsSync] Android usage access not authorized (${usageStatus}) - skipping screen time sync`);
             }
 
             const healthStatus = await getAndroidHealthAuthorizationStatusSafeAsync();
@@ -161,8 +179,10 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
           }
         }
       } catch (error) {
+        // Log in production too for debugging physical device issues
+        console.error('[InsightsSync] Sync failed:', error instanceof Error ? error.message : String(error));
         if (__DEV__) {
-          console.error('📊 Insights sync failed:', error);
+          console.error('📊 Insights sync failed (full error):', error);
         }
       } finally {
         isSyncingRef.current = false;
