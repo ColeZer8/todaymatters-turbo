@@ -75,8 +75,8 @@ export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]):
       continue;
     }
 
-    // Allow manual samples (dev tools) in addition to background task samples.
-    if (sample.source !== 'background' && sample.source !== 'manual') {
+    // Supabase constraint currently allows only 'background'.
+    if (sample.source !== 'background') {
       droppedKeys.push(sample.dedupe_key);
       continue;
     }

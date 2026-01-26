@@ -237,7 +237,8 @@ export async function captureAndroidLocationSampleNowAsync(
       speed_mps: typeof pos.coords.speed === 'number' ? pos.coords.speed : null,
       heading_deg: typeof pos.coords.heading === 'number' ? pos.coords.heading : null,
       is_mocked: (pos as unknown as { mocked?: boolean }).mocked ?? null,
-      source: 'manual',
+      // Supabase constraint currently allows only 'background'.
+      source: 'background',
       raw: null,
     };
 

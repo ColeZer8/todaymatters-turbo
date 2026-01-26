@@ -32,4 +32,5 @@ export { TimeSplitControl } from './TimeSplitControl';
 export { MultiSplitControl } from './MultiSplitControl';
 export { EventEditorModal } from './EventEditorModal';
 export { HierarchicalCategoryPicker } from './HierarchicalCategoryPicker';
+export { Big3InputModal } from './Big3InputModal';
 export type { CategoryPath, HierarchicalCategoryPickerProps } from './HierarchicalCategoryPicker';

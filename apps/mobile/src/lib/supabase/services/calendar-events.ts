@@ -303,6 +303,81 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
   };
 }
 
+interface GoogleCalendarMeta extends Record<string, Json> {
+  calendar_id: string;
+  ical_uid: string;
+  conference_url?: string;
+}
+
+function isGoogleCalendarMeta(meta: Json): meta is GoogleCalendarMeta {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  const rec = meta as Record<string, Json>;
+  // Google Calendar rows we ingest today include `calendar_id` + `ical_uid`.
+  return typeof rec.calendar_id === 'string' && typeof rec.ical_uid === 'string';
+}
+
+function rowToScheduledEventForDayFromTmGoogleMeeting(
+  row: TmEventRow,
+  dayStart: Date,
+  dayEnd: Date
+): ScheduledEvent | null {
+  if (!row.id) return null;
+  if (!row.scheduled_start || !row.scheduled_end) return null;
+  const start = parseDbTimestamp(row.scheduled_start);
+  const end = parseDbTimestamp(row.scheduled_end);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+
+  // Clip to visible day window so cross-midnight meetings render correctly.
+  const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
+  const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
+  const clippedStartMs = clippedStart.getTime();
+  const clippedEndMs = clippedEnd.getTime();
+  if (clippedEndMs <= clippedStartMs) return null;
+
+  const startMinutes = Math.max(0, Math.round((clippedStartMs - dayStart.getTime()) / 60_000));
+  const duration = Math.max(Math.round((clippedEndMs - clippedStartMs) / 60_000), 1);
+
+  const metaRaw = row.meta as Json;
+  if (!isGoogleCalendarMeta(metaRaw)) return null;
+
+  // Prod `tm.events` has `location`, but our generated types don't. Pull it cautiously.
+  // If absent, fall back to the Meet URL inside meta.
+  const rowWithLocation = row as unknown as { location?: string | null };
+  const location =
+    typeof rowWithLocation.location === 'string' && rowWithLocation.location.trim().length > 0
+      ? rowWithLocation.location
+      : typeof metaRaw.conference_url === 'string' && metaRaw.conference_url.trim().length > 0
+        ? metaRaw.conference_url
+        : undefined;
+
+  const sourceId = metaRaw.ical_uid;
+
+  const metaForDisplay: PlannedCalendarMeta = {
+    category: 'meeting',
+    source: 'system',
+    source_provider: 'google',
+    source_id: sourceId,
+    tags: ['external_calendar'],
+    // Preserve raw calendar metadata for debugging/inspection
+    raw: metaRaw,
+    ...(location ? { location } : {}),
+  };
+
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? '',
+    location,
+    startMinutes,
+    duration,
+    category: 'meeting',
+    isBig3: false,
+    meta: metaForDisplay,
+  };
+}
+
 export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: string): Promise<ScheduledEvent[]> {
   try {
     const dayStart = ymdToLocalDayStart(ymd);
@@ -310,7 +385,7 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
     const startIso = dayStart.toISOString();
     const endIso = dayEnd.toISOString();
 
-    const [tmResult, publicResult] = await Promise.all([
+    const [tmResult, publicResult, tmGoogleMeetingsResult] = await Promise.all([
       supabase
         .schema('tm')
         .from('events')
@@ -321,6 +396,7 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
         .gt('scheduled_end', startIso)
         .order('scheduled_start', { ascending: true }),
       supabase
+        .schema('public')
         .from('events')
         .select('*')
         .eq('user_id', userId)
@@ -328,10 +404,22 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
         .lt('scheduled_start', endIso)
         .gt('scheduled_end', startIso)
         .order('scheduled_start', { ascending: true }),
+      // Google Calendar ingestion currently stores meetings as `tm.events.type = 'meeting'`.
+      // We want those to show up in the PLANNED column, but only for Google Calendar rows.
+      supabase
+        .schema('tm')
+        .from('events')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('type', 'meeting')
+        .lt('scheduled_start', endIso)
+        .gt('scheduled_end', startIso)
+        .order('scheduled_start', { ascending: true }),
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
     if (publicResult.error) throw handleSupabaseError(publicResult.error);
+    if (tmGoogleMeetingsResult.error) throw handleSupabaseError(tmGoogleMeetingsResult.error);
 
     const tmEvents = (tmResult.data ?? [])
       .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
@@ -339,6 +427,10 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
 
     const externalEvents = (publicResult.data ?? [])
       .map((row) => rowToScheduledEventForDayFromPublic(row as PublicEventRow, dayStart, dayEnd))
+      .filter((e): e is ScheduledEvent => !!e);
+
+    const googleMeetingEvents = (tmGoogleMeetingsResult.data ?? [])
+      .map((row) => rowToScheduledEventForDayFromTmGoogleMeeting(row as TmEventRow, dayStart, dayEnd))
       .filter((e): e is ScheduledEvent => !!e);
 
     const seen = new Set<string>();
@@ -351,6 +443,13 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
     }
 
     for (const event of externalEvents) {
+      const key = buildDedupKey(event);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(event);
+    }
+
+    for (const event of googleMeetingEvents) {
       const key = buildDedupKey(event);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -381,6 +480,7 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
         .gt('scheduled_end', startIso)
         .order('scheduled_start', { ascending: true }),
       supabase
+        .schema('public')
         .from('events')
         .select('*')
         .eq('user_id', userId)

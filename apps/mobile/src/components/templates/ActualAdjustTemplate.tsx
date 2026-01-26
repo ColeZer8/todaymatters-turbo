@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Target, Plus } from 'lucide-react-native';
 import type { EventCategory } from '@/stores';
 import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
-import { HierarchicalCategoryPicker } from '@/components/molecules/HierarchicalCategoryPicker';
+import { HierarchicalCategoryPicker, Big3InputModal } from '@/components/molecules';
 import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
 
 export interface ActualAdjustSuggestion {
@@ -111,9 +112,7 @@ const Big3Section = ({
   onSelectBig3Priority,
   onSetBig3Inline,
 }: Big3SectionProps) => {
-  const [inlineP1, setInlineP1] = useState('');
-  const [inlineP2, setInlineP2] = useState('');
-  const [inlineP3, setInlineP3] = useState('');
+  const [showModal, setShowModal] = useState(false);
 
   const hasPriorities =
     big3Priorities &&
@@ -180,55 +179,41 @@ const Big3Section = ({
     );
   }
 
-  // No Big 3 set for today — show inline input
+  // No Big 3 set for today — show button to open modal
   return (
-    <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-      <Text className="text-[13px] font-semibold text-[#111827]">Set your Big 3 for today</Text>
-      <Text className="mt-1 text-[12px] text-[#64748B]">
-        Pick 3 things that would make today a success.
-      </Text>
-      <View className="mt-3 gap-2">
-        {[
-          { num: 1, value: inlineP1, onChange: setInlineP1 },
-          { num: 2, value: inlineP2, onChange: setInlineP2 },
-          { num: 3, value: inlineP3, onChange: setInlineP3 },
-        ].map((item) => (
-          <View key={item.num} className="flex-row items-center gap-2">
-            <View className="h-6 w-6 items-center justify-center rounded-full bg-[#E2E8F0]">
-              <Text className="text-[12px] font-bold text-[#64748B]">{item.num}</Text>
-            </View>
-            <TextInput
-              value={item.value}
-              onChangeText={item.onChange}
-              placeholder={`Priority ${item.num}`}
-              placeholderTextColor="#94A3B8"
-              className="flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2 text-[13px] text-[#111827]"
-              autoCapitalize="sentences"
-              returnKeyType="done"
-            />
-          </View>
-        ))}
-      </View>
+    <>
       <Pressable
-        onPress={() => {
-          if (inlineP1.trim() || inlineP2.trim() || inlineP3.trim()) {
-            onSetBig3Inline(inlineP1.trim(), inlineP2.trim(), inlineP3.trim());
-          }
-        }}
-        disabled={!inlineP1.trim() && !inlineP2.trim() && !inlineP3.trim()}
-        className="mt-3 self-start rounded-full bg-[#2563EB] px-4 py-2"
-        style={({ pressed }) => ({
-          opacity:
-            !inlineP1.trim() && !inlineP2.trim() && !inlineP3.trim()
-              ? 0.4
-              : pressed
-                ? 0.7
-                : 1,
-        })}
+        onPress={() => setShowModal(true)}
+        className="mt-4 flex-row items-center justify-between rounded-xl border border-[#E5E7EB] bg-white px-4 py-3"
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
       >
-        <Text className="text-[12px] font-semibold text-white">Save Big 3</Text>
+        <View className="flex-row items-center flex-1 gap-3">
+          <View className="h-9 w-9 items-center justify-center rounded-full bg-[#EFF6FF]">
+            <Target size={18} color="#2563EB" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-[14px] font-semibold text-[#111827]">
+              Set your Big 3 for today
+            </Text>
+            <Text className="text-[12px] text-[#64748B]">
+              Pick 3 priorities that would make today a success
+            </Text>
+          </View>
+        </View>
+        <View className="ml-2">
+          <Plus size={20} color="#2563EB" strokeWidth={2.5} />
+        </View>
       </Pressable>
-    </View>
+
+      <Big3InputModal
+        visible={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={(p1, p2, p3) => {
+          onSetBig3Inline(p1, p2, p3);
+          setShowModal(false);
+        }}
+      />
+    </>
   );
 };
 
