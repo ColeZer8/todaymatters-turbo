@@ -134,8 +134,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Morning routine was labeled 'productive screen time' incorrectly. Church was mislabeled. Travel not recognized."
+      "passes": true,
+      "notes": "COMPLETED — Five fixes: (1) replaceUnknownWithProductiveUsage now requires screen time >50% of block duration before labeling as productive. (2) buildLocationEvent checks user-defined places (tm.user_places) via resolveFromUserPlaces() before falling back to generic mapPlaceToCategory inference. (3) Added 'travel' kind to CalendarEventMeta and updated commute/transition detection to use category:'travel' + kind:'travel' with descriptive titles like 'Travel: Home → Church'. (4) Lowered travel detection minimum from 15 to 5 minutes (matching AC: <5 min within same area NOT flagged as travel). (5) Blocks without screen/location evidence remain 'Unknown' — fillUnknownGaps was already correct, the issue was aggressive productive labeling in (1)."
     },
     {
       "id": "US-034",

@@ -27,6 +27,9 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - Never put entire Zustand store selector objects in useMemo/useCallback dependency arrays — destructure to individual primitive values to avoid spurious recalculations
 - `buildActualDisplayEvents` has a module-level fingerprint cache — it returns cached results when inputs are identical (no need to add external memoization)
 - `useVerification.refresh()` uses refs for `appCategoryOverrides`, `plannedEvents`, `verificationStrictness`, `onError` to keep a stable callback identity (only depends on `isAuthenticated`, `userId`, `ymd`)
+- User-defined places are in `tm.user_places` table (accessed via `UserPlaceRow` type in evidence-data.ts) — already fetched as `evidence.userPlaces` in `EvidenceBundle`. Use `resolveFromUserPlaces()` in actual-display-events.ts to match location labels to user-defined place names before falling back to generic `mapPlaceToCategory`.
+- Travel events between locations use `kind: 'travel'` and `category: 'travel'` — minimum gap is 5 min (under 5 min = not travel), maximum 90 min
+- When labeling unknown gaps as screen time or productive, require screen time to account for >50% of the block's duration — prevents mislabeling morning routines, church, etc.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -180,4 +183,21 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - `Date.getHours()*60 + Date.getMinutes()` truncates seconds. Use `Math.round(hours*60 + minutes + seconds/60)` for nearest-minute accuracy.
   - When adding new types to `evidence-data.ts`, avoid naming conflicts with existing `location-samples.ts` types — both are re-exported from `services/index.ts`.
   - The `EvidenceBundle` type is used across many files but only constructed in `fetchAllEvidenceForDay()`. Adding new fields is safe as long as you update that single constructor.
+---
+
+## 2026-01-26 - US-033
+- **What was implemented**: Fixed event inference to stop mislabeling blocks as screen time when the user wasn't actively using their phone. Added user-defined place recognition, travel detection, and >50% screen time threshold.
+- **Root cause 1 (Aggressive productive labeling)**: `replaceUnknownWithProductiveUsage()` converted unknown gaps to "Productive" events whenever ANY productive app usage existed in the time range, regardless of how much of the block was actually phone use. A 60-minute morning routine with 5 minutes of phone checks would be labeled as "Productive Screen Time". Fix: Added `usageInfo.totalMinutes <= blockDuration * 0.5` check — screen time must account for >50% of the block's duration before relabeling.
+- **Root cause 2 (No user place matching)**: `buildLocationEvent()` used `mapPlaceToCategory()` for generic keyword-based inference (e.g., "church" → routine), but never checked the user's own place definitions (`tm.user_places`). So even labeled places fell through to generic matching. Fix: Added `resolveFromUserPlaces()` which checks `evidence.userPlaces` first. User labels take priority. Added `mapPlaceCategoryString()` to convert user-defined category strings to `EventCategory` values.
+- **Root cause 3 (No travel recognition)**: The pipeline detected location changes between stationary points but labeled them as "Commute"/"Driving" with `category: 'comm'` and `kind: 'transition_commute'`. Fix: Changed to `category: 'travel'`, `kind: 'travel'`, with descriptive titles like "Travel: Home → Church". Also lowered minimum travel gap from 15 to 5 minutes (matching AC: <5 min movements within same area are NOT flagged as travel). Added `'travel'` to `CalendarEventMeta.kind` union type.
+- **Threading userPlaces through the pipeline**: `EvidenceBundle.userPlaces` was already fetched but unused. Added `userPlaces` to `LocationReplacementContext` interface, passed `evidence?.userPlaces` through from `buildActualDisplayEvents`, and used it in `buildLocationEvent` → `resolveLocationDetails` → `resolveFromUserPlaces`.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `'travel'` to `CalendarEventMeta.kind` union type
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Added `UserPlaceRow` import, `userPlaces` to `LocationReplacementContext`, >50% threshold in `replaceUnknownWithProductiveUsage`, `resolveFromUserPlaces()` + `mapPlaceCategoryString()` helpers, updated `resolveLocationDetails` to check user places first, changed commute events to travel (`kind: 'travel'`, `category: 'travel'`), lowered travel min gap from 15 to 5 min
+- **Learnings for future iterations:**
+  - `tm.user_places` is already fetched in `EvidenceBundle` via `fetchUserPlaces()` — no need to add a separate fetch. Just thread `evidence.userPlaces` to any function that needs it.
+  - `mapPlaceToCategory` uses keyword matching on the combined `${locationLabel} ${placeCategory}` string. This is fragile — user-defined places should always take priority.
+  - When changing event kinds/categories for travel, also update the ID prefix to avoid collisions (e.g., `commute_` → `travel_`).
+  - The pipeline has layered gap-filling: sleep → location → productive usage → transitions → prep/wind-down → patterns. Each layer only touches `category: 'unknown'` events. The >50% threshold in productive usage prevents over-labeling at that layer.
+  - `EventCategory` already includes `'travel'` (line 14 of events-store.ts), but `CalendarEventMeta.kind` did not — always check both when adding a new activity type.
 ---
