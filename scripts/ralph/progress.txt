@@ -66,4 +66,24 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - The sync hook already had two AppState listeners (flush + health check). Each needs its own cleanup. Keep effects separate rather than combining to avoid complexity.
   - When using TypeScript discriminated unions with optional properties (`detail` only on the error variant), access via `'detail' in result ? result.detail : undefined` to satisfy the compiler.
   - The existing codebase uses `void functionCall()` for fire-and-forget async calls — this pattern still works when the return type changes from `void` to a result type, since `void` discards the value.
+- Android `UsageStatsManager.queryUsageStats(INTERVAL_DAILY)` often returns `totalTimeInForeground=0` on physical devices because stats aren't aggregated until end-of-day on many OEMs. Always fall back to summing session durations from `queryEvents()`.
+- `syncAndroidUsageSummary` must persist sessions AND hourlyByApp data to Supabase (not just daily totals and app daily rows) — otherwise the evidence pipeline and screen-time-app-sessions queries return empty data for Android
+- The Android UsageSummary has `sessions[].startIso/endIso/packageName/durationSeconds` while iOS has `appSessions[].startedAtIso/endedAtIso/bundleIdentifier/durationSeconds` — different field names for the same concept
+---
+
+## 2026-01-26 - US-028
+- **What was implemented**: Fixed two root causes of the "5 sessions, 0 min" Android screen time bug.
+- **Root cause 1 (Kotlin — AndroidInsightsModule.kt)**: `queryUsageStats(INTERVAL_DAILY)` returns `totalTimeInForeground=0` on many Android OEMs because aggregate stats aren't computed until end-of-day. Meanwhile, `queryEvents()` returns real-time foreground/background events and sessions with correct durations. The fix: when `totalSeconds == 0` but sessions exist, sum `durationSeconds` from all sessions to compute `totalSeconds`, and rebuild `topApps` from session data using the new `buildTopAppsFromSessions()` helper.
+- **Root cause 2 (TypeScript — screen-time-sync.ts)**: `syncAndroidUsageSummary` was calling `replaceAppSessions(dailyId, [])` — always passing an empty array, so no Android sessions were persisted to Supabase. It also never wrote `screen_time_app_hourly` data. The fix: map Android `UsageSummary.sessions[]` to `ScreenTimeAppSessionInsert[]` and persist them, and map `hourlyByApp` to `ScreenTimeAppHourlyInsert[]` rows.
+- **Logging added**: Kotlin `Log.d("AndroidInsights", ...)` logs aggregate stats count, totalSeconds, sessions count, hourly buckets sum. TypeScript `console.log("[insights-sync]")` logs summary stats before sync.
+- **Files changed**:
+  - `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt` — Added `import android.util.Log`, changed `appArray` from `val` to `var`, added session-based `totalSeconds` fallback and `buildTopAppsFromSessions()` helper, added production logging
+  - `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` — `syncAndroidUsageSummary` now maps and persists Android sessions to `screen_time_app_sessions` and hourlyByApp data to `screen_time_app_hourly`
+  - `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` — Added `console.log` for Android usage summary stats before sync
+- **Learnings for future iterations:**
+  - Android `queryUsageStats` aggregate data can return 0 for `totalTimeInForeground` even when the user has been actively using apps — this is an OEM/timing issue. Always have a fallback to event-based (`queryEvents`) data.
+  - The `buildUsageHourlyBucketsSeconds` function creates sessions from foreground/background event pairs. These sessions have correct durations even when aggregate stats are empty.
+  - When `totalSeconds` is computed from sessions, the existing fallback `if (hourlyBuckets.sum() == 0L && totalSeconds > 0L)` then fires correctly to rebuild hourly buckets from stats. However, if both aggregate stats AND hourly buckets are empty, the hourly data comes from session-based `hourlyByApp` which is already populated by `buildUsageHourlyBucketsSeconds`.
+  - The iOS and Android screen time data have different type shapes (`ScreenTimeSummary` vs `UsageSummary`, `appSessions` vs `sessions`, `bundleIdentifier` vs `packageName`). The sync functions need to handle these independently.
+  - `screen_time_app_sessions` is queried by `evidence-data.ts::fetchScreenTimeSessionsForDay()` for the evidence pipeline — if sessions aren't persisted, the entire evidence-based screen time detection is blind on Android.
 ---

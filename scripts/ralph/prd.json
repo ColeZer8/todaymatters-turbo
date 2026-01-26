@@ -51,8 +51,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Related to US-026 — may be same root cause (Android data collection broken)"
+      "passes": true,
+      "notes": "COMPLETED — Two root causes found and fixed: (1) Kotlin: queryUsageStats aggregate returns totalTimeInForeground=0 on many Android OEMs because stats aren't aggregated until end-of-day; added fallback to sum session durations from queryEvents which works in real-time, plus rebuild topApps from sessions. (2) TypeScript: syncAndroidUsageSummary was passing [] to replaceAppSessions and not writing screen_time_app_hourly at all; now persists both Android sessions and hourlyByApp data to Supabase. Added production logging in both Kotlin (Log.d) and TypeScript (console.log) for debugging."
     },
     {
       "id": "US-029",
