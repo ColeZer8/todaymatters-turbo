@@ -287,8 +287,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "Depends on US-039 and US-041"
+      "passes": true,
+      "notes": "COMPLETED — Created Big3ProgressCard organism component on the home screen. Card only visible when big3Enabled preference is true (from useUserPreferencesStore). Loads today's Big 3 from Supabase via fetchBig3ForDate on mount. For each priority: shows title text, total minutes allocated (computed from actualEventsByDate events with meta.big3_priority), and a green checkmark circle if any time is assigned. Shows N/3 completion indicator in header. When no Big 3 set for today, shows 'Set your Big 3' CTA with inline input form (3 text fields + save). Persists via upsertBig3ForDate (fire-and-forget). Zero new TS errors (36 pre-existing)."
     },
     {
       "id": "US-043",
