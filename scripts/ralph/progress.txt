@@ -22,6 +22,8 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - The sync hook (`use-location-samples-sync.ts`) now has a 5-min health check that auto-restarts the background task with retry backoff (max 3 attempts, reset on foreground)
 - `SparseLocationFallback` and `EvidenceAvailability` are PRD conceptual terms — they do not exist as code identifiers in the codebase
 - Location data flow: background task → AsyncStorage queue → flush every 2min → `tm.location_samples` → SQL view `tm.location_hourly` (auto-aggregated by PostGIS)
+- The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx is a narrowed subset of `ScheduledEvent` — if you need `meta`, you must add it to this local type
+- To detect "unknown gap" events, always check `meta.kind === 'unknown_gap'` (not just `category === 'unknown'`), because `buildProductiveUnknownEvent` creates events with `category: 'work'` + `kind: 'unknown_gap'`
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -116,4 +118,25 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - TypeScript widens string literals in object literals. Use `as const` on the literal value to keep narrow types, rather than annotating the entire object.
   - `syncDerivedActualEvents` can re-create derived events that a user has already edited if the overlap check isn't robust. The fix adds time-range overlap checking against `source: 'actual_adjust'` and `source: 'user'` events.
   - The `shouldCreate` check in actual-adjust.tsx (lines 410-413) creates new events for derived IDs. This is correct — derived events are ephemeral display IDs; the user edit creates a permanent Supabase record.
+---
+
+## 2026-01-26 - US-030
+- **What was implemented**: Made all unknown_gap events fully tappable and editable. Previously, "Productive" events (which have `meta.kind: 'unknown_gap'` but `category: 'work'`) were blocked from editing in the planned column because `handleOpenEditor` only checked `category === 'unknown'`, and `TimeEventBlock.handlePress` only routed to review-time for `category === 'unknown'`. Events with `kind: 'unknown_gap'` but different categories fell through to `handleOpenEditor` which blocked all derived non-unknown events.
+- **Root causes found**:
+  1. **CalendarEvent type too narrow**: The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx lacked the `meta` field, so kind-based checks were impossible at the type level.
+  2. **isUnknown only checked category**: `isUnknown = event.category === 'unknown'` missed events like "Productive" which have `kind: 'unknown_gap'` but `category: 'work'`.
+  3. **handleOpenEditor blocked derived non-unknown**: The guard `event.category !== 'unknown'` blocked Productive events (category: 'work') even though they have `kind: 'unknown_gap'`.
+- **Fixes applied**:
+  - Added `meta?: CalendarEventMeta` to local `CalendarEvent` type and imported `CalendarEventMeta`
+  - Expanded `isUnknown` to: `event.category === 'unknown' || event.meta?.kind === 'unknown_gap'`
+  - Added direct actual-adjust routing for all `unknown_gap` kind events in `TimeEventBlock.handlePress()` — these now bypass the review-time shortcut entirely
+  - Updated `handleOpenEditor` guard to also check `event.meta?.kind !== 'unknown_gap'`
+- **Persistence verification**: Editing already uses `source: 'actual_adjust' as const` in actual-adjust.tsx. After save, `buildActualDisplayEvents` overlap check suppresses the original derived Unknown event.
+- **Files changed**:
+  - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` — Added CalendarEventMeta import, meta field to CalendarEvent type, expanded isUnknown check, added unknown_gap direct routing in handlePress, updated handleOpenEditor guard
+- **Learnings for future iterations:**
+  - The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx is a subset of `ScheduledEvent`. When adding meta-based checks, the type must be updated to include `meta`.
+  - `buildProductiveUnknownEvent` creates events with `category: 'work'` but `kind: 'unknown_gap'` — always check `meta.kind` when determining if an event is an "unknown gap", not just `category`.
+  - Unknown_gap events should always route to actual-adjust for full editing (title, time, category), not to the simpler review-time interface.
+  - The planned column uses `handleOpenEditor` for inline editing, but unknown_gap events benefit from the full actual-adjust screen. Routing them directly prevents confusion.
 ---

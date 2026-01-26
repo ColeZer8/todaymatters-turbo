@@ -17,7 +17,7 @@ import { FloatingActionButton } from '../atoms/FloatingActionButton';
 import { BottomToolbar } from '../organisms/BottomToolbar';
 import { Icon } from '../atoms/Icon';
 import { useReviewTimeStore, useDemoStore } from '@/stores';
-import type { EventCategory, ScheduledEvent } from '@/stores';
+import type { CalendarEventMeta, EventCategory, ScheduledEvent } from '@/stores';
 import { EventEditorModal } from '../molecules/EventEditorModal';
 import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
 
@@ -113,6 +113,7 @@ type CalendarEvent = {
     duration: number;
     category: string;
     isBig3?: boolean;
+    meta?: CalendarEventMeta;
 };
 
 interface TimeEventBlockProps {
@@ -137,7 +138,7 @@ const TimeEventBlock = ({
     const shouldRender = visibleDuration > 0;
     const { top, height } = getPosition(eventStart, visibleDuration || 1);
     const catStyles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.work;
-    const isUnknown = event.category === 'unknown';
+    const isUnknown = event.category === 'unknown' || event.meta?.kind === 'unknown_gap';
     const extendsAbove = eventStart <= START_HOUR * 60;
     const extendsBelow = eventEnd >= DAY_END_MINUTES;
     const hasHiddenTail = !!visibleUntilMinutes && visibleUntilMinutes < eventEnd;
@@ -163,6 +164,23 @@ const TimeEventBlock = ({
         : 0;
     
     const handlePress = () => {
+        // unknown_gap events always open actual-adjust for full editing
+        if (event.meta?.kind === 'unknown_gap') {
+            router.push({
+                pathname: '/actual-adjust',
+                params: {
+                    id: event.id,
+                    title: event.title,
+                    description: event.description,
+                    category: event.category,
+                    startMinutes: String(event.startMinutes),
+                    duration: String(event.duration),
+                    meta: event.meta ? JSON.stringify(event.meta) : undefined,
+                },
+            });
+            return;
+        }
+
         if (isUnknown && enableReviewTimeShortcut) {
             // Set which block to highlight before navigating
             setHighlightedBlockId(event.id);
@@ -413,7 +431,8 @@ export const ComprehensiveCalendarTemplate = ({
         if (
             (event.id.startsWith(DERIVED_ACTUAL_PREFIX) ||
                 event.id.startsWith(DERIVED_EVIDENCE_PREFIX)) &&
-            event.category !== 'unknown'
+            event.category !== 'unknown' &&
+            event.meta?.kind !== 'unknown_gap'
         ) {
             return;
         }

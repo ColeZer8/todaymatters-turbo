@@ -85,8 +85,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "COMPLETED — Two root causes found: (1) CalendarEvent local type lacked meta field, preventing kind-based detection of unknown_gap events. (2) Productive unknown events (kind: 'unknown_gap', category: 'work') were blocked by handleOpenEditor which only checked category === 'unknown'. Fixes: Added meta to CalendarEvent type, expanded isUnknown check to include meta.kind === 'unknown_gap', added direct actual-adjust routing for all unknown_gap kind events in TimeEventBlock.handlePress(), and updated handleOpenEditor to allow unknown_gap kind events through. Persistence uses existing source: 'actual_adjust' flow. After editing, the derived Unknown event is suppressed by overlap check in buildActualDisplayEvents."
     },
     {
       "id": "US-031",
