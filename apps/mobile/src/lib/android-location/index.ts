@@ -13,6 +13,7 @@ import type { AndroidLocationSupportStatus, AndroidLocationSample } from './type
 const MAX_PENDING_SAMPLES_PER_USER = 10_000;
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 import { supabase } from '@/lib/supabase/client';
+import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
@@ -197,6 +198,69 @@ export async function stopAndroidBackgroundLocationAsync(): Promise<void> {
   const started = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
   if (!started) return;
   await Location.stopLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+}
+
+/**
+ * Dev helper: capture one location sample immediately, enqueue it, and optionally flush to Supabase.
+ * This bypasses background task delivery so we can confirm queue + Supabase sync works end-to-end.
+ */
+export async function captureAndroidLocationSampleNowAsync(
+  userId: string,
+  options: { flushToSupabase?: boolean } = {}
+): Promise<
+  | { ok: true; enqueued: number; pendingAfterEnqueue: number; uploaded?: number; remainingAfterFlush?: number }
+  | { ok: false; reason: string; detail?: string }
+> {
+  if (Platform.OS !== 'android') return { ok: false, reason: 'not_android' };
+  const Location = await loadExpoLocationAsync();
+  if (!Location) return { ok: false, reason: 'no_module' };
+
+  try {
+    // First try a last-known fix (fast, no GPS warmup). If unavailable, fall back to a live fix with a generous timeout.
+    const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 10 * 60 * 1000, requiredAccuracy: 500 }).catch(
+      () => null
+    );
+    const pos =
+      lastKnown ??
+      (await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        timeInterval: 0,
+        distanceInterval: 0,
+        mayShowUserSettingsDialog: true,
+      }));
+    const sample: Omit<AndroidLocationSample, 'dedupe_key'> = {
+      recorded_at: new Date(pos.timestamp).toISOString(),
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy_m: typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null,
+      altitude_m: typeof pos.coords.altitude === 'number' ? pos.coords.altitude : null,
+      speed_mps: typeof pos.coords.speed === 'number' ? pos.coords.speed : null,
+      heading_deg: typeof pos.coords.heading === 'number' ? pos.coords.heading : null,
+      is_mocked: (pos as unknown as { mocked?: boolean }).mocked ?? null,
+      source: 'manual',
+      raw: null,
+    };
+
+    const { enqueued, pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, [sample]);
+    if (!options.flushToSupabase) {
+      return { ok: true, enqueued, pendingAfterEnqueue: pendingCount };
+    }
+
+    const flushed = await flushPendingAndroidLocationSamplesToSupabaseAsync(userId);
+    return {
+      ok: true,
+      enqueued,
+      pendingAfterEnqueue: pendingCount,
+      uploaded: flushed.uploaded,
+      remainingAfterFlush: flushed.remaining,
+    };
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    // Extra diagnostics: provider status can explain "location unavailable" even when permissions are granted.
+    const providerStatus = await Location.getProviderStatusAsync().catch(() => null);
+    const providerDetail = providerStatus ? `providerStatus=${JSON.stringify(providerStatus)}` : 'providerStatus=unknown';
+    return { ok: false, reason: 'capture_failed', detail: `${detail}\n\n${providerDetail}` };
+  }
 }
 
 export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: string): Promise<{

@@ -10,6 +10,13 @@ import type { PatternIndex } from '@/lib/calendar/pattern-recognition';
 import { getPatternSuggestionForRange } from '@/lib/calendar/pattern-recognition';
 import { LocationSearchModal } from '../molecules/LocationSearchModal';
 
+/** Big 3 priorities for today */
+export interface Big3Priorities {
+  priority_1: string;
+  priority_2: string;
+  priority_3: string;
+}
+
 // Life areas with icons - same as EventEditorModal
 const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
     { id: 'routine', label: 'Faith', icon: Sun },
@@ -45,6 +52,7 @@ interface AddEventDraft {
     location: string;
     category: EventCategory;
     isBig3: boolean;
+    big3Priority: 1 | 2 | 3 | null;
     selectedDate: Date;
     startTime: Date;
     endTime: Date;
@@ -62,6 +70,12 @@ interface AddEventTemplateProps {
     patternIndex?: PatternIndex | null;
     patternMinConfidence?: number;
     allowAutoSuggestions?: boolean;
+    /** Whether Big 3 feature is enabled for this user */
+    big3Enabled?: boolean;
+    /** Today's Big 3 priorities, or null if not yet set */
+    big3Priorities?: Big3Priorities | null;
+    /** Called when user sets Big 3 from inline input (no Big 3 set for today) */
+    onSetBig3Inline?: (p1: string, p2: string, p3: string) => void;
     onClose: () => void;
     onSave: (draft: AddEventDraft) => void | Promise<void>;
 }
@@ -73,12 +87,144 @@ const dateToYmd = (date: Date): string => {
     return `${y}-${m}-${d}`;
 };
 
+// ---------------------------------------------------------------------------
+// Big 3 Section — shows priority buttons or inline input
+// ---------------------------------------------------------------------------
+
+interface Big3SectionProps {
+  big3Priorities: Big3Priorities | null;
+  big3Priority: 1 | 2 | 3 | null;
+  onSelectBig3Priority: (priority: 1 | 2 | 3 | null) => void;
+  onSetBig3Inline: (p1: string, p2: string, p3: string) => void;
+}
+
+const Big3Section = ({
+  big3Priorities,
+  big3Priority,
+  onSelectBig3Priority,
+  onSetBig3Inline,
+}: Big3SectionProps) => {
+  const [inlineP1, setInlineP1] = useState('');
+  const [inlineP2, setInlineP2] = useState('');
+  const [inlineP3, setInlineP3] = useState('');
+
+  const hasPriorities =
+    big3Priorities &&
+    (big3Priorities.priority_1.trim() !== '' ||
+      big3Priorities.priority_2.trim() !== '' ||
+      big3Priorities.priority_3.trim() !== '');
+
+  if (hasPriorities) {
+    const priorities = [
+      { num: 1 as const, text: big3Priorities.priority_1 },
+      { num: 2 as const, text: big3Priorities.priority_2 },
+      { num: 3 as const, text: big3Priorities.priority_3 },
+    ].filter((p) => p.text.trim() !== '');
+
+    return (
+      <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+        <Text className="text-[13px] font-semibold text-[#111827]">Mark as Big 3</Text>
+        <Text className="mt-1 text-[12px] text-[#64748B]">
+          Assign this event to one of today's priorities.
+        </Text>
+        <View className="mt-3 gap-2">
+          {priorities.map((p) => {
+            const isSelected = big3Priority === p.num;
+            return (
+              <Pressable
+                key={p.num}
+                onPress={() => onSelectBig3Priority(isSelected ? null : p.num)}
+                className={`flex-row items-center rounded-xl border px-4 py-3 ${
+                  isSelected
+                    ? 'border-[#2563EB] bg-[#DBEAFE]'
+                    : 'border-[#E2E8F0] bg-[#F8FAFC]'
+                }`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <View
+                  className={`mr-3 h-6 w-6 items-center justify-center rounded-full ${
+                    isSelected ? 'bg-[#2563EB]' : 'bg-[#E2E8F0]'
+                  }`}
+                >
+                  <Text
+                    className={`text-[12px] font-bold ${
+                      isSelected ? 'text-white' : 'text-[#64748B]'
+                    }`}
+                  >
+                    {p.num}
+                  </Text>
+                </View>
+                <Text
+                  className={`flex-1 text-[13px] ${
+                    isSelected ? 'font-semibold text-[#1D4ED8]' : 'text-[#374151]'
+                  }`}
+                  numberOfLines={2}
+                >
+                  {p.text}
+                </Text>
+                {isSelected && (
+                  <Text className="text-[12px] font-semibold text-[#2563EB]">Assigned</Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  // No Big 3 set for today — show inline input
+  return (
+    <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+      <Text className="text-[13px] font-semibold text-[#111827]">Set your Big 3 for today</Text>
+      <Text className="mt-1 text-[12px] text-[#64748B]">
+        Pick 3 things that would make today a success.
+      </Text>
+      <View className="mt-3 gap-2">
+        {[
+          { num: 1, value: inlineP1, onChange: setInlineP1 },
+          { num: 2, value: inlineP2, onChange: setInlineP2 },
+          { num: 3, value: inlineP3, onChange: setInlineP3 },
+        ].map((item) => (
+          <View key={item.num} className="flex-row items-center gap-2">
+            <View className="h-6 w-6 items-center justify-center rounded-full bg-[#E2E8F0]">
+              <Text className="text-[12px] font-bold text-[#64748B]">{item.num}</Text>
+            </View>
+            <TextInput
+              value={item.value}
+              onChangeText={item.onChange}
+              placeholder={`Priority ${item.num}`}
+              placeholderTextColor="#94A3B8"
+              className="flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2 text-[13px] text-[#111827]"
+              autoCapitalize="sentences"
+              returnKeyType="done"
+            />
+          </View>
+        ))}
+      </View>
+      <Pressable
+        onPress={() => {
+          if (inlineP1.trim() || inlineP2.trim() || inlineP3.trim()) {
+            onSetBig3Inline(inlineP1.trim(), inlineP2.trim(), inlineP3.trim());
+          }
+        }}
+        className="mt-3 self-end rounded-lg bg-[#2563EB] px-4 py-2"
+      >
+        <Text className="text-[13px] font-semibold text-white">Save Big 3</Text>
+      </Pressable>
+    </View>
+  );
+};
+
 export const AddEventTemplate = ({
     initialDate,
     initialStartMinutes,
     patternIndex,
     patternMinConfidence = 0.6,
     allowAutoSuggestions = true,
+    big3Enabled = false,
+    big3Priorities = null,
+    onSetBig3Inline,
     onClose,
     onSave,
 }: AddEventTemplateProps) => {
@@ -88,6 +234,7 @@ export const AddEventTemplate = ({
     // Local draft state
     const [selectedCategory, setSelectedCategory] = useState<EventCategory>('work');
     const [isBig3, setIsBig3] = useState(false);
+    const [big3Priority, setBig3Priority] = useState<1 | 2 | 3 | null>(null);
     const [selectedValue, setSelectedValue] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [location, setLocation] = useState('');
@@ -172,6 +319,7 @@ export const AddEventTemplate = ({
             location,
             category: selectedCategory,
             isBig3,
+            big3Priority,
             selectedDate,
             startTime,
             endTime,
@@ -185,6 +333,21 @@ export const AddEventTemplate = ({
                 : null,
         });
     };
+
+    const handleSelectBig3Priority = useCallback(
+        (priority: 1 | 2 | 3 | null) => {
+            setBig3Priority(priority);
+            setIsBig3(priority !== null);
+        },
+        [],
+    );
+
+    const handleSetBig3Inline = useCallback(
+        (p1: string, p2: string, p3: string) => {
+            onSetBig3Inline?.(p1, p2, p3);
+        },
+        [onSetBig3Inline],
+    );
 
     const openAndroidDatePicker = useCallback(() => {
         DateTimePickerAndroid.open({
@@ -449,22 +612,16 @@ export const AddEventTemplate = ({
                 </View>
 
                 {/* Big 3 Section */}
-                <View className="mt-8 mx-4 overflow-hidden rounded-xl bg-white">
-                    <Pressable 
-                        onPress={() => setIsBig3(!isBig3)}
-                        className="flex-row items-center justify-between px-4 py-3"
-                    >
-                        <View className="flex-row items-center gap-3">
-                            <Icon icon={Flag} size={20} color={isBig3 ? '#F59E0B' : '#8E8E93'} />
-                            <Text className="text-lg text-[#111827]">Mark as Big 3</Text>
-                        </View>
-                        <Switch
-                            value={isBig3}
-                            onValueChange={setIsBig3}
-                            trackColor={{ false: '#D1D1D6', true: '#34C759' }}
+                {big3Enabled && (
+                    <View className="mx-4">
+                        <Big3Section
+                            big3Priorities={big3Priorities}
+                            big3Priority={big3Priority}
+                            onSelectBig3Priority={handleSelectBig3Priority}
+                            onSetBig3Inline={handleSetBig3Inline}
                         />
-                    </Pressable>
-                </View>
+                    </View>
+                )}
                 
                 {/* Life Area */}
                 <View className="mt-8 px-6">

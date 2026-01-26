@@ -75,7 +75,8 @@ export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]):
       continue;
     }
 
-    if (sample.source !== 'background') {
+    // Allow manual samples (dev tools) in addition to background task samples.
+    if (sample.source !== 'background' && sample.source !== 'manual') {
       droppedKeys.push(sample.dedupe_key);
       continue;
     }

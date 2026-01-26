@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AddEventTemplate } from '../components/templates/AddEventTemplate';
+import { AddEventTemplate, type Big3Priorities } from '../components/templates/AddEventTemplate';
 import { USE_MOCK_CALENDAR } from '@/lib/config';
 import { useAuthStore, useEventsStore, useUserPreferencesStore } from '@/stores';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
@@ -12,6 +12,7 @@ import {
     type PatternIndex,
 } from '@/lib/calendar/pattern-recognition';
 import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
+import { fetchBig3ForDate, upsertBig3ForDate } from '@/lib/supabase/services/daily-big3';
 
 export default function AddEventScreen() {
     const router = useRouter();
@@ -21,7 +22,9 @@ export default function AddEventScreen() {
     const addActualEvent = useEventsStore((s) => s.addActualEvent);
     const userId = useAuthStore((s) => s.user?.id ?? null);
     const preferences = useUserPreferencesStore((s) => s.preferences);
+    const big3Enabled = useUserPreferencesStore((s) => s.preferences.big3Enabled);
     const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
+    const [big3Priorities, setBig3Priorities] = useState<Big3Priorities | null>(null);
     const { createPlanned, createActual, loadActualForRange } = useCalendarEventsSync({
         onError: (error) => {
             Alert.alert('Unable to save event', error.message);
@@ -69,6 +72,56 @@ export default function AddEventScreen() {
         };
     }, [loadActualForRange, preferences.autoSuggestEvents, userId, ymd]);
 
+    // Load today's Big 3 priorities when feature is enabled
+    useEffect(() => {
+        if (!userId || !big3Enabled) {
+            setBig3Priorities(null);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const result = await fetchBig3ForDate(userId, ymd);
+                if (!cancelled) {
+                    setBig3Priorities(
+                        result
+                            ? {
+                                  priority_1: result.priority_1 ?? '',
+                                  priority_2: result.priority_2 ?? '',
+                                  priority_3: result.priority_3 ?? '',
+                              }
+                            : null
+                    );
+                }
+            } catch (err) {
+                if (__DEV__) console.warn('[AddEvent] Failed to load Big 3:', err);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [userId, big3Enabled, ymd]);
+
+    const handleSetBig3Inline = async (p1: string, p2: string, p3: string) => {
+        if (!userId) return;
+        const newPriorities: Big3Priorities = {
+            priority_1: p1,
+            priority_2: p2,
+            priority_3: p3,
+        };
+        setBig3Priorities(newPriorities);
+        // Persist to Supabase (fire-and-forget)
+        void upsertBig3ForDate({
+            user_id: userId,
+            date: ymd,
+            priority_1: p1,
+            priority_2: p2,
+            priority_3: p3,
+        }).catch((err) => {
+            if (__DEV__) console.warn('[AddEvent] Failed to save Big 3:', err);
+        });
+    };
+
     return (
         <AddEventTemplate
             initialDate={initialDate}
@@ -76,6 +129,9 @@ export default function AddEventScreen() {
             patternIndex={patternIndex}
             patternMinConfidence={preferences.confidenceThreshold}
             allowAutoSuggestions={preferences.autoSuggestEvents}
+            big3Enabled={big3Enabled}
+            big3Priorities={big3Priorities}
+            onSetBig3Inline={handleSetBig3Inline}
             onClose={() => router.back()}
             onSave={async (draft) => {
                 const title = draft.title.trim();
@@ -105,6 +161,12 @@ export default function AddEventScreen() {
                         duration,
                         category: draft.category,
                         isBig3: draft.isBig3,
+                        meta: {
+                            category: draft.category,
+                            isBig3: draft.isBig3,
+                            big3_priority: draft.big3Priority,
+                            source: 'user' as const,
+                        },
                     };
                     if (column === 'actual') addActualEvent(localEvent, targetYmd);
                     else addScheduledEvent(localEvent, targetYmd);
@@ -120,6 +182,7 @@ export default function AddEventScreen() {
                             end: end.toISOString(),
                             category: draft.category,
                             isBig3: draft.isBig3,
+                            big3Priority: draft.big3Priority,
                         });
                     }
 
@@ -139,7 +202,12 @@ export default function AddEventScreen() {
                                   location: draft.location,
                                   scheduledStartIso: start.toISOString(),
                                   scheduledEndIso: end.toISOString(),
-                                  meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
+                                  meta: { 
+                                      category: draft.category, 
+                                      isBig3: draft.isBig3, 
+                                      big3_priority: draft.big3Priority,
+                                      source: 'user' 
+                                  },
                               })
                             : await createPlanned({
                                   title,
@@ -150,6 +218,7 @@ export default function AddEventScreen() {
                                   meta: {
                                       category: draft.category,
                                       isBig3: draft.isBig3,
+                                      big3_priority: draft.big3Priority,
                                       source: 'user',
                                       ...suggestionMeta,
                                   },

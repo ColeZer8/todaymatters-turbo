@@ -2,7 +2,7 @@ import type { Json } from '@/lib/supabase/database.types';
 
 export type AndroidLocationSupportStatus = 'notAndroid' | 'expoGo' | 'available';
 
-export type AndroidLocationSampleSource = 'background';
+export type AndroidLocationSampleSource = 'background' | 'manual';
 
 export interface AndroidLocationSample {
   recorded_at: string; // ISO timestamp

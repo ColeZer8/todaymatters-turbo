@@ -52,7 +52,11 @@ import {
   openUsageAccessSettingsSafeAsync,
 } from '@/lib/android-insights';
 import { flushPendingLocationSamplesToSupabaseAsync } from '@/lib/ios-location';
-import { flushPendingAndroidLocationSamplesToSupabaseAsync, getAndroidLocationDiagnostics } from '@/lib/android-location';
+import {
+  captureAndroidLocationSampleNowAsync,
+  flushPendingAndroidLocationSamplesToSupabaseAsync,
+  getAndroidLocationDiagnostics,
+} from '@/lib/android-location';
 import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
 import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
 import appConfig from '@/lib/config';
@@ -187,6 +191,23 @@ export default function ProfileScreen() {
     } catch (error) {
       Alert.alert('Location sync failed', error instanceof Error ? error.message : 'Unknown error');
     }
+  }, [user?.id]);
+
+  const handleDevCaptureLocationNow = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Location', 'This tool is Android-only.');
+      return;
+    }
+    if (!user?.id) return;
+    const result = await captureAndroidLocationSampleNowAsync(user.id, { flushToSupabase: true });
+    if (!result.ok) {
+      Alert.alert('Capture location failed', `${result.reason}${result.detail ? `\n\n${result.detail}` : ''}`);
+      return;
+    }
+    Alert.alert(
+      'Captured location sample',
+      `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`
+    );
   }, [user?.id]);
 
   const handleDevAndroidLocationDiagnostics = useCallback(async () => {
@@ -354,6 +375,12 @@ export default function ProfileScreen() {
             label: '🧪 Flush Location (dev)',
             icon: Calendar,
             onPress: handleDevFlushLocation,
+          },
+          {
+            id: 'dev-capture-location-now',
+            label: '🧪 Capture Location Now (dev)',
+            icon: Calendar,
+            onPress: handleDevCaptureLocationNow,
           },
           {
             id: 'dev-request-location',

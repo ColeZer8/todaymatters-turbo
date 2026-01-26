@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase/client';
 import type { Json } from '@/lib/supabase/database.types';
 import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
@@ -8,6 +9,8 @@ import type { AndroidLocationSample } from './types';
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
+
+const LAST_AUTHED_USER_ID_KEY = 'tm:lastAuthedUserId';
 
 type RawLocationObject = {
   timestamp: number;
@@ -103,7 +106,9 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
       if (locations.length === 0) return;
 
       const sessionResult = await supabase.auth.getSession();
-      const userId = sessionResult.data.session?.user?.id ?? null;
+      const sessionUserId = sessionResult.data.session?.user?.id ?? null;
+      const cachedUserId = await AsyncStorage.getItem(LAST_AUTHED_USER_ID_KEY).catch(() => null);
+      const userId = sessionUserId ?? cachedUserId ?? null;
       if (!userId) {
         if (__DEV__) console.log('📍 [task] No authenticated user — dropping locations');
         return;

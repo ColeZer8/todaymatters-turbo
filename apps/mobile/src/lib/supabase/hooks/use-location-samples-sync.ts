@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/stores';
 import {
   flushPendingLocationSamplesToSupabaseAsync,
@@ -21,6 +22,8 @@ const MAX_RETRY_ATTEMPTS = 3;
 /** How often to check if the Android background task is still alive (ms). */
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 
+const LAST_AUTHED_USER_ID_KEY = 'tm:lastAuthedUserId';
+
 interface UseLocationSamplesSyncOptions {
   flushIntervalMs?: number;
 }
@@ -41,6 +44,9 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
     if (isAuthenticated && userId) {
       lastAuthedUserIdRef.current = userId;
       retryAttemptsRef.current = 0;
+      AsyncStorage.setItem(LAST_AUTHED_USER_ID_KEY, userId).catch((e) => {
+        if (__DEV__) console.error('📍 Failed to persist last authed user id for location tasks:', e);
+      });
       if (Platform.OS === 'ios') {
         startIosBackgroundLocationAsync().catch((e) => {
           if (__DEV__) console.error('📍 Failed to start iOS background location:', e);
@@ -71,6 +77,9 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
 
     const previousUserId = lastAuthedUserIdRef.current;
     if (previousUserId) {
+      AsyncStorage.removeItem(LAST_AUTHED_USER_ID_KEY).catch((e) => {
+        if (__DEV__) console.error('📍 Failed to clear last authed user id for location tasks:', e);
+      });
       if (Platform.OS === 'ios') {
         clearPendingLocationSamplesAsync(previousUserId).catch((e) => {
           if (__DEV__) console.error('📍 Failed to clear pending iOS location samples:', e);
