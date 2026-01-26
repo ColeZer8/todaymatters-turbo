@@ -4,6 +4,7 @@ import type { Json } from '../database.types';
 import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights';
 import type { UsageSummary } from '@/lib/android-insights';
 import { upsertDataSyncState } from './data-sync-state';
+import { getReadableAppName } from '@/lib/app-names';
 
 type ScreenTimePlatform = 'ios' | 'android';
 
@@ -156,7 +157,7 @@ function mapScreenTimeSessions(
       user_id: userId,
       local_date: localDate,
       app_id: session.bundleIdentifier,
-      display_name: session.displayName,
+      display_name: getReadableAppName({ appId: session.bundleIdentifier, displayName: session.displayName }),
       started_at: session.startedAtIso,
       ended_at: session.endedAtIso,
       duration_seconds: session.durationSeconds,
@@ -199,7 +200,7 @@ export async function syncIosScreenTimeSummary(
       screen_time_daily_id: dailyId,
       user_id: userId,
       app_id: app.bundleIdentifier,
-      display_name: app.displayName,
+      display_name: getReadableAppName({ appId: app.bundleIdentifier, displayName: app.displayName }),
       duration_seconds: app.durationSeconds,
       pickups: app.pickups ?? null,
       notifications: null,
@@ -223,7 +224,7 @@ export async function syncIosScreenTimeSummary(
           local_date: localDate,
           hour,
           app_id: appId,
-          display_name: appIdToName.get(appId) ?? null,
+          display_name: getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }),
           duration_seconds: seconds,
           pickups: null,
           meta: { timezone } as Json,
@@ -281,7 +282,7 @@ export async function syncAndroidUsageSummary(
       screen_time_daily_id: dailyId,
       user_id: userId,
       app_id: app.packageName,
-      display_name: app.displayName,
+      display_name: getReadableAppName({ appId: app.packageName, displayName: app.displayName }),
       duration_seconds: app.durationSeconds,
       pickups: null,
       notifications: null,
@@ -299,7 +300,10 @@ export async function syncAndroidUsageSummary(
       user_id: userId,
       local_date: localDate,
       app_id: session.packageName,
-      display_name: appIdToName.get(session.packageName) ?? null,
+      display_name: getReadableAppName({
+        appId: session.packageName,
+        displayName: appIdToName.get(session.packageName) ?? null,
+      }),
       started_at: session.startIso,
       ended_at: session.endIso,
       duration_seconds: session.durationSeconds,
@@ -323,7 +327,7 @@ export async function syncAndroidUsageSummary(
           local_date: localDate,
           hour,
           app_id: appId,
-          display_name: appIdToName.get(appId) ?? null,
+          display_name: getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }),
           duration_seconds: seconds,
           pickups: null,
           meta: { timezone } as Json,

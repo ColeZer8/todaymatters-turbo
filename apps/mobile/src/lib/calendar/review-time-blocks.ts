@@ -1,6 +1,7 @@
 import type { EvidenceBundle } from '@/lib/supabase/services/evidence-data';
 import type { ScheduledEvent } from '@/stores';
 import type { TimeBlock } from '@/stores/review-time-store';
+import { getReadableAppName } from '@/lib/app-names';
 
 interface BuildReviewTimeBlocksInput {
   ymd: string;
@@ -160,7 +161,7 @@ function buildScreenTimeBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBl
     }
 
     currentPickups += session.pickups ?? 0;
-    const appName = session.display_name || session.app_id;
+    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
     const currentUsage = appUsage.get(appName) ?? 0;
     appUsage.set(appName, currentUsage + (session.duration_seconds / 60));
   }

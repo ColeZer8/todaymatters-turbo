@@ -25,6 +25,7 @@ import {
 } from '@/lib/android-insights';
 import { syncAndroidUsageSummary, syncIosScreenTimeSummary } from '@/lib/supabase/services';
 import { useAuthStore } from '@/stores';
+import { getReadableAppName } from '@/lib/app-names';
 
 const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
@@ -309,7 +310,8 @@ function AndroidScreenTimeDashboard() {
       const items = Array.from(apps.entries())
         .map(([packageName, seconds]) => ({
           id: packageName,
-          name: nameLookup.get(packageName) ?? packageName,
+          name:
+            getReadableAppName({ appId: packageName, displayName: nameLookup.get(packageName) ?? null }) ?? packageName,
           durationSeconds: seconds,
           durationLabel: formatDuration(seconds),
         }))
@@ -324,7 +326,11 @@ function AndroidScreenTimeDashboard() {
     return summary.sessions
       .map((session) => ({
         id: `${session.packageName}-${session.startIso}-${session.endIso}`,
-        name: nameLookup.get(session.packageName) ?? session.packageName,
+        name:
+          getReadableAppName({
+            appId: session.packageName,
+            displayName: nameLookup.get(session.packageName) ?? null,
+          }) ?? session.packageName,
         startIso: session.startIso,
         endIso: session.endIso,
         durationSeconds: session.durationSeconds,

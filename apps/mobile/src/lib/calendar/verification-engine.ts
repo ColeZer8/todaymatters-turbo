@@ -17,6 +17,7 @@ import {
   WORK_APPS,
 } from './verification-rules';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
+import { getReadableAppName } from '@/lib/app-names';
 
 // ============================================================================
 // Types
@@ -258,7 +259,8 @@ export function verifyEvent(
         sessionEndMins
       );
 
-      const appName = session.display_name || session.app_id;
+      const appName =
+        getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
       const currentUsage = appUsage.get(appName) ?? 0;
       appUsage.set(appName, currentUsage + overlap);
       totalMinutes += overlap;
@@ -805,7 +807,7 @@ function groupScreenTimeSessions(
     if (isPlannedDigital) continue;
 
     const durationMinutes = session.duration_seconds / 60;
-    const appName = session.display_name || session.app_id;
+    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
     const isDistraction = appMatchesList(appName, DISTRACTION_APPS);
 
     if (currentBlock && startMinutes - currentBlock.endMinutes <= GAP_THRESHOLD) {

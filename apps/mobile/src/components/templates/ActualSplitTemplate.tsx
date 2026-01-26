@@ -1,6 +1,6 @@
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, Text, View } from 'react-native';
-import { TimeSplitControl } from '@/components/molecules';
+import { MultiSplitControl } from '@/components/molecules';
 
 export interface ActualSplitTemplateProps {
   title: string;
@@ -9,7 +9,7 @@ export interface ActualSplitTemplateProps {
   startTime: string;
   endTime: string;
   onCancel: () => void;
-  onConfirm: (splitMinutes: number) => void;
+  onConfirm: (splitPointMinutes: number[]) => void;
 }
 
 export const ActualSplitTemplate = ({
@@ -47,10 +47,10 @@ export const ActualSplitTemplate = ({
         <View className="rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
           <Text className="text-[13px] font-semibold text-[#111827]">Choose where to split</Text>
           <Text className="mt-1 text-[12px] text-[#64748B]">
-            Drag the divider to split this event into two parts.
+            Tap the bar to add split points. Drag to adjust. Tap X to remove.
           </Text>
           <View className="mt-4">
-            <TimeSplitControl
+            <MultiSplitControl
               duration={duration}
               startTime={startTime}
               endTime={endTime}

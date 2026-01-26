@@ -1,6 +1,7 @@
 import type { ScreenTimeSummary, ScreenTimeAppSession } from '@/lib/ios-insights';
 import type { ScheduledEvent } from '@/stores/events-store';
 import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
+import { getReadableAppName } from '@/lib/app-names';
 
 interface DeriveActualEventsFromScreenTimeOptions {
   existingActualEvents: ScheduledEvent[];
@@ -181,7 +182,8 @@ function calculateDistractionFromSessions(event: ScheduledEvent, appSessions: Sc
     if (overlapEndMs <= overlapStartMs) continue;
 
     const overlapSeconds = (overlapEndMs - overlapStartMs) / 1000;
-    const appName = session.displayName;
+    const appName =
+      getReadableAppName({ appId: session.bundleIdentifier, displayName: session.displayName }) ?? session.displayName;
     appUsage[appName] = (appUsage[appName] ?? 0) + overlapSeconds;
   }
 
@@ -237,7 +239,8 @@ function calculateDistractionFromHourlyByApp(
 
       // Distribute app usage proportionally across the overlap
       const appOverlapSeconds = appSeconds * hourFraction;
-      const appName = appIdToDisplayName.get(appId) ?? appId;
+      const appName =
+        getReadableAppName({ appId, displayName: appIdToDisplayName.get(appId) ?? null }) ?? appId;
       appUsage[appName] = (appUsage[appName] ?? 0) + appOverlapSeconds;
     }
   }
@@ -370,7 +373,8 @@ function deriveBlocksFromSessions(
     );
     if (overlapsNonDigital) continue;
 
-    const appName = session.displayName;
+    const appName =
+      getReadableAppName({ appId: session.bundleIdentifier, displayName: session.displayName }) ?? session.displayName;
     const description = toScreenTimePhrase(appName);
     const classification = classifyAppUsage(appName, appCategoryOverrides);
 
@@ -648,7 +652,8 @@ function buildSleepSessionIntervals(options: {
     intervals.push({
       startMinutes: overlapStart,
       endMinutes: overlapEnd,
-      appName: session.displayName,
+      appName:
+        getReadableAppName({ appId: session.bundleIdentifier, displayName: session.displayName }) ?? session.displayName,
     });
   }
 
