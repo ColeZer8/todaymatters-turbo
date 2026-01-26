@@ -7,6 +7,9 @@ import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-
 import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
 import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
 import { applyUserAppCategoryFeedback } from '@/lib/supabase/services/user-app-categories';
+import { fetchActivityCategories } from '@/lib/supabase/services/activity-categories';
+import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
+import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
 import {
   useAppCategoryOverridesStore,
   useAuthStore,
@@ -257,6 +260,10 @@ export default function ActualAdjustScreen() {
     reason?: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    event.meta?.category_id ?? null,
+  );
 
   useEffect(() => {
     setTitleInput(event.title || 'Actual');
@@ -274,6 +281,27 @@ export default function ActualAdjustScreen() {
       typeof event.meta?.goal_contribution === 'number' ? event.meta.goal_contribution : null,
     );
   }, [event.duration, event.meta, event.startMinutes, event.title]);
+
+  // Load user's hierarchical activity categories on mount
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetchActivityCategories(userId)
+      .then((cats) => {
+        if (!cancelled) setActivityCategories(cats);
+      })
+      .catch((err) => {
+        if (__DEV__) console.warn('[ActualAdjust] Failed to load activity categories:', err);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleSelectActivityCategory = useCallback(
+    (categoryId: string, _path: CategoryPath) => {
+      setSelectedCategoryId(categoryId);
+    },
+    [],
+  );
 
   const valuesOptions = useMemo(() => {
     const valueLabels = coreValues.filter((value) => value.isSelected).map((value) => value.label);
@@ -383,6 +411,7 @@ export default function ActualAdjustScreen() {
 
       const meta = {
         category: finalCategory,
+        category_id: selectedCategoryId ?? null,
         isBig3,
         source: 'actual_adjust' as const,
         actual: true,
@@ -479,6 +508,7 @@ export default function ActualAdjustScreen() {
     startMinutes,
     goalContribution,
     selectedGoalId,
+    selectedCategoryId,
     selectedValue,
     note,
     params.id,
@@ -515,6 +545,9 @@ export default function ActualAdjustScreen() {
         evidenceRows={evidenceRows}
         suggestion={suggestion}
         isSaving={isSaving}
+        activityCategories={activityCategories}
+        selectedCategoryId={selectedCategoryId}
+        onSelectActivityCategory={handleSelectActivityCategory}
         onCancel={() => router.back()}
         onSave={handleSave}
         onSplit={() => {

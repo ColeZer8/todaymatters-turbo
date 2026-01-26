@@ -21,6 +21,8 @@ export type EventCategory =
 
 export interface CalendarEventMeta {
   category: EventCategory;
+  /** Hierarchical activity category id from tm.activity_categories */
+  category_id?: string | null;
   isBig3?: boolean;
   location?: string | null;
   value_label?: string | null;

@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, ScrollView, Text, TextInput, View, Switch } from 'react-native';
 import type { EventCategory } from '@/stores';
+import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
+import { HierarchicalCategoryPicker } from '@/components/molecules/HierarchicalCategoryPicker';
+import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
 
 export interface ActualAdjustSuggestion {
   category: EventCategory;
@@ -30,6 +33,12 @@ export interface ActualAdjustTemplateProps {
   evidenceRows?: Array<{ label: string; value: string }>;
   suggestion?: ActualAdjustSuggestion | null;
   isSaving: boolean;
+  /** Hierarchical activity categories (flat list from Supabase) */
+  activityCategories?: ActivityCategory[];
+  /** Currently selected hierarchical category id */
+  selectedCategoryId?: string | null;
+  /** Called when user selects a hierarchical category */
+  onSelectActivityCategory?: (categoryId: string, path: CategoryPath) => void;
   onCancel: () => void;
   onSave: () => void;
   onSplit?: () => void;
@@ -73,6 +82,9 @@ export const ActualAdjustTemplate = ({
   evidenceRows = [],
   suggestion,
   isSaving,
+  activityCategories,
+  selectedCategoryId,
+  onSelectActivityCategory,
   onCancel,
   onSave,
   onSplit,
@@ -189,29 +201,39 @@ export const ActualAdjustTemplate = ({
 
         <View className="mt-6">
           <Text className="text-[12px] font-semibold text-[#F97316]">LIFE AREA</Text>
-          <View className="mt-3 flex-row flex-wrap gap-2">
-            {LIFE_AREA_OPTIONS.map((option) => {
-              const isSelected = selectedCategory === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => onSelectCategory(option.id)}
-                  className={`rounded-full border px-4 py-2 ${
-                    isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
-                  }`}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                >
-                  <Text
-                    className={`text-[12px] font-semibold ${
-                      isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+          {activityCategories && activityCategories.length > 0 && onSelectActivityCategory ? (
+            <View className="mt-3 max-h-[280px] rounded-2xl border border-[#E5E7EB] bg-white px-2 py-2">
+              <HierarchicalCategoryPicker
+                categories={activityCategories}
+                selectedCategoryId={selectedCategoryId}
+                onSelect={onSelectActivityCategory}
+              />
+            </View>
+          ) : (
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              {LIFE_AREA_OPTIONS.map((option) => {
+                const isSelected = selectedCategory === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() => onSelectCategory(option.id)}
+                    className={`rounded-full border px-4 py-2 ${
+                      isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
                     }`}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                   >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text
+                      className={`text-[12px] font-semibold ${
+                        isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+                      }`}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         <View className="mt-6">
