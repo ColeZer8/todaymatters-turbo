@@ -184,7 +184,7 @@ export default function SetupQuestionsScreen() {
       setQuestionIndex((prev) => prev + 1);
       return;
     }
-    router.replace('/ai-summary');
+    router.replace('/big3-opt-in');
   };
 
   const handleBack = () => {

@@ -133,6 +133,9 @@ interface OnboardingState {
   homeAddress: string | null;
   workAddress: string | null;
 
+  // Big 3 opt-in
+  big3Enabled: boolean;
+
   // Completion state
   hasCompletedOnboarding: boolean;
 
@@ -230,6 +233,9 @@ interface OnboardingState {
   setMorningMindset: (mindset: string | null) => void;
   setHomeAddress: (address: string | null) => void;
   setWorkAddress: (address: string | null) => void;
+
+  // Actions - Big 3
+  setBig3Enabled: (value: boolean) => void;
 
   // Actions - Completion
   setHasCompletedOnboarding: (value: boolean) => void;
@@ -369,6 +375,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       morningMindset: 'slow',
       homeAddress: null,
       workAddress: null,
+      big3Enabled: false,
       hasCompletedOnboarding: false,
       _hasHydrated: false,
 
@@ -598,6 +605,9 @@ export const useOnboardingStore = create<OnboardingState>()(
       setMorningMindset: (mindset) => set({ morningMindset: mindset }),
       setHomeAddress: (address) => set({ homeAddress: address }),
       setWorkAddress: (address) => set({ workAddress: address }),
+
+      // Actions - Big 3
+      setBig3Enabled: (value) => set({ big3Enabled: value }),
 
       // Actions - Completion
       setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),

@@ -30,3 +30,4 @@ export { AppCategoryOverridesTemplate } from './AppCategoryOverridesTemplate';
 export { DemoCarouselTemplate } from './DemoCarouselTemplate';
 export { ScreenTimeAnalyticsTemplate } from './ScreenTimeAnalyticsTemplate';
 export { HealthKitDashboardTemplate } from './HealthKitDashboardTemplate';
+export { Big3OptInTemplate } from './Big3OptInTemplate';

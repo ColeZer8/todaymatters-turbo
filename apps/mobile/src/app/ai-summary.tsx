@@ -40,7 +40,7 @@ export default function AISummaryScreen() {
   };
 
   const handleBack = () => {
-    router.replace('/setup-questions');
+    router.replace('/big3-opt-in');
   };
 
   if (!isNavigationReady || !hasHydrated) {
