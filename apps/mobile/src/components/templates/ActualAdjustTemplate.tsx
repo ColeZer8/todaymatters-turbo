@@ -21,6 +21,16 @@ export interface Big3Priorities {
   priority_3: string;
 }
 
+/** Place label state passed from the screen to the template */
+export interface PlaceLabelInfo {
+  /** The location label from evidence (e.g., "Starbucks", "Office") */
+  locationLabel: string;
+  /** Whether this place already has a user-defined label in user_places */
+  hasExistingLabel: boolean;
+  /** Whether the place label form is saving */
+  isSavingPlace: boolean;
+}
+
 export interface ActualAdjustTemplateProps {
   title: string;
   titleValue: string;
@@ -52,6 +62,10 @@ export interface ActualAdjustTemplateProps {
   selectedCategoryId?: string | null;
   /** Called when user selects a hierarchical category */
   onSelectActivityCategory?: (categoryId: string, path: CategoryPath) => void;
+  /** Place labeling info — shown when event has location evidence */
+  placeLabelInfo?: PlaceLabelInfo | null;
+  /** Called when user saves a place label */
+  onSavePlaceLabel?: (label: string, categoryId: string | null) => void;
   onCancel: () => void;
   onSave: () => void;
   onSplit?: () => void;
@@ -218,6 +232,117 @@ const Big3Section = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// Place Label Section — label this place with name + category
+// ---------------------------------------------------------------------------
+
+interface PlaceLabelSectionProps {
+  placeLabelInfo: PlaceLabelInfo;
+  activityCategories?: ActivityCategory[];
+  onSavePlaceLabel: (label: string, categoryId: string | null) => void;
+}
+
+const PlaceLabelSection = ({
+  placeLabelInfo,
+  activityCategories,
+  onSavePlaceLabel,
+}: PlaceLabelSectionProps) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [placeName, setPlaceName] = useState(placeLabelInfo.locationLabel);
+  const [placeCategoryId, setPlaceCategoryId] = useState<string | null>(null);
+
+  const buttonLabel = placeLabelInfo.hasExistingLabel
+    ? 'Edit place label'
+    : 'Label this place';
+
+  if (!isExpanded) {
+    return (
+      <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text className="text-[13px] font-semibold text-[#111827]">
+              {placeLabelInfo.locationLabel}
+            </Text>
+            <Text className="mt-1 text-[12px] text-[#64748B]">
+              {placeLabelInfo.hasExistingLabel
+                ? 'This place has a label. Tap to edit.'
+                : 'Label this place so future visits auto-tag correctly.'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setIsExpanded(true)}
+            className="ml-3 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2"
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text className="text-[12px] font-semibold text-[#2563EB]">{buttonLabel}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+      <Text className="text-[13px] font-semibold text-[#111827]">{buttonLabel}</Text>
+      <Text className="mt-1 text-[12px] text-[#64748B]">
+        Name this place and assign a category. Future visits will be auto-tagged.
+      </Text>
+
+      <View className="mt-3">
+        <Text className="text-[11px] font-semibold text-[#64748B]">Place name</Text>
+        <TextInput
+          value={placeName}
+          onChangeText={setPlaceName}
+          placeholder="e.g., Home, Office, Gym"
+          placeholderTextColor="#94A3B8"
+          className="mt-1 rounded-lg border border-[#E5E7EB] px-3 py-2 text-[13px] text-[#111827]"
+          autoCapitalize="words"
+          returnKeyType="done"
+        />
+      </View>
+
+      {activityCategories && activityCategories.length > 0 && (
+        <View className="mt-3">
+          <Text className="text-[11px] font-semibold text-[#64748B]">Category</Text>
+          <View className="mt-1 max-h-[200px] rounded-xl border border-[#E5E7EB] px-2 py-2">
+            <HierarchicalCategoryPicker
+              categories={activityCategories}
+              selectedCategoryId={placeCategoryId}
+              onSelect={(categoryId) => setPlaceCategoryId(categoryId)}
+            />
+          </View>
+        </View>
+      )}
+
+      <View className="mt-3 flex-row gap-2">
+        <Pressable
+          onPress={() => {
+            if (placeName.trim()) {
+              onSavePlaceLabel(placeName.trim(), placeCategoryId);
+            }
+          }}
+          disabled={!placeName.trim() || placeLabelInfo.isSavingPlace}
+          className="rounded-full bg-[#2563EB] px-4 py-2"
+          style={({ pressed }) => ({
+            opacity: !placeName.trim() || placeLabelInfo.isSavingPlace ? 0.4 : pressed ? 0.7 : 1,
+          })}
+        >
+          <Text className="text-[12px] font-semibold text-white">
+            {placeLabelInfo.isSavingPlace ? 'Saving…' : 'Save label'}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setIsExpanded(false)}
+          className="rounded-full border border-[#E2E8F0] px-4 py-2"
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <Text className="text-[12px] font-semibold text-[#64748B]">Cancel</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+};
+
 export const ActualAdjustTemplate = ({
   title,
   titleValue,
@@ -243,6 +368,8 @@ export const ActualAdjustTemplate = ({
   activityCategories,
   selectedCategoryId,
   onSelectActivityCategory,
+  placeLabelInfo,
+  onSavePlaceLabel,
   onCancel,
   onSave,
   onSplit,
@@ -353,6 +480,14 @@ export const ActualAdjustTemplate = ({
             big3Priority={big3Priority}
             onSelectBig3Priority={onSelectBig3Priority}
             onSetBig3Inline={onSetBig3Inline}
+          />
+        )}
+
+        {placeLabelInfo && onSavePlaceLabel && (
+          <PlaceLabelSection
+            placeLabelInfo={placeLabelInfo}
+            activityCategories={activityCategories}
+            onSavePlaceLabel={onSavePlaceLabel}
           />
         )}
 

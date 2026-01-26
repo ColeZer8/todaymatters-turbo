@@ -2,7 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { ActualAdjustTemplate } from '@/components/templates/ActualAdjustTemplate';
-import type { Big3Priorities } from '@/components/templates/ActualAdjustTemplate';
+import type { Big3Priorities, PlaceLabelInfo } from '@/components/templates/ActualAdjustTemplate';
 import { TimePickerModal } from '@/components/organisms';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
@@ -11,6 +11,11 @@ import { applyUserAppCategoryFeedback } from '@/lib/supabase/services/user-app-c
 import { fetchActivityCategories } from '@/lib/supabase/services/activity-categories';
 import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
 import { fetchBig3ForDate, upsertBig3ForDate } from '@/lib/supabase/services/daily-big3';
+import {
+  fetchUserPlaceByLabel,
+  fetchLocationSamplesForRange,
+  upsertUserPlaceFromSamples,
+} from '@/lib/supabase/services/user-places';
 import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
 import {
   useAppCategoryOverridesStore,
@@ -272,6 +277,8 @@ export default function ActualAdjustScreen() {
     event.meta?.big3_priority ?? null,
   );
   const [big3Priorities, setBig3Priorities] = useState<Big3Priorities | null>(null);
+  const [hasExistingPlaceLabel, setHasExistingPlaceLabel] = useState(false);
+  const [isSavingPlace, setIsSavingPlace] = useState(false);
 
   useEffect(() => {
     setTitleInput(event.title || 'Actual');
@@ -327,6 +334,21 @@ export default function ActualAdjustScreen() {
     return () => { cancelled = true; };
   }, [userId, big3Enabled, selectedDateYmd]);
 
+  // Check if this event's location already has a user-defined place label
+  const locationLabel = event.meta?.evidence?.locationLabel ?? null;
+  useEffect(() => {
+    if (!userId || !locationLabel) return;
+    let cancelled = false;
+    fetchUserPlaceByLabel(userId, locationLabel)
+      .then((place) => {
+        if (!cancelled) setHasExistingPlaceLabel(place !== null);
+      })
+      .catch((err) => {
+        if (__DEV__) console.warn('[ActualAdjust] Failed to check place label:', err);
+      });
+    return () => { cancelled = true; };
+  }, [userId, locationLabel]);
+
   const handleSelectActivityCategory = useCallback(
     (categoryId: string, _path: CategoryPath) => {
       setSelectedCategoryId(categoryId);
@@ -364,6 +386,60 @@ export default function ActualAdjustScreen() {
     },
     [userId, selectedDateYmd],
   );
+
+  const handleSavePlaceLabel = useCallback(
+    async (label: string, categoryId: string | null) => {
+      if (!userId) return;
+      setIsSavingPlace(true);
+      try {
+        // Compute ISO time range for this event to fetch location samples
+        const start = ymdMinutesToDate(selectedDateYmd, startMinutes);
+        const end = new Date(start);
+        end.setMinutes(end.getMinutes() + durationMinutes);
+        const samples = await fetchLocationSamplesForRange(
+          userId,
+          start.toISOString(),
+          end.toISOString(),
+          200,
+        );
+        if (samples.length === 0) {
+          Alert.alert(
+            'No location data',
+            'We could not find location samples for this time block. The place cannot be labeled without GPS data.',
+          );
+          setIsSavingPlace(false);
+          return;
+        }
+        await upsertUserPlaceFromSamples({
+          userId,
+          label,
+          category: null,
+          categoryId,
+          samples,
+        });
+        setHasExistingPlaceLabel(true);
+        Alert.alert('Place labeled', `"${label}" has been saved. Future visits will auto-tag.`);
+      } catch (err) {
+        console.warn('[ActualAdjust] Failed to save place label:', err);
+        Alert.alert(
+          'Save failed',
+          err instanceof Error ? err.message : 'Could not save the place label. Please try again.',
+        );
+      } finally {
+        setIsSavingPlace(false);
+      }
+    },
+    [userId, selectedDateYmd, startMinutes, durationMinutes],
+  );
+
+  const placeLabelInfo = useMemo<PlaceLabelInfo | null>(() => {
+    if (!locationLabel) return null;
+    return {
+      locationLabel,
+      hasExistingLabel: hasExistingPlaceLabel,
+      isSavingPlace,
+    };
+  }, [locationLabel, hasExistingPlaceLabel, isSavingPlace]);
 
   const valuesOptions = useMemo(() => {
     const valueLabels = coreValues.filter((value) => value.isSelected).map((value) => value.label);
@@ -615,6 +691,8 @@ export default function ActualAdjustScreen() {
         activityCategories={activityCategories}
         selectedCategoryId={selectedCategoryId}
         onSelectActivityCategory={handleSelectActivityCategory}
+        placeLabelInfo={placeLabelInfo}
+        onSavePlaceLabel={handleSavePlaceLabel}
         onCancel={() => router.back()}
         onSave={handleSave}
         onSplit={() => {

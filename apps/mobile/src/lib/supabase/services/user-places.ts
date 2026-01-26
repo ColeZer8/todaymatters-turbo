@@ -13,6 +13,7 @@ interface UserPlaceRow {
   user_id: string;
   label: string;
   category: string | null;
+  category_id: string | null;
   radius_m: number;
 }
 
@@ -60,10 +61,36 @@ function computeCentroid(samples: LocationSampleRow[]): { latitude: number; long
   return { latitude: sumLat / sumWeight, longitude: sumLng / sumWeight };
 }
 
+const USER_PLACE_SELECT = 'id, user_id, label, category, category_id, radius_m';
+
+/**
+ * Fetch a user place by label (case-insensitive match via exact label).
+ * Returns null if no place with that label exists.
+ */
+export async function fetchUserPlaceByLabel(
+  userId: string,
+  label: string
+): Promise<UserPlaceRow | null> {
+  try {
+    const { data, error } = await tmSchema()
+      .from('user_places')
+      .select(USER_PLACE_SELECT)
+      .eq('user_id', userId)
+      .eq('label', label)
+      .maybeSingle();
+
+    if (error) throw handleSupabaseError(error);
+    return (data as UserPlaceRow) ?? null;
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
 export async function upsertUserPlaceFromSamples(input: {
   userId: string;
   label: string;
   category?: string | null;
+  categoryId?: string | null;
   radiusMeters?: number;
   samples: LocationSampleRow[];
 }): Promise<UserPlaceRow> {
@@ -80,7 +107,7 @@ export async function upsertUserPlaceFromSamples(input: {
   try {
     const existing = await tmSchema()
       .from('user_places')
-      .select('id, user_id, label, category, radius_m')
+      .select(USER_PLACE_SELECT)
       .eq('user_id', input.userId)
       .eq('label', input.label)
       .maybeSingle();
@@ -91,6 +118,7 @@ export async function upsertUserPlaceFromSamples(input: {
       user_id: input.userId,
       label: input.label,
       category: input.category ?? null,
+      category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? 150,
       center: centerGeoJson,
     };
@@ -100,7 +128,7 @@ export async function upsertUserPlaceFromSamples(input: {
         .from('user_places')
         .update(payload)
         .eq('id', existing.data.id)
-        .select('id, user_id, label, category, radius_m')
+        .select(USER_PLACE_SELECT)
         .single();
       if (error) throw handleSupabaseError(error);
       return data as UserPlaceRow;
@@ -109,7 +137,7 @@ export async function upsertUserPlaceFromSamples(input: {
     const { data, error } = await tmSchema()
       .from('user_places')
       .insert(payload)
-      .select('id, user_id, label, category, radius_m')
+      .select(USER_PLACE_SELECT)
       .single();
 
     if (error) throw handleSupabaseError(error);

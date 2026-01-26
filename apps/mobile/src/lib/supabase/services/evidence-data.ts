@@ -79,6 +79,7 @@ export interface UserPlaceRow {
   user_id: string;
   label: string;
   category: string | null;
+  category_id: string | null;
   radius_m: number;
 }
 
@@ -270,7 +271,7 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
   try {
     const { data, error } = await tmSchema()
       .from('user_places')
-      .select('id, user_id, label, category, radius_m')
+      .select('id, user_id, label, category, category_id, radius_m')
       .eq('user_id', userId)
       .order('label', { ascending: true });
 
