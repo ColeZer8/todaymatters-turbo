@@ -30,6 +30,8 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - User-defined places are in `tm.user_places` table (accessed via `UserPlaceRow` type in evidence-data.ts) — already fetched as `evidence.userPlaces` in `EvidenceBundle`. Use `resolveFromUserPlaces()` in actual-display-events.ts to match location labels to user-defined place names before falling back to generic `mapPlaceToCategory`.
 - Travel events between locations use `kind: 'travel'` and `category: 'travel'` — minimum gap is 5 min (under 5 min = not travel), maximum 90 min
 - When labeling unknown gaps as screen time or productive, require screen time to account for >50% of the block's duration — prevents mislabeling morning routines, church, etc.
+- Hierarchical activity categories live in `tm.activity_categories` (self-referencing parent_id). Types are `ActivityCategory`, `ActivityCategoryInsert`, `ActivityCategoryUpdate` exported from `services/activity-categories.ts`. Seed defaults via `tm.seed_default_activity_categories(user_id)`.
+- `public.update_updated_at_column()` is a shared trigger function — use it for all tables with `updated_at` columns
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -200,4 +202,33 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - When changing event kinds/categories for travel, also update the ID prefix to avoid collisions (e.g., `commute_` → `travel_`).
   - The pipeline has layered gap-filling: sleep → location → productive usage → transitions → prep/wind-down → patterns. Each layer only touches `category: 'unknown'` events. The >50% threshold in productive usage prevents over-labeling at that layer.
   - `EventCategory` already includes `'travel'` (line 14 of events-store.ts), but `CalendarEventMeta.kind` did not — always check both when adding a new activity type.
+---
+
+## 2026-01-26 - US-034
+- **What was implemented**: Created hierarchical activity categories database schema and TypeScript types. This replaces the flat `EventCategory` enum with a user-owned tree structure supporting Category → Subcategory → Sub-subcategory.
+- **Migration (`20260126_create_tm_activity_categories.sql`)**:
+  - Table `tm.activity_categories`: id (UUID PK), user_id (FK → auth.users), parent_id (nullable self-referencing FK → activity_categories, cascade delete), name, icon, color, sort_order, created_at, updated_at
+  - Unique constraint `(user_id, parent_id, name)` prevents duplicate categories at same hierarchy level
+  - Indexes on user_id, parent_id, and (user_id, parent_id, sort_order) for common query patterns
+  - `updated_at` trigger using existing `public.update_updated_at_column()` function
+  - RLS policies: select/insert/update/delete own rows (idempotent DO block pattern)
+  - `seed_default_activity_categories(p_user_id)` SQL function — creates 7 default top-level categories (Faith, Family, Work, Health, Personal Growth, Finances, Other) idempotently (skips if user already has categories)
+- **TypeScript types (`activity-categories.ts`)**:
+  - `ActivityCategory` = Row type from `Database['tm']['Tables']['activity_categories']`
+  - `ActivityCategoryInsert` = Insert type
+  - `ActivityCategoryUpdate` = Update type
+  - All derived from `database.types.ts` to stay in sync with schema
+- **database.types.ts updated**: Added `activity_categories` table definition to `tm.Tables` with Row/Insert/Update/Relationships, and `seed_default_activity_categories` to `tm.Functions`
+- **Exported from** `services/index.ts`
+- **Files changed**:
+  - `supabase/migrations/20260126_create_tm_activity_categories.sql` — New migration
+  - `apps/mobile/src/lib/supabase/database.types.ts` — Added activity_categories table type and seed function type
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — New service file with exported types
+  - `apps/mobile/src/lib/supabase/services/index.ts` — Added re-export
+- **Learnings for future iterations:**
+  - `public.update_updated_at_column()` is a shared trigger function already available in the database — use it for all tables with `updated_at` columns
+  - Self-referencing FKs with `ON DELETE CASCADE` handle subtree deletion automatically — deleting a parent category cascades to all children at all levels
+  - The unique constraint `(user_id, parent_id, name)` uses NULL for parent_id on top-level categories. PostgreSQL treats NULLs as distinct in unique constraints, so this works correctly: two users can both have a top-level "Work" category
+  - Seed functions using `SECURITY DEFINER` bypass RLS — necessary for server-side/admin seeding. The function is idempotent (checks for existing categories first).
+  - Database types are defined in `database.types.ts` following Row/Insert/Update pattern. Service files should derive types from this file using `Database['tm']['Tables']['table_name']` for type safety.
 ---

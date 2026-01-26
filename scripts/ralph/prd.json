@@ -152,8 +152,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "This is the schema only — CRUD service is US-035, UI is later"
+      "passes": true,
+      "notes": "COMPLETED — Created Supabase migration for tm.activity_categories table with self-referencing parent_id FK for hierarchical categories. Includes: unique constraint on (user_id, parent_id, name), RLS policies for select/insert/update/delete, updated_at trigger, sort_order for ordering. Added seed_default_activity_categories(p_user_id) SQL function that creates 7 default top-level categories (Faith, Family, Work, Health, Personal Growth, Finances, Other) idempotently. Added TypeScript types (ActivityCategory, ActivityCategoryInsert, ActivityCategoryUpdate) derived from Database['tm']['Tables']['activity_categories'] in database.types.ts. Exported from services/index.ts."
     },
     {
       "id": "US-035",
