@@ -13,6 +13,7 @@ import { classifyAppUsage, type AppCategoryOverrides } from './app-classificatio
 import { buildSleepQualityMetrics } from './sleep-analysis';
 import { buildDataQualityMetrics } from './data-quality';
 import { buildEvidenceFusion } from './evidence-fusion';
+import { getReadableAppName } from '@/lib/app-names';
 import {
   applyPatternSuggestions,
   buildPatternSummary,
@@ -44,7 +45,7 @@ function buildPipelineFingerprint(input: BuildActualDisplayEventsInput): string 
   // Evidence fingerprint — key counts and timestamps
   if (input.evidence) {
     const ev = input.evidence;
-    parts.push(`loc:${ev.locationHourly?.length ?? 0}|ls:${ev.locationSamples?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}`);
+    parts.push(`loc:${ev.locationHourly?.length ?? 0}|ls:${ev.locationSamples?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}|up:${ev.userPlaces?.length ?? 0}`);
   } else {
     parts.push('ev:null');
   }
@@ -100,7 +101,15 @@ interface LocationBlock {
   endMinutes: number;
   placeLabel: string;
   placeCategory: string | null;
+  placeId: string | null;
+  /** Average latitude of samples in this block (for haversine matching) */
+  avgLat: number | null;
+  /** Average longitude of samples in this block (for haversine matching) */
+  avgLng: number | null;
 }
+
+/** Default radius in meters for haversine-based place matching */
+const DEFAULT_PLACE_MATCH_RADIUS_METERS = 200;
 
 interface TransitionContext {
   locationBlocks: LocationBlock[];
@@ -801,9 +810,9 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
   const dayStart = ymdToDate(ymd);
   const sorted = [...rows].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
 
-  // Build a map of hour -> { firstSampleMinute, lastSampleMinute } from raw samples
-  // so we can refine hour boundaries to the actual first/last sample time.
-  const hourSampleBounds = new Map<number, { first: number; last: number }>();
+  // Build a map of hour -> { firstSampleMinute, lastSampleMinute, avgLat, avgLng } from raw samples
+  // so we can refine hour boundaries to the actual first/last sample time and compute avg coordinates.
+  const hourSampleBounds = new Map<number, { first: number; last: number; sumLat: number; sumLng: number; coordCount: number }>();
   if (samples && samples.length > 0) {
     for (const sample of samples) {
       const sampleTime = parseDbTimestamp(sample.recorded_at);
@@ -814,8 +823,19 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
       if (existing) {
         existing.first = Math.min(existing.first, sampleMinute);
         existing.last = Math.max(existing.last, sampleMinute);
+        if (sample.latitude != null && sample.longitude != null) {
+          existing.sumLat += sample.latitude;
+          existing.sumLng += sample.longitude;
+          existing.coordCount += 1;
+        }
       } else {
-        hourSampleBounds.set(hourKey, { first: sampleMinute, last: sampleMinute });
+        hourSampleBounds.set(hourKey, {
+          first: sampleMinute,
+          last: sampleMinute,
+          sumLat: sample.latitude ?? 0,
+          sumLng: sample.longitude ?? 0,
+          coordCount: (sample.latitude != null && sample.longitude != null) ? 1 : 0,
+        });
       }
     }
   }
@@ -829,6 +849,7 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
 
     const placeLabel = row.place_label || row.place_category || '';
     const placeCategory = row.place_category ?? null;
+    const placeId = row.place_id ?? null;
     const hourKey = Math.floor(hourStartMinutes / 60);
     const bounds = hourSampleBounds.get(hourKey);
 
@@ -837,6 +858,10 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
     // End is last sample minute + 1 (to cover the minute the sample occurred in),
     // but at most the full hour end boundary.
     const nextEnd = bounds ? Math.min(bounds.last + 1, hourStartMinutes + 60) : hourStartMinutes + 60;
+
+    // Compute average coordinates for this hour from raw samples
+    const hourAvgLat = bounds && bounds.coordCount > 0 ? bounds.sumLat / bounds.coordCount : null;
+    const hourAvgLng = bounds && bounds.coordCount > 0 ? bounds.sumLng / bounds.coordCount : null;
 
     if (nextEnd <= nextStart) continue;
 
@@ -847,6 +872,13 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
       nextStart - current.endMinutes <= 1
     ) {
       current.endMinutes = Math.max(current.endMinutes, nextEnd);
+      // Keep placeId from the first block that had one
+      if (!current.placeId && placeId) current.placeId = placeId;
+      // Keep first non-null coordinates
+      if (current.avgLat == null && hourAvgLat != null) {
+        current.avgLat = hourAvgLat;
+        current.avgLng = hourAvgLng;
+      }
       continue;
     }
 
@@ -855,6 +887,9 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
       endMinutes: nextEnd,
       placeLabel,
       placeCategory,
+      placeId,
+      avgLat: hourAvgLat,
+      avgLng: hourAvgLng,
     };
     blocks.push(current);
   }
@@ -1118,6 +1153,9 @@ function replaceUnknownWithLocationEvidence(
           duration,
           locationLabel: locationLabel || placeCategory || 'Unknown location',
           placeCategory,
+          placeId: block.placeId,
+          avgLat: block.avgLat,
+          avgLng: block.avgLng,
           context,
           uniqueId: unknownCounter++,
         }),
@@ -1383,11 +1421,25 @@ function buildLocationEvent(options: {
   duration: number;
   locationLabel: string;
   placeCategory: string | null;
+  placeId?: string | null;
+  avgLat?: number | null;
+  avgLng?: number | null;
   context: LocationReplacementContext;
   uniqueId: number;
 }): ScheduledEvent {
-  const { startMinutes, duration, locationLabel, placeCategory, context, uniqueId } = options;
-  const resolved = resolveLocationDetails(locationLabel, placeCategory, context.userPlaces);
+  const { startMinutes, duration, locationLabel, placeCategory, placeId, avgLat, avgLng, context, uniqueId } = options;
+
+  // Auto-tag from user place:
+  // 1. If placeId is set, the SQL view already matched geographically via PostGIS st_dwithin
+  // 2. If no placeId but we have coordinates, try haversine distance matching as fallback
+  let autoTaggedPlace = placeId ? findUserPlaceById(placeId, context.userPlaces) : null;
+  if (!autoTaggedPlace && avgLat != null && avgLng != null && context.userPlaces && context.userPlaces.length > 0) {
+    autoTaggedPlace = findNearestUserPlaceByHaversine(avgLat, avgLng, context.userPlaces);
+  }
+  const resolved = autoTaggedPlace
+    ? resolveFromAutoTaggedPlace(autoTaggedPlace, placeCategory)
+    : resolveLocationDetails(locationLabel, placeCategory, context.userPlaces);
+
   const screenTime = getScreenTimeOverlapInfo({
     ymd: context.ymd,
     startMinutes,
@@ -1400,17 +1452,23 @@ function buildLocationEvent(options: {
     base: resolved.description,
     screenTime,
   });
+
+  // Boost confidence for auto-tagged events (user label + geographic match = high confidence)
+  const isAutoTagged = !!autoTaggedPlace;
+  const confidence = isAutoTagged ? 0.85 : 0.45;
+
   const meta: CalendarEventMeta = {
     category: resolved.category,
     source: 'derived',
     kind: 'location_inferred',
-    confidence: 0.45,
+    confidence,
     dataQuality: context.dataQuality,
     evidence: {
       locationLabel,
       placeCategory,
       screenTimeMinutes: screenTime?.totalMinutes,
       topApp: screenTime?.topApp ?? null,
+      ...(isAutoTagged ? { autoTaggedFrom: autoTaggedPlace.label } : {}),
     },
   };
 
@@ -1424,6 +1482,78 @@ function buildLocationEvent(options: {
     category: resolved.category,
     meta,
   };
+}
+
+/**
+ * Find a user place by its ID from the user places array.
+ * Used when the location_hourly view has already matched a place geographically via PostGIS.
+ */
+function findUserPlaceById(placeId: string, userPlaces?: UserPlaceRow[]): UserPlaceRow | null {
+  if (!userPlaces || userPlaces.length === 0) return null;
+  return userPlaces.find((p) => p.id === placeId) ?? null;
+}
+
+/**
+ * Resolve title, description, and category from a geographically auto-tagged user place.
+ * User-defined label becomes the title. category_id-based category or place.category string
+ * is used for the EventCategory. Confidence is boosted externally.
+ */
+function resolveFromAutoTaggedPlace(
+  place: UserPlaceRow,
+  placeCategory: string | null,
+): { title: string; description: string; category: EventCategory } {
+  const category = place.category ? mapPlaceCategoryString(place.category) : 'free';
+  const description = placeCategory && formatPlaceLabel(placeCategory) !== place.label
+    ? formatPlaceLabel(placeCategory)
+    : '';
+  return { title: place.label, description, category };
+}
+
+/**
+ * Haversine distance between two lat/lng coordinates in meters.
+ * Used for client-side geographic matching with configurable radius.
+ */
+function haversineDistanceMeters(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number,
+): number {
+  const R = 6_371_000; // Earth's radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Find the nearest user place within its configured radius using haversine distance.
+ * Returns the closest matching place, or null if none are within radius.
+ * Each place uses its own radius_m; the DEFAULT_PLACE_MATCH_RADIUS_METERS is used
+ * as a maximum cap.
+ */
+function findNearestUserPlaceByHaversine(
+  lat: number,
+  lng: number,
+  userPlaces: UserPlaceRow[],
+): UserPlaceRow | null {
+  let bestPlace: UserPlaceRow | null = null;
+  let bestDistance = Infinity;
+
+  for (const place of userPlaces) {
+    if (place.latitude == null || place.longitude == null) continue;
+    const distance = haversineDistanceMeters(lat, lng, place.latitude, place.longitude);
+    const matchRadius = Math.min(place.radius_m || DEFAULT_PLACE_MATCH_RADIUS_METERS, DEFAULT_PLACE_MATCH_RADIUS_METERS);
+    if (distance <= matchRadius && distance < bestDistance) {
+      bestPlace = place;
+      bestDistance = distance;
+    }
+  }
+
+  return bestPlace;
 }
 
 /**
@@ -1582,7 +1712,7 @@ function buildSleepInterruptionSummaryFromSessions(
 
     intervals.push({ startMinutes: overlapStart, endMinutes: overlapEnd });
     const overlapMinutes = overlapEnd - overlapStart;
-    const appName = session.display_name || session.app_id;
+    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }
@@ -1660,7 +1790,7 @@ function buildScreenTimeOverlapFromSessions(
     const overlapEnd = Math.min(endMinutes, sessionEndMinutes);
     if (overlapEnd <= overlapStart) continue;
     const overlapMinutes = overlapEnd - overlapStart;
-    const appName = session.display_name || session.app_id;
+    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }
@@ -1880,7 +2010,11 @@ function deriveUsageSummaryBlocks(options: {
       const end = new Date(session.endIso);
       const startMinutes = dateToMinutes(start);
       const endMinutes = dateToMinutes(end);
-      const topApp = appIdToName.get(session.packageName) ?? session.packageName;
+      const topApp =
+        getReadableAppName({
+          appId: session.packageName,
+          displayName: appIdToName.get(session.packageName) ?? null,
+        }) ?? session.packageName;
 
       if (current && startMinutes - current.endMinutes <= SCREEN_TIME_GAP_MINUTES) {
         current.endMinutes = Math.max(current.endMinutes, endMinutes);
@@ -1932,7 +2066,8 @@ function deriveUsageSummaryBlocks(options: {
         const durationMinutes = Math.round(data.seconds / 60);
         const startMinutes = hour * 60;
         const endMinutes = startMinutes + durationMinutes;
-        const topApp = appIdToName.get(data.topApp) ?? data.topApp;
+        const topApp =
+          getReadableAppName({ appId: data.topApp, displayName: appIdToName.get(data.topApp) ?? null }) ?? data.topApp;
         return { startMinutes, endMinutes, topApp };
       })
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
@@ -1949,7 +2084,10 @@ function deriveUsageSummaryBlocks(options: {
   }
 
   if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
-    const topApp = usageSummary.topApps[0]?.displayName ?? 'Phone usage';
+    const first = usageSummary.topApps[0] ?? null;
+    const topApp =
+      getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null }) ??
+      'Phone usage';
     return usageSummary.hourlyBucketsSeconds
       .map((seconds, hour) => {
         const durationMinutes = Math.round(seconds / 60);
@@ -2213,7 +2351,11 @@ function getTopAppLabelForUsageInterval(options: {
       const sessionEnd = dateToMinutes(end);
       const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
       if (overlap <= 0) continue;
-      const appName = appIdToName.get(session.packageName) ?? session.packageName;
+      const appName =
+        getReadableAppName({
+          appId: session.packageName,
+          displayName: appIdToName.get(session.packageName) ?? null,
+        }) ?? session.packageName;
       usageByApp.set(appName, (usageByApp.get(appName) ?? 0) + overlap);
     }
   } else if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
@@ -2228,12 +2370,14 @@ function getTopAppLabelForUsageInterval(options: {
       for (const [appId, hours] of Object.entries(usageSummary.hourlyByApp)) {
         const seconds = hours[hour] ?? 0;
         if (seconds <= 0) continue;
-        const appName = appIdToName.get(appId) ?? appId;
+        const appName =
+          getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }) ?? appId;
         usageByApp.set(appName, (usageByApp.get(appName) ?? 0) + (seconds / 60) * fraction);
       }
     }
   } else if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
-    return usageSummary.topApps[0]?.displayName ?? null;
+    const first = usageSummary.topApps[0] ?? null;
+    return getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null });
   }
 
   if (usageByApp.size === 0) return null;
@@ -2274,7 +2418,11 @@ function getUsageOverlapInfo(
       const sessionEnd = dateToMinutes(end);
       const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
       if (overlap <= 0) continue;
-      const appName = appIdToName.get(session.packageName) ?? session.packageName;
+      const appName =
+        getReadableAppName({
+          appId: session.packageName,
+          displayName: appIdToName.get(session.packageName) ?? null,
+        }) ?? session.packageName;
       const current = appUsage.get(appName) ?? 0;
       appUsage.set(appName, current + overlap);
     }
@@ -2291,7 +2439,8 @@ function getUsageOverlapInfo(
       for (const [appId, hours] of Object.entries(usageSummary.hourlyByApp)) {
         const seconds = hours[hour] ?? 0;
         if (seconds <= 0) continue;
-        const appName = appIdToName.get(appId) ?? appId;
+        const appName =
+          getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }) ?? appId;
         const current = appUsage.get(appName) ?? 0;
         appUsage.set(appName, current + (seconds / 60) * fraction);
       }
@@ -2299,7 +2448,8 @@ function getUsageOverlapInfo(
   } else if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
-    const topApp = usageSummary.topApps[0]?.displayName ?? null;
+    const first = usageSummary.topApps[0] ?? null;
+    const topApp = getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null });
     let totalMinutes = 0;
     for (let hour = startHour; hour <= endHour; hour++) {
       const seconds = usageSummary.hourlyBucketsSeconds[hour] ?? 0;
@@ -2441,7 +2591,11 @@ function buildSleepSessionIntervals(options: {
     const overlapStart = Math.max(sleepStart, sessionStart);
     const overlapEnd = Math.min(sleepEnd, sessionEnd);
     if (overlapEnd <= overlapStart) continue;
-    const appName = appIdToName.get(session.packageName) ?? session.packageName;
+    const appName =
+      getReadableAppName({
+        appId: session.packageName,
+        displayName: appIdToName.get(session.packageName) ?? null,
+      }) ?? session.packageName;
     intervals.push({ startMinutes: overlapStart, endMinutes: overlapEnd, appName });
   }
 
@@ -2494,7 +2648,11 @@ function getTopAppForInterval(options: {
     const sessionEnd = dateToMinutes(end);
     const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
     if (overlap <= 0) continue;
-    const appName = appIdToName.get(session.packageName) ?? session.packageName;
+    const appName =
+      getReadableAppName({
+        appId: session.packageName,
+        displayName: appIdToName.get(session.packageName) ?? null,
+      }) ?? session.packageName;
     usageByApp.set(appName, (usageByApp.get(appName) ?? 0) + overlap);
   }
 

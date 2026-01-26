@@ -81,10 +81,14 @@ export interface UserPlaceRow {
   category: string | null;
   category_id: string | null;
   radius_m: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface EvidenceLocationSample {
   recorded_at: string; // timestamptz — precise timestamp
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface EvidenceBundle {
@@ -269,9 +273,10 @@ export async function fetchHealthDailyForDay(
  */
 export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
   try {
+    // Select lat/lng from center geography using PostGIS ST_Y/ST_X for haversine matching
     const { data, error } = await tmSchema()
       .from('user_places')
-      .select('id, user_id, label, category, category_id, radius_m')
+      .select('id, user_id, label, category, category_id, radius_m, center')
       .eq('user_id', userId)
       .order('label', { ascending: true });
 
@@ -281,13 +286,35 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
       }
       throw handleSupabaseError(error);
     }
-    return (data ?? []) as UserPlaceRow[];
+    // Extract lat/lng from center GeoJSON (PostGIS returns geography as GeoJSON)
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      user_id: row.user_id as string,
+      label: row.label as string,
+      category: (row.category as string) ?? null,
+      category_id: (row.category_id as string) ?? null,
+      radius_m: row.radius_m as number,
+      ...extractLatLngFromCenter(row.center),
+    }));
   } catch (error) {
     if (__DEV__) {
       console.warn('[Evidence] Failed to fetch user places:', error);
     }
     return [];
   }
+}
+
+/**
+ * Extract latitude/longitude from a PostGIS geography center field.
+ * PostGIS returns geography as GeoJSON: { type: "Point", coordinates: [lng, lat] }
+ */
+function extractLatLngFromCenter(center: unknown): { latitude: number | null; longitude: number | null } {
+  if (!center || typeof center !== 'object') return { latitude: null, longitude: null };
+  const geo = center as { type?: string; coordinates?: number[] };
+  if (geo.type === 'Point' && Array.isArray(geo.coordinates) && geo.coordinates.length >= 2) {
+    return { latitude: geo.coordinates[1], longitude: geo.coordinates[0] };
+  }
+  return { latitude: null, longitude: null };
 }
 
 /**
@@ -303,7 +330,7 @@ export async function fetchLocationSamplesForDay(
   try {
     const { data, error } = await tmSchema()
       .from('location_samples')
-      .select('recorded_at')
+      .select('recorded_at, latitude, longitude')
       .eq('user_id', userId)
       .gte('recorded_at', startIso)
       .lt('recorded_at', endIso)
@@ -315,8 +342,10 @@ export async function fetchLocationSamplesForDay(
       }
       throw handleSupabaseError(error);
     }
-    return (data ?? []).map((row: { recorded_at: string }) => ({
+    return (data ?? []).map((row: { recorded_at: string; latitude: number | null; longitude: number | null }) => ({
       recorded_at: row.recorded_at,
+      latitude: row.latitude ?? null,
+      longitude: row.longitude ?? null,
     }));
   } catch (error) {
     if (__DEV__) {

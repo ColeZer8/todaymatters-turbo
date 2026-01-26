@@ -58,6 +58,8 @@ export interface CalendarEventMeta {
   confidence?: number;
   evidence?: {
     locationLabel?: string | null;
+    placeCategory?: string | null;
+    autoTaggedFrom?: string;
     screenTimeMinutes?: number;
     topApp?: string | null;
     sleep?: {
