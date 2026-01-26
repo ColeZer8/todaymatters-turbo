@@ -817,6 +817,8 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
     if (fetchError) throw handleSupabaseError(fetchError);
 
     const existingSourceIds = new Set<string>();
+    // Track time ranges covered by user-edited events so we don't re-derive over them
+    const userEditedRanges: Array<{ start: number; end: number }> = [];
     if (existing) {
       for (const row of existing) {
         const meta = row.meta as Record<string, Json> | null;
@@ -828,6 +830,14 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
           const start = new Date(row.scheduled_start).getTime();
           const end = new Date(row.scheduled_end).getTime();
           existingSourceIds.add(`derived_${start}_${end}_${meta.kind}`);
+        }
+        // Track user-edited event time ranges to prevent re-derivation over them
+        if (meta?.source === 'actual_adjust' || meta?.source === 'user') {
+          const start = new Date(row.scheduled_start).getTime();
+          const end = new Date(row.scheduled_end).getTime();
+          if (!Number.isNaN(start) && !Number.isNaN(end)) {
+            userEditedRanges.push({ start, end });
+          }
         }
       }
     }
@@ -854,9 +864,19 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
       startDate.setHours(Math.floor(event.startMinutes / 60), event.startMinutes % 60, 0, 0);
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + event.duration);
-      
+
       const timeRangeKey = `derived_${startDate.getTime()}_${endDate.getTime()}_${event.meta?.kind ?? 'unknown'}`;
       if (existingSourceIds.has(timeRangeKey)) {
+        continue;
+      }
+
+      // Skip if a user-edited event already covers this time range (prevents re-deriving over user edits)
+      const derivedStartMs = startDate.getTime();
+      const derivedEndMs = endDate.getTime();
+      const overlapsUserEdit = userEditedRanges.some(
+        (range) => derivedStartMs < range.end && derivedEndMs > range.start
+      );
+      if (overlapsUserEdit) {
         continue;
       }
 

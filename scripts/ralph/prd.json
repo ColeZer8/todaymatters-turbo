@@ -69,8 +69,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "Key files: actual-adjust.tsx (save handler), calendar-events.ts (updateActual), events-store.ts (local state), use-calendar-events-sync.ts (sync)"
+      "passes": true,
+      "notes": "COMPLETED — Three fixes: (1) Added user-visible Alert on save failure in actual-adjust.tsx (was silently swallowing errors). (2) Added 'actual_adjust' to CalendarEventMeta source type union and used `as const` to fix TS type widening. (3) syncDerivedActualEvents now skips derived events that overlap user-edited events (source: 'actual_adjust' or 'user'), preventing re-derivation from overwriting user edits. Verified: store updates happen AFTER successful Supabase write, updateActual() returns mapped ScheduledEvent, source: 'actual_adjust' was already set in meta."
     },
     {
       "id": "US-030",

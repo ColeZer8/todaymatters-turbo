@@ -30,7 +30,7 @@ export interface CalendarEventMeta {
   note?: string | null;
   source_provider?: string | null;
   external_id?: string | null;
-  source?: 'user' | 'system' | 'evidence' | 'derived';
+  source?: 'user' | 'system' | 'evidence' | 'derived' | 'actual_adjust';
   plannedEventId?: string;
   kind?:
     | 'sleep_schedule'

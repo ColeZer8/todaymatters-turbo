@@ -13,7 +13,10 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - Android location code lives in `apps/mobile/src/lib/android-location/` — index.ts (start/stop/diagnostics), location-task.ts (background task handler), queue.ts (AsyncStorage sample buffer), register.ts (one-time task registration)
 - Android location background task uses expo-location + expo-task-manager; task must be defined at module scope per Expo docs
 - Location samples are buffered in AsyncStorage (key: `tm:location:pending:{userId}`) then flushed to Supabase via `flushPendingAndroidLocationSamplesToSupabaseAsync()`
-- Pre-existing TS errors exist in the codebase (42 total as of Jan 26 2026) — do not block on these; verify your changes don't add new ones
+- Pre-existing TS errors exist in the codebase (39 total as of Jan 26 2026) — do not block on these; verify your changes don't add new ones
+- Event save flow: `actual-adjust.tsx` → `useCalendarEventsSync().createActual()/updateActual()` → `calendar-events.ts` Supabase write → store update. Store updates happen AFTER successful write (no optimistic updates).
+- Events with `meta.source: 'actual_adjust'` or `'user'` are protected from: (1) sleep overlap removal in `actual-display-events.ts`, (2) overlap resolution (highest priority), (3) re-derivation in `syncDerivedActualEvents` (time-range overlap check).
+- When adding new `CalendarEventMeta.source` values, update the union type in `events-store.ts` and use `as const` on the literal in object literals to prevent TypeScript widening.
 - `startAndroidBackgroundLocationAsync()` returns `StartAndroidLocationResult` (typed ok/fail union) — callers should check `.ok` and `.reason`
 - `isAndroidBackgroundLocationRunningAsync()` is a lightweight health check for the background task — use it to verify the task is alive without triggering a start
 - The sync hook (`use-location-samples-sync.ts`) now has a 5-min health check that auto-restarts the background task with retry backoff (max 3 attempts, reset on foreground)
@@ -86,4 +89,31 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - When `totalSeconds` is computed from sessions, the existing fallback `if (hourlyBuckets.sum() == 0L && totalSeconds > 0L)` then fires correctly to rebuild hourly buckets from stats. However, if both aggregate stats AND hourly buckets are empty, the hourly data comes from session-based `hourlyByApp` which is already populated by `buildUsageHourlyBucketsSeconds`.
   - The iOS and Android screen time data have different type shapes (`ScreenTimeSummary` vs `UsageSummary`, `appSessions` vs `sessions`, `bundleIdentifier` vs `packageName`). The sync functions need to handle these independently.
   - `screen_time_app_sessions` is queried by `evidence-data.ts::fetchScreenTimeSessionsForDay()` for the evidence pipeline — if sessions aren't persisted, the entire evidence-based screen time detection is blind on Android.
+---
+
+## 2026-01-26 - US-029
+- **What was implemented**: Fixed event edit persistence — diagnosed and fixed three issues causing edits to appear to "revert" after saving.
+- **Root cause analysis**: The save flow in `actual-adjust.tsx` was architecturally correct (store updates happen only after successful Supabase write), but had three issues:
+  1. **Silent failure on save error**: The outer catch block (line 462) only logged in `__DEV__` mode and showed NO user-facing error. If Supabase write failed, the user got no feedback and `router.back()` was never called — but since the store wasn't updated either, navigating back showed old data, making it look like the edit "reverted."
+  2. **TypeScript type mismatch**: `source: 'actual_adjust'` was set in the meta object, but `CalendarEventMeta.source` only allowed `'user' | 'system' | 'evidence' | 'derived'`. The literal was widened to `string` at runtime (accepted as JSON), but TypeScript flagged it as an error.
+  3. **Re-derivation overwrite risk**: When a user edits a derived event (ID like `derived_actual:xxx`), `actual-adjust.tsx` creates a NEW event via `createActual()` with a fresh UUID. But `syncDerivedActualEvents` could re-create the original derived event on the next sync cycle if the time range/kind didn't exactly match (e.g., user changed the time).
+- **Fixes applied**:
+  - `actual-adjust.tsx`: Added `Alert.alert('Save failed', ...)` in the outer catch block (always shown, not just `__DEV__`). Changed `source: 'actual_adjust'` to `source: 'actual_adjust' as const` to fix TypeScript type widening.
+  - `events-store.ts`: Added `'actual_adjust'` to the `CalendarEventMeta.source` union type.
+  - `calendar-events.ts` (`syncDerivedActualEvents`): Added tracking of user-edited event time ranges (`source: 'actual_adjust'` or `source: 'user'`), and added an overlap check that skips derived event insertion if it overlaps any user-edited event.
+- **Verified correct existing behavior**:
+  - `updateActual()` in `calendar-events.ts` correctly calls Supabase `.update().eq('id', eventId).select('*').single()` and returns the mapped `ScheduledEvent`.
+  - Store updates (`updateActualEvent`/`addActualEvent`) happen only AFTER the `await createActual()` / `await updateActual()` calls succeed.
+  - `buildActualDisplayEvents` in `actual-display-events.ts` already protects events with `source: 'actual_adjust'` — they are skipped during sleep overlap removal and given highest priority in overlap resolution sorting.
+  - `source: 'actual_adjust'` was already being set in meta (line 387), so the acceptance criteria for adding it was already met.
+- **Files changed**:
+  - `apps/mobile/src/app/actual-adjust.tsx` — Added user-visible Alert on save failure, added `as const` for source literal
+  - `apps/mobile/src/stores/events-store.ts` — Added `'actual_adjust'` to CalendarEventMeta.source type union
+  - `apps/mobile/src/lib/supabase/services/calendar-events.ts` — `syncDerivedActualEvents` now tracks user-edited event time ranges and skips derived events that overlap them
+- **Learnings for future iterations:**
+  - The save flow correctly uses await-then-store pattern (no optimistic updates). Edits persist because: (1) `await createActual()`/`updateActual()` writes to Supabase, (2) the returned ScheduledEvent is then stored locally via `addActualEvent()`/`updateActualEvent()`. If step 1 fails, step 2 never runs.
+  - `CalendarEventMeta.source` type must include all source values used in the codebase. When adding a new source, update the union in `events-store.ts`.
+  - TypeScript widens string literals in object literals. Use `as const` on the literal value to keep narrow types, rather than annotating the entire object.
+  - `syncDerivedActualEvents` can re-create derived events that a user has already edited if the overlap check isn't robust. The fix adds time-range overlap checking against `source: 'actual_adjust'` and `source: 'user'` events.
+  - The `shouldCreate` check in actual-adjust.tsx (lines 410-413) creates new events for derived IDs. This is correct — derived events are ephemeral display IDs; the user edit creates a permanent Supabase record.
 ---

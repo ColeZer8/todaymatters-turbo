@@ -384,7 +384,7 @@ export default function ActualAdjustScreen() {
       const meta = {
         category: finalCategory,
         isBig3,
-        source: 'actual_adjust',
+        source: 'actual_adjust' as const,
         actual: true,
         tags: ['actual'],
         value_label: selectedValue ?? null,
@@ -460,9 +460,13 @@ export default function ActualAdjustScreen() {
 
       router.back();
     } catch (error) {
-      if (__DEV__) {
-        console.warn('[ActualAdjust] Save failed:', error);
-      }
+      console.warn('[ActualAdjust] Save failed:', error);
+      Alert.alert(
+        'Save failed',
+        error instanceof Error
+          ? error.message
+          : 'Your edits could not be saved. Please try again.',
+      );
     } finally {
       setIsSaving(false);
     }
