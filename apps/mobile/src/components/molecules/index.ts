@@ -30,3 +30,5 @@ export { ProfileAddInput } from './ProfileAddInput';
 export { DatePickerPopup } from './DatePickerPopup';
 export { TimeSplitControl } from './TimeSplitControl';
 export { EventEditorModal } from './EventEditorModal';
+export { HierarchicalCategoryPicker } from './HierarchicalCategoryPicker';
+export type { CategoryPath, HierarchicalCategoryPickerProps } from './HierarchicalCategoryPicker';
