@@ -284,3 +284,21 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - The `buildCategoryTree()` function is pure and memoization-safe — wrap in `useMemo` with `[categories]` dep.
   - When filtering a tree by search query, collect matching IDs + all ancestor IDs, then recursively prune the tree. Auto-expand all nodes during search for best UX.
 ---
+
+## 2026-01-26 - US-037
+- **What was implemented**: Integrated the HierarchicalCategoryPicker into the event editor (actual-adjust screen). Users can now select hierarchical activity categories when editing events, with the selected category_id persisted alongside the existing flat EventCategory enum.
+- **Changes made**:
+  - `events-store.ts`: Added `category_id?: string | null` to `CalendarEventMeta` type
+  - `ActualAdjustTemplate.tsx`: Added imports for `ActivityCategory`, `HierarchicalCategoryPicker`, and `CategoryPath`. Added 3 new optional props: `activityCategories`, `selectedCategoryId`, `onSelectActivityCategory`. Template conditionally renders `HierarchicalCategoryPicker` when categories are loaded; falls back to flat `LIFE_AREA_OPTIONS` pills when no categories exist.
+  - `actual-adjust.tsx`: Added imports for `fetchActivityCategories`, `ActivityCategory`, and `CategoryPath`. Added `activityCategories` and `selectedCategoryId` state. Added `useEffect` to fetch categories on mount (with cleanup). Added `handleSelectActivityCategory` callback. Added `category_id: selectedCategoryId` to meta in `handleSave`. Added `selectedCategoryId` to handleSave dep array. Passes new props to `ActualAdjustTemplate`.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `category_id` to CalendarEventMeta
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — Conditional hierarchical picker rendering
+  - `apps/mobile/src/app/actual-adjust.tsx` — Category loading, state, and persistence
+- **Learnings for future iterations:**
+  - `ActualAdjustTemplate` is a pure presentation component — all data fetching and state management belongs in the screen (`actual-adjust.tsx`). The template receives data via props.
+  - `CalendarEventMeta` is serialized as JSON in Supabase's `meta` JSONB column. Adding new optional fields is backward-compatible — old events without `category_id` will have it as `undefined`, and the `?? null` pattern handles this.
+  - The `fetchActivityCategories` call is non-blocking — if it fails (e.g., user has no categories yet), the UI gracefully falls back to the flat LIFE_AREA_OPTIONS pills.
+  - The existing flat `category` enum (`EventCategory`) is preserved alongside `category_id` for backward compatibility. The pipeline, overlap checks, and other consumers still use the enum. The `category_id` provides a more granular hierarchical classification.
+  - Manual browser verification is needed to confirm the picker renders correctly in the event editor.
+---

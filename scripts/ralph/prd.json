@@ -203,8 +203,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "Depends on US-036 picker component"
+      "passes": true,
+      "notes": "COMPLETED — Integrated HierarchicalCategoryPicker into event editor. Added category_id to CalendarEventMeta type. ActualAdjustTemplate conditionally renders hierarchical picker when activityCategories are loaded (falls back to flat LIFE_AREA_OPTIONS when no categories exist). actual-adjust.tsx fetches user categories via fetchActivityCategories on mount, tracks selectedCategoryId state, and includes category_id in meta on save. The existing EventCategory enum is preserved alongside category_id for backward compatibility."
     },
     {
       "id": "US-038",
