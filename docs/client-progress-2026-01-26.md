@@ -1,56 +1,56 @@
 # Today Matters — Client Progress Update (2026-01-26)
 
 ## Executive Summary
-Today’s work delivered a **major end-to-end upgrade** across the app’s “Actual” experience: **hierarchical categories**, the new **“Big 3” daily priorities** feature (database → onboarding → event editor → home progress), and **place labeling + auto-tagging** improvements. In parallel, I closed several high-impact reliability issues in the evidence pipeline, event editing, and Android data collection.
+Today was a big, high-leverage shipping day. I delivered a **major end-to-end upgrade** across the app’s “Actual” experience—introducing **hierarchical categories**, rolling out the new **“Big 3” daily priorities** feature (database → onboarding → event editor → home progress), and substantially improving **place labeling + auto-tagging**. In parallel, I closed multiple reliability issues across the evidence pipeline, event editing, and Android data collection so the core experience is **more accurate, more stable, and more trustable**.
 
 ## Highlights (Client-Facing)
-- **Big 3 Daily Priorities (new feature, end-to-end)**: Added database schema + services, onboarding opt-in, event assignment, and a home-screen progress card so users can plan and track their day.
-- **Big 3 UX polish (quality-of-life)**: Upgraded the Big 3 input experience with a **reusable modal** and added Big 3 editing directly inside **Add Event**, so users can keep priorities up-to-date while logging activity.
-- **Hierarchical Categories (foundation + UI integration)**: Replaced the prior flat category approach with a scalable **Category → Subcategory tree**, added CRUD services, and shipped a **hierarchical picker** integrated into onboarding and the event editor.
-- **Place Labeling (UX + management + smarter automation)**: Users can now label places directly from the event editor, manage labels in settings, and the evidence pipeline can use those labels for better auto-tagging.
-- **Stability wins across the “Actual” pipeline**: Fixed several issues that were causing incorrect event durations/times, re-processing loops, and edit persistence failures.
-- **Screen time quality improvements**: Fixed the “0 min session duration” bug and improved app name rendering for screen time insights.
+- **Big 3 Daily Priorities (new feature, fully integrated)**: Shipped the complete Big 3 system—secure schema + services, onboarding opt-in, event-level assignment, and home-screen progress—so users can **plan their day and see momentum build**.
+- **Big 3 UX polish (premium feel)**: Upgraded Big 3 editing with a **reusable modal** and surfaced it directly in **Add Event**, making it effortless for users to keep priorities current while logging real life.
+- **Hierarchical Categories (strong foundation + great UX)**: Replaced the old flat categories with a scalable **Category → Subcategory** hierarchy, added CRUD + defaults, and delivered a **hierarchical picker** wired into onboarding and the event editor.
+- **Place Labeling (more personal + smarter automation)**: Users can label places in the moment, manage labels cleanly in Settings, and the evidence pipeline now uses those labels to deliver **better auto-tagging and cleaner timelines**.
+- **Reliability upgrades (trust-building fixes)**: Eliminated root causes behind incorrect durations/times, re-processing loops, and save failures—making the “Actual” pipeline **consistently dependable**.
+- **Screen time improvements (polish + correctness)**: Fixed the **0-minute** session bug and improved app-name readability so insights look **clean and credible**.
 
 ## What Shipped Today (Grouped by Area)
 ### 1) Big 3 Daily Priorities
-- **Database**: Added `tm.daily_big3` table (one record per user/day), plus `big3_enabled` preference on `tm.user_data_preferences`.
+- **Database**: Added `tm.daily_big3` (one record per user/day) and a `big3_enabled` preference on `tm.user_data_preferences`—built with secure access controls so each user only sees their own data.
 - **App**:
-  - Added **Big 3 opt-in** during setup flow.
-  - Added **Big 3 assignment** inside the event editor (so events can be tied to priorities).
-  - Added **Big 3 progress** to the home screen via a dedicated progress card.
+  - Added a **Big 3 opt-in** step during setup.
+  - Enabled **Big 3 assignment** inside the event editor (so the day’s priorities can be tied to real activity).
+  - Added a dedicated **home-screen progress card** to make Big 3 feel alive and trackable.
 - **Add Event integration (new)**:
-  - Users can **view/edit today’s Big 3** directly inside the Add Event flow (when Big 3 is enabled), so priorities stay current while logging activity.
+  - Users can **view/edit today’s Big 3** directly inside Add Event (when enabled), so priorities stay current without an extra “admin” step.
 - **UX upgrade (new)**:
-  - Introduced a **Big 3 input modal** and reused it across key flows (Add Event + event adjustment) to make editing faster and more consistent.
-- **Services/State**: Implemented a dedicated Supabase service for Big 3 and wired it through existing preference flows.
+  - Introduced a polished **Big 3 input modal** reused across key flows (Add Event + event adjustment) for faster edits and consistent behavior.
+- **Services/State**: Implemented a dedicated Supabase service for Big 3 and connected it cleanly to preferences/state so the feature behaves predictably everywhere.
 
 ### 2) Hierarchical Activity Categories
-- **Database**: Added `tm.activity_categories` with parent-child relationships + RLS policies + a default seeding function.
+- **Database**: Added `tm.activity_categories` with parent-child relationships, secure access controls, and an idempotent default seeding function.
 - **App**:
-  - Built a **Hierarchical Category Picker** component.
-  - Updated the **Core Categories** setup screen to support the new hierarchy.
-  - Integrated the picker into the **event editor** so events can be categorized using the new system.
-- **Services**: Shipped CRUD services for activity categories and connected them to the setup/editor flows.
+  - Built a high-quality **Hierarchical Category Picker** component.
+  - Updated the **Core Categories** setup experience to support the new hierarchy.
+  - Integrated the picker into the **event editor** so categorizing is fast and consistent.
+- **Services**: Shipped CRUD services for activity categories and wired them into the setup/editor flows for a complete loop.
 
 ### 3) Place Labeling & Place-Based Auto-Tagging
-- **Event Editor**: Added a clear **“Label This Place”** action while editing events.
-- **Settings**: Added a **Place Labels Management** screen so users can view/edit place labels cleanly.
+- **Event Editor**: Added an intuitive **“Label This Place”** action while editing events.
+- **Settings**: Added a dedicated **Place Labels Management** screen so labels stay organized as usage grows.
 - **Pipeline**:
-  - Updated the evidence pipeline to **use place labels** when deriving/assigning actual events.
-  - Added `category_id` to `tm.user_places` so a labeled place can be linked directly to the hierarchical category system.
+  - Updated the evidence pipeline to **use place labels** when deriving/assigning actual events for more accurate categorization.
+  - Added `category_id` to `tm.user_places` so labeled places connect directly into the hierarchical category system.
 
 ### 4) Evidence Pipeline & Calendar Reliability Fixes
-- Fixed an **evidence pipeline re-processing loop** that could cause repeated/incorrect recalculation behavior.
-- Improved **event time accuracy** by auditing and fixing rounding behavior.
-- Prevented incorrect inference: **don’t label something as Screen Time unless evidence supports it**.
-- Added **travel segment detection** to improve event/evidence interpretation for movement periods.
-- Made **unknown events editable** to reduce “dead ends” during review and correction.
-- Fixed **event edit persistence** issues (diagnosed + resolved save failures).
+- Fixed an **evidence pipeline re-processing loop** that could trigger repeated/incorrect recalculation.
+- Improved **event time accuracy** by auditing and correcting rounding behavior.
+- Tightened inference rules: **no Screen Time labeling unless evidence supports it**.
+- Added **travel segment detection** to better interpret movement periods in the timeline.
+- Made **unknown events editable** to reduce dead-ends and speed up corrections.
+- Fixed **event edit persistence** (diagnosed root cause and resolved save failures).
 
 ### 5) Android & Screen Time Improvements
-- Investigated and improved handling around Android location background collection (including `canStart` failure investigation and follow-up fixes).
-- Fixed Screen Time sessions showing **0-minute durations**.
-- Improved screen time display by integrating a **readable app-name formatter** across screen time flows.
+- Investigated and improved Android background location collection (including `canStart` failure investigation and follow-up fixes).
+- Fixed Screen Time sessions incorrectly showing **0-minute durations**.
+- Improved screen time display quality by integrating a **readable app-name formatter** across the screen time experience.
 
 ## Concrete Deliverables (Technical Summary)
 ### Database / Supabase Migrations Added
@@ -66,18 +66,18 @@ Today’s work delivered a **major end-to-end upgrade** across the app’s “Ac
   - Big 3 opt-in flow (`big3-opt-in`)
   - Place labels management (`settings/place-labels`)
 - **New UI components**:
-  - `Big3InputModal` (modal editor for Big 3 priorities; reused across flows)
+  - `Big3InputModal` (modal editor for Big 3 priorities; reused across flows for consistency)
   - `HierarchicalCategoryPicker` (category tree picker)
   - `Big3ProgressCard` (home progress visualization)
   - `MultiSplitControl` (supporting improved screen time splitting UX)
 
 ## Process & Documentation
-- Updated internal PRD and progress tracking artifacts as each user story landed, keeping a consistent audit trail of shipped work and completion status.
+- Updated internal PRD and progress tracking as each user story landed, keeping a clean audit trail of decisions, shipped scope, and completion status.
 
 ## Next Steps (Suggested)
-- **QA pass**: Validate Big 3 flows (opt-in → create/edit priorities → event assignment → home progress) on iOS + Android.
-- **Migration roll-out**: Apply the new Supabase migrations in the target environment and verify RLS policies behave as expected for authenticated users.
-- **Polish**: Tighten UX copy and edge-case handling (empty-state, category seeding, and place label management flows) based on stakeholder review.
+- **QA pass**: Validate the full Big 3 journey (opt-in → create/edit → event assignment → home progress) on iOS + Android.
+- **Migration roll-out**: Apply new Supabase migrations and verify access controls behave correctly for authenticated users.
+- **Final polish**: Tighten microcopy and edge-cases (empty states, seeding, and label management) based on stakeholder review.
 
 ## Reference (Today’s Completed Work Items)
 Commits landed today cover: **US-026 → US-046** plus follow-up polish on Big 3 (Add Event integration + modal-based editing), including both feature work and reliability fixes across onboarding, event editing, settings, Supabase services, and the evidence pipeline.

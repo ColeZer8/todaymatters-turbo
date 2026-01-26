@@ -11,6 +11,9 @@ const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
 
 const LAST_AUTHED_USER_ID_KEY = 'tm:lastAuthedUserId';
+const LAST_TASK_FIRED_AT_KEY = 'tm:androidLocation:lastTaskFiredAt';
+const LAST_TASK_QUEUED_COUNT_KEY = 'tm:androidLocation:lastTaskQueuedCount';
+const LAST_TASK_ERROR_KEY = 'tm:androidLocation:lastTaskError';
 
 type RawLocationObject = {
   timestamp: number;
@@ -86,11 +89,16 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
   const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
   TaskManager.defineTask(ANDROID_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
     try {
+      const firedAtIso = new Date().toISOString();
+      AsyncStorage.setItem(LAST_TASK_FIRED_AT_KEY, firedAtIso).catch(() => undefined);
       if (__DEV__) {
-        console.log(`📍 [task] Background location task fired at ${new Date().toISOString()}`);
+        console.log(`📍 [task] Background location task fired at ${firedAtIso}`);
       }
 
       if (error) {
+        AsyncStorage.setItem(LAST_TASK_ERROR_KEY, JSON.stringify({ at: firedAtIso, error: String(error) })).catch(
+          () => undefined
+        );
         const now = Date.now();
         if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
           lastTaskErrorLogAtMs = now;
@@ -120,11 +128,17 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
       }
       if (samples.length === 0) return;
       const { pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
+      AsyncStorage.setItem(LAST_TASK_QUEUED_COUNT_KEY, String(samples.length)).catch(() => undefined);
+      AsyncStorage.removeItem(LAST_TASK_ERROR_KEY).catch(() => undefined);
 
       if (__DEV__) {
         console.log(`📍 [task] Queued ${samples.length} Android location samples (pending=${pendingCount})`);
       }
     } catch (e) {
+      AsyncStorage.setItem(
+        LAST_TASK_ERROR_KEY,
+        JSON.stringify({ at: new Date().toISOString(), error: e instanceof Error ? e.message : String(e) })
+      ).catch(() => undefined);
       console.error('📍 [task] Android background location task failed:', e);
     }
   });
