@@ -304,8 +304,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "tm.location_mappings table already exists from US-018/US-022. May need schema update to add category_id."
+      "passes": true,
+      "notes": "COMPLETED — The PRD referenced tm.location_mappings but the actual table is tm.user_places (created in US-018 migration). Added category_id column via migration. Updated user-places.ts service with fetchUserPlaceByLabel() and category_id support in upsertUserPlaceFromSamples(). Added PlaceLabelSection to ActualAdjustTemplate: shows 'Label this place' or 'Edit place label' button when event has locationLabel in meta, expands to inline form with place name input (pre-filled) and HierarchicalCategoryPicker. actual-adjust.tsx: checks existing place label on mount via fetchUserPlaceByLabel, fetches location samples for the event time range, upserts via upsertUserPlaceFromSamples with category_id. Updated UserPlaceRow in evidence-data.ts to include category_id."
     },
     {
       "id": "US-044",

@@ -40,6 +40,8 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - Daily Big 3 priorities live in `tm.daily_big3` (unique on user_id + date). Types: `DailyBig3`, `DailyBig3Insert`, `DailyBig3Update` from `services/daily-big3.ts`. CRUD: `fetchBig3ForDate`, `upsertBig3ForDate`, `deleteBig3ForDate`.
 - `big3_enabled` boolean is a column on `tm.user_data_preferences`, exposed as `big3Enabled` in `UserDataPreferences` interface (default: false). Read/write via `fetchUserDataPreferences` / `upsertUserDataPreferences`.
 - `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses manual `UserPreferencesRow` interface. When adding new columns, update: (1) migration, (2) `UserPreferencesRow`, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()`, (5) fetch select clause, (6) upsert payload.
+- `tm.location_mappings` does NOT exist — the actual table is `tm.user_places`. The PRD references location_mappings but all place label functionality uses user_places. Service is `user-places.ts`, types are `UserPlaceRow` (defined in both `user-places.ts` and `evidence-data.ts` — keep in sync).
+- `upsertUserPlaceFromSamples()` needs raw location samples with lat/lng — use `fetchLocationSamplesForRange()` from `user-places.ts` to get samples for an event's time range.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -427,4 +429,43 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - When computing Big 3 progress, only check `meta.big3_priority` (1, 2, or 3) — the `isBig3` boolean is a separate flag that doesn't indicate which priority.
   - The fire-and-forget upsert pattern (update local state immediately, persist async) is used across the app for Big 3 interactions. The local `setBig3Data` call creates a temporary object with `id: 'pending'` that gets replaced by the Supabase-returned row.
   - Manual browser verification is needed to confirm the Big 3 progress card renders correctly on the home screen.
+---
+
+## 2026-01-26 - US-043
+- **What was implemented**: Added "Label this place" / "Edit place label" inline form to the event editor (actual-adjust) so users can label locations from evidence and have future visits auto-tag correctly.
+- **Key discovery**: The PRD referenced `tm.location_mappings` but this table does not exist. The actual table is `tm.user_places` (created in the `20260112_create_tm_location_samples.sql` migration). The `user-places.ts` service had `upsertUserPlaceFromSamples()` already — it takes location samples, computes a centroid, and upserts a `user_places` row with PostGIS `center` geography.
+- **Migration**: Added `category_id` column (FK → `tm.activity_categories`, ON DELETE SET NULL) to `tm.user_places` via `20260126_add_category_id_to_user_places.sql`.
+- **Service changes** (`user-places.ts`):
+  - Added `category_id` to `UserPlaceRow` interface
+  - Added `fetchUserPlaceByLabel(userId, label)` — fetches existing place by exact label match (used to determine "Label" vs "Edit" button text)
+  - Added `categoryId` parameter to `upsertUserPlaceFromSamples()` input and payload
+  - Extracted `USER_PLACE_SELECT` constant for consistent select clauses
+- **Evidence-data changes** (`evidence-data.ts`):
+  - Added `category_id` to exported `UserPlaceRow` interface
+  - Updated `fetchUserPlaces()` select clause to include `category_id`
+- **Template changes** (`ActualAdjustTemplate.tsx`):
+  - Added `PlaceLabelInfo` interface (locationLabel, hasExistingLabel, isSavingPlace)
+  - Added `PlaceLabelSection` internal component: collapsed state shows location name + "Label this place" or "Edit place label" button; expanded state shows place name TextInput (pre-filled with locationLabel), HierarchicalCategoryPicker for category selection, and Save/Cancel buttons
+  - Added `placeLabelInfo` and `onSavePlaceLabel` props to `ActualAdjustTemplateProps`
+  - Renders `PlaceLabelSection` between Big3Section and LIFE AREA section
+- **Screen changes** (`actual-adjust.tsx`):
+  - Added imports for `fetchUserPlaceByLabel`, `fetchLocationSamplesForRange`, `upsertUserPlaceFromSamples`
+  - Added `hasExistingPlaceLabel` and `isSavingPlace` state
+  - Added `useEffect` to check if the event's `locationLabel` already has a user-defined place label
+  - Added `handleSavePlaceLabel` callback: fetches location samples for the event's time range, calls `upsertUserPlaceFromSamples` with label + categoryId, shows success/failure Alert
+  - Added `placeLabelInfo` memo (null when no locationLabel in evidence)
+  - Passes `placeLabelInfo` and `handleSavePlaceLabel` to template
+- **Files changed**:
+  - `supabase/migrations/20260126_add_category_id_to_user_places.sql` — New migration
+  - `apps/mobile/src/lib/supabase/services/user-places.ts` — category_id support, fetchUserPlaceByLabel
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — category_id in UserPlaceRow
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — PlaceLabelSection component
+  - `apps/mobile/src/app/actual-adjust.tsx` — Place labeling state, handlers, and props
+- **Learnings for future iterations:**
+  - `tm.location_mappings` does NOT exist — the PRD references it but the actual table is `tm.user_places`. Always verify table names against migrations, not PRD notes.
+  - `upsertUserPlaceFromSamples()` requires raw location samples (lat/lng/accuracy_m) to compute a centroid. The event meta does NOT store coordinates — you must fetch samples via `fetchLocationSamplesForRange()` using the event's time range.
+  - The `UserPlaceRow` type is defined in TWO places: `user-places.ts` (service) and `evidence-data.ts` (evidence bundle). Both must be updated when adding fields.
+  - `fetchUserPlaceByLabel()` does exact label match — case-sensitive. Future work may want case-insensitive matching.
+  - The PlaceLabelSection uses the same `HierarchicalCategoryPicker` as the LIFE AREA section — both need `activityCategories` loaded. Since actual-adjust.tsx already loads categories, the place label section reuses them.
+  - Manual browser verification is needed to confirm the place label section renders correctly in the event editor.
 ---
