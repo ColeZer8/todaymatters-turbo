@@ -131,6 +131,9 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
                 });
                 const summary: UsageSummary | null = await getUsageSummarySafeAsync('today');
                 if (summary) {
+                  console.log(
+                    `[insights-sync] Android usage: totalSeconds=${summary.totalSeconds} topApps=${summary.topApps.length} sessions=${summary.sessions?.length ?? 0} hourlyByAppKeys=${summary.hourlyByApp ? Object.keys(summary.hourlyByApp).length : 0}`
+                  );
                   await syncAndroidUsageSummary(userId, summary, timezone);
                 }
               }

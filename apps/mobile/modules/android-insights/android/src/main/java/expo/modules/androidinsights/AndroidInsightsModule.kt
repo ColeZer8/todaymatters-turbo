@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
@@ -132,7 +133,7 @@ class AndroidInsightsModule : Module() {
     val stats: List<UsageStats> = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startMs, endMs) ?: emptyList()
 
     val pm = reactContext.packageManager
-    val appArray = JSONArray()
+    var appArray = JSONArray()
 
     val byPackage = stats
       .filter { it.totalTimeInForeground > 0 }
@@ -167,6 +168,22 @@ class AndroidInsightsModule : Module() {
     val hourlyByApp = mutableMapOf<String, LongArray>()
     val sessions = JSONArray()
     var hourlyBuckets = buildUsageHourlyBucketsSeconds(usageStatsManager, startMs, endMs, hourlyByApp, sessions)
+
+    // When queryUsageStats aggregate returns 0 (common on Android — stats aren't
+    // aggregated until end-of-day on many OEMs), fall back to summing session durations
+    // from queryEvents which works in real-time.
+    if (totalSeconds == 0L && sessions.length() > 0) {
+      var sessionTotal = 0L
+      for (i in 0 until sessions.length()) {
+        sessionTotal += sessions.getJSONObject(i).optLong("durationSeconds", 0L)
+      }
+      if (sessionTotal > 0L) {
+        totalSeconds = sessionTotal
+        // Also rebuild topApps from session data since aggregate stats were empty
+        appArray = buildTopAppsFromSessions(sessions, pm)
+      }
+    }
+
     if (hourlyBuckets.sum() == 0L && totalSeconds > 0L) {
       hourlyBuckets = buildUsageHourlyBucketsFromStats(byPackage.values.toList())
       if (hourlyByApp.isEmpty()) {
@@ -191,6 +208,8 @@ class AndroidInsightsModule : Module() {
         hourlyByAppJson.put(packageName, hourJson)
       }
     }
+
+    Log.d("AndroidInsights", "[usage] range=$range aggregateApps=${byPackage.size} totalSeconds=$totalSeconds sessions=${sessions.length()} hourlyBucketsSum=${hourlyBuckets.sum()} hourlyByAppKeys=${hourlyByApp.size}")
 
     val out = JSONObject()
     out.put("generatedAtIso", isoNow())
@@ -312,6 +331,34 @@ class AndroidInsightsModule : Module() {
       val buckets = hourlyByApp.getOrPut(u.packageName) { LongArray(24) { 0L } }
       buckets[hour] += seconds
     }
+  }
+
+  private fun buildTopAppsFromSessions(sessions: JSONArray, pm: android.content.pm.PackageManager): JSONArray {
+    val appDurations = mutableMapOf<String, Long>()
+    for (i in 0 until sessions.length()) {
+      val session = sessions.getJSONObject(i)
+      val pkg = session.optString("packageName", "")
+      val dur = session.optLong("durationSeconds", 0L)
+      if (pkg.isNotEmpty() && dur > 0L) {
+        appDurations[pkg] = (appDurations[pkg] ?: 0L) + dur
+      }
+    }
+    val sorted = appDurations.entries.sortedByDescending { it.value }.take(10)
+    val result = JSONArray()
+    for (entry in sorted) {
+      val label = try {
+        val appInfo = pm.getApplicationInfo(entry.key, 0)
+        pm.getApplicationLabel(appInfo)?.toString() ?: entry.key
+      } catch (_: Throwable) {
+        entry.key
+      }
+      val obj = JSONObject()
+      obj.put("packageName", entry.key)
+      obj.put("displayName", label)
+      obj.put("durationSeconds", entry.value)
+      result.put(obj)
+    }
+    return result
   }
 
   private fun addIntervalToBuckets(startMs: Long, endMs: Long, buckets: LongArray) {

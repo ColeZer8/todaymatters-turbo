@@ -290,7 +290,48 @@ export async function syncAndroidUsageSummary(
   );
   await replaceAppDaily(dailyId, appDailyRows);
 
-  await replaceAppSessions(dailyId, []);
+  // Persist Android sessions to screen_time_app_sessions
+  const appIdToName = new Map(summary.topApps.map((app) => [app.packageName, app.displayName]));
+  const sessionRows: ScreenTimeAppSessionInsert[] = (summary.sessions ?? [])
+    .filter((s) => s.durationSeconds > 0)
+    .map((session) => ({
+      screen_time_daily_id: dailyId,
+      user_id: userId,
+      local_date: localDate,
+      app_id: session.packageName,
+      display_name: appIdToName.get(session.packageName) ?? null,
+      started_at: session.startIso,
+      ended_at: session.endIso,
+      duration_seconds: session.durationSeconds,
+      pickups: null,
+      meta: { timezone } as Json,
+    }));
+  await replaceAppSessions(dailyId, sessionRows);
+
+  // Persist Android hourlyByApp data to screen_time_app_hourly
+  const hourlyByApp = summary.hourlyByApp ?? null;
+  if (hourlyByApp && Object.keys(hourlyByApp).length > 0) {
+    const hourlyRows: ScreenTimeAppHourlyInsert[] = [];
+    for (const [appId, hourMap] of Object.entries(hourlyByApp)) {
+      for (const [hourKey, seconds] of Object.entries(hourMap)) {
+        const hour = Number(hourKey);
+        if (!Number.isFinite(hour) || hour < 0 || hour > 23) continue;
+        if (!seconds || seconds <= 0) continue;
+        hourlyRows.push({
+          screen_time_daily_id: dailyId,
+          user_id: userId,
+          local_date: localDate,
+          hour,
+          app_id: appId,
+          display_name: appIdToName.get(appId) ?? null,
+          duration_seconds: seconds,
+          pickups: null,
+          meta: { timezone } as Json,
+        });
+      }
+    }
+    await replaceAppHourly(dailyId, hourlyRows);
+  }
 
   await upsertDataSyncState({
     userId,
