@@ -35,8 +35,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Depends on US-026 investigation findings"
+      "passes": true,
+      "notes": "COMPLETED — US-026 fixed the canStart logic bug (root cause). US-027 added: typed result from startAndroidBackgroundLocationAsync with production logging on every failure path, try/catch around native startLocationUpdatesAsync, isAndroidBackgroundLocationRunningAsync health check helper, periodic 5-min health check in sync hook with auto-restart, foreground-resume restart, retry backoff (max 3 attempts). Location samples flow: background task → AsyncStorage queue → flush every 2min → Supabase tm.location_samples → SQL view tm.location_hourly (auto-aggregated). SparseLocationFallback is not an actual code construct — it's a conceptual PRD term. The actual fallback behavior is handled correctly by the evidence pipeline which checks for presence of location data."
     },
     {
       "id": "US-028",

@@ -14,6 +14,11 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - Android location background task uses expo-location + expo-task-manager; task must be defined at module scope per Expo docs
 - Location samples are buffered in AsyncStorage (key: `tm:location:pending:{userId}`) then flushed to Supabase via `flushPendingAndroidLocationSamplesToSupabaseAsync()`
 - Pre-existing TS errors exist in the codebase (42 total as of Jan 26 2026) — do not block on these; verify your changes don't add new ones
+- `startAndroidBackgroundLocationAsync()` returns `StartAndroidLocationResult` (typed ok/fail union) — callers should check `.ok` and `.reason`
+- `isAndroidBackgroundLocationRunningAsync()` is a lightweight health check for the background task — use it to verify the task is alive without triggering a start
+- The sync hook (`use-location-samples-sync.ts`) now has a 5-min health check that auto-restarts the background task with retry backoff (max 3 attempts, reset on foreground)
+- `SparseLocationFallback` and `EvidenceAvailability` are PRD conceptual terms — they do not exist as code identifiers in the codebase
+- Location data flow: background task → AsyncStorage queue → flush every 2min → `tm.location_samples` → SQL view `tm.location_hourly` (auto-aggregated by PostGIS)
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -38,4 +43,27 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - Location task fires asynchronously by the Android system — adding timestamp logging is critical to verify it actually fires.
   - `peekPendingAndroidLocationSamplesAsync` with limit=1000 missed samples beyond that; changed to MAX_PENDING_SAMPLES_PER_USER (10000) for accurate diagnostics.
   - Pre-existing TS errors: `PermissionStatus` type mismatch at lines 46/98 — string literal `'denied'` doesn't match enum. Not blocking; don't fix in unrelated stories.
+---
+
+## 2026-01-26 - US-027
+- **What was implemented**: Fixed Android location background collection by adding robust start result reporting, production logging, error handling, and automatic health-check/restart mechanism.
+- **Changes to `apps/mobile/src/lib/android-location/index.ts`**:
+  - Changed `startAndroidBackgroundLocationAsync()` return type from `Promise<void>` to `Promise<StartAndroidLocationResult>` — a discriminated union with `ok: true/false` and specific `reason` strings
+  - Added `console.log` on every early-return path (support, module, services, fg permission, bg permission) — these are NOT gated behind `__DEV__` so they appear in production logs
+  - Wrapped `Location.startLocationUpdatesAsync()` in try/catch to handle native module failures gracefully, returning `{ ok: false, reason: 'start_failed', detail }` instead of throwing
+  - Added `isAndroidBackgroundLocationRunningAsync()` — lightweight check of whether the background task is running, used by the health check
+- **Changes to `apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts`**:
+  - Updated auth-change start handler to use the typed result, logging failures with reason and detail
+  - Added new `useEffect` for Android health check: runs every 5 minutes and on app foreground
+  - Health check calls `isAndroidBackgroundLocationRunningAsync()`, and if task is stopped, attempts `startAndroidBackgroundLocationAsync()`
+  - Retry backoff: max 3 consecutive restart attempts (via `retryAttemptsRef`), then backs off until next foreground event when the counter resets
+- **Files changed**:
+  - `apps/mobile/src/lib/android-location/index.ts` — New result type, production logging, error handling, health check helper
+  - `apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts` — Health check effect, retry backoff, typed result handling
+- **Learnings for future iterations:**
+  - `SparseLocationFallback`, `EvidenceAvailability`, and `EvidenceFusion` are PRD conceptual terms that do not exist as code identifiers. Don't search for them in code.
+  - `tm.location_hourly` is a SQL view (not a table) — it auto-aggregates from `tm.location_samples` using PostGIS. No ETL or sync job needed.
+  - The sync hook already had two AppState listeners (flush + health check). Each needs its own cleanup. Keep effects separate rather than combining to avoid complexity.
+  - When using TypeScript discriminated unions with optional properties (`detail` only on the error variant), access via `'detail' in result ? result.detail : undefined` to satisfy the compiler.
+  - The existing codebase uses `void functionCall()` for fire-and-forget async calls — this pattern still works when the return type changes from `void` to a result type, since `void` discards the value.
 ---
