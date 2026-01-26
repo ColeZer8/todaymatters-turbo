@@ -321,8 +321,8 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": "Depends on US-043 for label data. Uses existing location_mappings loaded in comprehensive-calendar.tsx (US-022)."
+      "passes": true,
+      "notes": "COMPLETED — Two-tier auto-tagging: (1) Primary: location_hourly SQL view matches user_places via PostGIS st_dwithin, populating place_id in LocationHourlyRow. buildLocationBlocks carries place_id through to LocationBlock. buildLocationEvent uses findUserPlaceById() to look up the matched user place and resolve title/category/description via resolveFromAutoTaggedPlace(). (2) Fallback: when no place_id from SQL view, uses haversine distance matching via findNearestUserPlaceByHaversine() with avg lat/lng from raw location samples. DEFAULT_PLACE_MATCH_RADIUS_METERS = 200m. Auto-tagged events get confidence 0.85 (vs 0.45 for generic), and evidence.autoTaggedFrom = place.label in metadata. UserPlaceRow updated with latitude/longitude (extracted from PostGIS center geography). EvidenceLocationSample updated with lat/lng. Pipeline fingerprint includes userPlaces count for cache invalidation."
     },
     {
       "id": "US-045",

@@ -42,6 +42,8 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses manual `UserPreferencesRow` interface. When adding new columns, update: (1) migration, (2) `UserPreferencesRow`, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()`, (5) fetch select clause, (6) upsert payload.
 - `tm.location_mappings` does NOT exist — the actual table is `tm.user_places`. The PRD references location_mappings but all place label functionality uses user_places. Service is `user-places.ts`, types are `UserPlaceRow` (defined in both `user-places.ts` and `evidence-data.ts` — keep in sync).
 - `upsertUserPlaceFromSamples()` needs raw location samples with lat/lng — use `fetchLocationSamplesForRange()` from `user-places.ts` to get samples for an event's time range.
+- Auto-tagging from user places uses two-tier matching: (1) `place_id` from `location_hourly` SQL view (PostGIS st_dwithin), (2) haversine distance fallback using `EvidenceLocationSample` lat/lng and `UserPlaceRow` lat/lng. `findUserPlaceById()` for SQL matches, `findNearestUserPlaceByHaversine()` for client-side. Auto-tagged events get confidence 0.85 and `evidence.autoTaggedFrom` metadata.
+- PostGIS geography columns are returned as GeoJSON by Supabase (`{ type: "Point", coordinates: [lng, lat] }`). Use `extractLatLngFromCenter()` in evidence-data.ts to parse.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -468,4 +470,36 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - `fetchUserPlaceByLabel()` does exact label match — case-sensitive. Future work may want case-insensitive matching.
   - The PlaceLabelSection uses the same `HierarchicalCategoryPicker` as the LIFE AREA section — both need `activityCategories` loaded. Since actual-adjust.tsx already loads categories, the place label section reuses them.
   - Manual browser verification is needed to confirm the place label section renders correctly in the event editor.
+---
+
+## 2026-01-26 - US-044
+- **What was implemented**: Place auto-tagging — labeled user places now auto-populate event title and category when the evidence pipeline builds location events. Two-tier matching: SQL-view-based (PostGIS `st_dwithin`) and client-side haversine distance fallback.
+- **Two-tier auto-tagging architecture**:
+  1. **Primary (SQL view)**: The `location_hourly` view already joins with `user_places` via PostGIS `st_dwithin(center, centroid, radius_m)`. When matched, the view populates `place_id`, `place_label`, `place_category` in `LocationHourlyRow`. `buildLocationBlocks` now carries `place_id` through to `LocationBlock`. `buildLocationEvent` uses `findUserPlaceById()` to look up the matched user place from the `EvidenceBundle.userPlaces` array and resolves title/category/description via `resolveFromAutoTaggedPlace()`.
+  2. **Fallback (Haversine)**: When no `place_id` is available from the SQL view (e.g., user labeled a place after the hourly view was last refreshed), `findNearestUserPlaceByHaversine()` computes haversine distance between the block's average lat/lng and each user place's center coordinates. Matches within `DEFAULT_PLACE_MATCH_RADIUS_METERS` (200m) or the place's own `radius_m` (whichever is smaller).
+- **Auto-tag metadata and confidence**:
+  - Auto-tagged events get `confidence: 0.85` (vs 0.45 for generic location-inferred events)
+  - Evidence metadata includes `autoTaggedFrom: 'Place Name'` for auto-tagged events
+  - `placeCategory` added to evidence metadata for all location events
+- **Data pipeline changes**:
+  - `EvidenceLocationSample` now includes `latitude` and `longitude` (fetched from `location_samples`)
+  - `UserPlaceRow` (in evidence-data.ts) now includes `latitude` and `longitude` (extracted from PostGIS `center` geography via GeoJSON parsing in `extractLatLngFromCenter()`)
+  - `LocationBlock` includes `placeId`, `avgLat`, `avgLng` for geographic matching
+  - Pipeline fingerprint now includes `userPlaces` count (`up:N`) for cache invalidation when places change
+- **New functions added** to `actual-display-events.ts`:
+  - `findUserPlaceById(placeId, userPlaces)` — lookup by ID (for SQL view matches)
+  - `resolveFromAutoTaggedPlace(place, placeCategory)` — resolve title/description/category from matched place
+  - `haversineDistanceMeters(lat1, lng1, lat2, lng2)` — Haversine formula distance calculation
+  - `findNearestUserPlaceByHaversine(lat, lng, userPlaces)` — find closest user place within radius
+- **Files changed**:
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — LocationBlock type, buildLocationBlocks (placeId + avgLat/avgLng), buildLocationEvent (auto-tag logic), new helper functions, pipeline fingerprint
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — EvidenceLocationSample lat/lng, UserPlaceRow lat/lng, fetchLocationSamplesForDay (selects lat/lng), fetchUserPlaces (extracts lat/lng from center geography), extractLatLngFromCenter helper
+  - `apps/mobile/src/stores/events-store.ts` — Added `placeCategory` and `autoTaggedFrom` to CalendarEventMeta.evidence type
+- **Learnings for future iterations:**
+  - The `location_hourly` SQL view already does PostGIS geographic matching with `user_places` via `st_dwithin`. No need to implement separate location matching — just use the `place_id` from the view.
+  - PostGIS returns geography fields as GeoJSON (`{ type: "Point", coordinates: [lng, lat] }`). Extract lat/lng with `coordinates[1]` (lat) and `coordinates[0]` (lng).
+  - The Supabase client returns geography columns as JSON objects — no need for raw SQL. Just select the column and parse the GeoJSON structure.
+  - `UserPlaceRow` is defined in both `evidence-data.ts` and `user-places.ts`. The evidence-data.ts version is used by the pipeline and now includes lat/lng; the user-places.ts version is a local interface used only for CRUD and does not need lat/lng.
+  - Haversine distance is a client-side fallback for cases where the SQL view hasn't re-matched (e.g., recently labeled places). The SQL view match via `place_id` is the primary and more reliable path.
+  - `DEFAULT_PLACE_MATCH_RADIUS_METERS = 200` is the configurable cap. Each user place also has its own `radius_m` (default 150m). The haversine matching uses `Math.min(place.radius_m, DEFAULT_PLACE_MATCH_RADIUS_METERS)`.
 ---
