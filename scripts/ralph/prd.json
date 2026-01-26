@@ -169,8 +169,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Depends on US-034 schema"
+      "passes": true,
+      "notes": "COMPLETED — Created CRUD service in activity-categories.ts with: fetchActivityCategories (flat list, ordered by sort_order), fetchTopLevelCategories (parent_id is null), fetchSubcategories(parentId), createActivityCategory, updateActivityCategory, deleteActivityCategory (blocks if children exist with error message). Added buildCategoryTree() helper that converts flat list to nested ActivityCategoryNode[] tree. Added ActivityCategoryNode interface extending ActivityCategory with children array. Uses tmSchema() helper pattern for tm schema access. Already exported from services/index.ts (from US-034)."
     },
     {
       "id": "US-036",

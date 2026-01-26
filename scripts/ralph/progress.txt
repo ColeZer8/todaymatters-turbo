@@ -232,3 +232,27 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - Seed functions using `SECURITY DEFINER` bypass RLS — necessary for server-side/admin seeding. The function is idempotent (checks for existing categories first).
   - Database types are defined in `database.types.ts` following Row/Insert/Update pattern. Service files should derive types from this file using `Database['tm']['Tables']['table_name']` for type safety.
 ---
+
+## 2026-01-26 - US-035
+- **What was implemented**: Created Supabase CRUD service for hierarchical activity categories with all required functions and a tree builder helper.
+- **Functions implemented**:
+  - `fetchActivityCategories(userId)` — returns flat list of all categories, ordered by sort_order
+  - `fetchTopLevelCategories(userId)` — returns only root categories (parent_id is null)
+  - `fetchSubcategories(userId, parentId)` — returns direct children of a parent
+  - `createActivityCategory(input)` — inserts a new category, returns the created row
+  - `updateActivityCategory(categoryId, updates)` — updates a category, returns the updated row
+  - `deleteActivityCategory(categoryId)` — deletes a category; blocks with error if children exist
+  - `buildCategoryTree(categories)` — converts flat ActivityCategory[] to nested ActivityCategoryNode[] tree
+- **Types added**: `ActivityCategoryNode` interface extending `ActivityCategory` with `children: ActivityCategoryNode[]`
+- **Design decisions**:
+  - Delete blocks (not cascades) when children exist — chosen per AC "block with error message". The SQL schema has ON DELETE CASCADE, but the service layer adds a pre-check for safety, giving callers a clear error message rather than silently cascading
+  - Uses `tmSchema()` helper (consistent with evidence-data.ts and screen-time-sync.ts patterns)
+  - `buildCategoryTree()` handles orphans (parent_id refers to a category not in the input list) by promoting them to root level
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — Added CRUD functions, tree builder, and ActivityCategoryNode type (file already existed with types from US-034)
+- **Learnings for future iterations:**
+  - The file was already created in US-034 with types only. US-035 added the actual CRUD functions and tree builder to the same file.
+  - `services/index.ts` re-export was already in place from US-034 — no changes needed there.
+  - The `tmSchema()` helper pattern is used across multiple service files to work with the `tm` schema. Each file defines its own local copy since it returns `any` to bypass Supabase client generics.
+  - `buildCategoryTree()` is a pure function (no Supabase calls) — it can be used in React components or anywhere without async concerns.
+---
