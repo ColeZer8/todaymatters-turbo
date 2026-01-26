@@ -21,6 +21,50 @@ import {
 export const DERIVED_ACTUAL_PREFIX = 'derived_actual:';
 export const DERIVED_EVIDENCE_PREFIX = 'derived_evidence:';
 
+// ============================================================================
+// Input fingerprinting cache — prevents redundant pipeline runs when
+// buildActualDisplayEvents is called multiple times with the same inputs.
+// ============================================================================
+
+let _lastPipelineFingerprint: string | null = null;
+let _lastPipelineResult: ScheduledEvent[] = [];
+
+function buildPipelineFingerprint(input: BuildActualDisplayEventsInput): string {
+  const parts: string[] = [input.ymd];
+  // Planned events: id + time
+  parts.push(input.plannedEvents.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(','));
+  // Actual events: id + time + meta source
+  parts.push(input.actualEvents.map((e) => `${e.id}:${e.startMinutes}:${e.duration}:${e.meta?.source ?? ''}`).join(','));
+  // Derived actual events
+  parts.push(input.derivedActualEvents?.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(',') ?? '');
+  // Actual blocks
+  parts.push((input.actualBlocks ?? []).map((b) => `${b.source}:${b.startMinutes}:${b.endMinutes}`).join(','));
+  // Evidence fingerprint — key counts and timestamps
+  if (input.evidence) {
+    const ev = input.evidence;
+    parts.push(`loc:${ev.locationHourly?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}`);
+  } else {
+    parts.push('ev:null');
+  }
+  // Verification results
+  if (input.verificationResults) {
+    const entries: string[] = [];
+    input.verificationResults.forEach((v, k) => entries.push(`${k}:${v.status}`));
+    parts.push(entries.join(','));
+  }
+  // Usage summary
+  if (input.usageSummary) {
+    parts.push(`usage:${input.usageSummary.totalSeconds ?? 0}:${input.usageSummary.sessions?.length ?? 0}`);
+  }
+  // Pattern index presence
+  parts.push(`pat:${input.patternIndex ? 'y' : 'n'}`);
+  // App overrides count
+  parts.push(`ov:${input.appCategoryOverrides ? Object.keys(input.appCategoryOverrides).length : 0}`);
+  // Preferences
+  parts.push(`${input.gapFillingPreference ?? 'conservative'}|${input.confidenceThreshold ?? 0.6}|${input.allowAutoSuggestions ?? true}`);
+  return parts.join('|');
+}
+
 const MIN_EVIDENCE_BLOCK_MINUTES = 10;
 const DISTRACTION_THRESHOLD_MINUTES = 10;
 const SCREEN_TIME_GAP_MINUTES = 15;
@@ -110,6 +154,16 @@ export function buildActualDisplayEvents({
   confidenceThreshold = 0.6,
   allowAutoSuggestions = true,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
+  // Check fingerprint cache — skip full pipeline if inputs are unchanged
+  const fingerprint = buildPipelineFingerprint({
+    ymd, plannedEvents, actualEvents, derivedActualEvents, actualBlocks,
+    verificationResults, evidence, usageSummary, patternIndex,
+    appCategoryOverrides, gapFillingPreference, confidenceThreshold, allowAutoSuggestions,
+  });
+  if (fingerprint === _lastPipelineFingerprint && _lastPipelineResult.length > 0) {
+    return _lastPipelineResult;
+  }
+
   const todayYmd = (() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -430,7 +484,13 @@ export function buildActualDisplayEvents({
   // This guarantees there's always something in the "actual" column
   const withGapsFilled = fillUnknownGaps(deduplicated);
 
-  return withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
+  const result = withGapsFilled.sort((a, b) => a.startMinutes - b.startMinutes);
+
+  // Cache the result for fingerprint-based deduplication
+  _lastPipelineFingerprint = fingerprint;
+  _lastPipelineResult = result;
+
+  return result;
 }
 
 /**

@@ -88,6 +88,30 @@ export function useVerification(
 
   // Track last fetched to prevent duplicate requests
   const lastFetched = useRef<{ ymd: string; userId: string } | null>(null);
+  // Track last re-verification inputs to prevent redundant computation
+  const lastVerificationInputs = useRef<string | null>(null);
+
+  // Stable refs for values only needed inside refresh to avoid re-creating the callback
+  const appCategoryOverridesRef = useRef(appCategoryOverrides);
+  appCategoryOverridesRef.current = appCategoryOverrides;
+  const plannedEventsRef = useRef(plannedEvents);
+  plannedEventsRef.current = plannedEvents;
+  const verificationStrictnessRef = useRef(verificationStrictness);
+  verificationStrictnessRef.current = verificationStrictness;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  /**
+   * Build a fingerprint for re-verification inputs to skip redundant computation.
+   */
+  const buildVerificationFingerprint = useCallback(
+    (events: ScheduledEvent[], overrides: AppCategoryOverrides | undefined, strictness: VerificationStrictness | undefined, date: string): string => {
+      const eventPart = events.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(',');
+      const overrideKeys = overrides ? Object.keys(overrides).sort().join(',') : '';
+      return `${date}|${strictness ?? ''}|${overrideKeys}|${eventPart}`;
+    },
+    []
+  );
 
   /**
    * Fetch evidence and run verification.
@@ -107,21 +131,27 @@ export function useVerification(
       const bundle = await fetchAllEvidenceForDay(userId, ymd);
       setEvidence(bundle);
 
-      // Run verification
-      const thresholds = getVerificationThresholds(verificationStrictness);
-      const results = verifyPlannedEvents(plannedEvents, bundle, ymd, appCategoryOverrides, thresholds);
+      // Run verification using current ref values
+      const currentOverrides = appCategoryOverridesRef.current;
+      const currentPlanned = plannedEventsRef.current;
+      const currentStrictness = verificationStrictnessRef.current;
+
+      const thresholds = getVerificationThresholds(currentStrictness);
+      const results = verifyPlannedEvents(currentPlanned, bundle, ymd, currentOverrides, thresholds);
       setVerificationResults(results);
 
       // Generate actual blocks
-      const blocks = generateActualBlocks(bundle, ymd, plannedEvents, appCategoryOverrides);
+      const blocks = generateActualBlocks(bundle, ymd, currentPlanned, currentOverrides);
       setActualBlocks(blocks);
 
       lastFetched.current = { ymd, userId };
+      // Mark re-verification as up-to-date so the effect below skips
+      lastVerificationInputs.current = buildVerificationFingerprint(currentPlanned, currentOverrides, currentStrictness, ymd);
     } catch (err) {
       const typedError =
         err instanceof Error ? err : new Error('Failed to fetch evidence');
       setError(typedError);
-      onError?.(typedError);
+      onErrorRef.current?.(typedError);
 
       if (__DEV__) {
         console.error('[Verification] Failed:', err);
@@ -129,7 +159,7 @@ export function useVerification(
     } finally {
       setIsLoading(false);
     }
-  }, [appCategoryOverrides, isAuthenticated, userId, ymd, plannedEvents, onError, verificationStrictness]);
+  }, [isAuthenticated, userId, ymd, buildVerificationFingerprint]);
 
   // Auto-fetch when date or user changes
   useEffect(() => {
@@ -147,9 +177,14 @@ export function useVerification(
     }
   }, [autoFetch, isAuthenticated, userId, ymd, refresh]);
 
-  // Re-run verification when planned events change (but don't refetch evidence)
+  // Re-run verification when planned events or overrides change (but don't refetch evidence)
   useEffect(() => {
     if (!evidence) return;
+
+    // Skip if inputs haven't changed since last verification (prevents double-run after refresh)
+    const fingerprint = buildVerificationFingerprint(plannedEvents, appCategoryOverrides, verificationStrictness, ymd);
+    if (fingerprint === lastVerificationInputs.current) return;
+    lastVerificationInputs.current = fingerprint;
 
     const thresholds = getVerificationThresholds(verificationStrictness);
     const results = verifyPlannedEvents(plannedEvents, evidence, ymd, appCategoryOverrides, thresholds);
@@ -157,7 +192,7 @@ export function useVerification(
 
     const blocks = generateActualBlocks(evidence, ymd, plannedEvents, appCategoryOverrides);
     setActualBlocks(blocks);
-  }, [appCategoryOverrides, evidence, plannedEvents, verificationStrictness, ymd]);
+  }, [appCategoryOverrides, buildVerificationFingerprint, evidence, plannedEvents, verificationStrictness, ymd]);
 
   /**
    * Get verification result for a specific event.

@@ -101,8 +101,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Likely caused by useEffect dependency arrays triggering re-renders, or polling intervals re-calling the pipeline"
+      "passes": true,
+      "notes": "COMPLETED — Three root causes fixed: (1) useMemo dependency array in comprehensive-calendar.tsx included entire userPreferences object instead of individual primitive fields, causing recalculation on any unrelated preference store mutation. (2) useVerification hook ran verifyPlannedEvents+generateActualBlocks twice: once in refresh() and again in re-verification effect when evidence changed. Fixed by adding fingerprint tracking (lastVerificationInputs ref) so re-verification effect skips when inputs match what refresh() already computed. (3) refresh callback had appCategoryOverrides, plannedEvents, verificationStrictness in deps, causing identity changes that cascaded to auto-fetch effect. Fixed by using stable refs for these values inside the callback, reducing deps to [isAuthenticated, userId, ymd]. Added module-level fingerprint cache to buildActualDisplayEvents as last-line defense — returns cached result when inputs are identical."
     },
     {
       "id": "US-032",

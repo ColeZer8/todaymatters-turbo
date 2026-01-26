@@ -488,6 +488,10 @@ export default function ComprehensiveCalendarScreen() {
   }, [router, selectedDateYmd]);
 
   // Combine Supabase actual events with verified/derived actual blocks
+  const gapFillingPreference = userPreferences.gapFillingPreference;
+  const confidenceThreshold = userPreferences.confidenceThreshold;
+  const allowAutoSuggestions = userPreferences.autoSuggestEvents;
+
   const combinedActualEvents = useMemo(() => {
     return buildActualDisplayEvents({
       ymd: selectedDateYmd,
@@ -500,9 +504,9 @@ export default function ComprehensiveCalendarScreen() {
       usageSummary,
       patternIndex,
       appCategoryOverrides,
-      gapFillingPreference: userPreferences.gapFillingPreference,
-      confidenceThreshold: userPreferences.confidenceThreshold,
-      allowAutoSuggestions: userPreferences.autoSuggestEvents,
+      gapFillingPreference,
+      confidenceThreshold,
+      allowAutoSuggestions,
     });
   }, [
     actualBlocks,
@@ -513,7 +517,9 @@ export default function ComprehensiveCalendarScreen() {
     plannedEvents,
     patternIndex,
     selectedDateYmd,
-    userPreferences,
+    gapFillingPreference,
+    confidenceThreshold,
+    allowAutoSuggestions,
     usageSummary,
     verificationResults,
   ]);

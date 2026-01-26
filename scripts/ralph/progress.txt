@@ -24,6 +24,9 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - Location data flow: background task → AsyncStorage queue → flush every 2min → `tm.location_samples` → SQL view `tm.location_hourly` (auto-aggregated by PostGIS)
 - The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx is a narrowed subset of `ScheduledEvent` — if you need `meta`, you must add it to this local type
 - To detect "unknown gap" events, always check `meta.kind === 'unknown_gap'` (not just `category === 'unknown'`), because `buildProductiveUnknownEvent` creates events with `category: 'work'` + `kind: 'unknown_gap'`
+- Never put entire Zustand store selector objects in useMemo/useCallback dependency arrays — destructure to individual primitive values to avoid spurious recalculations
+- `buildActualDisplayEvents` has a module-level fingerprint cache — it returns cached results when inputs are identical (no need to add external memoization)
+- `useVerification.refresh()` uses refs for `appCategoryOverrides`, `plannedEvents`, `verificationStrictness`, `onError` to keep a stable callback identity (only depends on `isAuthenticated`, `userId`, `ymd`)
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -139,4 +142,22 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - `buildProductiveUnknownEvent` creates events with `category: 'work'` but `kind: 'unknown_gap'` — always check `meta.kind` when determining if an event is an "unknown gap", not just `category`.
   - Unknown_gap events should always route to actual-adjust for full editing (title, time, category), not to the simpler review-time interface.
   - The planned column uses `handleOpenEditor` for inline editing, but unknown_gap events benefit from the full actual-adjust screen. Routing them directly prevents confusion.
+---
+
+## 2026-01-26 - US-031
+- **What was implemented**: Fixed evidence pipeline re-processing loop. The pipeline was running 8+ times per cycle due to three cascading issues in React dependency management and lack of memoization.
+- **Root cause 1 (comprehensive-calendar.tsx)**: The `combinedActualEvents` useMemo (line 491) included the entire `userPreferences` object in its dependency array, but only used 3 primitive fields (`gapFillingPreference`, `confidenceThreshold`, `autoSuggestEvents`). Any Zustand store mutation created a new `userPreferences` reference, triggering full pipeline recalculation even when relevant preferences hadn't changed. Fix: extracted the 3 fields into local variables and used them as individual deps.
+- **Root cause 2 (use-verification.ts)**: The `refresh()` callback (which fetches evidence AND runs verification) and the re-verification effect both ran `verifyPlannedEvents()` + `generateActualBlocks()`. When `refresh()` set new `evidence` state, the re-verification effect fired again because `evidence` was in its dependency array — running the same computation a second time. Fix: added `lastVerificationInputs` fingerprint ref. After `refresh()` computes verification, it stores the fingerprint. The re-verification effect checks fingerprint before computing, and skips if it matches.
+- **Root cause 3 (use-verification.ts)**: The `refresh` callback had `appCategoryOverrides`, `plannedEvents`, `verificationStrictness`, and `onError` in its dependency array. When any of these changed, `refresh` got a new identity, which triggered the auto-fetch effect (which depends on `refresh`). Even though `lastFetched` prevented re-fetching, the callback recreation caused React to re-render. Fix: moved these values to stable refs (`appCategoryOverridesRef`, `plannedEventsRef`, etc.) accessed inside the callback, reducing deps to `[isAuthenticated, userId, ymd, buildVerificationFingerprint]`.
+- **Additional defense (actual-display-events.ts)**: Added module-level fingerprint cache (`_lastPipelineFingerprint` + `_lastPipelineResult`) to `buildActualDisplayEvents`. Before running the full pipeline, it computes a string fingerprint of all inputs (event IDs/times, evidence counts, preference values, etc.) and returns the cached result if the fingerprint matches. This provides a last-line defense against redundant computation even if React deps fire spuriously.
+- **Files changed**:
+  - `apps/mobile/src/app/comprehensive-calendar.tsx` — Decomposed `userPreferences` object into individual primitive deps in useMemo
+  - `apps/mobile/src/lib/calendar/use-verification.ts` — Added fingerprint tracking for re-verification skip, stable refs for refresh callback deps, reduced callback dependency array
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Added `buildPipelineFingerprint()` and module-level cache for input-based deduplication
+- **Learnings for future iterations:**
+  - Zustand stores return new object references on ANY mutation. Never put an entire store selector object in a useMemo dependency array — always destructure to individual primitive values.
+  - When a useCallback fetches data AND processes it (setting multiple states), downstream useEffects that depend on those states will fire redundantly. Use fingerprint refs to deduplicate.
+  - Moving values to refs breaks the React dependency chain intentionally — use this pattern when a callback needs current values but shouldn't re-create when they change (because re-creation causes cascading effects).
+  - Module-level caches (outside React) are a useful last-line defense for pure functions called from useMemo — they work even when React deps fire spuriously.
+  - `SparseLocationFallback`, `EvidenceAvailability`, `EvidenceFusion` log lines come from `buildActualDisplayEvents` sub-functions. Reducing pipeline runs directly reduces these log lines.
 ---
