@@ -160,4 +160,24 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - Moving values to refs breaks the React dependency chain intentionally — use this pattern when a callback needs current values but shouldn't re-create when they change (because re-creation causes cascading effects).
   - Module-level caches (outside React) are a useful last-line defense for pure functions called from useMemo — they work even when React deps fire spuriously.
   - `SparseLocationFallback`, `EvidenceAvailability`, `EvidenceFusion` log lines come from `buildActualDisplayEvents` sub-functions. Reducing pipeline runs directly reduces these log lines.
+- `location_hourly` is a SQL view using `date_trunc('hour', recorded_at)` — all timestamps snap to :00. To get precise timing, fetch raw `location_samples.recorded_at` and use them to refine boundaries.
+- When converting a `Date` to minutes-from-midnight, use `Math.round(hours*60 + minutes + seconds/60)` instead of `hours*60 + minutes` to preserve nearest-minute accuracy.
+- `EvidenceBundle.locationSamples` contains raw sample timestamps for precise location block boundaries; `locationHourly` contains place labels and categories.
+---
+
+## 2026-01-26 - US-032
+- **What was implemented**: Fixed event time accuracy by eliminating two sources of time rounding/bucketing.
+- **Root cause 1 (buildLocationBlocks)**: The `buildLocationBlocks` function in `actual-display-events.ts` created location blocks by parsing `location_hourly` view rows. Since `location_hourly` uses SQL `date_trunc('hour', recorded_at)`, all `hour_start` values are snapped to hour boundaries (e.g., 9:00, 10:00). The function then assumed each block spanned exactly 60 minutes (`startMinutes + 60`). This meant if a user arrived at a location at 9:32, the event would show starting at 9:00. **Fix**: Added `fetchLocationSamplesForDay()` to fetch raw `location_samples` with precise `recorded_at` timestamps. In `buildLocationBlocks`, built a lookup map of `hour → { first sample minute, last sample minute }` from raw samples, then used these precise boundaries instead of the hour boundary + 60. Adjacent blocks merge with a 1-minute tolerance.
+- **Root cause 2 (session time truncation)**: Six locations in `actual-display-events.ts` converted `Date` objects to minutes-from-midnight using `start.getHours() * 60 + start.getMinutes()`, which truncates seconds (9:32:45 → 572.0 instead of 573). **Fix**: Added `dateToMinutes()` helper that uses `Math.round(hours*60 + minutes + seconds/60)` for nearest-minute precision, and replaced all 6 occurrences.
+- **Audit results for evidence-fusion.ts**: Clean — no timestamp rounding or bucketing. It only computes confidence scores from verification/data-quality/pattern data, not timestamps.
+- **Calendar-sourced events**: Already correct — `buildPlannedActualEvent` uses `planned.startMinutes` directly with `clampMinutes()` (no rounding).
+- **Debug logging added**: `buildLocationBlocks` now logs block count, raw sample count, and each block's precise start/end minutes for runtime verification.
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — Added `EvidenceLocationSample` type, `fetchLocationSamplesForDay()` function, added `locationSamples` to `EvidenceBundle`, updated `fetchAllEvidenceForDay()` to fetch raw samples in parallel
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Rewrote `buildLocationBlocks` to use raw sample timestamps for precise boundaries, added `dateToMinutes()` helper, replaced 6 occurrences of truncating `getHours()*60+getMinutes()` pattern, updated pipeline fingerprint to include `locationSamples` count
+- **Learnings for future iterations:**
+  - `location_hourly` view uses `date_trunc('hour', recorded_at)` which snaps all timestamps to hour boundaries. For precise timing, always use raw `location_samples.recorded_at`.
+  - `Date.getHours()*60 + Date.getMinutes()` truncates seconds. Use `Math.round(hours*60 + minutes + seconds/60)` for nearest-minute accuracy.
+  - When adding new types to `evidence-data.ts`, avoid naming conflicts with existing `location-samples.ts` types — both are re-exported from `services/index.ts`.
+  - The `EvidenceBundle` type is used across many files but only constructed in `fetchAllEvidenceForDay()`. Adding new fields is safe as long as you update that single constructor.
 ---

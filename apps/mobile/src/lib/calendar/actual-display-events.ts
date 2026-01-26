@@ -1,6 +1,7 @@
 import type { CalendarEventMeta, ScheduledEvent, EventCategory } from '@/stores';
 import type {
   EvidenceBundle,
+  EvidenceLocationSample,
   HealthDailyRow,
   LocationHourlyRow,
   ScreenTimeSessionRow,
@@ -42,7 +43,7 @@ function buildPipelineFingerprint(input: BuildActualDisplayEventsInput): string 
   // Evidence fingerprint — key counts and timestamps
   if (input.evidence) {
     const ev = input.evidence;
-    parts.push(`loc:${ev.locationHourly?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}`);
+    parts.push(`loc:${ev.locationHourly?.length ?? 0}|ls:${ev.locationSamples?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}`);
   } else {
     parts.push('ev:null');
   }
@@ -171,7 +172,7 @@ export function buildActualDisplayEvents({
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   })();
-  const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly) : [];
+  const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly, evidence.locationSamples) : [];
   const dataQuality = buildDataQualityMetrics({ evidence, usageSummary });
   const plannedSorted = [...plannedEvents].sort((a, b) => a.startMinutes - b.startMinutes);
 
@@ -792,28 +793,57 @@ function buildActualDescription(options: {
   return parts.join(' • ');
 }
 
-function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[]): LocationBlock[] {
+function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: EvidenceLocationSample[]): LocationBlock[] {
   const blocks: LocationBlock[] = [];
   const dayStart = ymdToDate(ymd);
   const sorted = [...rows].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
+
+  // Build a map of hour -> { firstSampleMinute, lastSampleMinute } from raw samples
+  // so we can refine hour boundaries to the actual first/last sample time.
+  const hourSampleBounds = new Map<number, { first: number; last: number }>();
+  if (samples && samples.length > 0) {
+    for (const sample of samples) {
+      const sampleTime = parseDbTimestamp(sample.recorded_at);
+      const sampleMinute = Math.round((sampleTime.getTime() - dayStart.getTime()) / 60_000);
+      if (sampleMinute < 0 || sampleMinute >= 24 * 60) continue;
+      const hourKey = Math.floor(sampleMinute / 60);
+      const existing = hourSampleBounds.get(hourKey);
+      if (existing) {
+        existing.first = Math.min(existing.first, sampleMinute);
+        existing.last = Math.max(existing.last, sampleMinute);
+      } else {
+        hourSampleBounds.set(hourKey, { first: sampleMinute, last: sampleMinute });
+      }
+    }
+  }
+
   let current: LocationBlock | null = null;
 
   for (const row of sorted) {
     const hourStart = parseDbTimestamp(row.hour_start);
-    const startMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
-    if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
+    const hourStartMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
+    if (hourStartMinutes < 0 || hourStartMinutes >= 24 * 60) continue;
 
     const placeLabel = row.place_label || row.place_category || '';
     const placeCategory = row.place_category ?? null;
-    const nextStart = startMinutes;
-    const nextEnd = startMinutes + 60;
+    const hourKey = Math.floor(hourStartMinutes / 60);
+    const bounds = hourSampleBounds.get(hourKey);
+
+    // Use precise sample boundaries when available, otherwise fall back to hour boundary
+    const nextStart = bounds ? bounds.first : hourStartMinutes;
+    // End is last sample minute + 1 (to cover the minute the sample occurred in),
+    // but at most the full hour end boundary.
+    const nextEnd = bounds ? Math.min(bounds.last + 1, hourStartMinutes + 60) : hourStartMinutes + 60;
+
+    if (nextEnd <= nextStart) continue;
 
     if (
       current &&
       current.placeLabel.toLowerCase() === placeLabel.toLowerCase() &&
-      current.endMinutes === nextStart
+      // Allow merging if blocks are within 1 minute of each other (adjacent or nearly adjacent)
+      nextStart - current.endMinutes <= 1
     ) {
-      current.endMinutes = nextEnd;
+      current.endMinutes = Math.max(current.endMinutes, nextEnd);
       continue;
     }
 
@@ -824,6 +854,11 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[]): LocationBl
       placeCategory,
     };
     blocks.push(current);
+  }
+
+  console.log(`[location-blocks] Built ${blocks.length} blocks from ${rows.length} hourly rows and ${samples?.length ?? 0} raw samples`);
+  for (const block of blocks) {
+    console.log(`[location-blocks]   ${block.placeLabel}: ${block.startMinutes}-${block.endMinutes} (${block.endMinutes - block.startMinutes} min)`);
   }
 
   return blocks;
@@ -877,6 +912,14 @@ function clampMinutes(minutes: number): number {
   if (minutes < 0) return 0;
   if (minutes > 24 * 60) return 24 * 60;
   return minutes;
+}
+
+/**
+ * Convert a Date to minutes-from-midnight, rounded to the nearest minute.
+ * Preserves seconds precision (e.g., 9:32:45 → 573 not 572).
+ */
+function dateToMinutes(date: Date): number {
+  return Math.round((date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60));
 }
 
 function ymdToDate(ymd: string): Date {
@@ -1762,8 +1805,8 @@ function deriveUsageSummaryBlocks(options: {
     for (const session of sessions) {
       const start = new Date(session.startIso);
       const end = new Date(session.endIso);
-      const startMinutes = start.getHours() * 60 + start.getMinutes();
-      const endMinutes = end.getHours() * 60 + end.getMinutes();
+      const startMinutes = dateToMinutes(start);
+      const endMinutes = dateToMinutes(end);
       const topApp = appIdToName.get(session.packageName) ?? session.packageName;
 
       if (current && startMinutes - current.endMinutes <= SCREEN_TIME_GAP_MINUTES) {
@@ -2014,8 +2057,8 @@ function deriveUsageSummaryBlocksForInterval(options: {
     for (const session of sessions) {
       const start = new Date(session.startIso);
       const end = new Date(session.endIso);
-      const sessionStart = start.getHours() * 60 + start.getMinutes();
-      const sessionEnd = end.getHours() * 60 + end.getMinutes();
+      const sessionStart = dateToMinutes(start);
+      const sessionEnd = dateToMinutes(end);
       const clippedStart = Math.max(startMinutes, sessionStart);
       const clippedEnd = Math.min(endMinutes, sessionEnd);
       if (clippedEnd <= clippedStart) continue;
@@ -2093,8 +2136,8 @@ function getTopAppLabelForUsageInterval(options: {
     for (const session of usageSummary.sessions) {
       const start = new Date(session.startIso);
       const end = new Date(session.endIso);
-      const sessionStart = start.getHours() * 60 + start.getMinutes();
-      const sessionEnd = end.getHours() * 60 + end.getMinutes();
+      const sessionStart = dateToMinutes(start);
+      const sessionEnd = dateToMinutes(end);
       const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
       if (overlap <= 0) continue;
       const appName = appIdToName.get(session.packageName) ?? session.packageName;
@@ -2154,8 +2197,8 @@ function getUsageOverlapInfo(
     for (const session of usageSummary.sessions) {
       const start = new Date(session.startIso);
       const end = new Date(session.endIso);
-      const sessionStart = start.getHours() * 60 + start.getMinutes();
-      const sessionEnd = end.getHours() * 60 + end.getMinutes();
+      const sessionStart = dateToMinutes(start);
+      const sessionEnd = dateToMinutes(end);
       const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
       if (overlap <= 0) continue;
       const appName = appIdToName.get(session.packageName) ?? session.packageName;
@@ -2320,8 +2363,8 @@ function buildSleepSessionIntervals(options: {
   for (const session of sessions) {
     const start = new Date(session.startIso);
     const end = new Date(session.endIso);
-    const sessionStart = start.getHours() * 60 + start.getMinutes();
-    const sessionEnd = end.getHours() * 60 + end.getMinutes();
+    const sessionStart = dateToMinutes(start);
+    const sessionEnd = dateToMinutes(end);
     const overlapStart = Math.max(sleepStart, sessionStart);
     const overlapEnd = Math.min(sleepEnd, sessionEnd);
     if (overlapEnd <= overlapStart) continue;
@@ -2374,8 +2417,8 @@ function getTopAppForInterval(options: {
   for (const session of sessions) {
     const start = new Date(session.startIso);
     const end = new Date(session.endIso);
-    const sessionStart = start.getHours() * 60 + start.getMinutes();
-    const sessionEnd = end.getHours() * 60 + end.getMinutes();
+    const sessionStart = dateToMinutes(start);
+    const sessionEnd = dateToMinutes(end);
     const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
     if (overlap <= 0) continue;
     const appName = appIdToName.get(session.packageName) ?? session.packageName;

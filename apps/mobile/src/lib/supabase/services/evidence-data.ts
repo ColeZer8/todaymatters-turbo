@@ -82,8 +82,13 @@ export interface UserPlaceRow {
   radius_m: number;
 }
 
+export interface EvidenceLocationSample {
+  recorded_at: string; // timestamptz — precise timestamp
+}
+
 export interface EvidenceBundle {
   locationHourly: LocationHourlyRow[];
+  locationSamples: EvidenceLocationSample[];
   screenTimeSessions: ScreenTimeSessionRow[];
   healthWorkouts: HealthWorkoutRow[];
   healthDaily: HealthDailyRow | null;
@@ -285,15 +290,52 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
 }
 
 /**
+ * Fetch raw location samples for a day, ordered by recorded_at.
+ * Used to refine hourly location block boundaries to precise minute-level timestamps.
+ */
+export async function fetchLocationSamplesForDay(
+  userId: string,
+  ymd: string
+): Promise<EvidenceLocationSample[]> {
+  const { startIso, endIso } = ymdToDayRange(ymd);
+
+  try {
+    const { data, error } = await tmSchema()
+      .from('location_samples')
+      .select('recorded_at')
+      .eq('user_id', userId)
+      .gte('recorded_at', startIso)
+      .lt('recorded_at', endIso)
+      .order('recorded_at', { ascending: true });
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.code === '42P01') {
+        return [];
+      }
+      throw handleSupabaseError(error);
+    }
+    return (data ?? []).map((row: { recorded_at: string }) => ({
+      recorded_at: row.recorded_at,
+    }));
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[Evidence] Failed to fetch location samples:', error);
+    }
+    return [];
+  }
+}
+
+/**
  * Fetch all evidence data for a day in parallel.
  */
 export async function fetchAllEvidenceForDay(
   userId: string,
   ymd: string
 ): Promise<EvidenceBundle> {
-  const [locationHourly, screenTimeSessions, healthWorkouts, healthDaily, userPlaces] =
+  const [locationHourly, locationSamples, screenTimeSessions, healthWorkouts, healthDaily, userPlaces] =
     await Promise.all([
       fetchLocationHourlyForDay(userId, ymd),
+      fetchLocationSamplesForDay(userId, ymd),
       fetchScreenTimeSessionsForDay(userId, ymd),
       fetchHealthWorkoutsForDay(userId, ymd),
       fetchHealthDailyForDay(userId, ymd),
@@ -302,6 +344,7 @@ export async function fetchAllEvidenceForDay(
 
   return {
     locationHourly,
+    locationSamples,
     screenTimeSessions,
     healthWorkouts,
     healthDaily,

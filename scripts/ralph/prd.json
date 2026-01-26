@@ -118,8 +118,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Key files: actual-display-events.ts (time assignment), evidence-fusion.ts (evidence times), evidence-data.ts (raw times)"
+      "passes": true,
+      "notes": "COMPLETED — Two root causes fixed: (1) buildLocationBlocks used hour_start from location_hourly view (snapped to hour boundaries by SQL date_trunc) and assumed 60-min blocks, making all location events start at :00. Fixed by fetching raw location_samples with precise recorded_at timestamps and using them to compute actual first/last sample minute within each hourly row. (2) Session time conversion used getHours()*60+getMinutes() which truncated seconds (9:32:45 → 572 instead of 573). Added dateToMinutes() helper using Math.round with seconds precision, replaced all 6 occurrences. evidence-fusion.ts was clean — no timestamp rounding. Calendar-sourced events already used planned.startMinutes directly (no bucketing). Added debug logging in buildLocationBlocks."
     },
     {
       "id": "US-033",
