@@ -1,0 +1,44 @@
+# Ralph Progress Log
+Started: Sun Jan 26 2026
+PRD: TodayMatters V2 — Critical Bugs, Timeline Accuracy & Feature Expansion
+Continues from: ralph/calendar-actual-timeline-fix (US-001 through US-025, all passing — archived)
+---
+
+## Codebase Patterns
+- Evidence data is fetched in `apps/mobile/src/lib/supabase/services/evidence-data.ts`
+- Actual event derivation happens in `apps/mobile/src/lib/calendar/actual-display-events.ts`
+- Screen time derivation is in `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts`
+- Calendar orchestration is in `apps/mobile/src/app/comprehensive-calendar.tsx`
+- Rendering with absolute positioning is in `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
+- Known duplicate key issue at ComprehensiveCalendarTemplate.tsx lines 552-559
+- Android native module for insights: `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt`
+- Use `Log.d(TAG, ...)` for production logging in Kotlin (logcat tag: "AndroidInsights")
+- TypeScript wrapper in `apps/mobile/modules/android-insights/src/index.ts`
+- Library wrapper with safe functions in `apps/mobile/src/lib/android-insights/index.ts`
+- Dev screen for Android insights at `apps/mobile/src/app/dev/android-insights.tsx`
+- Pre-existing TypeScript errors in codebase - don't expect clean typecheck
+- **Screen time sync**: `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` - syncs iOS and Android data to Supabase
+- **Insights sync hook**: `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` - orchestrates sync on app active
+- When comparing iOS vs Android sync, always check if all data fields are being synced (sessions, hourly, daily)
+- **Derived Event ID Format**: Use `derived:{type}:{startMinutes}:{endMinutes}:{source}` for deterministic unique IDs
+- **Screen Time Event ID Format**: Use `st:{type}:{startMinutes}:{endMinutes}:{source}` for screen time derived events
+- **Overlap Resolution**: Use `buildNonOverlappingTimeline()` from `actual-timeline-builder.ts` to resolve overlaps by splitting events
+- **Event Priority Order**: UserEdited(1) > SupabaseActual(2) > DerivedEvidence(3) > ScreenTime(4) > Unknown(5)
+- **Duplicate Cleanup**: Use `cleanupDuplicateDerivedEvents()` from `calendar-events.ts` to remove duplicates while preserving oldest
+- **Re-derivation Prevention**: `buildActualDisplayEvents` tracks saved derived events by source_id and time+kind to skip re-derivation
+- **Evidence Priority Order**: UserPlanned(1) > Location(2) > ScreenTime(3) > Pattern(4) > Health(5) - defined in `EvidenceSourcePriority` enum in `evidence-fusion.ts`
+- **Contextual Screen Time**: Use `isContextualScreenTime()` to check if screen time is expected for an activity (e.g., calculator at work) - contextual usage doesn't override location
+- **User Input Source**: Use `source: 'user_input'` for events created from unknown gap selections to distinguish from derived/system sources. These get highest priority (UserEdited) in timeline builder.
+- **Sparse Location Detection**: Use `detectSparseLocationData()` to check if location coverage is <30% or <6 hours - common on Android due to battery optimization
+- **Evidence Availability**: Use `assessEvidenceAvailability()` to get overall data availability and confidence multiplier for the day
+- **Sparse Location Fallback**: Use `fillSparseLocationGapsWithScreenTime()` to fill unknown gaps with screen time data when location is sparse
+- **Android Location**: Background location code in `apps/mobile/src/lib/android-location/` — index.ts (diagnostics, permissions), location-task.ts (background task), queue.ts (sample queue)
+- **Event Editing**: Save handler in `apps/mobile/src/app/actual-adjust.tsx`, persistence via `calendar-events.ts` updateActual/createActual
+- **Location Mappings**: `apps/mobile/src/lib/supabase/services/location-mappings.ts` — CRUD for user place labels (US-018/US-022)
+- **App Mappings**: `apps/mobile/src/lib/supabase/services/app-mappings.ts` — CRUD for user app labels (US-019/US-023)
+- **Setup Flow**: Screens in `apps/mobile/src/app/`, constants in `apps/mobile/src/constants/setup-screens.ts`, state in `apps/mobile/src/stores/onboarding-store.ts`
+- **Split Event**: `apps/mobile/src/app/actual-split.tsx` + `apps/mobile/src/components/templates/ActualSplitTemplate.tsx`
+- **Supabase Migrations**: `supabase/migrations/` — use date prefix format `YYYYMMDD_description.sql`
+- **Services Export**: All Supabase services exported from `apps/mobile/src/lib/supabase/services/index.ts`
+
+---

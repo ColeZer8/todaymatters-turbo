@@ -83,33 +83,44 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
   const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
   TaskManager.defineTask(ANDROID_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
     try {
+      if (__DEV__) {
+        console.log(`📍 [task] Background location task fired at ${new Date().toISOString()}`);
+      }
+
       if (error) {
-        if (__DEV__) {
-          const now = Date.now();
-          if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
-            lastTaskErrorLogAtMs = now;
-            console.warn('📍 Android background location task warning:', error);
-          }
+        const now = Date.now();
+        if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
+          lastTaskErrorLogAtMs = now;
+          console.warn('📍 [task] Android background location task warning:', error);
         }
         return;
       }
 
       const locations = (data as unknown as { locations?: RawLocationObject[] } | null | undefined)?.locations ?? [];
+      if (__DEV__) {
+        console.log(`📍 [task] Received ${locations.length} raw location(s)`);
+      }
       if (locations.length === 0) return;
 
       const sessionResult = await supabase.auth.getSession();
       const userId = sessionResult.data.session?.user?.id ?? null;
-      if (!userId) return;
+      if (!userId) {
+        if (__DEV__) console.log('📍 [task] No authenticated user — dropping locations');
+        return;
+      }
 
       const samples = locations.map(toSample).filter((s): s is Omit<AndroidLocationSample, 'dedupe_key'> => s != null);
+      if (__DEV__) {
+        console.log(`📍 [task] Converted to ${samples.length} valid sample(s) from ${locations.length} raw`);
+      }
       if (samples.length === 0) return;
       const { pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
 
       if (__DEV__) {
-        console.log(`📍 queued ${samples.length} Android location samples (pending=${pendingCount})`);
+        console.log(`📍 [task] Queued ${samples.length} Android location samples (pending=${pendingCount})`);
       }
     } catch (e) {
-      if (__DEV__) console.error('📍 Android background location task failed:', e);
+      console.error('📍 [task] Android background location task failed:', e);
     }
   });
 }

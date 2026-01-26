@@ -202,7 +202,10 @@ export default function ProfileScreen() {
         `Foreground permission: ${diagnostics.foregroundPermission}`,
         `Background permission: ${diagnostics.backgroundPermission}`,
         `Task started: ${diagnostics.taskStarted ? 'yes' : 'no'}`,
+        `Can start: ${diagnostics.canStart ? 'yes' : 'no'}`,
         `Pending samples: ${diagnostics.pendingSamples}`,
+        `Last sample: ${diagnostics.lastSampleTimestamp ?? 'none'}`,
+        `Samples (24h): ${diagnostics.sampleCount24h}`,
       ].join('\n');
       const errors = diagnostics.errors.length > 0 ? `\n\nBlocking issues:\n- ${diagnostics.errors.join('\n- ')}` : '';
       Alert.alert('Android Location Diagnostics', `${summary}${errors}`);

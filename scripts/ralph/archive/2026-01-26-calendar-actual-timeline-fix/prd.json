@@ -18,8 +18,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "COMPLETED — Found root cause: canStart logic was self-contradictory. When taskStarted=false and all checks pass, it pushed a spurious error making canStart always false. Fixed in index.ts. Added verbose logging to location-task.ts and diagnostics to profile.tsx."
+      "passes": false,
+      "notes": "URGENT — Blocking all location-based features. Check: expo-location background task restrictions on newer Android, battery optimization/Doze mode, task not actually starting despite taskStarted: true"
     },
     {
       "id": "US-027",

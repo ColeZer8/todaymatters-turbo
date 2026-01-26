@@ -8,6 +8,9 @@ import {
   removePendingAndroidLocationSamplesByKeyAsync,
 } from './queue';
 import type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
+
+/** Mirror of MAX_PENDING_SAMPLES_PER_USER in queue.ts — used for diagnostics peek. */
+const MAX_PENDING_SAMPLES_PER_USER = 10_000;
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 import { supabase } from '@/lib/supabase/client';
 
@@ -202,6 +205,8 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   backgroundPermission: string;
   taskStarted: boolean;
   pendingSamples: number;
+  lastSampleTimestamp: string | null;
+  sampleCount24h: number;
   errors: string[];
   canStart: boolean;
 }> {
@@ -214,9 +219,16 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     backgroundPermission: 'unknown',
     taskStarted: false,
     pendingSamples: 0,
+    lastSampleTimestamp: null as string | null,
+    sampleCount24h: 0,
     errors,
     canStart: false,
   };
+
+  if (__DEV__) {
+    console.log('📍 [diag] Starting Android location diagnostics...');
+    console.log(`📍 [diag] Support status: ${diagnostics.support}`);
+  }
 
   if (diagnostics.support !== 'available') {
     errors.push(`Support status: ${diagnostics.support} (expected: 'available')`);
@@ -226,48 +238,89 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   const Location = await loadExpoLocationAsync();
   if (!Location) {
     errors.push('Location module not loaded - native module missing or not available');
+    if (__DEV__) console.log('📍 [diag] Location module: FAILED to load');
     return diagnostics;
   }
   diagnostics.locationModule = true;
+  if (__DEV__) console.log('📍 [diag] Location module: loaded');
 
   diagnostics.servicesEnabled = await Location.hasServicesEnabledAsync();
+  if (__DEV__) console.log(`📍 [diag] Services enabled: ${diagnostics.servicesEnabled}`);
   if (!diagnostics.servicesEnabled) {
     errors.push('Location services disabled on device - enable in Settings > Location');
   }
 
   const fg = await Location.getForegroundPermissionsAsync();
   diagnostics.foregroundPermission = fg.status;
+  if (__DEV__) console.log(`📍 [diag] Foreground permission: ${fg.status}`);
   if (fg.status !== 'granted') {
     errors.push(`Foreground permission: ${fg.status} (required: 'granted')`);
   }
 
   const bg = await getBackgroundPermissionsSafeAsync(Location);
   diagnostics.backgroundPermission = bg.status;
+  if (__DEV__) console.log(`📍 [diag] Background permission: ${bg.status}`);
   if (bg.status !== 'granted') {
     errors.push(`Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`);
   }
 
   diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  if (__DEV__) console.log(`📍 [diag] Task started: ${diagnostics.taskStarted}`);
+
+  // Note: taskStarted=false with no errors is EXPECTED — it means we CAN start.
+  // Only warn if task is not started but there are stale pending samples.
   if (!diagnostics.taskStarted && errors.length === 0) {
-    errors.push('Task not started despite all checks passing - unknown reason');
+    if (__DEV__) console.log('📍 [diag] All prerequisites passed, task not yet started — canStart will be true');
   }
 
-  // Check pending samples
+  // Check pending samples and gather sample statistics
   try {
     const sessionResult = await supabase.auth.getSession();
     const userId = sessionResult.data.session?.user?.id;
     if (userId) {
-      const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
+      const pending = await peekPendingAndroidLocationSamplesAsync(userId, MAX_PENDING_SAMPLES_PER_USER);
       diagnostics.pendingSamples = pending.length;
+
+      if (pending.length > 0) {
+        // Find the most recent sample timestamp
+        const sorted = [...pending].sort(
+          (a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()
+        );
+        diagnostics.lastSampleTimestamp = sorted[0].recorded_at;
+
+        // Count samples within last 24 hours
+        const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+        diagnostics.sampleCount24h = pending.filter(
+          (s) => new Date(s.recorded_at).getTime() >= cutoff24h
+        ).length;
+
+        if (__DEV__) {
+          console.log(`📍 [diag] Pending samples: ${pending.length}`);
+          console.log(`📍 [diag] Last sample at: ${diagnostics.lastSampleTimestamp}`);
+          console.log(`📍 [diag] Samples in last 24h: ${diagnostics.sampleCount24h}`);
+        }
+      } else {
+        if (__DEV__) console.log('📍 [diag] Pending samples: 0 (no location data collected)');
+      }
+
       if (pending.length > 0 && !diagnostics.taskStarted) {
         errors.push(`Found ${pending.length} pending samples but task not started - samples may be stale`);
       }
+    } else {
+      if (__DEV__) console.log('📍 [diag] No authenticated user — cannot check pending samples');
     }
   } catch (error) {
     errors.push(`Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  // canStart = all prerequisites met AND task not already running
   diagnostics.canStart = errors.length === 0 && !diagnostics.taskStarted;
+  if (__DEV__) {
+    console.log(`📍 [diag] canStart: ${diagnostics.canStart} (errors=${errors.length}, taskStarted=${diagnostics.taskStarted})`);
+    if (errors.length > 0) {
+      console.log(`📍 [diag] Blocking errors: ${errors.join('; ')}`);
+    }
+  }
 
   return diagnostics;
 }
