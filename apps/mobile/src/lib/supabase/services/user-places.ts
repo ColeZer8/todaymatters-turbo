@@ -86,6 +86,98 @@ export async function fetchUserPlaceByLabel(
   }
 }
 
+/**
+ * Fetch all user places for a user, ordered by label.
+ */
+export async function fetchAllUserPlaces(
+  userId: string
+): Promise<UserPlaceRow[]> {
+  try {
+    const { data, error } = await tmSchema()
+      .from('user_places')
+      .select(USER_PLACE_SELECT)
+      .eq('user_id', userId)
+      .order('label', { ascending: true });
+
+    if (error) throw handleSupabaseError(error);
+    return (data ?? []) as UserPlaceRow[];
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Update a user place's label and/or category.
+ */
+export async function updateUserPlace(
+  placeId: string,
+  updates: { label?: string; category?: string | null; category_id?: string | null }
+): Promise<UserPlaceRow> {
+  try {
+    const { data, error } = await tmSchema()
+      .from('user_places')
+      .update(updates)
+      .eq('id', placeId)
+      .select(USER_PLACE_SELECT)
+      .single();
+
+    if (error) throw handleSupabaseError(error);
+    return data as UserPlaceRow;
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Delete a user place by ID.
+ */
+export async function deleteUserPlace(
+  placeId: string
+): Promise<void> {
+  try {
+    const { error } = await tmSchema()
+      .from('user_places')
+      .delete()
+      .eq('id', placeId);
+
+    if (error) throw handleSupabaseError(error);
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Count events auto-tagged from each user place.
+ * Queries actual_events meta->>'autoTaggedFrom' matching place labels.
+ */
+export async function fetchAutoTagCountsByPlaceLabel(
+  userId: string
+): Promise<Record<string, number>> {
+  try {
+    const { data, error } = await tmSchema()
+      .from('actual_events')
+      .select('meta')
+      .eq('user_id', userId)
+      .not('meta', 'is', null);
+
+    if (error) throw handleSupabaseError(error);
+
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      const meta = row.meta as Record<string, unknown> | null;
+      const evidence = meta?.evidence as Record<string, unknown> | null;
+      const autoTaggedFrom = evidence?.autoTaggedFrom as string | undefined;
+      if (autoTaggedFrom) {
+        counts[autoTaggedFrom] = (counts[autoTaggedFrom] ?? 0) + 1;
+      }
+    }
+    return counts;
+  } catch (error) {
+    // If table doesn't exist yet or query fails, return empty counts
+    return {};
+  }
+}
+
 export async function upsertUserPlaceFromSamples(input: {
   userId: string;
   label: string;

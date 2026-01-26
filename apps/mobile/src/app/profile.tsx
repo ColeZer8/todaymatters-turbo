@@ -8,6 +8,7 @@ import {
   ListChecks,
   LogOut,
   LucideIcon,
+  MapPin,
   MessageCircle,
   MoonStar,
   Play,
@@ -281,6 +282,12 @@ export default function ProfileScreen() {
       label: 'Ideal Day',
       icon: Calendar,
       onPress: () => router.push('/settings/ideal-day'),
+    },
+    {
+      id: 'place-labels',
+      label: 'Place Labels',
+      icon: MapPin,
+      onPress: () => router.push('/settings/place-labels'),
     },
   ];
 
