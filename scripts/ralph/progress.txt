@@ -503,3 +503,41 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - Haversine distance is a client-side fallback for cases where the SQL view hasn't re-matched (e.g., recently labeled places). The SQL view match via `place_id` is the primary and more reliable path.
   - `DEFAULT_PLACE_MATCH_RADIUS_METERS = 200` is the configurable cap. Each user place also has its own `radius_m` (default 150m). The haversine matching uses `Math.min(place.radius_m, DEFAULT_PLACE_MATCH_RADIUS_METERS)`.
 ---
+
+## 2026-01-26 - US-045
+- **What was implemented**: Place Labels Management in Settings — new settings screen to view, edit, and delete user-defined place labels with hierarchical category display and auto-tagged event counts.
+- **Key discovery**: No `LocationMappingsTemplate` existed in the codebase. The PRD referenced updating an existing template, but place labeling was only available inline in the event editor (ActualAdjustTemplate). Created the settings screen from scratch following the existing settings sub-screen pattern.
+- **Service additions** (`user-places.ts`):
+  - `fetchAllUserPlaces(userId)` — returns all user places ordered by label
+  - `updateUserPlace(placeId, updates)` — updates label, category, category_id
+  - `deleteUserPlace(placeId)` — deletes a user place
+  - `fetchAutoTagCountsByPlaceLabel(userId)` — queries `actual_events` meta->evidence->autoTaggedFrom to count auto-tagged events per place label. Gracefully returns empty counts if table doesn't exist.
+- **Template** (`PlaceLabelsTemplate.tsx`):
+  - Header with back button, "Place Labels" title
+  - Loading state with ActivityIndicator, empty state with MapPin icon + explanation
+  - Place cards showing: MapPin icon, label, hierarchical category name (via `Tag` icon), auto-tagged event count
+  - Edit mode: inline TextInput for label + HierarchicalCategoryPicker for category + Save/Cancel buttons
+  - Delete with confirmation Alert dialog
+  - Pencil and Trash2 action buttons per card
+- **Screen** (`settings/place-labels.tsx`):
+  - Loads all user places, activity categories, and auto-tag counts in parallel on mount
+  - `buildCategoryDisplayName()` walks up parent chain to build "Family > Dog Walking" display format
+  - `handleUpdatePlace` calls `updateUserPlace` then updates local state
+  - `handleDeletePlace` with confirmation → `deleteUserPlace` → filter local state
+  - Uses Expo Router's settings Stack layout (auto-routed from file name)
+- **Profile integration** (`profile.tsx`):
+  - Added `MapPin` import from lucide-react-native
+  - Added "Place Labels" entry to `personalizationItems` array, routing to `/settings/place-labels`
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/user-places.ts` — 4 new exported functions
+  - `apps/mobile/src/components/templates/PlaceLabelsTemplate.tsx` — New template component
+  - `apps/mobile/src/components/templates/index.ts` — Added PlaceLabelsTemplate and PlaceLabelItem exports
+  - `apps/mobile/src/app/settings/place-labels.tsx` — New settings screen
+  - `apps/mobile/src/app/profile.tsx` — Added MapPin import and Place Labels menu entry
+- **Learnings for future iterations:**
+  - Settings sub-screens in Expo Router auto-register via file name in `app/settings/`. No need to update `_layout.tsx` or `_layout.tsx` for settings — the Stack layout with `screenOptions` handles it.
+  - `fetchAutoTagCountsByPlaceLabel` queries `actual_events.meta` JSONB column. The `meta.evidence.autoTaggedFrom` field stores the place label string (set by US-044). Counting by label match works but is case-sensitive — a place label rename won't match historical events.
+  - The `UserPlaceRow` type in `user-places.ts` does NOT include lat/lng (those are only in `evidence-data.ts` version). The settings screen doesn't need coordinates — just label, category, and ID.
+  - `buildCategoryDisplayName()` is a client-side helper that walks parent_id chain to build "Parent > Child > Grandchild" display names from flat ActivityCategory[]. Reusable wherever hierarchical names are needed.
+  - Manual browser verification is needed to confirm the place labels settings screen renders correctly.
+---

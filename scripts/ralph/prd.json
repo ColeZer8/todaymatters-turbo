@@ -336,8 +336,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Enhances existing location-mappings settings screen from US-020"
+      "passes": true,
+      "notes": "COMPLETED — No existing LocationMappingsTemplate existed; created new PlaceLabelsTemplate and settings/place-labels.tsx screen. Added fetchAllUserPlaces, updateUserPlace, deleteUserPlace, fetchAutoTagCountsByPlaceLabel to user-places.ts service. PlaceLabelsTemplate shows all user places with: (1) category displayed alongside label using hierarchical name (e.g., 'Family > Dog Walking') resolved from activity_categories via buildCategoryDisplayName, (2) edit inline form with TextInput for label + HierarchicalCategoryPicker for category, (3) delete with confirmation alert, (4) auto-tagged event count per place queried from actual_events meta.evidence.autoTaggedFrom. Added 'Place Labels' entry to profile.tsx personalization items with MapPin icon, routing to /settings/place-labels."
     },
     {
       "id": "US-046",
