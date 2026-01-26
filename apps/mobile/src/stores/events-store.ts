@@ -44,7 +44,8 @@ export interface CalendarEventMeta {
     | 'transition_commute'
     | 'transition_prep'
     | 'transition_wind_down'
-    | 'location_inferred';
+    | 'location_inferred'
+    | 'travel';
   startYmd?: string;
   actual?: boolean;
   tags?: string[];

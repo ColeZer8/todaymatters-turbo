@@ -5,6 +5,7 @@ import type {
   HealthDailyRow,
   LocationHourlyRow,
   ScreenTimeSessionRow,
+  UserPlaceRow,
 } from '@/lib/supabase/services/evidence-data';
 import type { UsageSummary } from '@/lib/android-insights';
 import type { ActualBlock, VerificationResult } from './verification-engine';
@@ -136,6 +137,7 @@ interface LocationReplacementContext {
   appCategoryOverrides?: AppCategoryOverrides;
   dataQuality: ReturnType<typeof buildDataQualityMetrics>;
   minMinutes: number;
+  userPlaces?: UserPlaceRow[];
 }
 
 export function buildActualDisplayEvents({
@@ -439,6 +441,7 @@ export function buildActualDisplayEvents({
     appCategoryOverrides,
     dataQuality,
     minMinutes: minEvidenceBlockMinutes,
+    userPlaces: evidence?.userPlaces,
   });
   const allowGapFilling = gapFillingPreference !== 'manual';
   const allowProductiveFill = gapFillingPreference === 'aggressive';
@@ -1057,11 +1060,13 @@ function replaceUnknownWithLocationEvidence(
     const endLabel = endLocation.label?.trim() ?? null;
     const gapMinutes = end - start;
 
+    // Detect travel between different locations (5-90 min gap).
+    // Short movements <5 min within same area are NOT flagged as travel.
     const canCommute =
       startLabel &&
       endLabel &&
       startLabel.toLowerCase() !== endLabel.toLowerCase() &&
-      gapMinutes >= 15 &&
+      gapMinutes >= 5 &&
       gapMinutes <= 90;
 
     if (canCommute) {
@@ -1154,7 +1159,14 @@ function replaceUnknownWithProductiveUsage(
       continue;
     }
 
-    const durationMinutes = Math.round(Math.min(usageInfo.totalMinutes, end - start));
+    // Screen time must account for >50% of the block's duration to be labeled as productive
+    const blockDuration = end - start;
+    if (usageInfo.totalMinutes <= blockDuration * 0.5) {
+      updated.push(event);
+      continue;
+    }
+
+    const durationMinutes = Math.round(Math.min(usageInfo.totalMinutes, blockDuration));
     updated.push(buildProductiveUnknownEvent(start, durationMinutes, usageInfo.topApp));
   }
 
@@ -1213,9 +1225,9 @@ function replaceUnknownWithTransitions(
     }
 
     const meta: CalendarEventMeta = {
-      category: 'comm',
+      category: 'travel',
       source: 'derived',
-      kind: 'transition_commute',
+      kind: 'travel',
       confidence: 0.45,
       evidence: {
         locationLabel: `${fromLabel} → ${toLabel}`,
@@ -1224,9 +1236,9 @@ function replaceUnknownWithTransitions(
 
     updated.push({
       ...event,
-      title: 'Commute',
+      title: `Travel: ${fromLabel} → ${toLabel}`,
       description: `${fromLabel} → ${toLabel}`,
-      category: 'comm',
+      category: 'travel',
       meta,
     });
   }
@@ -1343,9 +1355,9 @@ function buildCommuteEvent(options: {
     screenTime,
   });
   const meta: CalendarEventMeta = {
-    category: 'comm',
+    category: 'travel',
     source: 'derived',
-    kind: 'transition_commute',
+    kind: 'travel',
     confidence: 0.5,
     dataQuality: context.dataQuality,
     evidence: {
@@ -1356,12 +1368,12 @@ function buildCommuteEvent(options: {
   };
 
   return {
-    id: `${DERIVED_EVIDENCE_PREFIX}commute_${startMinutes}_${duration}`,
-    title: 'Driving',
+    id: `${DERIVED_EVIDENCE_PREFIX}travel_${startMinutes}_${duration}`,
+    title: `Travel: ${fromLabel} → ${toLabel}`,
     description,
     startMinutes,
     duration,
-    category: 'comm',
+    category: 'travel',
     meta,
   };
 }
@@ -1375,7 +1387,7 @@ function buildLocationEvent(options: {
   uniqueId: number;
 }): ScheduledEvent {
   const { startMinutes, duration, locationLabel, placeCategory, context, uniqueId } = options;
-  const resolved = resolveLocationDetails(locationLabel, placeCategory);
+  const resolved = resolveLocationDetails(locationLabel, placeCategory, context.userPlaces);
   const screenTime = getScreenTimeOverlapInfo({
     ymd: context.ymd,
     startMinutes,
@@ -1414,11 +1426,72 @@ function buildLocationEvent(options: {
   };
 }
 
-function resolveLocationDetails(locationLabel: string, placeCategory: string | null): {
+/**
+ * Check user-defined places (tm.user_places) for a matching label/category.
+ * User labels take priority over generic mapPlaceToCategory inference.
+ */
+function resolveFromUserPlaces(
+  locationLabel: string,
+  userPlaces?: UserPlaceRow[],
+): { title: string; category: EventCategory } | null {
+  if (!userPlaces || userPlaces.length === 0) return null;
+  const needle = locationLabel.toLowerCase().trim();
+  if (!needle) return null;
+
+  for (const place of userPlaces) {
+    const placeLabel = place.label.toLowerCase().trim();
+    // Match if the location label contains the user place label or vice versa
+    if (needle.includes(placeLabel) || placeLabel.includes(needle)) {
+      const category = place.category ? mapPlaceCategoryString(place.category) : 'free';
+      return { title: place.label, category };
+    }
+  }
+  return null;
+}
+
+/**
+ * Map a user-defined place category string to an EventCategory.
+ */
+function mapPlaceCategoryString(category: string): EventCategory {
+  const lower = category.toLowerCase().trim();
+  const mapping: Record<string, EventCategory> = {
+    faith: 'routine',
+    church: 'routine',
+    worship: 'routine',
+    family: 'family',
+    home: 'family',
+    work: 'work',
+    office: 'work',
+    health: 'health',
+    gym: 'health',
+    fitness: 'health',
+    meal: 'meal',
+    food: 'meal',
+    restaurant: 'meal',
+    travel: 'travel',
+    finance: 'finance',
+    social: 'social',
+    digital: 'digital',
+    sleep: 'sleep',
+    routine: 'routine',
+    meeting: 'meeting',
+    commute: 'comm',
+  };
+  return mapping[lower] ?? 'free';
+}
+
+function resolveLocationDetails(locationLabel: string, placeCategory: string | null, userPlaces?: UserPlaceRow[]): {
   title: string;
   description: string;
   category: EventCategory;
 } {
+  // Check user-defined places first — user labels take priority over generic inference
+  const userMatch = resolveFromUserPlaces(locationLabel, userPlaces);
+  if (userMatch) {
+    const description = placeCategory && formatPlaceLabel(placeCategory) !== userMatch.title ? formatPlaceLabel(placeCategory) : '';
+    return { title: userMatch.title, description, category: userMatch.category };
+  }
+
   const raw = [locationLabel, placeCategory].find(Boolean) ?? 'Location';
   const label = formatPlaceLabel(raw);
   const category = mapPlaceToCategory(locationLabel, placeCategory);
