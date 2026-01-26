@@ -254,8 +254,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "Depends on US-039 schema"
+      "passes": true,
+      "notes": "COMPLETED — Created Big3OptInTemplate and big3-opt-in.tsx setup screen. Screen inserted between setup-questions and ai-summary (step 13 of 14). Two options: 'Yes, enable Big 3' (saves big3Enabled: true) and 'No thanks, skip' (saves big3Enabled: false). Preference saved to tm.user_data_preferences via upsertUserDataPreferences and to user-preferences Zustand store. Onboarding store updated with big3Enabled field and setBig3Enabled action. Navigation: setup-questions → big3-opt-in → ai-summary. ai-summary back button goes to big3-opt-in."
     },
     {
       "id": "US-041",

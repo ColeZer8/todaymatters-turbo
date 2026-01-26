@@ -364,3 +364,25 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - The upsert service uses `onConflict: 'user_id,date'` (comma-separated string) matching the unique constraint columns.
   - `maybeSingle()` is correct for fetchBig3ForDate since the row may not exist on first access for a given date.
 ---
+
+## 2026-01-26 - US-040
+- **What was implemented**: Added Big 3 opt-in screen to the setup flow. Users are asked during setup whether they want to use the Big 3 daily priorities concept. The screen appears between setup-questions (step 12) and ai-summary (step 14) as step 13 of 14.
+- **Screen design**: Big3OptInTemplate shows a Target icon, "What is the Big 3?" explanation ("Each morning, pick 3 things that would make today a success. The app tracks how much time you spend on each priority throughout the day."), two benefit cards (Stay focused with ListChecks icon, See your progress with Sparkles icon), and two action buttons: "Yes, enable Big 3" (GradientButton) and "No thanks, skip" (text link).
+- **Data flow**: On enable/skip, the screen: (1) sets `big3Enabled` in onboarding Zustand store (immediate), (2) fires async `saveBig3Preference` which fetches current user preferences, merges `big3Enabled`, and upserts to `tm.user_data_preferences` via `upsertUserDataPreferences`, and (3) updates the user-preferences Zustand store. Navigation proceeds immediately (fire-and-forget pattern matching other setup screens).
+- **Navigation changes**: `setup-questions.tsx` handleContinue now routes to `/big3-opt-in` (was `/ai-summary`). `ai-summary.tsx` handleBack now routes to `/big3-opt-in` (was `/setup-questions`). Big3OptInScreen routes forward to `/ai-summary` and back to `/setup-questions`.
+- **Files changed**:
+  - `apps/mobile/src/components/templates/Big3OptInTemplate.tsx` — New template component with SetupStepLayout, explanation, benefit cards, enable/skip buttons
+  - `apps/mobile/src/components/templates/index.ts` — Added Big3OptInTemplate export
+  - `apps/mobile/src/app/big3-opt-in.tsx` — New setup screen with auth guard, hydration check, preference saving, navigation
+  - `apps/mobile/src/app/_layout.tsx` — Registered big3-opt-in route
+  - `apps/mobile/src/app/setup-questions.tsx` — Changed forward navigation from /ai-summary to /big3-opt-in
+  - `apps/mobile/src/app/ai-summary.tsx` — Changed back navigation from /setup-questions to /big3-opt-in
+  - `apps/mobile/src/constants/setup-screens.ts` — Added big3OptIn: 13, shifted aiSummary to 14, updated total from 13 to 14
+  - `apps/mobile/src/stores/onboarding-store.ts` — Added big3Enabled state (default false), setBig3Enabled action
+- **Learnings for future iterations:**
+  - Setup screens save preferences using a fire-and-forget async pattern — `void saveFunction()` followed by immediate `router.replace()`. The save doesn't block navigation.
+  - The user-preferences service (`user-preferences.ts`) functions are NOT exported from `services/index.ts` — import directly from `@/lib/supabase/services/user-preferences`.
+  - `SETUP_SCREENS_TOTAL_STEPS` and `SETUP_SCREENS_STEPS` in `constants/setup-screens.ts` must be kept in sync. When inserting a new screen, increment total and shift all subsequent step numbers.
+  - Onboarding store persists to AsyncStorage via Zustand `persist` middleware. Adding a new boolean field with a default is safe — `merge()` in the persist config will use the default for users who don't have the field persisted yet.
+  - Setup screen pattern: auth guard effect, hydration check, loading spinner, template render with step/totalSteps props. Back/forward navigation uses `router.replace()`.
+---
