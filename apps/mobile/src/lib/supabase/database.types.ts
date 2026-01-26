@@ -1250,6 +1250,70 @@ export type Database = {
           },
         ]
       }
+      daily_big3: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          priority_1: string
+          priority_2: string
+          priority_3: string
+          category_id_1: string | null
+          category_id_2: string | null
+          category_id_3: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date: string
+          priority_1?: string
+          priority_2?: string
+          priority_3?: string
+          category_id_1?: string | null
+          category_id_2?: string | null
+          category_id_3?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          priority_1?: string
+          priority_2?: string
+          priority_3?: string
+          category_id_1?: string | null
+          category_id_2?: string | null
+          category_id_3?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_big3_category_id_1_fkey"
+            columns: ["category_id_1"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_big3_category_id_2_fkey"
+            columns: ["category_id_2"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_big3_category_id_3_fkey"
+            columns: ["category_id_3"]
+            isOneToOne: false
+            referencedRelation: "activity_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

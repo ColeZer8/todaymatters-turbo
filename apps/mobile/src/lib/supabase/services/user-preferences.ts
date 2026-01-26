@@ -10,6 +10,7 @@ import {
 interface UserPreferencesRow {
   user_id: string;
   gap_filling_preferences: unknown | null;
+  big3_enabled: boolean | null;
 }
 
 interface GapFillingPreferencesPayload {
@@ -41,9 +42,17 @@ function coerceVerificationStrictness(value: unknown): VerificationStrictness {
   return 'balanced';
 }
 
-function mergePreferences(payload: GapFillingPreferencesPayload | null): UserDataPreferences {
+function mergePreferences(
+  payload: GapFillingPreferencesPayload | null,
+  big3Enabled?: boolean | null
+): UserDataPreferences {
   const defaults = DEFAULT_USER_PREFERENCES;
-  if (!payload) return defaults;
+  if (!payload) {
+    return {
+      ...defaults,
+      big3Enabled: typeof big3Enabled === 'boolean' ? big3Enabled : defaults.big3Enabled,
+    };
+  }
   return {
     gapFillingPreference: coerceGapFillingPreference(payload.mode),
     confidenceThreshold:
@@ -63,6 +72,7 @@ function mergePreferences(payload: GapFillingPreferencesPayload | null): UserDat
         ? payload.realTimeUpdates
         : defaults.realTimeUpdates,
     verificationStrictness: coerceVerificationStrictness(payload.verificationStrictness),
+    big3Enabled: typeof big3Enabled === 'boolean' ? big3Enabled : defaults.big3Enabled,
   };
 }
 
@@ -70,15 +80,16 @@ export async function fetchUserDataPreferences(userId: string): Promise<UserData
   try {
     const { data, error } = await tmSchema()
       .from('user_data_preferences')
-      .select('user_id, gap_filling_preferences')
+      .select('user_id, gap_filling_preferences, big3_enabled')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (error) throw handleSupabaseError(error);
     if (!data) return DEFAULT_USER_PREFERENCES;
 
-    const payload = parseGapFillingPreferences((data as UserPreferencesRow).gap_filling_preferences);
-    return mergePreferences(payload);
+    const row = data as UserPreferencesRow;
+    const payload = parseGapFillingPreferences(row.gap_filling_preferences);
+    return mergePreferences(payload, row.big3_enabled);
   } catch (error) {
     if (__DEV__) {
       console.warn('[UserPreferences] Failed to fetch preferences:', error);
@@ -108,15 +119,17 @@ export async function upsertUserDataPreferences(options: {
         {
           user_id: userId,
           gap_filling_preferences: payload,
+          big3_enabled: preferences.big3Enabled,
         },
         { onConflict: 'user_id' },
       )
-      .select('user_id, gap_filling_preferences')
+      .select('user_id, gap_filling_preferences, big3_enabled')
       .maybeSingle();
 
     if (error) throw handleSupabaseError(error);
-    const payloadValue = parseGapFillingPreferences((data as UserPreferencesRow | null)?.gap_filling_preferences);
-    return mergePreferences(payloadValue);
+    const row = data as UserPreferencesRow | null;
+    const payloadValue = parseGapFillingPreferences(row?.gap_filling_preferences);
+    return mergePreferences(payloadValue, row?.big3_enabled);
   } catch (error) {
     if (__DEV__) {
       console.warn('[UserPreferences] Failed to save preferences:', error);

@@ -10,6 +10,7 @@ export interface UserDataPreferences {
   verificationAlerts: boolean;
   realTimeUpdates: boolean;
   verificationStrictness: VerificationStrictness;
+  big3Enabled: boolean;
 }
 
 export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
@@ -19,6 +20,7 @@ export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
   verificationAlerts: true,
   realTimeUpdates: false,
   verificationStrictness: 'balanced',
+  big3Enabled: false,
 };
 
 interface UserPreferencesState {
