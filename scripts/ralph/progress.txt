@@ -32,6 +32,8 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - When labeling unknown gaps as screen time or productive, require screen time to account for >50% of the block's duration — prevents mislabeling morning routines, church, etc.
 - Hierarchical activity categories live in `tm.activity_categories` (self-referencing parent_id). Types are `ActivityCategory`, `ActivityCategoryInsert`, `ActivityCategoryUpdate` exported from `services/activity-categories.ts`. Seed defaults via `tm.seed_default_activity_categories(user_id)`.
 - `public.update_updated_at_column()` is a shared trigger function — use it for all tables with `updated_at` columns
+- `HierarchicalCategoryPicker` molecule component in `components/molecules/HierarchicalCategoryPicker.tsx` — accepts flat `ActivityCategory[]`, builds tree internally, returns `(categoryId, CategoryPath)` on select. Exported from `molecules/index.ts` with `CategoryPath` and `HierarchicalCategoryPickerProps` types.
+- Molecule components follow NativeWind + Pressable pattern: use `className` for static styles, `style` prop for dynamic values (e.g., per-depth indentation). Exported from `molecules/index.ts`.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -255,4 +257,30 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - `services/index.ts` re-export was already in place from US-034 — no changes needed there.
   - The `tmSchema()` helper pattern is used across multiple service files to work with the `tm` schema. Each file defines its own local copy since it returns `any` to bypass Supabase client generics.
   - `buildCategoryTree()` is a pure function (no Supabase calls) — it can be used in React components or anywhere without async concerns.
+---
+
+## 2026-01-26 - US-036
+- **What was implemented**: Created HierarchicalCategoryPicker molecule component for selecting categories from a hierarchical tree with expand/collapse, search, and visual hierarchy.
+- **Component features**:
+  - Accepts flat `ActivityCategory[]` prop and builds tree internally via `buildCategoryTree()` (memoized)
+  - Top-level categories show expand/collapse chevrons (ChevronRight/ChevronDown from lucide-react-native)
+  - Subcategories indented by 20px per depth level, recursively expandable
+  - Selecting any category at any level calls `onSelect(categoryId, path)` where path is `CategoryPath` (string array of names from root to leaf)
+  - Selected category highlighted: blue background (#DBEAFE), bold blue text (#2563EB), Check icon
+  - Top-level categories render with semibold font; subcategories with normal weight
+  - Color dots shown when category has a `color` value
+  - Search input at top with Search icon — filters tree to matching branches, auto-expands all nodes when searching
+  - Matched text highlighted in bold blue via `highlightMatch()` helper
+  - Empty state messages for no results / no categories
+  - Props: `categories` (flat list), `selectedCategoryId` (nullable), `onSelect` callback
+- **Exported types**: `CategoryPath`, `HierarchicalCategoryPickerProps`
+- **Files changed**:
+  - `apps/mobile/src/components/molecules/HierarchicalCategoryPicker.tsx` — New component file
+  - `apps/mobile/src/components/molecules/index.ts` — Added exports for component and types
+- **Learnings for future iterations:**
+  - The `ActivityCategory` type (flat row from DB) does NOT have a `children` field — only `ActivityCategoryNode` (from `buildCategoryTree()`) has children. Don't access `.children` on `ActivityCategory[]` directly.
+  - NativeWind `className` works on React Native components, but dynamic padding (per-depth indentation) needs `style={{ paddingLeft: value }}` since Tailwind can't compute dynamic values.
+  - `Pressable.onPress` with `e.stopPropagation()` works in React Native for nested pressables (e.g., chevron inside row) — prevents the parent row's onPress from firing.
+  - The `buildCategoryTree()` function is pure and memoization-safe — wrap in `useMemo` with `[categories]` dep.
+  - When filtering a tree by search query, collect matching IDs + all ancestor IDs, then recursively prune the tree. Auto-expand all nodes during search for best UX.
 ---

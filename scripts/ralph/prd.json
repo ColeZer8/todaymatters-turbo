@@ -187,8 +187,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Depends on US-035 CRUD service. Reusable across event editor, setup, and analytics."
+      "passes": true,
+      "notes": "COMPLETED — Created HierarchicalCategoryPicker molecule component at components/molecules/HierarchicalCategoryPicker.tsx. Features: (1) Accepts flat ActivityCategory[] and builds tree via buildCategoryTree(). (2) Top-level categories shown with expand/collapse chevrons; tap chevron to reveal subcategories indented by 20px per depth level. (3) Sub-subcategories also expandable (recursive rendering). (4) onSelect returns category id AND full CategoryPath (array of names from root to leaf). (5) Selected category highlighted with blue background + checkmark + bold blue text. (6) Search input at top filters by name — matching branches auto-expand, non-matching branches pruned. Matched text highlighted in bold blue. (7) Props: categories, selectedCategoryId, onSelect. (8) Exported from molecules/index.ts with CategoryPath and HierarchicalCategoryPickerProps types. Uses NativeWind styling, lucide-react-native icons (ChevronRight, ChevronDown, Search, Check), color dot for categories with color field. Zero new TS errors."
     },
     {
       "id": "US-037",
