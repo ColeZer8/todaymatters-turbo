@@ -354,8 +354,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "Requires location data to be working (US-027). Uses stationary point detection from location_hourly."
+      "passes": true,
+      "notes": "COMPLETED — Travel segment detection was already largely implemented across prior stories (US-033 added travel kind/category, buildCommuteEvent, and travel detection in replaceUnknownWithLocationEvidence). US-046 made two key improvements: (1) replaceUnknownWithTransitions now always runs regardless of gapFillingPreference (was previously aggressive-only) — travel between locations is evidence-based, not a gap-filling suggestion. (2) Fixed minimum gap threshold in replaceUnknownWithTransitions from 15 min to 5 min, matching the <5 min AC and aligning with replaceUnknownWithLocationEvidence. Two travel detection paths: replaceUnknownWithLocationEvidence detects travel in gaps between location blocks (5-90 min, different labels), and replaceUnknownWithTransitions detects travel between different-location events (5-90 min). Travel events use kind:'travel', category:'travel', title 'Travel: A → B'. Events are editable in the actual column (routes to actual-adjust). 'travel' was already in EventCategory and CalendarEventMeta.kind."
     },
     {
       "id": "US-047",

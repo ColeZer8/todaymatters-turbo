@@ -541,3 +541,22 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - `buildCategoryDisplayName()` is a client-side helper that walks parent_id chain to build "Parent > Child > Grandchild" display names from flat ActivityCategory[]. Reusable wherever hierarchical names are needed.
   - Manual browser verification is needed to confirm the place labels settings screen renders correctly.
 ---
+
+## 2026-01-26 - US-046
+- **What was implemented**: Travel segment detection improvements in the evidence pipeline. Most travel detection was already implemented across US-033 (travel kind/category, buildCommuteEvent, replaceUnknownWithLocationEvidence travel detection) and earlier stories. US-046 made two targeted improvements to ensure travel detection works reliably.
+- **Fix 1 (Always run travel detection)**: `replaceUnknownWithTransitions` was only called when `gapFillingPreference === 'aggressive'` (behind `allowTransitions` flag). Since travel between locations is evidence-based (observable location change), not a speculative gap-filling suggestion, it should always run. Changed from conditional to unconditional execution in the pipeline.
+- **Fix 2 (5-min minimum gap threshold)**: `replaceUnknownWithTransitions` required a 15-min minimum gap to detect travel between events. This was inconsistent with `replaceUnknownWithLocationEvidence` which correctly used 5-min minimum (matching AC: <5 min = not travel). Changed from `gapMinutes < 15` to `gapMinutes < 5`.
+- **Existing travel detection verified**:
+  - Two detection paths: (1) `replaceUnknownWithLocationEvidence` — detects travel in gaps between adjacent location blocks with different labels (5-90 min, calls `buildCommuteEvent`). (2) `replaceUnknownWithTransitions` — detects travel between known events with different location labels (now 5-90 min, creates travel events inline).
+  - Both produce events with `kind: 'travel'`, `category: 'travel'`, title `Travel: A → B`.
+  - `buildCommuteEvent` includes screen time overlay info and data quality metrics.
+  - `'travel'` was already in `EventCategory` (line 14) and `CalendarEventMeta.kind` (line 52) since US-033.
+  - Travel events are editable: actual column routes all events to `/actual-adjust` (ComprehensiveCalendarTemplate lines 578-591).
+  - Short movements <5 min are NOT flagged as travel (both functions check `gapMinutes >= 5`).
+- **Files changed**:
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Made `replaceUnknownWithTransitions` unconditional, changed minimum gap from 15 to 5 minutes
+- **Learnings for future iterations:**
+  - Travel detection runs in two pipeline stages: `replaceUnknownWithLocationEvidence` (stage 3, always runs) and `replaceUnknownWithTransitions` (stage 5, now always runs). Stage 3 handles gaps between location blocks; stage 5 handles gaps between arbitrary events with different location labels.
+  - Evidence-based detection (location change → travel) should not be gated behind gap-filling preference. Only speculative suggestions (productive usage, prep/wind-down, patterns) should respect the preference setting.
+  - The prep/wind-down detection (`replaceUnknownWithPrepWindDown`) is correctly kept behind `allowTransitions` since it's more speculative than travel detection.
+---
