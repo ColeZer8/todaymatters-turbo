@@ -37,6 +37,9 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - `seedDefaultActivityCategories(userId)` in `activity-categories.ts` calls `tm.seed_default_activity_categories` via RPC — idempotent, safe to call on every setup screen mount.
 - `ActivityCategory` uses `.name` (not `.label`) — differs from the old `CoreCategory` type which used `.label`. Watch for this when migrating from the flat store system.
 - Setup screens use `SETUP_SCREENS_STEPS` from `constants/setup-screens.ts` for step numbers; full onboarding uses `ONBOARDING_STEPS` from `constants/onboarding.ts` — different step counts.
+- Daily Big 3 priorities live in `tm.daily_big3` (unique on user_id + date). Types: `DailyBig3`, `DailyBig3Insert`, `DailyBig3Update` from `services/daily-big3.ts`. CRUD: `fetchBig3ForDate`, `upsertBig3ForDate`, `deleteBig3ForDate`.
+- `big3_enabled` boolean is a column on `tm.user_data_preferences`, exposed as `big3Enabled` in `UserDataPreferences` interface (default: false). Read/write via `fetchUserDataPreferences` / `upsertUserDataPreferences`.
+- `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses manual `UserPreferencesRow` interface. When adding new columns, update: (1) migration, (2) `UserPreferencesRow`, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()`, (5) fetch select clause, (6) upsert payload.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -324,4 +327,40 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - The old `CoreCategory` store data and `profiles.core_categories` JSON blob remain in the codebase (used by `use-onboarding-sync.ts` for loading existing data). They are not deleted to preserve backward compatibility for users who started onboarding before this change.
   - The EXAMPLE_SUBCATEGORIES map in the template uses lowercase category names as keys (e.g., 'faith', 'personal growth') to match the `name.toLowerCase()` of top-level activity categories from the seed function.
   - Manual browser verification is needed to confirm the hierarchical categories render correctly during setup.
+---
+
+## 2026-01-26 - US-039
+- **What was implemented**: Created Big 3 Daily Priorities database schema, TypeScript types, CRUD service, and integrated big3_enabled preference into the existing user preferences system.
+- **Migration (`20260126_create_tm_daily_big3.sql`)**:
+  - Table `tm.daily_big3`: id (UUID PK), user_id (FK → auth.users), date (date), priority_1/2/3 (text, default ''), category_id_1/2/3 (nullable FK → tm.activity_categories, ON DELETE SET NULL), created_at, updated_at
+  - Unique constraint `(user_id, date)` — one Big 3 set per day per user
+  - Indexes on user_id and (user_id, date) for common query patterns
+  - `updated_at` trigger using `public.update_updated_at_column()`
+  - RLS policies: select/insert/update/delete own rows (idempotent DO block pattern)
+  - Added `big3_enabled boolean not null default false` column to existing `tm.user_data_preferences` table
+- **TypeScript types (`daily-big3.ts`)**:
+  - `DailyBig3` = Row type from `Database['tm']['Tables']['daily_big3']`
+  - `DailyBig3Insert` = Insert type
+  - `DailyBig3Update` = Update type
+- **CRUD service (`daily-big3.ts`)**:
+  - `fetchBig3ForDate(userId, date)` — returns DailyBig3 | null (uses maybeSingle)
+  - `upsertBig3ForDate(input)` — upserts on (user_id, date) conflict
+  - `deleteBig3ForDate(userId, date)` — deletes the row
+- **User preferences changes**:
+  - `user-preferences-store.ts`: Added `big3Enabled: boolean` to `UserDataPreferences` interface, default `false`
+  - `user-preferences.ts`: Updated `UserPreferencesRow` to include `big3_enabled`, updated `mergePreferences()` to accept and merge `big3Enabled`, updated fetch to select `big3_enabled` column, updated upsert to persist `big3_enabled`
+- **database.types.ts**: Added `daily_big3` table with Row/Insert/Update/Relationships types
+- **Exported from** `services/index.ts`
+- **Files changed**:
+  - `supabase/migrations/20260126_create_tm_daily_big3.sql` — New migration
+  - `apps/mobile/src/lib/supabase/database.types.ts` — Added daily_big3 table types
+  - `apps/mobile/src/lib/supabase/services/daily-big3.ts` — New CRUD service
+  - `apps/mobile/src/lib/supabase/services/index.ts` — Added re-export
+  - `apps/mobile/src/lib/supabase/services/user-preferences.ts` — big3_enabled read/write
+  - `apps/mobile/src/stores/user-preferences-store.ts` — big3Enabled field + default
+- **Learnings for future iterations:**
+  - `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses a manual `UserPreferencesRow` interface. When adding new preference columns, you must update: (1) migration, (2) `UserPreferencesRow` interface, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()` function, (5) fetch `.select()` clause, (6) upsert payload object.
+  - Category FKs use `ON DELETE SET NULL` (not CASCADE) since deleting a category shouldn't delete the Big 3 entry — just nullify the category link.
+  - The upsert service uses `onConflict: 'user_id,date'` (comma-separated string) matching the unique constraint columns.
+  - `maybeSingle()` is correct for fetchBig3ForDate since the row may not exist on first access for a given date.
 ---

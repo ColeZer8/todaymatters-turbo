@@ -237,8 +237,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "Schema + service only — UI is split across US-040 and US-041"
+      "passes": true,
+      "notes": "COMPLETED — Created Supabase migration for tm.daily_big3 table with: id, user_id, date, priority_1/2/3 (text), category_id_1/2/3 (FK → activity_categories, ON DELETE SET NULL), created_at, updated_at. Unique constraint on (user_id, date). RLS policies for select/insert/update/delete. Updated-at trigger. Added big3_enabled boolean column to tm.user_data_preferences. Updated database.types.ts with daily_big3 Row/Insert/Update/Relationships types. Created daily-big3.ts CRUD service with fetchBig3ForDate (maybeSingle), upsertBig3ForDate (onConflict: user_id,date), deleteBig3ForDate. Added big3Enabled to UserDataPreferences interface, DEFAULT_USER_PREFERENCES (false), and user-preferences service (fetch/upsert read/write big3_enabled column). Exported from services/index.ts. Zero new TS errors."
     },
     {
       "id": "US-040",
