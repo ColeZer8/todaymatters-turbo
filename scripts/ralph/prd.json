@@ -219,8 +219,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Depends on US-035 CRUD service"
+      "passes": true,
+      "notes": "COMPLETED — Rewrote core-categories.tsx to use tm.activity_categories instead of flat CoreCategory[] in onboarding store. On mount: seeds default top-level categories via seedDefaultActivityCategories() (idempotent — creates Faith, Family, Work, Health, Personal Growth, Finances, Other), then fetches all categories. Top-level categories render as expandable sections. Users add unlimited subcategories via createActivityCategory() with parent_id. Subcategories are deleted via deleteActivityCategory(). 'Other' always appears as a permanent top-level category from the seed function. LLM suggestion engine (generateOnboardingCategorySuggestionsLlm) generates subcategory ideas by mapping top-level categories as 'values' and existing subcategories as 'categories'. Template updated to use ActivityCategory type from the CRUD service. All categories are persisted directly to tm.activity_categories — no intermediate onboarding store sync needed."
     },
     {
       "id": "US-039",

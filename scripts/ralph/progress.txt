@@ -34,6 +34,9 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
 - `public.update_updated_at_column()` is a shared trigger function — use it for all tables with `updated_at` columns
 - `HierarchicalCategoryPicker` molecule component in `components/molecules/HierarchicalCategoryPicker.tsx` — accepts flat `ActivityCategory[]`, builds tree internally, returns `(categoryId, CategoryPath)` on select. Exported from `molecules/index.ts` with `CategoryPath` and `HierarchicalCategoryPickerProps` types.
 - Molecule components follow NativeWind + Pressable pattern: use `className` for static styles, `style` prop for dynamic values (e.g., per-depth indentation). Exported from `molecules/index.ts`.
+- `seedDefaultActivityCategories(userId)` in `activity-categories.ts` calls `tm.seed_default_activity_categories` via RPC — idempotent, safe to call on every setup screen mount.
+- `ActivityCategory` uses `.name` (not `.label`) — differs from the old `CoreCategory` type which used `.label`. Watch for this when migrating from the flat store system.
+- Setup screens use `SETUP_SCREENS_STEPS` from `constants/setup-screens.ts` for step numbers; full onboarding uses `ONBOARDING_STEPS` from `constants/onboarding.ts` — different step counts.
 
 ## Critical Issue - Android Physical Device
 - **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
@@ -301,4 +304,24 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - The `fetchActivityCategories` call is non-blocking — if it fails (e.g., user has no categories yet), the UI gracefully falls back to the flat LIFE_AREA_OPTIONS pills.
   - The existing flat `category` enum (`EventCategory`) is preserved alongside `category_id` for backward compatibility. The pipeline, overlap checks, and other consumers still use the enum. The `category_id` provides a more granular hierarchical classification.
   - Manual browser verification is needed to confirm the picker renders correctly in the event editor.
+---
+
+## 2026-01-26 - US-038
+- **What was implemented**: Updated the Setup Core Categories screen to use the hierarchical `tm.activity_categories` system instead of the flat `CoreCategory[]` stored in the onboarding Zustand store and `profiles.core_categories` JSON blob.
+- **Architecture change**: Previously, categories were stored locally in the onboarding store as `CoreCategory[]` (with valueId, label, color, isCustom) and synced to `profiles.core_categories` (a JSONB column). Now, categories are stored directly in `tm.activity_categories` (relational table with self-referencing parent_id) and all mutations go through the CRUD service. The onboarding store's `coreCategories` field is no longer used by this screen.
+- **Changes made**:
+  - `activity-categories.ts`: Added `seedDefaultActivityCategories(userId)` function that calls the `tm.seed_default_activity_categories` SQL function via `supabase.schema('tm').rpc()`. This creates 7 default top-level categories (Faith, Family, Work, Health, Personal Growth, Finances, Other) idempotently.
+  - `core-categories.tsx`: Completely rewritten. Removed onboarding store category management (setCoreCategories, addCoreCategory, removeCoreCategory, saveCoreCategories). Added: seedDefaultActivityCategories on mount, fetchActivityCategories to load all categories, createActivityCategory for adding subcategories, deleteActivityCategory for removal. Top-level categories are derived from the flat list (parent_id === null). Subcategories grouped by parent_id. LLM suggestions map top-level categories as "values" and subcategories as "categories" to generate suggestions via the existing `generateOnboardingCategorySuggestionsLlm` endpoint.
+  - `CoreCategoriesTemplate.tsx`: Updated props interface from `CoreValue[]` + `CoreCategory[]` to `ActivityCategory[]` top-level + subcategoriesByParent map. Replaced `CoreCategory` rendering with `ActivityCategory` rendering (uses `.name` instead of `.label`, resolves icons and colors by top-level category name). Added loading state for initial category fetch. The "Other" category renders with Star icon and gray accent.
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — Added seedDefaultActivityCategories function
+  - `apps/mobile/src/app/core-categories.tsx` — Rewritten to use CRUD service
+  - `apps/mobile/src/components/templates/CoreCategoriesTemplate.tsx` — Rewritten for ActivityCategory data model
+- **Learnings for future iterations:**
+  - `supabase.schema('tm').rpc()` can call functions in the tm schema — no need for a custom SQL helper.
+  - The seed function `tm.seed_default_activity_categories` is idempotent (checks if user already has categories). Safe to call on every mount during setup.
+  - `ActivityCategory` uses `.name` (not `.label`) for the display text — different from the old `CoreCategory` type which used `.label`.
+  - The old `CoreCategory` store data and `profiles.core_categories` JSON blob remain in the codebase (used by `use-onboarding-sync.ts` for loading existing data). They are not deleted to preserve backward compatibility for users who started onboarding before this change.
+  - The EXAMPLE_SUBCATEGORIES map in the template uses lowercase category names as keys (e.g., 'faith', 'personal growth') to match the `name.toLowerCase()` of top-level activity categories from the seed function.
+  - Manual browser verification is needed to confirm the hierarchical categories render correctly during setup.
 ---
