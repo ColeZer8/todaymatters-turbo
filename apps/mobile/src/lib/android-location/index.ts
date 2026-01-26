@@ -112,37 +112,81 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   };
 }
 
-export async function startAndroidBackgroundLocationAsync(): Promise<void> {
+export type StartAndroidLocationResult =
+  | { ok: true; reason: 'started' | 'already_running' }
+  | { ok: false; reason: 'not_available' | 'no_module' | 'services_disabled' | 'fg_denied' | 'bg_denied' | 'start_failed'; detail?: string };
+
+export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroidLocationResult> {
   const support = getAndroidLocationSupportStatus();
-  if (support !== 'available') return;
+  if (support !== 'available') {
+    console.log(`📍 [start] Skipped: support=${support}`);
+    return { ok: false, reason: 'not_available' };
+  }
 
   const Location = await loadExpoLocationAsync();
-  if (!Location) return;
+  if (!Location) {
+    console.log('📍 [start] Skipped: expo-location module not available');
+    return { ok: false, reason: 'no_module' };
+  }
 
   const servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (!servicesEnabled) return;
+  if (!servicesEnabled) {
+    console.log('📍 [start] Skipped: location services disabled');
+    return { ok: false, reason: 'services_disabled' };
+  }
 
   // IMPORTANT: Do not auto-request permissions here; onboarding should drive prompts.
   const fg = await Location.getForegroundPermissionsAsync();
   const bg = await getBackgroundPermissionsSafeAsync(Location);
-  if (fg.status !== 'granted') return;
-  if (bg.status !== 'granted') return;
+  if (fg.status !== 'granted') {
+    console.log(`📍 [start] Skipped: foreground permission=${fg.status}`);
+    return { ok: false, reason: 'fg_denied' };
+  }
+  if (bg.status !== 'granted') {
+    console.log(`📍 [start] Skipped: background permission=${bg.status}`);
+    return { ok: false, reason: 'bg_denied' };
+  }
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
-  if (alreadyStarted) return;
+  if (alreadyStarted) {
+    return { ok: true, reason: 'already_running' };
+  }
 
-  await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 40,
-    // Android-specific: control update cadence.
-    timeInterval: 2 * 60 * 1000,
-    // Foreground service is required for background reliability.
-    foregroundService: {
-      notificationTitle: 'TodayMatters is tracking your day',
-      notificationBody: 'Used to build an hour-by-hour view of your day for schedule comparison.',
-      notificationColor: '#2563EB',
-    },
-  });
+  try {
+    await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
+      accuracy: Location.Accuracy.Balanced,
+      distanceInterval: 40,
+      // Android-specific: control update cadence.
+      timeInterval: 2 * 60 * 1000,
+      // Foreground service is required for background reliability.
+      foregroundService: {
+        notificationTitle: 'TodayMatters is tracking your day',
+        notificationBody: 'Used to build an hour-by-hour view of your day for schedule comparison.',
+        notificationColor: '#2563EB',
+      },
+    });
+    console.log('📍 [start] Background location task started successfully');
+    return { ok: true, reason: 'started' };
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error('📍 [start] Failed to start background location task:', detail);
+    return { ok: false, reason: 'start_failed', detail };
+  }
+}
+
+/**
+ * Check if the Android background location task is currently running.
+ * Returns false on non-Android or if the check fails.
+ */
+export async function isAndroidBackgroundLocationRunningAsync(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  const Location = await loadExpoLocationAsync();
+  if (!Location) return false;
+  try {
+    return await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  } catch {
+    return false;
+  }
 }
 
 export async function stopAndroidBackgroundLocationAsync(): Promise<void> {

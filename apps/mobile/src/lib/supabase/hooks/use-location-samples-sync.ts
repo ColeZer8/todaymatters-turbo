@@ -12,7 +12,14 @@ import {
   startAndroidBackgroundLocationAsync,
   stopAndroidBackgroundLocationAsync,
   clearPendingAndroidLocationSamplesAsync,
+  isAndroidBackgroundLocationRunningAsync,
 } from '@/lib/android-location';
+
+/** Max consecutive start failures before backing off until next app foreground. */
+const MAX_RETRY_ATTEMPTS = 3;
+
+/** How often to check if the Android background task is still alive (ms). */
+const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 
 interface UseLocationSamplesSyncOptions {
   flushIntervalMs?: number;
@@ -25,6 +32,7 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
 
   const lastAuthedUserIdRef = useRef<string | null>(null);
   const isFlushingRef = useRef(false);
+  const retryAttemptsRef = useRef(0);
 
   // Start/stop background tracking based on authentication.
   useEffect(() => {
@@ -32,13 +40,19 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
 
     if (isAuthenticated && userId) {
       lastAuthedUserIdRef.current = userId;
+      retryAttemptsRef.current = 0;
       if (Platform.OS === 'ios') {
         startIosBackgroundLocationAsync().catch((e) => {
           if (__DEV__) console.error('📍 Failed to start iOS background location:', e);
         });
       } else {
-        startAndroidBackgroundLocationAsync().catch((e) => {
-          if (__DEV__) console.error('📍 Failed to start Android background location:', e);
+        startAndroidBackgroundLocationAsync().then((result) => {
+          if (!result.ok) {
+            const detail = 'detail' in result ? result.detail : undefined;
+            console.warn(`📍 [sync] Android location start failed: ${result.reason}${detail ? ` — ${detail}` : ''}`);
+          }
+        }).catch((e) => {
+          console.error('📍 [sync] Android location start threw:', e);
         });
       }
       return;
@@ -68,6 +82,59 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
       }
       lastAuthedUserIdRef.current = null;
     }
+  }, [isAuthenticated, userId]);
+
+  // Android health check: periodically verify background task is alive and restart if needed.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!isAuthenticated || !userId) return;
+
+    let isCancelled = false;
+
+    const healthCheck = async () => {
+      if (isCancelled) return;
+      if (retryAttemptsRef.current >= MAX_RETRY_ATTEMPTS) {
+        console.log(`📍 [health] Skipping — retry limit reached (${MAX_RETRY_ATTEMPTS}), waiting for next foreground event`);
+        return;
+      }
+
+      const running = await isAndroidBackgroundLocationRunningAsync();
+      if (running) {
+        // Task is alive — reset retry counter.
+        retryAttemptsRef.current = 0;
+        return;
+      }
+
+      // Task is not running — attempt restart.
+      retryAttemptsRef.current += 1;
+      console.log(`📍 [health] Background task not running — restarting (attempt ${retryAttemptsRef.current}/${MAX_RETRY_ATTEMPTS})`);
+      const result = await startAndroidBackgroundLocationAsync();
+      if (result.ok) {
+        console.log(`📍 [health] Restart successful: ${result.reason}`);
+        retryAttemptsRef.current = 0;
+      } else {
+        const detail = 'detail' in result ? result.detail : undefined;
+        console.warn(`📍 [health] Restart failed: ${result.reason}${detail ? ` — ${detail}` : ''}`);
+      }
+    };
+
+    // Run health check on a slower interval than flush.
+    const id = setInterval(healthCheck, HEALTH_CHECK_INTERVAL_MS);
+
+    // Also health-check when app comes to foreground (resets retry counter first).
+    const appStateListener = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') return;
+      retryAttemptsRef.current = 0; // Reset on foreground — user is present.
+      healthCheck().catch((e) => {
+        console.error('📍 [health] Foreground health check failed:', e);
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+      clearInterval(id);
+      appStateListener.remove();
+    };
   }, [isAuthenticated, userId]);
 
   // Periodically flush queued samples while authenticated.
