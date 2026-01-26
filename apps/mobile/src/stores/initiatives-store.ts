@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { formatLocalYmd } from '@/lib/dates/local-date';
 
 // ============================================================================
 // Types
@@ -75,7 +76,7 @@ const calculateProgress = (milestones: Milestone[]): number => {
 const getDefaultDueDate = () => {
   const date = new Date();
   date.setDate(date.getDate() + 30);
-  return date.toISOString().split('T')[0];
+  return formatLocalYmd(date);
 };
 
 // ============================================================================

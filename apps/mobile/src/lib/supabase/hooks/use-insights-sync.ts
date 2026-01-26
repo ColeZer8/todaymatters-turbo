@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/stores';
+import { getDeviceTimezone } from '@/lib/dates/local-date';
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -22,16 +23,9 @@ import {
 import { fetchDataSyncState, upsertDataSyncState } from '@/lib/supabase/services/data-sync-state';
 import { syncIosScreenTimeSummary, syncAndroidUsageSummary } from '@/lib/supabase/services/screen-time-sync';
 import { syncIosHealthSummary, syncAndroidHealthSummary } from '@/lib/supabase/services/health-sync';
+import { updateProfile } from '@/lib/supabase/services/profiles';
 
 const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getDeviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-  } catch {
-    return 'UTC';
-  }
-}
 
 async function shouldSyncDataset(userId: string, dataset: 'health' | 'screen_time', platform: 'ios' | 'android', provider: string, minIntervalMs: number): Promise<boolean> {
   const state = await fetchDataSyncState(userId, dataset, platform, provider);
@@ -46,18 +40,28 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const intervalMs = options.intervalMs ?? DEFAULT_SYNC_INTERVAL_MS;
   const isSyncingRef = useRef(false);
+  const lastTimezoneRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return;
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
 
     let isCancelled = false;
-    const timezone = getDeviceTimezone();
 
     const tick = async () => {
       if (isCancelled || isSyncingRef.current) return;
       isSyncingRef.current = true;
       try {
+        const timezone = getDeviceTimezone();
+        if (lastTimezoneRef.current !== timezone) {
+          lastTimezoneRef.current = timezone;
+          try {
+            await updateProfile(userId, { timezone });
+          } catch (error) {
+            console.warn('[InsightsSync] Failed to sync profile timezone:', error instanceof Error ? error.message : String(error));
+          }
+        }
+
         if (Platform.OS === 'ios') {
           const support = getIosInsightsSupportStatus();
           if (support === 'available') {
