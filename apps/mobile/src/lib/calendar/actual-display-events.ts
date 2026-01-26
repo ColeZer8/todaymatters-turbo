@@ -470,11 +470,10 @@ export function buildActualDisplayEvents({
         appCategoryOverrides,
       )
     : withLocationFilled;
-  const withTransitions = allowTransitions
-    ? replaceUnknownWithTransitions(withProductiveFilled, {
-        locationBlocks,
-      })
-    : withProductiveFilled;
+  // Travel detection always runs — it's evidence-based (location change), not a gap-filling suggestion
+  const withTransitions = replaceUnknownWithTransitions(withProductiveFilled, {
+    locationBlocks,
+  });
   const withPrepWindDown = allowTransitions
     ? replaceUnknownWithPrepWindDown(withTransitions, {
         locationBlocks,
@@ -1245,7 +1244,7 @@ function replaceUnknownWithTransitions(
     }
 
     const gapMinutes = event.duration;
-    if (gapMinutes < 15 || gapMinutes > 90) {
+    if (gapMinutes < 5 || gapMinutes > 90) {
       updated.push(event);
       continue;
     }
