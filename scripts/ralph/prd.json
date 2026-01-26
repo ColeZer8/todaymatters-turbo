@@ -271,8 +271,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Depends on US-039 schema and US-040 opt-in. Existing isBig3 flag in CalendarEventMeta."
+      "passes": true,
+      "notes": "COMPLETED — Replaced simple Big 3 toggle with full priority assignment section in event editor. Big3Section component conditionally renders when big3Enabled preference is true. When Big 3 priorities exist for today (loaded from tm.daily_big3 via fetchBig3ForDate), shows 3 tappable priority buttons with toggle behavior (tap to assign, tap again to unassign). Assigned priority stored as big3_priority (1, 2, or 3) and isBig3: true in CalendarEventMeta. When no Big 3 set for today, shows inline input form with 3 text fields and 'Save Big 3' button that persists via upsertBig3ForDate. Added big3_priority field to CalendarEventMeta type. Zero new TS errors (36 pre-existing)."
     },
     {
       "id": "US-042",

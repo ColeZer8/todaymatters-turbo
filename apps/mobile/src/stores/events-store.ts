@@ -24,6 +24,8 @@ export interface CalendarEventMeta {
   /** Hierarchical activity category id from tm.activity_categories */
   category_id?: string | null;
   isBig3?: boolean;
+  /** Which Big 3 priority (1, 2, or 3) this event is assigned to */
+  big3_priority?: 1 | 2 | 3 | null;
   location?: string | null;
   value_label?: string | null;
   goal_title?: string | null;

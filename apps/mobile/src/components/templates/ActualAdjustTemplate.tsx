@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Pressable, ScrollView, Text, TextInput, View, Switch } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import type { EventCategory } from '@/stores';
 import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
 import { HierarchicalCategoryPicker } from '@/components/molecules/HierarchicalCategoryPicker';
@@ -14,6 +14,13 @@ export interface ActualAdjustSuggestion {
   reason?: string;
 }
 
+/** Big 3 priorities for today */
+export interface Big3Priorities {
+  priority_1: string;
+  priority_2: string;
+  priority_3: string;
+}
+
 export interface ActualAdjustTemplateProps {
   title: string;
   titleValue: string;
@@ -23,6 +30,12 @@ export interface ActualAdjustTemplateProps {
   isSleep?: boolean;
   selectedCategory: EventCategory;
   isBig3: boolean;
+  /** Which Big 3 priority is assigned (1, 2, or 3), or null if none */
+  big3Priority: 1 | 2 | 3 | null;
+  /** Whether Big 3 feature is enabled for this user */
+  big3Enabled: boolean;
+  /** Today's Big 3 priorities, or null if not yet set */
+  big3Priorities: Big3Priorities | null;
   values: string[];
   selectedValue: string | null;
   linkedGoals: Array<{ id: string; label: string }>;
@@ -47,6 +60,10 @@ export interface ActualAdjustTemplateProps {
   onChangeTitle: (value: string) => void;
   onChangeNote: (value: string) => void;
   onToggleBig3: (value: boolean) => void;
+  /** Called when user taps a Big 3 priority button (1, 2, or 3) or null to unassign */
+  onSelectBig3Priority: (priority: 1 | 2 | 3 | null) => void;
+  /** Called when user sets Big 3 from inline input (no Big 3 set for today) */
+  onSetBig3Inline: (p1: string, p2: string, p3: string) => void;
   onSelectCategory: (value: EventCategory) => void;
   onSelectValue: (value: string | null) => void;
   onSelectGoal: (value: string | null) => void;
@@ -63,6 +80,144 @@ const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
   { id: 'unknown', label: 'Other' },
 ];
 
+// ---------------------------------------------------------------------------
+// Big 3 Section — shows priority buttons or inline input
+// ---------------------------------------------------------------------------
+
+interface Big3SectionProps {
+  big3Priorities: Big3Priorities | null;
+  big3Priority: 1 | 2 | 3 | null;
+  onSelectBig3Priority: (priority: 1 | 2 | 3 | null) => void;
+  onSetBig3Inline: (p1: string, p2: string, p3: string) => void;
+}
+
+const Big3Section = ({
+  big3Priorities,
+  big3Priority,
+  onSelectBig3Priority,
+  onSetBig3Inline,
+}: Big3SectionProps) => {
+  const [inlineP1, setInlineP1] = useState('');
+  const [inlineP2, setInlineP2] = useState('');
+  const [inlineP3, setInlineP3] = useState('');
+
+  const hasPriorities =
+    big3Priorities &&
+    (big3Priorities.priority_1.trim() !== '' ||
+      big3Priorities.priority_2.trim() !== '' ||
+      big3Priorities.priority_3.trim() !== '');
+
+  if (hasPriorities) {
+    const priorities = [
+      { num: 1 as const, text: big3Priorities.priority_1 },
+      { num: 2 as const, text: big3Priorities.priority_2 },
+      { num: 3 as const, text: big3Priorities.priority_3 },
+    ].filter((p) => p.text.trim() !== '');
+
+    return (
+      <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+        <Text className="text-[13px] font-semibold text-[#111827]">Mark as Big 3</Text>
+        <Text className="mt-1 text-[12px] text-[#64748B]">
+          Assign this time block to one of today's priorities.
+        </Text>
+        <View className="mt-3 gap-2">
+          {priorities.map((p) => {
+            const isSelected = big3Priority === p.num;
+            return (
+              <Pressable
+                key={p.num}
+                onPress={() => onSelectBig3Priority(isSelected ? null : p.num)}
+                className={`flex-row items-center rounded-xl border px-4 py-3 ${
+                  isSelected
+                    ? 'border-[#2563EB] bg-[#DBEAFE]'
+                    : 'border-[#E2E8F0] bg-[#F8FAFC]'
+                }`}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <View
+                  className={`mr-3 h-6 w-6 items-center justify-center rounded-full ${
+                    isSelected ? 'bg-[#2563EB]' : 'bg-[#E2E8F0]'
+                  }`}
+                >
+                  <Text
+                    className={`text-[12px] font-bold ${
+                      isSelected ? 'text-white' : 'text-[#64748B]'
+                    }`}
+                  >
+                    {p.num}
+                  </Text>
+                </View>
+                <Text
+                  className={`flex-1 text-[13px] ${
+                    isSelected ? 'font-semibold text-[#1D4ED8]' : 'text-[#374151]'
+                  }`}
+                  numberOfLines={2}
+                >
+                  {p.text}
+                </Text>
+                {isSelected && (
+                  <Text className="text-[12px] font-semibold text-[#2563EB]">Assigned</Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  // No Big 3 set for today — show inline input
+  return (
+    <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
+      <Text className="text-[13px] font-semibold text-[#111827]">Set your Big 3 for today</Text>
+      <Text className="mt-1 text-[12px] text-[#64748B]">
+        Pick 3 things that would make today a success.
+      </Text>
+      <View className="mt-3 gap-2">
+        {[
+          { num: 1, value: inlineP1, onChange: setInlineP1 },
+          { num: 2, value: inlineP2, onChange: setInlineP2 },
+          { num: 3, value: inlineP3, onChange: setInlineP3 },
+        ].map((item) => (
+          <View key={item.num} className="flex-row items-center gap-2">
+            <View className="h-6 w-6 items-center justify-center rounded-full bg-[#E2E8F0]">
+              <Text className="text-[12px] font-bold text-[#64748B]">{item.num}</Text>
+            </View>
+            <TextInput
+              value={item.value}
+              onChangeText={item.onChange}
+              placeholder={`Priority ${item.num}`}
+              placeholderTextColor="#94A3B8"
+              className="flex-1 rounded-lg border border-[#E5E7EB] px-3 py-2 text-[13px] text-[#111827]"
+              autoCapitalize="sentences"
+              returnKeyType="done"
+            />
+          </View>
+        ))}
+      </View>
+      <Pressable
+        onPress={() => {
+          if (inlineP1.trim() || inlineP2.trim() || inlineP3.trim()) {
+            onSetBig3Inline(inlineP1.trim(), inlineP2.trim(), inlineP3.trim());
+          }
+        }}
+        disabled={!inlineP1.trim() && !inlineP2.trim() && !inlineP3.trim()}
+        className="mt-3 self-start rounded-full bg-[#2563EB] px-4 py-2"
+        style={({ pressed }) => ({
+          opacity:
+            !inlineP1.trim() && !inlineP2.trim() && !inlineP3.trim()
+              ? 0.4
+              : pressed
+                ? 0.7
+                : 1,
+        })}
+      >
+        <Text className="text-[12px] font-semibold text-white">Save Big 3</Text>
+      </Pressable>
+    </View>
+  );
+};
+
 export const ActualAdjustTemplate = ({
   title,
   titleValue,
@@ -72,6 +227,9 @@ export const ActualAdjustTemplate = ({
   isSleep = false,
   selectedCategory,
   isBig3,
+  big3Priority,
+  big3Enabled,
+  big3Priorities,
   values,
   selectedValue,
   linkedGoals,
@@ -93,6 +251,8 @@ export const ActualAdjustTemplate = ({
   onChangeTitle,
   onChangeNote,
   onToggleBig3,
+  onSelectBig3Priority,
+  onSetBig3Inline,
   onSelectCategory,
   onSelectValue,
   onSelectGoal,
@@ -187,17 +347,14 @@ export const ActualAdjustTemplate = ({
           </View>
         )}
 
-        <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-          <View className="flex-row items-center justify-between">
-            <Text className="text-[13px] font-semibold text-[#111827]">Mark as Big 3</Text>
-            <Switch
-              value={isBig3}
-              onValueChange={onToggleBig3}
-              trackColor={{ false: '#E5E7EB', true: '#93C5FD' }}
-              thumbColor={isBig3 ? '#2563EB' : '#FFFFFF'}
-            />
-          </View>
-        </View>
+        {big3Enabled && (
+          <Big3Section
+            big3Priorities={big3Priorities}
+            big3Priority={big3Priority}
+            onSelectBig3Priority={onSelectBig3Priority}
+            onSetBig3Inline={onSetBig3Inline}
+          />
+        )}
 
         <View className="mt-6">
           <Text className="text-[12px] font-semibold text-[#F97316]">LIFE AREA</Text>

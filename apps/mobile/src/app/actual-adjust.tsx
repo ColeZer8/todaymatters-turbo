@@ -2,6 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { ActualAdjustTemplate } from '@/components/templates/ActualAdjustTemplate';
+import type { Big3Priorities } from '@/components/templates/ActualAdjustTemplate';
 import { TimePickerModal } from '@/components/organisms';
 import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
 import { requestReviewTimeSuggestion } from '@/lib/supabase/services/review-time-suggestions';
@@ -9,12 +10,14 @@ import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/a
 import { applyUserAppCategoryFeedback } from '@/lib/supabase/services/user-app-categories';
 import { fetchActivityCategories } from '@/lib/supabase/services/activity-categories';
 import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
+import { fetchBig3ForDate, upsertBig3ForDate } from '@/lib/supabase/services/daily-big3';
 import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
 import {
   useAppCategoryOverridesStore,
   useAuthStore,
   useEventsStore,
   useOnboardingStore,
+  useUserPreferencesStore,
   type CalendarEventMeta,
   type EventCategory,
   type ScheduledEvent,
@@ -62,6 +65,7 @@ export default function ActualAdjustScreen() {
   }>();
 
   const userId = useAuthStore((s) => s.user?.id ?? null);
+  const big3Enabled = useUserPreferencesStore((s) => s.preferences.big3Enabled);
   const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
   const actualEvents = useEventsStore((s) => s.actualEvents);
   const addActualEvent = useEventsStore((s) => s.addActualEvent);
@@ -264,6 +268,10 @@ export default function ActualAdjustScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     event.meta?.category_id ?? null,
   );
+  const [big3Priority, setBig3Priority] = useState<1 | 2 | 3 | null>(
+    event.meta?.big3_priority ?? null,
+  );
+  const [big3Priorities, setBig3Priorities] = useState<Big3Priorities | null>(null);
 
   useEffect(() => {
     setTitleInput(event.title || 'Actual');
@@ -296,11 +304,65 @@ export default function ActualAdjustScreen() {
     return () => { cancelled = true; };
   }, [userId]);
 
+  // Load today's Big 3 priorities if Big 3 is enabled
+  useEffect(() => {
+    if (!userId || !big3Enabled) return;
+    let cancelled = false;
+    fetchBig3ForDate(userId, selectedDateYmd)
+      .then((row) => {
+        if (cancelled) return;
+        if (row) {
+          setBig3Priorities({
+            priority_1: row.priority_1 ?? '',
+            priority_2: row.priority_2 ?? '',
+            priority_3: row.priority_3 ?? '',
+          });
+        } else {
+          setBig3Priorities(null);
+        }
+      })
+      .catch((err) => {
+        if (__DEV__) console.warn('[ActualAdjust] Failed to load Big 3:', err);
+      });
+    return () => { cancelled = true; };
+  }, [userId, big3Enabled, selectedDateYmd]);
+
   const handleSelectActivityCategory = useCallback(
     (categoryId: string, _path: CategoryPath) => {
       setSelectedCategoryId(categoryId);
     },
     [],
+  );
+
+  const handleSelectBig3Priority = useCallback(
+    (priority: 1 | 2 | 3 | null) => {
+      setBig3Priority(priority);
+      setIsBig3(priority !== null);
+    },
+    [],
+  );
+
+  const handleSetBig3Inline = useCallback(
+    (p1: string, p2: string, p3: string) => {
+      if (!userId) return;
+      const newPriorities: Big3Priorities = {
+        priority_1: p1,
+        priority_2: p2,
+        priority_3: p3,
+      };
+      setBig3Priorities(newPriorities);
+      // Persist to Supabase (fire-and-forget)
+      void upsertBig3ForDate({
+        user_id: userId,
+        date: selectedDateYmd,
+        priority_1: p1,
+        priority_2: p2,
+        priority_3: p3,
+      }).catch((err) => {
+        console.warn('[ActualAdjust] Failed to save Big 3:', err);
+      });
+    },
+    [userId, selectedDateYmd],
   );
 
   const valuesOptions = useMemo(() => {
@@ -413,6 +475,7 @@ export default function ActualAdjustScreen() {
         category: finalCategory,
         category_id: selectedCategoryId ?? null,
         isBig3,
+        big3_priority: big3Priority,
         source: 'actual_adjust' as const,
         actual: true,
         tags: ['actual'],
@@ -501,6 +564,7 @@ export default function ActualAdjustScreen() {
     }
   }, [
     addActualEvent,
+    big3Priority,
     createActual,
     event,
     isBig3,
@@ -535,6 +599,9 @@ export default function ActualAdjustScreen() {
         isSleep={selectedCategory === 'sleep'}
         selectedCategory={selectedCategory}
         isBig3={isBig3}
+        big3Priority={big3Priority}
+        big3Enabled={big3Enabled}
+        big3Priorities={big3Priorities}
         values={valuesOptions}
         selectedValue={selectedValue}
         linkedGoals={linkedGoals}
@@ -570,6 +637,8 @@ export default function ActualAdjustScreen() {
         onChangeTitle={setTitleInput}
         onChangeNote={setNote}
         onToggleBig3={setIsBig3}
+        onSelectBig3Priority={handleSelectBig3Priority}
+        onSetBig3Inline={handleSetBig3Inline}
         onSelectCategory={setSelectedCategory}
         onSelectValue={setSelectedValue}
         onSelectGoal={handleSelectGoal}

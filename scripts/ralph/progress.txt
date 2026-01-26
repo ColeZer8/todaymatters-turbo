@@ -386,3 +386,25 @@ Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
   - Onboarding store persists to AsyncStorage via Zustand `persist` middleware. Adding a new boolean field with a default is safe — `merge()` in the persist config will use the default for users who don't have the field persisted yet.
   - Setup screen pattern: auth guard effect, hydration check, loading spinner, template render with step/totalSteps props. Back/forward navigation uses `router.replace()`.
 ---
+
+## 2026-01-26 - US-041
+- **What was implemented**: Added Big 3 priority assignment to the event editor. Users can now assign a time block to one of their Big 3 daily priorities when editing events, with full toggle behavior and inline priority creation.
+- **Architecture**:
+  - Replaced the simple `Switch` toggle ("Mark as Big 3") with a full `Big3Section` component that conditionally renders based on `big3Enabled` user preference.
+  - When Big 3 priorities exist for today (loaded from `tm.daily_big3` via `fetchBig3ForDate`): renders 3 tappable priority buttons showing each priority's text, numbered 1-3. Tap to assign (sets `big3_priority` and `isBig3: true`), tap again to unassign (toggle behavior).
+  - When no Big 3 set for today: renders inline input form with 3 text fields and a "Save Big 3" button. Submitting creates the Big 3 via `upsertBig3ForDate` (fire-and-forget pattern) and updates local state so buttons appear immediately.
+- **Changes made**:
+  - `events-store.ts`: Added `big3_priority?: 1 | 2 | 3 | null` to `CalendarEventMeta`.
+  - `ActualAdjustTemplate.tsx`: Removed `Switch` import. Added `Big3Priorities` interface (exported), `Big3SectionProps` internal interface, and `Big3Section` internal component. Updated `ActualAdjustTemplateProps` with `big3Priority`, `big3Enabled`, `big3Priorities`, `onSelectBig3Priority`, `onSetBig3Inline` props. Replaced simple toggle with conditional `Big3Section` rendering (only when `big3Enabled` is true).
+  - `actual-adjust.tsx`: Added imports for `Big3Priorities`, `fetchBig3ForDate`, `upsertBig3ForDate`, `useUserPreferencesStore`. Added `big3Enabled` from user preferences store. Added `big3Priority` and `big3Priorities` state. Added `useEffect` to load today's Big 3 from Supabase when `big3Enabled`. Added `handleSelectBig3Priority` (sets priority + syncs `isBig3`) and `handleSetBig3Inline` (persists to Supabase, updates local state) callbacks. Added `big3_priority: big3Priority` to meta in `handleSave`. Passes all new props to template.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `big3_priority` to `CalendarEventMeta`
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — Big3Section component, updated props
+  - `apps/mobile/src/app/actual-adjust.tsx` — Big 3 data loading, state management, and persistence
+- **Learnings for future iterations:**
+  - `Big3Priorities` is an interface exported from `ActualAdjustTemplate.tsx` (not from the Big 3 service) — it's a simpler UI-oriented type with just `priority_1/2/3` strings.
+  - The `DailyBig3` row from Supabase has `priority_1/2/3` as `string | null` (nullable), while the UI `Big3Priorities` uses `string` (defaults to `''`). Always coerce with `?? ''` when mapping.
+  - `handleSelectBig3Priority` syncs both `big3Priority` state AND `isBig3` state — when a priority is selected, `isBig3` becomes `true`; when unassigned, `isBig3` becomes `false`. This keeps backward compatibility with code that only checks `isBig3`.
+  - The inline Big 3 input uses fire-and-forget `upsertBig3ForDate` (same pattern as setup screens) — the local state updates immediately and the Supabase write happens asynchronously.
+  - Manual browser verification is needed to confirm the Big 3 section renders correctly in the event editor.
+---
