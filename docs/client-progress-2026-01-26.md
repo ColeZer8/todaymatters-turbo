@@ -5,6 +5,7 @@ Today’s work delivered a **major end-to-end upgrade** across the app’s “Ac
 
 ## Highlights (Client-Facing)
 - **Big 3 Daily Priorities (new feature, end-to-end)**: Added database schema + services, onboarding opt-in, event assignment, and a home-screen progress card so users can plan and track their day.
+- **Big 3 UX polish (quality-of-life)**: Upgraded the Big 3 input experience with a **reusable modal** and added Big 3 editing directly inside **Add Event**, so users can keep priorities up-to-date while logging activity.
 - **Hierarchical Categories (foundation + UI integration)**: Replaced the prior flat category approach with a scalable **Category → Subcategory tree**, added CRUD services, and shipped a **hierarchical picker** integrated into onboarding and the event editor.
 - **Place Labeling (UX + management + smarter automation)**: Users can now label places directly from the event editor, manage labels in settings, and the evidence pipeline can use those labels for better auto-tagging.
 - **Stability wins across the “Actual” pipeline**: Fixed several issues that were causing incorrect event durations/times, re-processing loops, and edit persistence failures.
@@ -17,6 +18,10 @@ Today’s work delivered a **major end-to-end upgrade** across the app’s “Ac
   - Added **Big 3 opt-in** during setup flow.
   - Added **Big 3 assignment** inside the event editor (so events can be tied to priorities).
   - Added **Big 3 progress** to the home screen via a dedicated progress card.
+- **Add Event integration (new)**:
+  - Users can **view/edit today’s Big 3** directly inside the Add Event flow (when Big 3 is enabled), so priorities stay current while logging activity.
+- **UX upgrade (new)**:
+  - Introduced a **Big 3 input modal** and reused it across key flows (Add Event + event adjustment) to make editing faster and more consistent.
 - **Services/State**: Implemented a dedicated Supabase service for Big 3 and wired it through existing preference flows.
 
 ### 2) Hierarchical Activity Categories
@@ -61,6 +66,7 @@ Today’s work delivered a **major end-to-end upgrade** across the app’s “Ac
   - Big 3 opt-in flow (`big3-opt-in`)
   - Place labels management (`settings/place-labels`)
 - **New UI components**:
+  - `Big3InputModal` (modal editor for Big 3 priorities; reused across flows)
   - `HierarchicalCategoryPicker` (category tree picker)
   - `Big3ProgressCard` (home progress visualization)
   - `MultiSplitControl` (supporting improved screen time splitting UX)
@@ -74,5 +80,5 @@ Today’s work delivered a **major end-to-end upgrade** across the app’s “Ac
 - **Polish**: Tighten UX copy and edge-case handling (empty-state, category seeding, and place label management flows) based on stakeholder review.
 
 ## Reference (Today’s Completed Work Items)
-Commits landed today cover: **US-026 → US-046**, including both feature work and reliability fixes across onboarding, event editing, settings, Supabase services, and the evidence pipeline.
+Commits landed today cover: **US-026 → US-046** plus follow-up polish on Big 3 (Add Event integration + modal-based editing), including both feature work and reliability fixes across onboarding, event editing, settings, Supabase services, and the evidence pipeline.
 
