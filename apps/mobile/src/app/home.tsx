@@ -11,7 +11,14 @@ import {
   getNextTimeOfDayBoundary,
   type HomeBriefDraft,
 } from '@/lib/home-brief';
-import { fetchGmailEmailEvents, fetchProfile, generateHomeBriefLlm } from '@/lib/supabase/services';
+import {
+  fetchGmailEmailEvents,
+  fetchProfile,
+  generateHomeBriefLlm,
+  fetchBig3ForDate,
+  upsertBig3ForDate,
+} from '@/lib/supabase/services';
+import type { DailyBig3 } from '@/lib/supabase/services';
 import {
   useAuthStore,
   useCurrentMinutes,
@@ -24,6 +31,7 @@ import {
   useReviewTimeStore,
   type ScheduledEvent,
 } from '@/stores';
+import { useUserPreferencesStore } from '@/stores/user-preferences-store';
 import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
 
 // Voice features require native modules and do not run in Expo Go.
@@ -88,11 +96,15 @@ function HomeScreenInner() {
   const lastLlmAt = useHomeBriefStore((s) => s.lastLlmAt);
   const setLastLlmAt = useHomeBriefStore((s) => s.setLastLlmAt);
 
+  const big3Enabled = useUserPreferencesStore((s) => s.preferences.big3Enabled);
+  const actualEventsByDate = useEventsStore((s) => s.actualEventsByDate);
+
   const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
   const [pendingCommunicationsCount, setPendingCommunicationsCount] = useState(0);
   const [pendingCommunicationsDescription, setPendingCommunicationsDescription] = useState(
     'No new Gmail to review.'
   );
+  const [big3Data, setBig3Data] = useState<DailyBig3 | null>(null);
 
   const timersRef = useRef<{ debounce?: ReturnType<typeof setTimeout>; boundary?: ReturnType<typeof setTimeout> }>({});
   const llmRequestIdRef = useRef(0);
@@ -221,6 +233,74 @@ function HomeScreenInner() {
       cancelled = true;
     };
   }, [isAuthenticated, isDemoActive, user?.id]);
+
+  // Load today's Big 3 priorities when feature is enabled.
+  useEffect(() => {
+    if (!big3Enabled || !isAuthenticated || !user?.id) return;
+    if (isDemoActive) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fetchBig3ForDate(user.id, todayYmd);
+        if (!cancelled) setBig3Data(result);
+      } catch {
+        // Non-blocking: card shows CTA if no data.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [big3Enabled, isAuthenticated, isDemoActive, todayYmd, user?.id]);
+
+  // Handler for setting Big 3 inline from the home screen CTA.
+  const handleSetBig3 = useCallback(
+    (p1: string, p2: string, p3: string) => {
+      if (!user?.id) return;
+      const input = {
+        user_id: user.id,
+        date: todayYmd,
+        priority_1: p1,
+        priority_2: p2,
+        priority_3: p3,
+      };
+      // Update local state immediately
+      setBig3Data({
+        id: 'pending',
+        user_id: user.id,
+        date: todayYmd,
+        priority_1: p1,
+        priority_2: p2,
+        priority_3: p3,
+        category_id_1: null,
+        category_id_2: null,
+        category_id_3: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      // Persist asynchronously (fire-and-forget)
+      void upsertBig3ForDate(input).then((saved) => setBig3Data(saved)).catch(() => {});
+    },
+    [todayYmd, user?.id]
+  );
+
+  // Compute Big 3 prop for the template
+  const todayActualEvents = useMemo(
+    () => actualEventsByDate[todayYmd] ?? [],
+    [actualEventsByDate, todayYmd]
+  );
+
+  const big3Prop = useMemo(() => {
+    if (!big3Enabled) return null;
+    return {
+      data: {
+        big3: big3Data,
+        actualEvents: todayActualEvents,
+      },
+      onSetBig3: handleSetBig3,
+    };
+  }, [big3Enabled, big3Data, todayActualEvents, handleSetBig3]);
 
   const evaluateBrief = useMemo(() => {
     return (trigger: string) => {
@@ -470,6 +550,7 @@ function HomeScreenInner() {
           nowMinutes: nowMinutesFromMidnight,
           onPressViewAll: handleViewAllSchedule,
         }}
+        big3={big3Prop}
         onPressGreeting={isVoiceAvailable ? handlePressGreeting : undefined}
       />
     </>

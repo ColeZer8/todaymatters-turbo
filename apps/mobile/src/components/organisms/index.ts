@@ -18,3 +18,4 @@ export { DemoPrayerRate } from './DemoPrayerRate';
 export { DemoMeetingRate } from './DemoMeetingRate';
 export { VoiceCoachButton } from './VoiceCoachButton';
 export { VoiceCoachModal } from './VoiceCoachModal';
+export { Big3ProgressCard, type Big3ProgressData, type Big3ProgressCardProps } from './Big3ProgressCard';
