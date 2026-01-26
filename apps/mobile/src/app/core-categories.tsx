@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { CoreCategoriesTemplate } from '@/components/templates/CoreCategoriesTemplate';
@@ -6,39 +6,49 @@ import { useAuthStore } from '@/stores';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
 import { generateOnboardingCategorySuggestionsLlm } from '@/lib/supabase/services';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
-
-const REQUIRED_CATEGORY_SEEDS = [
-  { valueId: 'health', label: 'Exercise', color: '#F95C2E' },
-  { valueId: 'health', label: 'Nutrition', color: '#F95C2E' },
-  { valueId: 'health', label: 'Sleep / Recovery', color: '#F95C2E' },
-  { valueId: 'finances', label: 'Budgeting', color: '#10B981' },
-  { valueId: 'finances', label: 'Saving', color: '#10B981' },
-  { valueId: 'finances', label: 'Investing', color: '#10B981' },
-] as const;
+import {
+  seedDefaultActivityCategories,
+  fetchActivityCategories,
+  createActivityCategory,
+  deleteActivityCategory,
+} from '@/lib/supabase/services/activity-categories';
+import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
 
 export default function CoreCategoriesScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
-  const coreValues = useOnboardingStore((state) => state.coreValues);
-  const coreCategories = useOnboardingStore((state) => state.coreCategories);
-  const setCoreCategories = useOnboardingStore((state) => state.setCoreCategories);
-  const addCoreCategory = useOnboardingStore((state) => state.addCoreCategory);
-  const removeCoreCategory = useOnboardingStore((state) => state.removeCoreCategory);
-  const { saveCoreCategories } = useOnboardingSync({ autoLoad: false, autoSave: false });
+
+  // Activity categories from tm.activity_categories
+  const [activityCategories, setActivityCategories] = useState<ActivityCategory[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [suggestionsByValueId, setSuggestionsByValueId] = useState<Record<string, string[]>>({});
+  const [suggestionsByTopCategoryId, setSuggestionsByTopCategoryId] = useState<Record<string, string[]>>({});
 
-  const selectedValues = useMemo(
-    () => coreValues.filter((v) => v.isSelected).map((v) => ({ id: v.id, label: v.label })),
-    [coreValues]
+  // Top-level categories (sections)
+  const topLevelCategories = useMemo(
+    () => activityCategories.filter((c) => c.parent_id === null),
+    [activityCategories]
   );
 
+  // Subcategories grouped by parent_id
+  const subcategoriesByParent = useMemo(() => {
+    const map: Record<string, ActivityCategory[]> = {};
+    for (const cat of activityCategories) {
+      if (cat.parent_id !== null) {
+        if (!map[cat.parent_id]) map[cat.parent_id] = [];
+        map[cat.parent_id].push(cat);
+      }
+    }
+    return map;
+  }, [activityCategories]);
+
+  // Auth guard
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
@@ -46,51 +56,62 @@ export default function CoreCategoriesScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
+  // Seed and fetch categories on mount
   useEffect(() => {
-    if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
-    const existingLabels = new Set(
-      coreCategories.map((category) => `${category.valueId}:${category.label.toLowerCase()}`)
-    );
-    const additions = REQUIRED_CATEGORY_SEEDS.filter(
-      (seed) => !existingLabels.has(`${seed.valueId}:${seed.label.toLowerCase()}`)
-    ).map((seed) => ({
-      id: `${seed.valueId}-${seed.label.toLowerCase().replace(/\s+/g, '-')}`,
-      valueId: seed.valueId,
-      label: seed.label,
-      color: seed.color,
-      isCustom: false,
-    }));
-    if (additions.length > 0) {
-      setCoreCategories([...coreCategories, ...additions]);
+    if (!isNavigationReady || !hasHydrated || !isAuthenticated || !userId) return;
+
+    let cancelled = false;
+
+    async function loadCategories() {
+      setIsLoadingCategories(true);
+      try {
+        // Seed defaults (idempotent) then fetch
+        await seedDefaultActivityCategories(userId!);
+        const categories = await fetchActivityCategories(userId!);
+        if (!cancelled) {
+          setActivityCategories(categories);
+        }
+      } catch (error) {
+        console.warn('[core-categories] Failed to load activity categories', error);
+      } finally {
+        if (!cancelled) setIsLoadingCategories(false);
+      }
     }
-  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, setCoreCategories]);
 
+    loadCategories();
+    return () => { cancelled = true; };
+  }, [hasHydrated, isAuthenticated, isNavigationReady, userId]);
+
+  // LLM suggestions — map top-level categories to "values" for the suggestion engine
   useEffect(() => {
     if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
-    const timeoutId = setTimeout(() => {
-      saveCoreCategories(coreCategories);
-    }, 800);
-    return () => clearTimeout(timeoutId);
-  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, saveCoreCategories]);
+    if (topLevelCategories.length === 0) return;
 
-  useEffect(() => {
-    if (!isNavigationReady || !hasHydrated || !isAuthenticated) return;
-    if (selectedValues.length === 0) return;
+    // Map top-level activity categories to the format the LLM engine expects
+    const valuesForLlm = topLevelCategories.map((c) => ({ id: c.id, label: c.name }));
+
+    // Map subcategories to the format the LLM engine expects (as "categories" under values)
+    const categoriesForLlm: Array<{ id: string; valueId: string; label: string }> = [];
+    for (const topCat of topLevelCategories) {
+      const subs = subcategoriesByParent[topCat.id] ?? [];
+      for (const sub of subs) {
+        categoriesForLlm.push({ id: sub.id, valueId: topCat.id, label: sub.name });
+      }
+    }
 
     let cancelled = false;
     setIsLoadingSuggestions(true);
     generateOnboardingCategorySuggestionsLlm({
-      values: selectedValues,
-      categories: coreCategories.map((c) => ({ id: c.id, valueId: c.valueId, label: c.label })),
+      values: valuesForLlm,
+      categories: categoriesForLlm,
     })
       .then((suggestions) => {
         if (cancelled) return;
-        setSuggestionsByValueId(suggestions);
+        setSuggestionsByTopCategoryId(suggestions);
       })
       .catch((error) => {
         if (__DEV__) {
-          // eslint-disable-next-line no-console
-          console.warn('[onboarding] category suggestions failed', error);
+          console.warn('[core-categories] category suggestions failed', error);
         }
       })
       .finally(() => {
@@ -98,18 +119,54 @@ export default function CoreCategoriesScreen() {
         setIsLoadingSuggestions(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [coreCategories, hasHydrated, isAuthenticated, isNavigationReady, selectedValues]);
+    return () => { cancelled = true; };
+  }, [hasHydrated, isAuthenticated, isNavigationReady, topLevelCategories, subcategoriesByParent]);
+
+  // Add a subcategory under a top-level category
+  const handleAddSubcategory = useCallback(
+    async (parentId: string, label: string, color: string) => {
+      if (!userId) return;
+      const trimmed = label.trim();
+      if (!trimmed) return;
+
+      // Check for duplicate under same parent
+      const existing = (subcategoriesByParent[parentId] ?? []);
+      if (existing.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase())) return;
+
+      try {
+        const created = await createActivityCategory({
+          user_id: userId,
+          parent_id: parentId,
+          name: trimmed,
+          color,
+          sort_order: existing.length,
+        });
+        setActivityCategories((prev) => [...prev, created]);
+      } catch (error) {
+        console.warn('[core-categories] Failed to create subcategory', error);
+      }
+    },
+    [userId, subcategoriesByParent]
+  );
+
+  // Remove a subcategory
+  const handleRemoveSubcategory = useCallback(
+    async (categoryId: string) => {
+      try {
+        await deleteActivityCategory(categoryId);
+        setActivityCategories((prev) => prev.filter((c) => c.id !== categoryId));
+      } catch (error) {
+        console.warn('[core-categories] Failed to delete subcategory', error);
+      }
+    },
+    []
+  );
 
   const handleContinue = () => {
-    saveCoreCategories(coreCategories);
     router.replace('/values-scores');
   };
 
   const handleSkip = () => {
-    saveCoreCategories(coreCategories);
     router.replace('/values-scores');
   };
 
@@ -129,12 +186,13 @@ export default function CoreCategoriesScreen() {
     <CoreCategoriesTemplate
       step={SETUP_SCREENS_STEPS.coreCategories}
       totalSteps={SETUP_SCREENS_TOTAL_STEPS}
-      coreValues={coreValues}
-      categories={coreCategories}
-      suggestionsByValueId={suggestionsByValueId}
+      topLevelCategories={topLevelCategories}
+      subcategoriesByParent={subcategoriesByParent}
+      suggestionsByTopCategoryId={suggestionsByTopCategoryId}
       isLoadingSuggestions={isLoadingSuggestions}
-      onAddCategory={addCoreCategory}
-      onRemoveCategory={removeCoreCategory}
+      isLoadingCategories={isLoadingCategories}
+      onAddSubcategory={handleAddSubcategory}
+      onRemoveSubcategory={handleRemoveSubcategory}
       onContinue={handleContinue}
       onSkip={handleSkip}
       onBack={handleBack}

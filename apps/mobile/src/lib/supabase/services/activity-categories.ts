@@ -32,6 +32,25 @@ function tmSchema(): any {
 }
 
 // ---------------------------------------------------------------------------
+// Seed
+// ---------------------------------------------------------------------------
+
+/**
+ * Seed default top-level activity categories for a user.
+ * Idempotent — does nothing if the user already has categories.
+ * Creates: Faith, Family, Work, Health, Personal Growth, Finances, Other.
+ */
+export async function seedDefaultActivityCategories(
+  userId: string
+): Promise<void> {
+  const { error } = await supabase.schema('tm').rpc(
+    'seed_default_activity_categories',
+    { p_user_id: userId }
+  );
+  if (error) throw handleSupabaseError(error);
+}
+
+// ---------------------------------------------------------------------------
 // Read operations
 // ---------------------------------------------------------------------------
 
