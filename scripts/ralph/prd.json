@@ -100,8 +100,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created movement-state.ts with MovementState type ('moving'|'stationary'|'unknown'), MovementReason type ('activity'|'distance'), and MovementStateData interface (state, lastUpdated, reason). Implemented getMovementState() and setMovementState() with AsyncStorage persistence (key: tm:location:movementState). Defaults to 'unknown' state when nothing stored. Includes runtime type guard for safe deserialization. Exported from barrel index.ts."
     },
     {
       "id": "US-007",

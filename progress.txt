@@ -19,6 +19,7 @@
 - For slide-up modals on Android, add `paddingTop: insets.top` to prevent header content from being blocked by status bar
 - When parsing database timestamps, use `parseDbTimestamp()` helper (in calendar-events.ts) to ensure UTC interpretation
 - Task heartbeat tracking: `recordTaskHeartbeat(sampleCount)` persists last execution time to AsyncStorage key `tm:location:lastTaskExecution`; use `getLastTaskHeartbeat()` to read it
+- Movement state: `getMovementState()` / `setMovementState(state, reason)` persist to AsyncStorage key `tm:location:movementState`; returns `MovementStateData` with state, lastUpdated, reason; defaults to 'unknown' on missing/corrupt data
 
 ---
 
@@ -146,5 +147,20 @@
   - Haversine formula uses Earth radius of 6,371,000 meters for great-circle distance
   - The Coordinate interface is simple `{ latitude, longitude }` in degrees - future stories (US-007 movement detection) will use this with AndroidLocationSample coordinates
   - Export pattern for new modules: `export { fn } from './module'` and `export type { Type } from './module'` in barrel index.ts
+---
+
+## 2026-01-27 - US-006
+- What was implemented: Movement state persistence module with AsyncStorage for tracking moving/stationary/unknown states
+- Files changed:
+  - apps/mobile/src/lib/android-location/movement-state.ts (new: MovementState, MovementReason, MovementStateData types; getMovementState() and setMovementState() with AsyncStorage persistence)
+  - apps/mobile/src/lib/android-location/index.ts (added barrel exports for getMovementState, setMovementState, MovementState, MovementReason, MovementStateData)
+- **Learnings for future iterations:**
+  - AsyncStorage key for movement state: `tm:location:movementState`
+  - MovementState is a union type `'moving' | 'stationary' | 'unknown'`, not an enum (simpler for JSON serialization)
+  - MovementReason is `'activity' | 'distance'` - tracks what triggered the state change (activity recognition vs distance calculation)
+  - Always include a runtime type guard (`isMovementStateData()`) when deserializing JSON from AsyncStorage - gracefully falls back to default 'unknown' state
+  - Default state pattern: return `{ state: 'unknown', lastUpdated: now, reason: 'distance' }` when nothing stored or data is corrupt
+  - US-007 (movement detection) and US-008 (task integration) will call `setMovementState()` to persist classification results
+  - US-009 (adaptive sync) and US-010 (health check) will read movement state via `getMovementState()` to adjust intervals
 ---
 
