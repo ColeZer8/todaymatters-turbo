@@ -28,6 +28,12 @@ export type { MovementState, MovementReason, MovementStateData } from './movemen
 export { classifyMovementByDistance } from './movement-detector';
 export type { LocationSampleInput, MovementClassification } from './movement-detector';
 export { recordLastSyncTime, getLastSyncTime } from './sync-timing';
+export {
+  getHealthCheckRetries,
+  incrementHealthCheckRetries,
+  resetHealthCheckRetries,
+} from './health-check-retries';
+export type { HealthCheckRetryData } from './health-check-retries';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
