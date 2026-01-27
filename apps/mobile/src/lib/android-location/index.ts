@@ -15,6 +15,8 @@ export type { AndroidLocationSupportStatus, AndroidLocationSample } from './type
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 export { clearPendingAndroidLocationSamplesAsync } from './queue';
 export { isAndroid14Plus, getAndroidApiLevel } from './android-version';
+export { ErrorCategory, logError, getRecentErrors, clearErrors } from './error-logger';
+export type { ErrorLogEntry } from './error-logger';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
