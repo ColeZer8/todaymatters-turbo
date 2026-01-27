@@ -1,65 +1,70 @@
 {
-  "project": "TodayMatters Calendar",
-  "branchName": "ralph/calendar-actual-timeline-fix",
-  "description": "Fix the calendar Actual timeline to be accurate, non-overlapping, and reliable. CRITICAL: Evidence data not pulling on physical Android devices in production (Play Console internal testing) - works on simulator but fails on real devices despite permissions granted.",
+  "project": "TodayMatters Mobile",
+  "branchName": "ralph/v2-android-location-fixes",
+  "description": "Android Location Tracking Reliability & Movement Detection - Fix critical location tracking failures and implement adaptive sampling",
   "userStories": [
     {
       "id": "US-001",
-      "title": "CRITICAL: Debug Android Production Evidence Data Pull Failure",
-      "description": "As a user on a physical Android device, I need evidence data (location, screen time) to be pulled correctly so my actual timeline works. Currently works on Android simulator but fails on physical devices running production builds via Play Console internal testing. All permissions are granted but nothing is being pulled.",
+      "title": "Add Android 14+ detection and manifest updates",
+      "description": "As a developer, I need to detect Android 14+ and update AndroidManifest.xml with required permissions and service types so the app can request location permissions properly on newer Android versions.",
       "acceptanceCriteria": [
-        "Add comprehensive logging to evidence data fetch in production builds",
-        "Log permission states at runtime (Usage Access, Location) with actual granted status",
-        "Log raw responses from Android Usage Stats API and Location APIs",
-        "Log any errors or empty responses with full context",
-        "Test on physical Android device via Play Console internal testing",
-        "Document findings in progress.txt for root cause analysis",
+        "Add Platform.Version check utility to detect Android API level 34+",
+        "Update AndroidManifest.xml with FOREGROUND_SERVICE_LOCATION permission",
+        "Update AndroidManifest.xml foreground service type to include 'location'",
+        "Add ACTIVITY_RECOGNITION permission to manifest (for future use)",
+        "Export isAndroid14Plus() helper from android-location utils",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "HIGHEST PRIORITY - Blocking all other actual timeline features on physical devices"
+      "passes": true,
+      "notes": "FOREGROUND_SERVICE_LOCATION and foregroundServiceType already present via expo-location manifest merger. Added ACTIVITY_RECOGNITION to manifest and app.config.js."
     },
     {
       "id": "US-002",
-      "title": "Fix Android Production Build Evidence Collection",
-      "description": "As a developer, I need to fix whatever is preventing evidence data collection on physical Android devices in production so users can see their actual timeline.",
+      "title": "Add error logging infrastructure to AsyncStorage",
+      "description": "As a developer, I need a centralized error logging system that persists to AsyncStorage so I can diagnose location tracking failures.",
       "acceptanceCriteria": [
-        "Based on US-001 findings, implement fix for evidence data collection",
-        "Handle any production-specific configurations (ProGuard, release signing, etc.)",
-        "Verify Usage Access permission works in production build",
-        "Verify Location permission works in production build",
-        "Evidence data appears in dev screens on physical Android device",
+        "Create ErrorLogger class in android-location/error-logger.ts",
+        "Implement logError(category, message, context) method",
+        "Store errors as circular buffer (max 50 entries, FIFO)",
+        "Error format: { timestamp, category, message, context, count }",
+        "Implement getRecentErrors() to retrieve last 50 errors",
+        "Throttle duplicate errors (same category+message within 5 mins = increment count)",
+        "Error categories enum: PERMISSION_DENIED, TASK_START_FAILED, TASK_EXECUTION_FAILED, LOCATION_UNAVAILABLE, SYNC_FAILED",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": false,
-      "notes": "Depends on US-001 investigation findings"
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Generate Unique Deterministic Event IDs",
-      "description": "As a developer, I need every derived event to have a unique ID so React renders correctly without duplicate key warnings.",
+      "title": "Integrate error logging into existing location code",
+      "description": "As a developer, I need all location tracking error paths to log to AsyncStorage so failures are captured for diagnostics.",
       "acceptanceCriteria": [
-        "Derived event IDs use format: derived:{type}:{startMinutes}:{endMinutes}:{source}",
-        "Fix derived_actual:sleep_interrupted_60_8 duplicate issue in derive-screen-time-actual-events.ts",
-        "Add uniqueness validation before rendering - log warning if duplicates found",
-        "No React duplicate key warnings in console",
+        "Add error logging to location-task.ts on all error/early-return paths",
+        "Add error logging to index.ts startTracking() failures",
+        "Add error logging to permissions.ts permission denial paths",
+        "Add error logging to queue.ts sync failures",
+        "Include context: permission status, task status, last sample timestamp, Android version",
+        "All logs use ErrorLogger.logError() with appropriate category",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": false,
-      "notes": "Fixes ComprehensiveCalendarTemplate.tsx lines 552-559 duplicate key error"
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Create ActualTimelineBuilder with Overlap Split Algorithm",
-      "description": "As a user, I want the actual timeline to never show overlapping events so I can clearly see my day.",
+      "title": "Update location task configuration for 15-minute intervals",
+      "description": "As a user, I need location samples captured every 15 minutes so my daily activity is comprehensively tracked.",
       "acceptanceCriteria": [
-        "Create ActualTimelineBuilder class in apps/mobile/src/lib/calendar/actual-timeline-builder.ts",
-        "Implement split algorithm: when events overlap, split lower-priority event around higher-priority",
-        "Priority order: (1) User-edited actual, (2) Supabase actual (non-derived), (3) Derived from evidence, (4) Screen time, (5) Unknown",
-        "Export and use in actual-display-events.ts",
+        "Update startLocationUpdatesAsync options to include timeInterval: 900000 (15 minutes)",
+        "Update deferredUpdatesInterval to 900000 to match timeInterval",
+        "Verify showsBackgroundLocationIndicator is true",
+        "Verify foregroundService notification title/body are clear",
+        "Add AsyncStorage tracking for last task execution timestamp",
+        "Log task execution to AsyncStorage on every location-task.ts callback",
         "Typecheck passes"
       ],
       "priority": 4,
@@ -68,14 +73,14 @@
     },
     {
       "id": "US-005",
-      "title": "Add Unit Test for Overlap Elimination",
-      "description": "As a developer, I need tests to verify no two events overlap in the final timeline output.",
+      "title": "Implement distance calculation utility",
+      "description": "As a developer, I need haversine distance calculation between coordinates so I can detect user movement.",
       "acceptanceCriteria": [
-        "Create test file for ActualTimelineBuilder",
-        "Test: two overlapping events result in split/non-overlapping output",
-        "Test: priority order is respected when splitting",
-        "Test: edge cases (exact same time, partial overlap, contained event)",
-        "Tests pass",
+        "Create calculateDistance(coord1, coord2) function in android-location/distance.ts",
+        "Use haversine formula for accurate distance calculation",
+        "Input: { latitude, longitude } objects",
+        "Output: distance in meters",
+        "Unit tests with known coordinate pairs and expected distances",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -84,13 +89,14 @@
     },
     {
       "id": "US-006",
-      "title": "Integrate ActualTimelineBuilder into Display Pipeline",
-      "description": "As a user, I want the no-overlap invariant enforced in the actual calendar display.",
+      "title": "Add movement state management to AsyncStorage",
+      "description": "As a developer, I need to persist movement state (moving/stationary) to AsyncStorage so it survives app restarts.",
       "acceptanceCriteria": [
-        "Replace overlap handling in buildActualDisplayEvents with ActualTimelineBuilder",
-        "Remove old dedup/overlap logic that was producing overlaps",
-        "Verify no overlapping events render in ComprehensiveCalendarTemplate",
-        "Visual inspection: events line up without stacking",
+        "Create MovementState type: 'moving' | 'stationary' | 'unknown'",
+        "Implement getMovementState() to read from AsyncStorage key tm:location:movementState",
+        "Implement setMovementState(state) to write to AsyncStorage",
+        "Store metadata: state, lastUpdated timestamp, reason (activity or distance)",
+        "Default to 'unknown' if no state exists",
         "Typecheck passes"
       ],
       "priority": 6,
@@ -99,13 +105,17 @@
     },
     {
       "id": "US-007",
-      "title": "Fix Actual Data Persistence - Prevent Prior Day Erasure",
-      "description": "As a user, I want my actual data from previous days to persist and not be erased.",
+      "title": "Implement distance-based movement detection",
+      "description": "As a user on devices without activity recognition, I need distance-based movement detection so tracking frequency adapts to my activity.",
       "acceptanceCriteria": [
-        "Investigate syncDerivedActualEvents for erasure bug",
-        "Add logging to trace actual event lifecycle (create, sync, retrieve)",
-        "Ensure derived events synced to Supabase are not re-derived and duplicated",
-        "Prior day actual events remain intact after app restart",
+        "Create classifyMovementByDistance() in android-location/movement-detector.ts",
+        "Calculate distance between last 3 consecutive location samples",
+        "If total distance >200 meters over samples spanning 15+ mins, classify as 'moving'",
+        "If total distance <50 meters over samples spanning 30+ mins, classify as 'stationary'",
+        "Filter out low-accuracy samples (accuracy >50m) before calculation",
+        "Ignore tiny movements (<10m) to handle GPS drift",
+        "Return classification with confidence score",
+        "Unit tests with various sample sequences",
         "Typecheck passes"
       ],
       "priority": 7,
@@ -114,13 +124,14 @@
     },
     {
       "id": "US-008",
-      "title": "Implement Evidence Priority Resolution",
-      "description": "As a user, I want my actual timeline to reflect reality using the best available evidence with correct priority.",
+      "title": "Integrate movement detection into location task",
+      "description": "As a user, I want my movement state automatically updated based on location samples so tracking frequency can adapt.",
       "acceptanceCriteria": [
-        "Resolution order: (1) User's ideal/planned event, (2) Location data, (3) Screen time as intentionality check",
-        "Screen time within expected context (e.g., calculator at work) doesnt override location",
-        "Location is primary source when available; screen time confirms/adjusts",
-        "Add priority field to evidence fusion logic in actual-display-events.ts",
+        "Call classifyMovementByDistance() on every location sample in location-task.ts",
+        "Update movement state to AsyncStorage when classification changes",
+        "Log movement state changes to AsyncStorage for diagnostics",
+        "Store last 10 location samples in memory for classification (cleared on task restart)",
+        "Only update state if confidence >70%",
         "Typecheck passes"
       ],
       "priority": 8,
@@ -129,13 +140,15 @@
     },
     {
       "id": "US-009",
-      "title": "Cross-Reference Planned Events with Evidence - Shifting",
-      "description": "As a user, I want planned events to be reconciled with actual evidence showing late arrivals.",
+      "title": "Implement adaptive sync intervals based on movement state",
+      "description": "As a user, I need location data synced efficiently based on my movement so I don't drain battery unnecessarily.",
       "acceptanceCriteria": [
-        "For each planned event, check evidence timestamps",
-        "If evidence shows late arrival: create actual block with shifted start time",
-        "Add 'arrived X min late' in actual event description",
-        "Planned events are never modified - actual timeline shows reality",
+        "Update use-location-samples-sync.ts to read movement state from AsyncStorage",
+        "When stationary: sync every 30 minutes OR when 10 samples queued (whichever first)",
+        "When moving: sync every 15 minutes OR when 20 samples queued (whichever first)",
+        "When unknown: use moving intervals (conservative approach)",
+        "On app foreground: immediate sync regardless of interval",
+        "Add lastSyncTime to AsyncStorage to track sync timing",
         "Typecheck passes"
       ],
       "priority": 9,
@@ -144,13 +157,16 @@
     },
     {
       "id": "US-010",
-      "title": "Cross-Reference Planned Events with Evidence - Different Activity",
-      "description": "As a user, I want to see what I actually did when it differs from planned.",
+      "title": "Enhanced health check with movement-aware intervals",
+      "description": "As a user, if location tracking stops working, I need the health check to detect it quickly and attempt recovery.",
       "acceptanceCriteria": [
-        "If evidence shows different activity than planned: create actual block showing reality",
-        "Example: 'Go to gym' planned + McDonald's location = create 'Fast food' actual with location evidence",
-        "Keep planned event visible for comparison",
-        "Actual block includes evidence source in metadata",
+        "Update health check in use-location-samples-sync.ts to read movement state",
+        "Check if last sample timestamp is within expected interval (15 mins stationary, 5 mins moving)",
+        "Verify background task is still registered and started",
+        "Verify location permissions still granted",
+        "If checks fail: attempt automatic task restart (max 3 times, exponential backoff 30s, 2min, 5min)",
+        "Track retry count in AsyncStorage (tm:androidLocation:healthCheckRetries)",
+        "Reset retry count when task successfully restarts or app comes to foreground",
         "Typecheck passes"
       ],
       "priority": 10,
@@ -159,13 +175,16 @@
     },
     {
       "id": "US-011",
-      "title": "Handle Screen Time Inside Sleep - Embed Short Usage",
-      "description": "As a user, I want brief phone usage during sleep to be noted on the sleep block.",
+      "title": "Add persistent notification after health check failures",
+      "description": "As a user, after automatic recovery fails 3 times, I need a notification alerting me so I can take action.",
       "acceptanceCriteria": [
-        "Screen time <=10 min during sleep: embed in sleep block description",
-        "Format: 'Sleep (phone: 5 min)' or similar",
-        "Do not create separate block for short screen time",
-        "Update derive-screen-time-actual-events.ts logic",
+        "After 3 failed health check restarts, show persistent notification",
+        "Notification title: 'Location tracking paused'",
+        "Notification body: 'Tap to fix the issue and resume tracking'",
+        "Notification uses location pin icon with warning badge",
+        "Notification deep-links to diagnostics screen (using Expo Notifications)",
+        "Notification priority: DEFAULT (not intrusive)",
+        "Notification persists until user taps or tracking restored",
         "Typecheck passes"
       ],
       "priority": 11,
@@ -174,13 +193,18 @@
     },
     {
       "id": "US-012",
-      "title": "Handle Screen Time Inside Sleep - Separate Long Usage",
-      "description": "As a user, I want longer phone usage during sleep to be a separate event.",
+      "title": "Create enhanced diagnostics data structure",
+      "description": "As a developer, I need to collect comprehensive diagnostic data from all location subsystems so it can be displayed or exported.",
       "acceptanceCriteria": [
-        "Screen time >10 min during sleep: create separate 'Screen Time' block",
-        "Split sleep block around the screen time block",
-        "Sleep block shows total duration excluding screen time interruptions >10 min",
-        "Use ActualTimelineBuilder for split logic",
+        "Create getDiagnostics() function in android-location/diagnostics.ts",
+        "Section 1: System info (Android version, device model, app version)",
+        "Section 2: Permission status (foreground, background, battery optimization)",
+        "Section 3: Task status (registered, started, last fired, consecutive failures)",
+        "Section 4: Location data (samples today, last sample, queue size, sync status)",
+        "Section 5: Movement state (current classification, last update, confidence)",
+        "Section 6: Health check (last check time, retry count, blocking errors)",
+        "Section 7: Recent errors (last 10 from ErrorLogger)",
+        "Return as structured JSON object",
         "Typecheck passes"
       ],
       "priority": 12,
@@ -189,14 +213,17 @@
     },
     {
       "id": "US-013",
-      "title": "Detect and Annotate Distractions",
-      "description": "As a user, I want to see when I was distracted from my planned activity.",
+      "title": "Update diagnostics screen UI with enhanced data",
+      "description": "As a user or support agent, I need to see detailed diagnostic information to troubleshoot location tracking issues quickly.",
       "acceptanceCriteria": [
-        "If planned work + location is work but distraction app used: add 'distracted' note",
-        "Distraction <10 min: note on same block (e.g., 'Work (distracted 5 min)')",
-        "Distraction >10 min: create separate distraction block",
-        "Default distraction apps: social media, games",
-        "Typecheck passes"
+        "Update existing diagnostics screen (dev/location.tsx or profile.tsx) to call getDiagnostics()",
+        "Display all 7 diagnostic sections in collapsible accordions",
+        "Color-code status indicators (green=good, yellow=warning, red=error)",
+        "Use monospace font for technical details (timestamps, coordinates)",
+        "Auto-refresh every 5 seconds while screen is open",
+        "Show loading spinner during refresh",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 13,
       "passes": false,
@@ -204,14 +231,17 @@
     },
     {
       "id": "US-014",
-      "title": "Fill Unknown Gaps with Interactive Prompts",
-      "description": "As a user, I want gaps in my actual timeline to prompt me with suggestions.",
+      "title": "Add diagnostic action buttons (Export, Force Restart, Test)",
+      "description": "As a user, I need action buttons on the diagnostics screen to export data, manually restart tracking, or test location immediately.",
       "acceptanceCriteria": [
-        "Unknown gaps show interactive 'What were you doing?' prompt",
-        "Suggestions inferred from planned events for that time slot",
-        "User can select from suggestions or enter custom activity",
-        "Unknown blocks only appear for past time, never future",
-        "Typecheck passes"
+        "Add 'Export Diagnostics' button that copies full diagnostics JSON to clipboard",
+        "Show toast confirmation after export",
+        "Add 'Force Restart Task' button that calls stopAndroidLocationTracking() then startAndroidLocationTracking()",
+        "Show loading state during restart, then success/failure message",
+        "Add 'Test Location Now' button that requests single location immediately",
+        "Display test result (coordinates, accuracy, timestamp) or error message",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 14,
       "passes": false,
@@ -219,14 +249,21 @@
     },
     {
       "id": "US-015",
-      "title": "Persist Unknown Gap Selections to Supabase",
-      "description": "As a user, I want my unknown gap selections to be saved permanently.",
+      "title": "Create guided permission setup flow component",
+      "description": "As a user, I need a step-by-step permission setup flow that verifies each requirement so I know location tracking will work reliably.",
       "acceptanceCriteria": [
-        "Selected activity from unknown prompt persisted to Supabase as actual event",
-        "Event includes source: 'user_input' to distinguish from derived",
-        "Persisted events load correctly on app restart",
-        "No duplication on subsequent loads",
-        "Typecheck passes"
+        "Create PermissionSetupFlow component in permissions/setup-flow.tsx",
+        "Use stepper UI with 6 steps (configurable based on Android version)",
+        "Step 1: Request foreground location permission, verify granted",
+        "Step 2: Request background location permission (Android 10+), verify granted",
+        "Step 3: Check location services enabled, button to open system settings if disabled",
+        "Step 4: Check battery optimization, button to open battery settings if enabled",
+        "Step 5 (Android 14+ only): Guide to 'Allow all the time' in Settings with screenshots",
+        "Step 6: Start background task, verify started successfully",
+        "Each step shows status: pending (gray), in-progress (blue), complete (green), failed (red)",
+        "Progress saved to AsyncStorage, can resume if user exits",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
       "passes": false,
@@ -234,13 +271,15 @@
     },
     {
       "id": "US-016",
-      "title": "Show Evidence in Event Detail View",
-      "description": "As a user, I want to see the evidence that informed an actual event when I tap on it.",
+      "title": "Add deep-links to Android Settings screens",
+      "description": "As a user, I need 'Open Settings' buttons to take me directly to the correct Android settings screen so I don't have to navigate manually.",
       "acceptanceCriteria": [
-        "Event detail view shows source evidence (location data, screen time sessions)",
-        "Evidence formatted clearly (e.g., 'Location: 123 Main St from 9:00-10:30 AM')",
-        "Screen time details show apps and durations",
-        "Only show for events that have evidence metadata",
+        "Create openLocationSettings() helper using Linking.openSettings() for location services",
+        "Create openBatteryOptimizationSettings() using IntentLauncher for battery settings",
+        "Create openAppSettings() using Linking.openSettings() for app-specific settings",
+        "Add Android 14+ specific guidance modal with screenshots when 'Allow all the time' step needed",
+        "Verify deep-links work on Android 10, 12, 14+ test devices",
+        "Fallback to generic app settings if specific intent fails",
         "Typecheck passes"
       ],
       "priority": 16,
@@ -249,14 +288,17 @@
     },
     {
       "id": "US-017",
-      "title": "Show Confidence Score in Event Detail View",
-      "description": "As a user, I want to see how confident the system is about derived events.",
+      "title": "Add movement state visualization to Location Activity screen",
+      "description": "As a user, I want to see my current movement state and how it affects tracking frequency so I understand the system behavior.",
       "acceptanceCriteria": [
-        "Event detail view shows confidence score for derived events",
-        "Only visible on tap/expand, not inline on timeline",
-        "Format: 'Confidence: 85%' or similar",
-        "Confidence based on evidence strength (multiple sources = higher)",
-        "Typecheck passes"
+        "Update Location Activity screen to show current movement state at top",
+        "Visual indicator: green icon + 'Moving' or gray icon + 'Stationary'",
+        "Show current sampling interval: '5 minutes' or '15 minutes'",
+        "Show last state change timestamp",
+        "Add info tooltip explaining why frequency changes based on movement",
+        "Update in real-time when screen is open (subscribe to movement state changes)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
       "passes": false,
@@ -264,14 +306,18 @@
     },
     {
       "id": "US-018",
-      "title": "Create User Location Mappings Schema",
-      "description": "As a developer, I need to store user-defined location mappings in Supabase.",
+      "title": "Add in-app banner for tracking failures",
+      "description": "As a user, when location tracking stops, I need a visible banner on the home screen so I know to fix it.",
       "acceptanceCriteria": [
-        "Create location_mappings table: id, user_id, location_address, activity_name, created_at",
-        "Add Supabase migration",
-        "Create TypeScript types for location mappings",
-        "Add CRUD functions in supabase services",
-        "Typecheck passes"
+        "Create LocationTrackingBanner component",
+        "Show banner at top of home screen when task status is 'stopped' or health check has 3+ failures",
+        "Yellow background with warning icon",
+        "Message: 'Location tracking is paused'",
+        "Action button: 'Fix Now' opens diagnostics screen",
+        "Banner dismissible (hide for 1 hour), reappears if still broken",
+        "Store dismiss timestamp in AsyncStorage",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
       "passes": false,
@@ -279,14 +325,18 @@
     },
     {
       "id": "US-019",
-      "title": "Create User App Mappings Schema",
-      "description": "As a developer, I need to store user-defined app mappings in Supabase.",
+      "title": "Create guided recovery flow for common errors",
+      "description": "As a user who encounters a tracking failure, I need step-by-step guidance to fix the issue without technical knowledge.",
       "acceptanceCriteria": [
-        "Create app_mappings table: id, user_id, app_name, activity_type, is_distraction, created_at",
-        "Add Supabase migration",
-        "Create TypeScript types for app mappings",
-        "Add CRUD functions in supabase services",
-        "Typecheck passes"
+        "Create RecoveryFlow component that takes error category as prop",
+        "Error PERMISSION_DENIED: Show permission setup flow starting at appropriate step",
+        "Error TASK_START_FAILED: Show checklist (permissions, battery, location services) with test buttons",
+        "Error LOCATION_UNAVAILABLE: Show tutorial to enable location services with screenshots",
+        "Error on Android 14: Show specific Android 14 setup guide",
+        "Each flow includes 'Test Now' button to verify fix worked",
+        "Show success confirmation when test passes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
       "passes": false,
@@ -294,14 +344,16 @@
     },
     {
       "id": "US-020",
-      "title": "Create Location Mappings Settings UI",
-      "description": "As a user, I want to map locations to activities so the system can infer correctly.",
+      "title": "Integrate recovery flows into diagnostics screen",
+      "description": "As a user on the diagnostics screen, I need quick access to recovery flows for detected errors.",
       "acceptanceCriteria": [
-        "Settings screen for managing location mappings",
-        "User can add new mapping (location address to activity name)",
-        "User can edit/delete existing mappings",
-        "Mappings load from and save to Supabase",
-        "Typecheck passes"
+        "Add 'Fix This Issue' button next to each detected error in diagnostics",
+        "Button opens RecoveryFlow component for that specific error category",
+        "Button disabled if no actionable recovery flow exists for error type",
+        "After completing recovery flow, re-run diagnostics and update display",
+        "Show success toast if error resolved",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 20,
       "passes": false,
@@ -309,14 +361,15 @@
     },
     {
       "id": "US-021",
-      "title": "Create App Mappings Settings UI",
-      "description": "As a user, I want to map apps to activity types so the system can infer correctly.",
+      "title": "Update existing permissions.tsx to use new setup flow",
+      "description": "As a user going through initial app setup, I need to use the new guided permission setup flow instead of the old simple permission requests.",
       "acceptanceCriteria": [
-        "Settings screen for managing app mappings",
-        "User can map app to activity type",
-        "User can mark app as distraction",
-        "Mappings load from and save to Supabase",
-        "Typecheck passes"
+        "Replace existing permission request logic in permissions.tsx with PermissionSetupFlow component",
+        "Maintain backward compatibility with existing navigation flow",
+        "On successful completion, navigate to next onboarding step",
+        "On cancellation, show warning about reduced functionality",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 21,
       "passes": false,
@@ -324,13 +377,17 @@
     },
     {
       "id": "US-022",
-      "title": "Use Location Mappings in Cross-Reference Logic",
-      "description": "As a user, I want the system to use my location mappings when inferring activities.",
+      "title": "Add 24-hour movement timeline visualization",
+      "description": "As a user, I want to see a timeline of my movement state changes over the past 24 hours so I can verify the system is detecting movement correctly.",
       "acceptanceCriteria": [
-        "Cross-reference logic loads user's location mappings",
-        "When location matches a mapping, use the mapped activity name",
-        "Fallback to raw location if no mapping exists",
-        "Typecheck passes"
+        "Create mini-timeline component showing past 24 hours",
+        "Divide timeline into hourly segments",
+        "Color-code segments: green=moving, gray=stationary, white=unknown/no data",
+        "Tap segment to show details (time range, sample count, avg accuracy)",
+        "Show movement state changes as markers on timeline",
+        "Updates in real-time as new samples arrive",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 22,
       "passes": false,
@@ -338,45 +395,17 @@
     },
     {
       "id": "US-023",
-      "title": "Use App Mappings in Cross-Reference Logic",
-      "description": "As a user, I want the system to use my app mappings when inferring activities and distractions.",
+      "title": "Integrate timeline into Location Activity screen",
+      "description": "As a user viewing my location activity, I want the movement timeline visible so I can understand my activity patterns.",
       "acceptanceCriteria": [
-        "Cross-reference logic loads user's app mappings",
-        "When app matches a mapping, use the mapped activity type",
-        "When app is marked as distraction, flag accordingly",
-        "Typecheck passes"
+        "Add movement timeline below current movement state indicator on Location Activity screen",
+        "Timeline takes full width, horizontally scrollable if needed",
+        "Position between header and hourly activity chart",
+        "Add section title 'Movement History (24h)'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-024",
-      "title": "Consolidate Evidence Fusion Pipeline",
-      "description": "As a developer, I need a single pipeline that fuses all evidence sources before rendering.",
-      "acceptanceCriteria": [
-        "Create unified evidence fusion in actual-display-events.ts",
-        "Pipeline: merge evidence blocks + screen time + planned cross-ref into single ordered list",
-        "Each event has unique ID and attached metadata for description rendering",
-        "Pipeline runs once per render cycle, not multiple times",
-        "Typecheck passes"
-      ],
-      "priority": 24,
-      "passes": false,
-      "notes": ""
-    },
-    {
-      "id": "US-025",
-      "title": "Android Evidence Pipeline - Sparse Location Fallback",
-      "description": "As an Android user, I need the pipeline to handle sparse location data gracefully.",
-      "acceptanceCriteria": [
-        "When location is sparse, fallback to screen time + unknown with confidence tags",
-        "Add confidence indicators based on evidence availability",
-        "Log evidence source availability for debugging",
-        "Handle Android-specific data formats and timing",
-        "Typecheck passes"
-      ],
-      "priority": 25,
       "passes": false,
       "notes": ""
     }

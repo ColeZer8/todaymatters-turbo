@@ -1,22 +1,28 @@
 # Ralph Progress Log
-Started: Thu Jan 22 14:33:52 CST 2026
-Updated: Fri Jan 24 2026 - New PRD: Calendar Actual Timeline Fix
+Started: Tue Jan 27 16:04:44 CST 2026
 ---
 
 ## Codebase Patterns
-- Evidence data is fetched in `apps/mobile/src/lib/supabase/services/evidence-data.ts`
-- Actual event derivation happens in `apps/mobile/src/lib/calendar/actual-display-events.ts`
-- Screen time derivation is in `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts`
-- Calendar orchestration is in `apps/mobile/src/app/comprehensive-calendar.tsx`
-- Rendering with absolute positioning is in `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
-- Known duplicate key issue at ComprehensiveCalendarTemplate.tsx lines 552-559
+- Android location tracking code lives in `apps/mobile/src/lib/android-location/`
+- Core files: index.ts (public API), location-task.ts (background task), queue.ts (AsyncStorage queue), types.ts, register.ts, task-names.ts
+- `expo-location` library's own AndroidManifest.xml already declares `foregroundServiceType="location"` on `LocationTaskService` - the Android manifest merger handles this automatically
+- `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` permissions already present in both app.config.js and AndroidManifest.xml
+- Permissions must be declared in both `app.config.js` (for Expo prebuild) AND `AndroidManifest.xml` (for native builds)
+- Platform.Version on Android returns API level as a number (e.g., 34 for Android 14)
+- Pre-existing 42 TypeScript errors in the codebase (unrelated to android-location) - do not try to fix these
+- Typecheck command: `npx tsc -p tsconfig.json --noEmit` from apps/mobile directory
 
-## Critical Issue - Android Physical Device
-- **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
-- **Works**: Android simulator
-- **Fails**: Physical Android device via Play Console internal testing (production build)
-- **Permissions**: All granted (Usage Access, Location)
-- **Symptom**: Nothing being pulled despite permissions granted
-- **Priority**: HIGHEST - US-001 and US-002 must be completed first
+---
 
+## 2026-01-27 - US-001
+- **What was implemented**: Android 14+ detection utility and manifest permission updates
+- **Files changed**:
+  - `apps/mobile/src/lib/android-location/android-version.ts` (new) - isAndroid14Plus() and getAndroidApiLevel() utilities
+  - `apps/mobile/src/lib/android-location/index.ts` - Added exports for new helpers
+  - `apps/mobile/android/app/src/main/AndroidManifest.xml` - Added ACTIVITY_RECOGNITION permission
+  - `apps/mobile/app.config.js` - Added ACTIVITY_RECOGNITION to Android permissions array
+- **Learnings for future iterations:**
+  - FOREGROUND_SERVICE_LOCATION permission and foregroundServiceType="location" were already in place via expo-location's manifest merger, so no changes needed for AC #2 and #3
+  - Platform.Version can be a number or string depending on RN version; always handle both cases with parseInt fallback
+  - The codebase has 42 pre-existing TS errors that are unrelated to android-location work; these should not block commits
 ---
