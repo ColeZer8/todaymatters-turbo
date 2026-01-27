@@ -25,6 +25,8 @@ export { calculateDistance } from './distance';
 export type { Coordinate } from './distance';
 export { getMovementState, setMovementState } from './movement-state';
 export type { MovementState, MovementReason, MovementStateData } from './movement-state';
+export { classifyMovementByDistance } from './movement-detector';
+export type { LocationSampleInput, MovementClassification } from './movement-detector';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
