@@ -119,8 +119,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created movement-detector.ts with classifyMovementByDistance(). Filters samples by accuracy (<=50m), sorts chronologically, sums consecutive distances ignoring GPS drift (<10m). Moving: >200m over >=15min. Stationary: <50m over >=30min. Confidence ranges 0.7-1.0 based on distance/time ratios. Returns null state for ambiguous or insufficient data (<3 usable samples). 17 unit tests covering: empty/insufficient data, accuracy filtering, moving/stationary classification, GPS drift, ambiguous zones, non-chronological input, edge cases, mixed accuracy samples. Exported from barrel index.ts."
     },
     {
       "id": "US-008",

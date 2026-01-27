@@ -20,6 +20,7 @@
 - When parsing database timestamps, use `parseDbTimestamp()` helper (in calendar-events.ts) to ensure UTC interpretation
 - Task heartbeat tracking: `recordTaskHeartbeat(sampleCount)` persists last execution time to AsyncStorage key `tm:location:lastTaskExecution`; use `getLastTaskHeartbeat()` to read it
 - Movement state: `getMovementState()` / `setMovementState(state, reason)` persist to AsyncStorage key `tm:location:movementState`; returns `MovementStateData` with state, lastUpdated, reason; defaults to 'unknown' on missing/corrupt data
+- Movement detection: `classifyMovementByDistance(samples)` takes `LocationSampleInput[]`, filters by accuracy <=50m, ignores GPS drift <10m, classifies as moving (>200m/15min) or stationary (<50m/30min) with confidence 0.7-1.0; returns null state for ambiguous/insufficient data
 
 ---
 
@@ -162,5 +163,24 @@
   - Default state pattern: return `{ state: 'unknown', lastUpdated: now, reason: 'distance' }` when nothing stored or data is corrupt
   - US-007 (movement detection) and US-008 (task integration) will call `setMovementState()` to persist classification results
   - US-009 (adaptive sync) and US-010 (health check) will read movement state via `getMovementState()` to adjust intervals
+---
+
+## 2026-01-27 - US-007
+- What was implemented: Distance-based movement detection with comprehensive unit tests
+- Files changed:
+  - apps/mobile/src/lib/android-location/movement-detector.ts (new: classifyMovementByDistance(), LocationSampleInput, MovementClassification types)
+  - apps/mobile/src/lib/android-location/movement-detector.test.ts (new: 17 unit tests)
+  - apps/mobile/src/lib/android-location/index.ts (added barrel exports for classifyMovementByDistance, LocationSampleInput, MovementClassification)
+- **Learnings for future iterations:**
+  - `classifyMovementByDistance()` accepts `LocationSampleInput[]` with latitude, longitude, accuracy_m, recorded_at fields
+  - Accuracy filter: samples with `accuracy_m > 50` or `null` are excluded before classification
+  - GPS drift: consecutive-pair distances < 10m are zeroed to prevent false movement from GPS jitter
+  - Moving threshold: total distance > 200m AND time span >= 15 minutes
+  - Stationary threshold: total distance < 50m AND time span >= 30 minutes
+  - Ambiguous zone: 50-200m distance, or insufficient time span → returns `state: null`
+  - Confidence: ranges 0.7-1.0, calculated from distance ratio (moving) or time+stillness ratio (stationary)
+  - Minimum 3 usable samples required for any classification
+  - Samples are sorted internally by timestamp, so caller order doesn't matter
+  - US-008 will integrate this into location-task.ts to call on every batch of location samples
 ---
 
