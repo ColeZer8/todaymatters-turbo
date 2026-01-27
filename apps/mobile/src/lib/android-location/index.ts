@@ -1,11 +1,17 @@
 import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { requireOptionalNativeModule } from "expo-modules-core";
+import {
+  sanitizeLocationSamplesForUpload,
+  upsertLocationSamples,
+} from "@/lib/supabase/services/location-samples";
+import { supabase } from "@/lib/supabase/client";
 import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
 import {
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
   removePendingAndroidLocationSamplesByKeyAsync,
+  enqueueAndroidLocationSamplesForUserAsync,
 } from "./queue";
 import type {
   AndroidLocationSupportStatus,
@@ -14,19 +20,40 @@ import type {
 
 /** Mirror of MAX_PENDING_SAMPLES_PER_USER in queue.ts — used for diagnostics peek. */
 const MAX_PENDING_SAMPLES_PER_USER = 10_000;
-import {
-  sanitizeLocationSamplesForUpload,
-  upsertLocationSamples,
-} from "@/lib/supabase/services/location-samples";
-import { supabase } from "@/lib/supabase/client";
-import { enqueueAndroidLocationSamplesForUserAsync } from "./queue";
 
 export type {
   AndroidLocationSupportStatus,
   AndroidLocationSample,
 } from "./types";
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
-export { clearPendingAndroidLocationSamplesAsync } from "./queue";
+export {
+  clearPendingAndroidLocationSamplesAsync,
+  peekPendingAndroidLocationSamplesAsync,
+} from "./queue";
+export { isAndroid14Plus, getAndroidApiLevel } from "./android-version";
+export {
+  ErrorCategory,
+  logError,
+  getRecentErrors,
+  clearErrors,
+} from "./error-logger";
+export type { ErrorLogEntry } from "./error-logger";
+export { recordTaskHeartbeat, getLastTaskHeartbeat } from "./task-heartbeat";
+export type { TaskHeartbeat } from "./task-heartbeat";
+export { calculateDistance } from "./distance";
+export type { Coordinate } from "./distance";
+export { getMovementState, setMovementState } from "./movement-state";
+export type {
+  MovementState,
+  MovementReason,
+  MovementStateData,
+} from "./movement-state";
+export { classifyMovementByDistance } from "./movement-detector";
+export type {
+  LocationSampleInput,
+  MovementClassification,
+} from "./movement-detector";
+export { recordLastSyncTime, getLastSyncTime } from "./sync-timing";
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== "android") return "notAndroid";
