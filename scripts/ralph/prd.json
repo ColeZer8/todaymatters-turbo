@@ -68,8 +68,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated timeInterval and deferredUpdatesInterval to 900000ms (15 min). Added showsBackgroundLocationIndicator: true. Created task-heartbeat.ts with recordTaskHeartbeat()/getLastTaskHeartbeat() for AsyncStorage persistence (key: tm:location:lastTaskExecution). Heartbeat recorded on every location-task.ts callback (initial 0, updated to actual sample count on success). Exported from barrel index.ts."
     },
     {
       "id": "US-005",

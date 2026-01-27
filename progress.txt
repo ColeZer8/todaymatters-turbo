@@ -18,6 +18,7 @@
 - Android DateTimePicker: Use `display="default"` (native modal) not `display="spinner"` (inline) for proper state persistence
 - For slide-up modals on Android, add `paddingTop: insets.top` to prevent header content from being blocked by status bar
 - When parsing database timestamps, use `parseDbTimestamp()` helper (in calendar-events.ts) to ensure UTC interpretation
+- Task heartbeat tracking: `recordTaskHeartbeat(sampleCount)` persists last execution time to AsyncStorage key `tm:location:lastTaskExecution`; use `getLastTaskHeartbeat()` to read it
 
 ---
 
@@ -114,5 +115,21 @@
   - When wrapping an existing function body in try/catch for logging (like `startAndroidBackgroundLocationAsync` and `flushPending`), re-throw the error after logging so callers still see the failure
   - `use-location-samples-sync.ts` imports from `@/lib/android-location` barrel - added `ErrorCategory` and `logError` to its import
   - Pre-existing type errors exist in index.ts (`status: 'denied'` literal vs PermissionStatus type) - unrelated to this change
+---
+
+## 2026-01-27 - US-004
+- What was implemented: Updated location task configuration for 15-minute intervals with heartbeat tracking
+- Files changed:
+  - apps/mobile/src/lib/android-location/index.ts (updated startLocationUpdatesAsync options: timeInterval 2min→15min, added deferredUpdatesInterval: 900000, added showsBackgroundLocationIndicator: true; added barrel exports for task-heartbeat)
+  - apps/mobile/src/lib/android-location/location-task.ts (added recordTaskHeartbeat() calls: initial heartbeat with 0 on every callback, updated heartbeat with actual sampleCount on success)
+  - apps/mobile/src/lib/android-location/task-heartbeat.ts (new: recordTaskHeartbeat(sampleCount) and getLastTaskHeartbeat() with AsyncStorage key tm:location:lastTaskExecution)
+- **Learnings for future iterations:**
+  - expo-location's `startLocationUpdatesAsync` accepts `LocationTaskOptions` which extends `LocationOptions` with `deferredUpdatesInterval`, `deferredUpdatesDistance`, `showsBackgroundLocationIndicator` (iOS), `activityType` (iOS), `pausesUpdatesAutomatically` (iOS)
+  - `timeInterval` is Android-only, controls minimum time between location updates
+  - `deferredUpdatesInterval` batches deferred updates - set to match timeInterval for consistent cadence
+  - `showsBackgroundLocationIndicator` is iOS-only but harmless to include on Android (ignored)
+  - Heartbeat pattern: record at start of callback (sampleCount=0), update after success (sampleCount=actual) - this way even error/early-return executions are tracked
+  - `recordTaskHeartbeat()` is fire-and-forget (async but not awaited in the task) - same pattern as `logError()`
+  - Future stories (US-010 health check) can use `getLastTaskHeartbeat()` to check if the task is still firing within expected intervals
 ---
 
