@@ -100,3 +100,19 @@
   - US-003 will integrate logError() calls into existing location code paths (location-task.ts, index.ts, permissions.ts, queue.ts)
 ---
 
+## 2026-01-27 - US-003
+- What was implemented: Integrated error logging (logError) calls into all location tracking error paths across 3 files
+- Files changed:
+  - apps/mobile/src/lib/android-location/location-task.ts (added logError to 5 error paths: task error callback, empty locations, no user session, all samples invalid, catch block)
+  - apps/mobile/src/lib/android-location/index.ts (added logError to 7 error paths: bg permission check failure, bg permission request failure, start tracking - no module/no services/fg denied/bg denied/start exception, flush sync failure)
+  - apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts (added logError to 2 error paths: start tracking failure, flush failure)
+- **Learnings for future iterations:**
+  - There is no separate `permissions.ts` file - all permission logic lives in `index.ts` within `requestAndroidLocationPermissionsAsync()` and `getBackgroundPermissionsSafeAsync()`
+  - `queue.ts` has no direct error paths needing logging - it's called by location-task.ts (enqueue) and index.ts (flush), which now log errors at the caller level
+  - `logError()` is async but returns void - in fire-and-forget contexts (like the background task), no need to await it
+  - Context objects should include `androidApiLevel: getAndroidApiLevel()` for diagnostic value on every error
+  - When wrapping an existing function body in try/catch for logging (like `startAndroidBackgroundLocationAsync` and `flushPending`), re-throw the error after logging so callers still see the failure
+  - `use-location-samples-sync.ts` imports from `@/lib/android-location` barrel - added `ErrorCategory` and `logError` to its import
+  - Pre-existing type errors exist in index.ts (`status: 'denied'` literal vs PermissionStatus type) - unrelated to this change
+---
+

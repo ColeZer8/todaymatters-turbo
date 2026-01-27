@@ -51,8 +51,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added logError() calls to: location-task.ts (4 error paths: task error callback, empty locations, no user session, all samples invalid, catch block), index.ts (permission check/request failures, startAndroidBackgroundLocationAsync early returns for no module/no services/fg denied/bg denied/start exception, flush sync failure), use-location-samples-sync.ts (start tracking failure, flush failure). All logs include androidApiLevel context. No separate permissions.ts exists - permission logic is in index.ts. Queue.ts has no direct error paths (called by task/flush)."
     },
     {
       "id": "US-004",
