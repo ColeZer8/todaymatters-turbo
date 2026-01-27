@@ -7,6 +7,7 @@ import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 import type { AndroidLocationSample } from './types';
 import { ErrorCategory, logError } from './error-logger';
 import { getAndroidApiLevel } from './android-version';
+import { recordTaskHeartbeat } from './task-heartbeat';
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
@@ -84,6 +85,9 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
   TaskManager.defineTask(ANDROID_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
+    // Record heartbeat on every callback to track when the task last fired.
+    recordTaskHeartbeat(0);
+
     try {
       if (error) {
         if (__DEV__) {
@@ -127,6 +131,9 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
         return;
       }
       const { pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
+
+      // Update heartbeat with actual sample count after successful processing.
+      recordTaskHeartbeat(samples.length);
 
       if (__DEV__) {
         console.log(`📍 queued ${samples.length} Android location samples (pending=${pendingCount})`);

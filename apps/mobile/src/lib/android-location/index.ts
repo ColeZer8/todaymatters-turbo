@@ -19,6 +19,8 @@ export { clearPendingAndroidLocationSamplesAsync } from './queue';
 export { isAndroid14Plus, getAndroidApiLevel } from './android-version';
 export { ErrorCategory, logError, getRecentErrors, clearErrors } from './error-logger';
 export type { ErrorLogEntry } from './error-logger';
+export { recordTaskHeartbeat, getLastTaskHeartbeat } from './task-heartbeat';
+export type { TaskHeartbeat } from './task-heartbeat';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
@@ -170,8 +172,12 @@ export async function startAndroidBackgroundLocationAsync(): Promise<void> {
     await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.Balanced,
       distanceInterval: 40,
-      // Android-specific: control update cadence.
-      timeInterval: 2 * 60 * 1000,
+      // Android-specific: request updates every 15 minutes.
+      timeInterval: 15 * 60 * 1000,
+      // Batch deferred updates to match the 15-minute cadence.
+      deferredUpdatesInterval: 15 * 60 * 1000,
+      // iOS: show indicator in status bar when using background location.
+      showsBackgroundLocationIndicator: true,
       // Foreground service is required for background reliability.
       foregroundService: {
         notificationTitle: 'TodayMatters is tracking your day',
