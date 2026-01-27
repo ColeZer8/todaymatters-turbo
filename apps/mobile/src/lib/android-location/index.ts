@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase/client';
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 export { clearPendingAndroidLocationSamplesAsync } from './queue';
+export { isAndroid14Plus, getAndroidApiLevel } from './android-version';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';

@@ -110,6 +110,8 @@ export default {
         'android.permission.ACCESS_BACKGROUND_LOCATION',
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_LOCATION',
+        // Activity recognition for future movement detection (Android 10+)
+        'android.permission.ACTIVITY_RECOGNITION',
       ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
