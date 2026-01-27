@@ -152,8 +152,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Split use-location-samples-sync.ts into separate iOS (fixed 2-min interval) and Android (adaptive) sync effects. Android sync uses two mechanisms: (1) time-based intervals that adapt to movement state (30 min stationary, 15 min moving/unknown), and (2) queue-size polling every 60s that triggers sync when pending samples exceed threshold (10 stationary, 20 moving/unknown). App foreground triggers immediate sync via AppState listener. Created sync-timing.ts with recordLastSyncTime()/getLastSyncTime() for AsyncStorage persistence (key: tm:location:lastSyncTime). Exported peekPendingAndroidLocationSamplesAsync and sync-timing functions from barrel index.ts."
     },
     {
       "id": "US-010",

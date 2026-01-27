@@ -21,6 +21,8 @@
 - Task heartbeat tracking: `recordTaskHeartbeat(sampleCount)` persists last execution time to AsyncStorage key `tm:location:lastTaskExecution`; use `getLastTaskHeartbeat()` to read it
 - Movement state: `getMovementState()` / `setMovementState(state, reason)` persist to AsyncStorage key `tm:location:movementState`; returns `MovementStateData` with state, lastUpdated, reason; defaults to 'unknown' on missing/corrupt data
 - Movement detection: `classifyMovementByDistance(samples)` takes `LocationSampleInput[]`, filters by accuracy <=50m, ignores GPS drift <10m, classifies as moving (>200m/15min) or stationary (<50m/30min) with confidence 0.7-1.0; returns null state for ambiguous/insufficient data
+- Adaptive sync: Android uses movement-aware sync intervals (30 min stationary, 15 min moving/unknown) plus queue-size threshold checks (10 stationary, 20 moving/unknown); iOS uses fixed 2-min interval
+- Sync timing: `recordLastSyncTime()` / `getLastSyncTime()` persist to AsyncStorage key `tm:location:lastSyncTime`
 
 ---
 
@@ -197,5 +199,21 @@
   - State is only updated when it differs from current persisted state - avoids unnecessary AsyncStorage writes
   - US-009 (adaptive sync) will read movement state via `getMovementState()` to adjust sync intervals
   - US-010 (health check) will use movement state for expected interval calculations
+---
+
+## 2026-01-27 - US-009
+- What was implemented: Adaptive sync intervals based on movement state for Android location data upload
+- Files changed:
+  - apps/mobile/src/lib/android-location/sync-timing.ts (new: recordLastSyncTime() and getLastSyncTime() with AsyncStorage key tm:location:lastSyncTime)
+  - apps/mobile/src/lib/android-location/index.ts (added barrel exports for peekPendingAndroidLocationSamplesAsync, recordLastSyncTime, getLastSyncTime)
+  - apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts (split into separate iOS and Android sync effects; Android uses adaptive time-based + queue-based sync)
+- **Learnings for future iterations:**
+  - The sync hook previously used a single useEffect for both iOS and Android with Platform.OS checks - splitting into separate effects makes each platform's logic clearer and independently testable
+  - Android adaptive sync uses two complementary mechanisms: (1) time-based via setTimeout chain that re-reads movement state on each cycle, (2) queue-size polling via setInterval every 60s
+  - setTimeout chain (instead of setInterval) allows dynamic interval adjustment - each cycle reads current movement state and computes the next delay accordingly
+  - `peekPendingAndroidLocationSamplesAsync(userId, threshold + 1)` is used to check queue size without reading all samples - peek with threshold+1 is sufficient to know if threshold is met
+  - `recordLastSyncTime()` is fire-and-forget (no await needed) - same pattern as other AsyncStorage writes in the location system
+  - The `isFlushingRef` is shared between iOS and Android effects since only one platform runs at a time - this prevents concurrent flushes from time-based and queue-based triggers
+  - US-010 (health check) and US-012 (diagnostics) can use `getLastSyncTime()` to check sync recency
 ---
 
