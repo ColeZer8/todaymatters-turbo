@@ -135,8 +135,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Integrated movement detection into location-task.ts. Added in-memory buffer (max 10 samples) that accumulates validated samples on each task callback. After enqueuing samples, calls classifyMovementByDistance() on the buffer. Only updates persisted movement state (via setMovementState) when confidence >= 0.7 and state differs from current. Movement state changes logged via setMovementState() which persists to AsyncStorage (tm:location:movementState). Buffer clears naturally on task/process restart since it's module-level."
     },
     {
       "id": "US-009",

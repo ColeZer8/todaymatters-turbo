@@ -184,3 +184,18 @@
   - US-008 will integrate this into location-task.ts to call on every batch of location samples
 ---
 
+## 2026-01-27 - US-008
+- What was implemented: Integrated movement detection into the location background task, with in-memory sample buffer and automatic state persistence
+- Files changed:
+  - apps/mobile/src/lib/android-location/location-task.ts (added movement detection integration: imports for classifyMovementByDistance/getMovementState/setMovementState, in-memory recentSamplesBuffer with MAX_RECENT_SAMPLES=10, updateMovementDetection() function, sample buffer population after successful enqueue, movement classification and state update on every callback)
+- **Learnings for future iterations:**
+  - Module-level arrays in location-task.ts persist across task callbacks but clear on process/task restart - perfect for in-memory sample buffers
+  - The `classifyMovementByDistance()` requires at least 3 usable samples (accuracy <=50m) for any classification, so the buffer needs to accumulate over multiple callbacks
+  - Movement state changes are persisted via `setMovementState()` to AsyncStorage (key: tm:location:movementState) - this doubles as diagnostic logging since it includes lastUpdated timestamp
+  - The `updateMovementDetection()` function is wrapped in try/catch and fails silently - movement detection must never crash the background location task
+  - Confidence threshold of 0.7 (70%) matches the minimum confidence returned by `classifyMovementByDistance()` for definitive classifications
+  - State is only updated when it differs from current persisted state - avoids unnecessary AsyncStorage writes
+  - US-009 (adaptive sync) will read movement state via `getMovementState()` to adjust sync intervals
+  - US-010 (health check) will use movement state for expected interval calculations
+---
+
