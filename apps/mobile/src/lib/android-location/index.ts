@@ -15,7 +15,7 @@ import { getAndroidApiLevel } from './android-version';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-export { clearPendingAndroidLocationSamplesAsync } from './queue';
+export { clearPendingAndroidLocationSamplesAsync, peekPendingAndroidLocationSamplesAsync } from './queue';
 export { isAndroid14Plus, getAndroidApiLevel } from './android-version';
 export { ErrorCategory, logError, getRecentErrors, clearErrors } from './error-logger';
 export type { ErrorLogEntry } from './error-logger';
@@ -27,6 +27,7 @@ export { getMovementState, setMovementState } from './movement-state';
 export type { MovementState, MovementReason, MovementStateData } from './movement-state';
 export { classifyMovementByDistance } from './movement-detector';
 export type { LocationSampleInput, MovementClassification } from './movement-detector';
+export { recordLastSyncTime, getLastSyncTime } from './sync-timing';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
