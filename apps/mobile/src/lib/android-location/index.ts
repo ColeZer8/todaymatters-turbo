@@ -21,6 +21,8 @@ export { ErrorCategory, logError, getRecentErrors, clearErrors } from './error-l
 export type { ErrorLogEntry } from './error-logger';
 export { recordTaskHeartbeat, getLastTaskHeartbeat } from './task-heartbeat';
 export type { TaskHeartbeat } from './task-heartbeat';
+export { calculateDistance } from './distance';
+export type { Coordinate } from './distance';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';

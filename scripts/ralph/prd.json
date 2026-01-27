@@ -84,8 +84,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created distance.ts with Coordinate interface and calculateDistance() using haversine formula. Returns distance in meters. 9 unit tests covering: identical points, long distances (NYC-LA, London-Paris), short walking distances, equator crossing, antimeridian crossing, symmetry, GPS drift, and pole-to-pole. Exported calculateDistance and Coordinate type from barrel index.ts."
     },
     {
       "id": "US-006",

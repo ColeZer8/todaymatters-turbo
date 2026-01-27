@@ -133,3 +133,18 @@
   - Future stories (US-010 health check) can use `getLastTaskHeartbeat()` to check if the task is still firing within expected intervals
 ---
 
+## 2026-01-27 - US-005
+- What was implemented: Haversine distance calculation utility with comprehensive unit tests
+- Files changed:
+  - apps/mobile/src/lib/android-location/distance.ts (new: Coordinate interface, calculateDistance() using haversine formula, returns meters)
+  - apps/mobile/src/lib/android-location/distance.test.ts (new: 9 unit tests covering identical points, long distances, short distances, equator, antimeridian, symmetry, GPS drift, poles)
+  - apps/mobile/src/lib/android-location/index.ts (added barrel exports for calculateDistance and Coordinate type)
+- **Learnings for future iterations:**
+  - Jest test framework is configured in apps/mobile with `jest-expo` preset and `jest.config.cjs`
+  - Test files go alongside source files as `*.test.ts` (co-located pattern)
+  - Tests run with `npx jest <path>` from apps/mobile directory or `pnpm test` for all
+  - Haversine formula uses Earth radius of 6,371,000 meters for great-circle distance
+  - The Coordinate interface is simple `{ latitude, longitude }` in degrees - future stories (US-007 movement detection) will use this with AndroidLocationSample coordinates
+  - Export pattern for new modules: `export { fn } from './module'` and `export type { Type } from './module'` in barrel index.ts
+---
+
