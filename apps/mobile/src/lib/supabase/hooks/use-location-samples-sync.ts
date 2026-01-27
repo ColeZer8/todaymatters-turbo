@@ -12,6 +12,8 @@ import {
   startAndroidBackgroundLocationAsync,
   stopAndroidBackgroundLocationAsync,
   clearPendingAndroidLocationSamplesAsync,
+  ErrorCategory,
+  logError,
 } from '@/lib/android-location';
 
 interface UseLocationSamplesSyncOptions {
@@ -39,6 +41,9 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
       } else {
         startAndroidBackgroundLocationAsync().catch((e) => {
           if (__DEV__) console.error('📍 Failed to start Android background location:', e);
+          logError(ErrorCategory.TASK_START_FAILED, 'Failed to start Android background location from sync hook', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         });
       }
       return;
@@ -95,6 +100,11 @@ export function useLocationSamplesSync(options: UseLocationSamplesSyncOptions = 
         }
       } catch (e) {
         if (__DEV__) console.error('📍 Failed to flush location samples:', e);
+        if (Platform.OS === 'android') {
+          logError(ErrorCategory.SYNC_FAILED, 'Failed to flush location samples in sync hook', {
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
       } finally {
         isFlushingRef.current = false;
       }

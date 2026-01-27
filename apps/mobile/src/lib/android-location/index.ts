@@ -10,6 +10,8 @@ import {
 import type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
 import { supabase } from '@/lib/supabase/client';
+import { ErrorCategory, logError } from './error-logger';
+import { getAndroidApiLevel } from './android-version';
 
 export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
 export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
@@ -42,6 +44,10 @@ async function getBackgroundPermissionsSafeAsync(
     if (__DEV__) {
       console.warn('📍 Android background permission check failed:', error);
     }
+    logError(ErrorCategory.PERMISSION_DENIED, 'Background permission check threw an exception', {
+      error: error instanceof Error ? error.message : String(error),
+      androidApiLevel: getAndroidApiLevel(),
+    });
     return {
       status: 'denied',
       granted: false,
@@ -94,6 +100,11 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       if (__DEV__) {
         console.warn('📍 Android background permission request failed:', error);
       }
+      logError(ErrorCategory.PERMISSION_DENIED, 'Background permission request threw an exception', {
+        error: error instanceof Error ? error.message : String(error),
+        androidApiLevel: getAndroidApiLevel(),
+        foregroundStatus: foreground.status,
+      });
       background = {
         status: 'denied',
         granted: false,
@@ -117,32 +128,64 @@ export async function startAndroidBackgroundLocationAsync(): Promise<void> {
   if (support !== 'available') return;
 
   const Location = await loadExpoLocationAsync();
-  if (!Location) return;
+  if (!Location) {
+    logError(ErrorCategory.TASK_START_FAILED, 'Expo Location native module not available', {
+      androidApiLevel: getAndroidApiLevel(),
+    });
+    return;
+  }
 
   const servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (!servicesEnabled) return;
+  if (!servicesEnabled) {
+    logError(ErrorCategory.LOCATION_UNAVAILABLE, 'Location services disabled on device', {
+      androidApiLevel: getAndroidApiLevel(),
+    });
+    return;
+  }
 
   // IMPORTANT: Do not auto-request permissions here; onboarding should drive prompts.
   const fg = await Location.getForegroundPermissionsAsync();
   const bg = await getBackgroundPermissionsSafeAsync(Location);
-  if (fg.status !== 'granted') return;
-  if (bg.status !== 'granted') return;
+  if (fg.status !== 'granted') {
+    logError(ErrorCategory.PERMISSION_DENIED, 'Foreground location permission not granted at task start', {
+      androidApiLevel: getAndroidApiLevel(),
+      foregroundStatus: fg.status,
+      canAskAgain: fg.canAskAgain,
+    });
+    return;
+  }
+  if (bg.status !== 'granted') {
+    logError(ErrorCategory.PERMISSION_DENIED, 'Background location permission not granted at task start', {
+      androidApiLevel: getAndroidApiLevel(),
+      backgroundStatus: bg.status,
+      canAskAgain: bg.canAskAgain,
+    });
+    return;
+  }
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
   if (alreadyStarted) return;
 
-  await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 40,
-    // Android-specific: control update cadence.
-    timeInterval: 2 * 60 * 1000,
-    // Foreground service is required for background reliability.
-    foregroundService: {
-      notificationTitle: 'TodayMatters is tracking your day',
-      notificationBody: 'Used to build an hour-by-hour view of your day for schedule comparison.',
-      notificationColor: '#2563EB',
-    },
-  });
+  try {
+    await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
+      accuracy: Location.Accuracy.Balanced,
+      distanceInterval: 40,
+      // Android-specific: control update cadence.
+      timeInterval: 2 * 60 * 1000,
+      // Foreground service is required for background reliability.
+      foregroundService: {
+        notificationTitle: 'TodayMatters is tracking your day',
+        notificationBody: 'Used to build an hour-by-hour view of your day for schedule comparison.',
+        notificationColor: '#2563EB',
+      },
+    });
+  } catch (e) {
+    logError(ErrorCategory.TASK_START_FAILED, 'startLocationUpdatesAsync threw an exception', {
+      error: e instanceof Error ? e.message : String(e),
+      androidApiLevel: getAndroidApiLevel(),
+    });
+    throw e;
+  }
 }
 
 export async function stopAndroidBackgroundLocationAsync(): Promise<void> {
@@ -164,29 +207,38 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: 
   const BATCH_SIZE = 250;
   let uploaded = 0;
 
-  while (true) {
-    const batch = await peekPendingAndroidLocationSamplesAsync(userId, BATCH_SIZE);
-    if (batch.length === 0) break;
+  try {
+    while (true) {
+      const batch = await peekPendingAndroidLocationSamplesAsync(userId, BATCH_SIZE);
+      if (batch.length === 0) break;
 
-    const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
-    if (droppedKeys.length > 0) {
-      if (__DEV__) {
-        console.warn(`📍 Dropped ${droppedKeys.length} Android location samples with invalid fields.`);
+      const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
+      if (droppedKeys.length > 0) {
+        if (__DEV__) {
+          console.warn(`📍 Dropped ${droppedKeys.length} Android location samples with invalid fields.`);
+        }
+        await removePendingAndroidLocationSamplesByKeyAsync(userId, droppedKeys);
       }
-      await removePendingAndroidLocationSamplesByKeyAsync(userId, droppedKeys);
+
+      if (validSamples.length === 0) {
+        continue;
+      }
+
+      await upsertLocationSamples(userId, validSamples);
+      await removePendingAndroidLocationSamplesByKeyAsync(
+        userId,
+        validSamples.map((s) => s.dedupe_key)
+      );
+
+      uploaded += validSamples.length;
     }
-
-    if (validSamples.length === 0) {
-      continue;
-    }
-
-    await upsertLocationSamples(userId, validSamples);
-    await removePendingAndroidLocationSamplesByKeyAsync(
-      userId,
-      validSamples.map((s) => s.dedupe_key)
-    );
-
-    uploaded += validSamples.length;
+  } catch (e) {
+    logError(ErrorCategory.SYNC_FAILED, 'Failed to flush pending location samples to Supabase', {
+      error: e instanceof Error ? e.message : String(e),
+      androidApiLevel: getAndroidApiLevel(),
+      uploadedBeforeFailure: uploaded,
+    });
+    throw e;
   }
 
   const remaining = (await peekPendingAndroidLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;

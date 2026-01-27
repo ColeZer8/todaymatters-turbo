@@ -5,6 +5,8 @@ import type { Json } from '@/lib/supabase/database.types';
 import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
 import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
 import type { AndroidLocationSample } from './types';
+import { ErrorCategory, logError } from './error-logger';
+import { getAndroidApiLevel } from './android-version';
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
@@ -91,18 +93,39 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
             console.warn('📍 Android background location task warning:', error);
           }
         }
+        logError(ErrorCategory.TASK_EXECUTION_FAILED, 'Background location task received error callback', {
+          error: error instanceof Error ? error.message : String(error),
+          androidApiLevel: getAndroidApiLevel(),
+        });
         return;
       }
 
       const locations = (data as unknown as { locations?: RawLocationObject[] } | null | undefined)?.locations ?? [];
-      if (locations.length === 0) return;
+      if (locations.length === 0) {
+        logError(ErrorCategory.LOCATION_UNAVAILABLE, 'Background location task received empty locations array', {
+          androidApiLevel: getAndroidApiLevel(),
+        });
+        return;
+      }
 
       const sessionResult = await supabase.auth.getSession();
       const userId = sessionResult.data.session?.user?.id ?? null;
-      if (!userId) return;
+      if (!userId) {
+        logError(ErrorCategory.TASK_EXECUTION_FAILED, 'No authenticated user session during location task', {
+          androidApiLevel: getAndroidApiLevel(),
+          locationCount: locations.length,
+        });
+        return;
+      }
 
       const samples = locations.map(toSample).filter((s): s is Omit<AndroidLocationSample, 'dedupe_key'> => s != null);
-      if (samples.length === 0) return;
+      if (samples.length === 0) {
+        logError(ErrorCategory.LOCATION_UNAVAILABLE, 'All location samples failed validation', {
+          androidApiLevel: getAndroidApiLevel(),
+          rawLocationCount: locations.length,
+        });
+        return;
+      }
       const { pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
 
       if (__DEV__) {
@@ -110,6 +133,10 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
       }
     } catch (e) {
       if (__DEV__) console.error('📍 Android background location task failed:', e);
+      logError(ErrorCategory.TASK_EXECUTION_FAILED, 'Background location task threw an exception', {
+        error: e instanceof Error ? e.message : String(e),
+        androidApiLevel: getAndroidApiLevel(),
+      });
     }
   });
 }
