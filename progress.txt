@@ -9,6 +9,10 @@
   - Actual adjust screen: /apps/mobile/src/app/actual-adjust.tsx
   - Location services: /apps/mobile/src/lib/supabase/services/location-samples.ts
   - Events store: /apps/mobile/src/stores/events-store.ts
+  - Error logger: /apps/mobile/src/lib/android-location/error-logger.ts
+- AsyncStorage key convention: `tm:location:<purpose>` (e.g., `tm:location:errors`, `tm:location:pending:<userId>`)
+- android-location module uses barrel exports from index.ts - always re-export new modules there
+- Error logging uses `logError(ErrorCategory, message, context)` - import from `@/lib/android-location`
 - SafeAreaView must be imported from 'react-native-safe-area-context' not 'react-native' for proper notch/status bar handling
 - Templates can either use SafeAreaView directly, useSafeAreaInsets hook with manual padding, or delegate to SetupStepLayout
 - Android DateTimePicker: Use `display="default"` (native modal) not `display="spinner"` (inline) for proper state persistence
@@ -79,5 +83,20 @@
   - This difference can cause events to appear hours off depending on user timezone
   - The same pattern should be used anywhere database timestamps are parsed: `parseDbTimestamp(row.timestamp)` instead of `new Date(row.timestamp)`
   - Pre-existing type errors (CalendarEventMeta export, Json types) are unrelated to timezone handling
+---
+
+## 2026-01-27 - US-002
+- What was implemented: Created ErrorLogger infrastructure with AsyncStorage persistence for location tracking diagnostics
+- Files changed:
+  - apps/mobile/src/lib/android-location/error-logger.ts (new)
+  - apps/mobile/src/lib/android-location/index.ts (added exports)
+- **Learnings for future iterations:**
+  - AsyncStorage key for errors: `tm:location:errors`
+  - Circular buffer pattern: read all, append/throttle, write back trimmed to max 50
+  - Duplicate throttling: scan from end of array for matching category+message within 5-min window, increment count instead of appending
+  - ErrorCategory enum: PERMISSION_DENIED, TASK_START_FAILED, TASK_EXECUTION_FAILED, LOCATION_UNAVAILABLE, SYNC_FAILED
+  - All public functions (logError, getRecentErrors, clearErrors) wrap in try/catch and fail silently - logging must never crash the app
+  - Export both values and types from barrel index.ts: `export { ErrorCategory }` for the enum, `export type { ErrorLogEntry }` for the interface
+  - US-003 will integrate logError() calls into existing location code paths (location-task.ts, index.ts, permissions.ts, queue.ts)
 ---
 
