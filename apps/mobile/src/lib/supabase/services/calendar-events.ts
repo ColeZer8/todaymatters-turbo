@@ -13,7 +13,6 @@ const ACTUAL_EVENT_TYPE = "calendar_actual";
 type TmEventRow = Database["tm"]["Tables"]["events"]["Row"];
 type TmEventInsert = Database["tm"]["Tables"]["events"]["Insert"];
 type TmEventUpdate = Database["tm"]["Tables"]["events"]["Update"];
-type PublicEventRow = Database["public"]["Tables"]["events"]["Row"];
 
 export type PlannedCalendarMeta = CalendarEventMeta & Record<string, Json>;
 
@@ -152,149 +151,6 @@ function rowToScheduledEventForDay(
     category,
     isBig3: metaParsed?.isBig3 ?? false,
     meta: Object.keys(metaWithActual).length > 0 ? metaWithActual : undefined,
-  };
-}
-
-function isEventCategory(value: unknown): value is EventCategory {
-  return (
-    typeof value === "string" &&
-    [
-      "routine",
-      "work",
-      "meal",
-      "meeting",
-      "health",
-      "family",
-      "social",
-      "travel",
-      "finance",
-      "comm",
-      "digital",
-      "sleep",
-      "unknown",
-      "free",
-    ].includes(value)
-  );
-}
-
-function mapPublicEventTypeToCategory(
-  type: Database["public"]["Enums"]["event_type"] | string | null,
-  fallback?: EventCategory | null,
-): EventCategory {
-  if (fallback && isEventCategory(fallback)) return fallback;
-  switch (type) {
-    case "calendar_planned":
-    case "calendar_actual":
-    case "meeting":
-    case "call":
-    case "video_call":
-    case "phone_call":
-      return "meeting";
-    case "drive":
-      return "travel";
-    case "sleep":
-      return "sleep";
-    case "message":
-    case "email":
-    case "chat":
-    case "slack_message":
-    case "sms":
-    case "communication":
-      return "social";
-    case "task":
-    case "project":
-    case "goal":
-    case "category":
-    case "tag":
-      return "work";
-    case "note":
-    case "other":
-    default:
-      return "work";
-  }
-}
-
-function rowToScheduledEventForDayFromPublic(
-  row: PublicEventRow,
-  dayStart: Date,
-  dayEnd: Date,
-): ScheduledEvent | null {
-  if (!row.id) return null;
-  if (!row.scheduled_start || !row.scheduled_end) return null;
-  const start = parseDbTimestamp(row.scheduled_start);
-  const end = parseDbTimestamp(row.scheduled_end);
-  const startMs = start.getTime();
-  const endMs = end.getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
-    return null;
-
-  const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
-  const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
-  const clippedStartMs = clippedStart.getTime();
-  const clippedEndMs = clippedEnd.getTime();
-  if (clippedEndMs <= clippedStartMs) return null;
-
-  const startMinutes = Math.max(
-    0,
-    Math.round((clippedStartMs - dayStart.getTime()) / 60_000),
-  );
-  const duration = Math.max(
-    Math.round((clippedEndMs - clippedStartMs) / 60_000),
-    1,
-  );
-
-  const meta = row.meta as Json;
-  const metaParsed =
-    meta && typeof meta === "object" && !Array.isArray(meta)
-      ? (meta as Record<string, Json>)
-      : null;
-  const metaCategory = metaParsed?.category;
-  const category = mapPublicEventTypeToCategory(
-    row.type,
-    isEventCategory(metaCategory) ? metaCategory : null,
-  );
-
-  const title =
-    row.title?.trim() ||
-    row.subject?.trim() ||
-    (typeof metaParsed?.title === "string" ? metaParsed.title : "") ||
-    "Calendar event";
-  const description =
-    row.description?.trim() ||
-    row.preview?.trim() ||
-    (typeof metaParsed?.description === "string"
-      ? metaParsed.description
-      : "") ||
-    "";
-
-  const location =
-    row.location?.trim() ||
-    (typeof metaParsed?.location === "string" ? metaParsed.location : "") ||
-    undefined;
-
-  const isActual = row.type === ACTUAL_EVENT_TYPE;
-  const metaForDisplay: PlannedCalendarMeta = {
-    ...(metaParsed ?? {}),
-    category,
-    source: isActual ? "user" : "system",
-    actual: isActual ? true : undefined,
-    tags: ["external_calendar"],
-    source_provider: row.source_provider ?? null,
-    external_id: row.external_id ?? null,
-    source_id: row.source_id ?? undefined,
-    ...(location ? { location } : {}),
-  };
-
-  return {
-    id: row.id,
-    title,
-    description,
-    location,
-    startMinutes,
-    duration,
-    category,
-    isBig3: Boolean((metaParsed?.isBig3 as boolean | undefined) ?? false),
-    meta: metaForDisplay,
   };
 }
 
@@ -457,18 +313,11 @@ export async function fetchPlannedCalendarEventsForDay(
     const startIso = dayStart.toISOString();
     const endIso = dayEnd.toISOString();
 
-    const [tmResult, publicResult, tmGoogleMeetingsResult] = await Promise.all([
+    // Keep planned calendar data scoped to tm.events to avoid ghost events
+    // from external sources that are not part of the app's sync pipeline.
+    const [tmResult, tmGoogleMeetingsResult] = await Promise.all([
       supabase
         .schema("tm")
-        .from("events")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("type", PLANNED_EVENT_TYPE)
-        .lt("scheduled_start", endIso)
-        .gt("scheduled_end", startIso)
-        .order("scheduled_start", { ascending: true }),
-      supabase
-        .schema("public")
         .from("events")
         .select("*")
         .eq("user_id", userId)
@@ -490,23 +339,12 @@ export async function fetchPlannedCalendarEventsForDay(
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
-    if (publicResult.error) throw handleSupabaseError(publicResult.error);
     if (tmGoogleMeetingsResult.error)
       throw handleSupabaseError(tmGoogleMeetingsResult.error);
 
     const tmEvents = (tmResult.data ?? [])
       .map((row) =>
         rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd),
-      )
-      .filter((e): e is ScheduledEvent => !!e);
-
-    const externalEvents = (publicResult.data ?? [])
-      .map((row) =>
-        rowToScheduledEventForDayFromPublic(
-          row as PublicEventRow,
-          dayStart,
-          dayEnd,
-        ),
       )
       .filter((e): e is ScheduledEvent => !!e);
 
@@ -525,13 +363,6 @@ export async function fetchPlannedCalendarEventsForDay(
 
     for (const event of tmEvents) {
       const key = buildDedupKey(event);
-      seen.add(key);
-      merged.push(event);
-    }
-
-    for (const event of externalEvents) {
-      const key = buildDedupKey(event);
-      if (seen.has(key)) continue;
       seen.add(key);
       merged.push(event);
     }
@@ -559,18 +390,9 @@ export async function fetchActualCalendarEventsForDay(
     const startIso = dayStart.toISOString();
     const endIso = dayEnd.toISOString();
 
-    const [tmResult, publicResult] = await Promise.all([
+    const [tmResult] = await Promise.all([
       supabase
         .schema("tm")
-        .from("events")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("type", ACTUAL_EVENT_TYPE)
-        .lt("scheduled_start", endIso)
-        .gt("scheduled_end", startIso)
-        .order("scheduled_start", { ascending: true }),
-      supabase
-        .schema("public")
         .from("events")
         .select("*")
         .eq("user_id", userId)
@@ -581,7 +403,6 @@ export async function fetchActualCalendarEventsForDay(
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
-    if (publicResult.error) throw handleSupabaseError(publicResult.error);
 
     const tmEvents = (tmResult.data ?? [])
       .map((row) =>
@@ -589,33 +410,7 @@ export async function fetchActualCalendarEventsForDay(
       )
       .filter((e): e is ScheduledEvent => !!e);
 
-    const externalEvents = (publicResult.data ?? [])
-      .map((row) =>
-        rowToScheduledEventForDayFromPublic(
-          row as PublicEventRow,
-          dayStart,
-          dayEnd,
-        ),
-      )
-      .filter((e): e is ScheduledEvent => !!e);
-
-    const seen = new Set<string>();
-    const merged: ScheduledEvent[] = [];
-
-    for (const event of tmEvents) {
-      const key = buildDedupKey(event);
-      seen.add(key);
-      merged.push(event);
-    }
-
-    for (const event of externalEvents) {
-      const key = buildDedupKey(event);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(event);
-    }
-
-    return merged.sort((a, b) => a.startMinutes - b.startMinutes);
+    return tmEvents.sort((a, b) => a.startMinutes - b.startMinutes);
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
