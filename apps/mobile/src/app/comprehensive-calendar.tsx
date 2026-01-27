@@ -618,6 +618,8 @@ export default function ComprehensiveCalendarScreen() {
         const startMinutes = updates.startMinutes ?? existing.startMinutes;
         const duration = updates.duration ?? existing.duration;
         const location = updates.location ?? existing.location;
+        const valueLabel = updates.valueLabel ?? existing.meta?.value_label ?? null;
+        const valueSubcategory = updates.valueSubcategory ?? existing.meta?.value_subcategory ?? null;
 
         if (USE_MOCK_CALENDAR) {
           updateScheduledEvent(
@@ -629,6 +631,14 @@ export default function ComprehensiveCalendarScreen() {
               isBig3: updates.isBig3 ?? existing.isBig3,
               startMinutes,
               duration,
+              meta: {
+                ...existing.meta,
+                category: updates.category ?? existing.category,
+                isBig3: updates.isBig3 ?? existing.isBig3,
+                source: 'user',
+                value_label: valueLabel,
+                value_subcategory: valueSubcategory,
+              },
             },
             selectedDateYmd
           );
@@ -647,9 +657,12 @@ export default function ComprehensiveCalendarScreen() {
           scheduledStartIso: newStart.toISOString(),
           scheduledEndIso: newEnd.toISOString(),
           meta: {
+            ...existing.meta,
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
             source: 'user',
+            value_label: valueLabel,
+            value_subcategory: valueSubcategory,
           },
         });
 
@@ -670,6 +683,8 @@ export default function ComprehensiveCalendarScreen() {
         const startMinutes = updates.startMinutes ?? existing.startMinutes;
         const duration = updates.duration ?? existing.duration;
         const location = updates.location ?? existing.location;
+        const valueLabel = updates.valueLabel ?? existing.meta?.value_label ?? null;
+        const valueSubcategory = updates.valueSubcategory ?? existing.meta?.value_subcategory ?? null;
 
         if (USE_MOCK_CALENDAR) {
           updateActualEvent(
@@ -681,6 +696,14 @@ export default function ComprehensiveCalendarScreen() {
               isBig3: updates.isBig3 ?? existing.isBig3,
               startMinutes,
               duration,
+              meta: {
+                ...existing.meta,
+                category: updates.category ?? existing.category,
+                isBig3: updates.isBig3 ?? existing.isBig3,
+                source: 'user',
+                value_label: valueLabel,
+                value_subcategory: valueSubcategory,
+              },
             },
             selectedDateYmd
           );
@@ -699,9 +722,12 @@ export default function ComprehensiveCalendarScreen() {
           scheduledStartIso: newStart.toISOString(),
           scheduledEndIso: newEnd.toISOString(),
           meta: {
+            ...existing.meta,
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
             source: 'user',
+            value_label: valueLabel,
+            value_subcategory: valueSubcategory,
           },
         });
         updateActualEvent(updated, selectedDateYmd);

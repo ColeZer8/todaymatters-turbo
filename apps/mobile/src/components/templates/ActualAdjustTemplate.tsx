@@ -20,8 +20,10 @@ export interface ActualAdjustTemplateProps {
   isSleep?: boolean;
   selectedCategory: EventCategory;
   isBig3: boolean;
-  values: string[];
-  selectedValue: string | null;
+  coreValues: Array<{ id: string; label: string }>;
+  selectedCoreValueId: string | null;
+  coreSubcategories: Array<{ id: string; label: string }>;
+  selectedSubcategoryId: string | null;
   linkedGoals: Array<{ id: string; label: string }>;
   selectedGoalId: string | null;
   goalContribution: number | null;
@@ -38,21 +40,11 @@ export interface ActualAdjustTemplateProps {
   onChangeTitle: (value: string) => void;
   onChangeNote: (value: string) => void;
   onToggleBig3: (value: boolean) => void;
-  onSelectCategory: (value: EventCategory) => void;
-  onSelectValue: (value: string | null) => void;
+  onSelectCoreValue: (valueId: string) => void;
+  onSelectSubcategory: (valueId: string | null) => void;
   onSelectGoal: (value: string | null) => void;
   onSelectGoalContribution: (value: number | null) => void;
 }
-
-const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
-  { id: 'routine', label: 'Faith' },
-  { id: 'family', label: 'Family' },
-  { id: 'work', label: 'Work' },
-  { id: 'health', label: 'Health' },
-  { id: 'sleep', label: 'Sleep' },
-  { id: 'digital', label: 'Digital' },
-  { id: 'unknown', label: 'Other' },
-];
 
 export const ActualAdjustTemplate = ({
   title,
@@ -63,8 +55,10 @@ export const ActualAdjustTemplate = ({
   isSleep = false,
   selectedCategory,
   isBig3,
-  values,
-  selectedValue,
+  coreValues,
+  selectedCoreValueId,
+  coreSubcategories,
+  selectedSubcategoryId,
   linkedGoals,
   selectedGoalId,
   goalContribution,
@@ -81,8 +75,8 @@ export const ActualAdjustTemplate = ({
   onChangeTitle,
   onChangeNote,
   onToggleBig3,
-  onSelectCategory,
-  onSelectValue,
+  onSelectCoreValue,
+  onSelectSubcategory,
   onSelectGoal,
   onSelectGoalContribution,
 }: ActualAdjustTemplateProps) => {
@@ -188,44 +182,17 @@ export const ActualAdjustTemplate = ({
         </View>
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#F97316]">LIFE AREA</Text>
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">CORE VALUES</Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
-            {LIFE_AREA_OPTIONS.map((option) => {
-              const isSelected = selectedCategory === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => onSelectCategory(option.id)}
-                  className={`rounded-full border px-4 py-2 ${
-                    isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
-                  }`}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                >
-                  <Text
-                    className={`text-[12px] font-semibold ${
-                      isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
-                    }`}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#94A3B8]">ALIGN WITH VALUES</Text>
-          <View className="mt-3 flex-row flex-wrap gap-2">
-            {values.length === 0 && (
-              <Text className="text-[12px] text-[#94A3B8]">No values found</Text>
+            {coreValues.length === 0 && (
+              <Text className="text-[12px] text-[#94A3B8]">No core values found</Text>
             )}
-            {values.map((value) => {
-              const isSelected = selectedValue === value;
+            {coreValues.map((value) => {
+              const isSelected = selectedCoreValueId === value.id;
               return (
                 <Pressable
-                  key={value}
-                  onPress={() => onSelectValue(isSelected ? null : value)}
+                  key={value.id}
+                  onPress={() => onSelectCoreValue(value.id)}
                   className={`rounded-full border px-4 py-2 ${
                     isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
                   }`}
@@ -236,7 +203,7 @@ export const ActualAdjustTemplate = ({
                       isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
                     }`}
                   >
-                    {value}
+                    {value.label}
                   </Text>
                 </Pressable>
               );
@@ -245,7 +212,37 @@ export const ActualAdjustTemplate = ({
         </View>
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#94A3B8]">LINKED GOAL</Text>
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">SUBCATEGORIES</Text>
+          <View className="mt-3 flex-row flex-wrap gap-2">
+            {coreSubcategories.length === 0 && (
+              <Text className="text-[12px] text-[#94A3B8]">No subcategories found</Text>
+            )}
+            {coreSubcategories.map((subcategory) => {
+              const isSelected = selectedSubcategoryId === subcategory.id;
+              return (
+                <Pressable
+                  key={subcategory.id}
+                  onPress={() => onSelectSubcategory(isSelected ? null : subcategory.id)}
+                  className={`rounded-full border px-4 py-2 ${
+                    isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
+                  }`}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                >
+                  <Text
+                    className={`text-[12px] font-semibold ${
+                      isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+                    }`}
+                  >
+                    {subcategory.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View className="mt-6">
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">LINK TO GOAL</Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             <Pressable
               onPress={() => onSelectGoal(null)}

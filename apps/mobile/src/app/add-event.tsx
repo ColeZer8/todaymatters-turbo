@@ -105,6 +105,13 @@ export default function AddEventScreen() {
                         duration,
                         category: draft.category,
                         isBig3: draft.isBig3,
+                        meta: {
+                            category: draft.category,
+                            isBig3: draft.isBig3,
+                            source: 'user',
+                            value_label: draft.coreValueLabel,
+                            value_subcategory: draft.subcategoryLabel,
+                        },
                     };
                     if (column === 'actual') addActualEvent(localEvent, targetYmd);
                     else addScheduledEvent(localEvent, targetYmd);
@@ -120,6 +127,8 @@ export default function AddEventScreen() {
                             end: end.toISOString(),
                             category: draft.category,
                             isBig3: draft.isBig3,
+                            coreValue: draft.coreValueLabel,
+                            subcategory: draft.subcategoryLabel,
                         });
                     }
 
@@ -139,7 +148,13 @@ export default function AddEventScreen() {
                                   location: draft.location,
                                   scheduledStartIso: start.toISOString(),
                                   scheduledEndIso: end.toISOString(),
-                                  meta: { category: draft.category, isBig3: draft.isBig3, source: 'user' },
+                                meta: {
+                                    category: draft.category,
+                                    isBig3: draft.isBig3,
+                                    source: 'user',
+                                    value_label: draft.coreValueLabel,
+                                    value_subcategory: draft.subcategoryLabel,
+                                },
                               })
                             : await createPlanned({
                                   title,
@@ -151,6 +166,8 @@ export default function AddEventScreen() {
                                       category: draft.category,
                                       isBig3: draft.isBig3,
                                       source: 'user',
+                                    value_label: draft.coreValueLabel,
+                                    value_subcategory: draft.subcategoryLabel,
                                       ...suggestionMeta,
                                   },
                               });

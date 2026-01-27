@@ -1,0 +1,562 @@
+# Ralph Progress Log
+Started: Thu Jan 22 14:33:52 CST 2026
+Updated: Sun Jan 26 2026 - New PRD: V2 Bugs and Features
+---
+
+## Codebase Patterns
+- Evidence data is fetched in `apps/mobile/src/lib/supabase/services/evidence-data.ts`
+- Actual event derivation happens in `apps/mobile/src/lib/calendar/actual-display-events.ts`
+- Screen time derivation is in `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts`
+- Calendar orchestration is in `apps/mobile/src/app/comprehensive-calendar.tsx`
+- Rendering with absolute positioning is in `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
+- Known duplicate key issue at ComprehensiveCalendarTemplate.tsx lines 552-559
+- Android location code lives in `apps/mobile/src/lib/android-location/` — index.ts (start/stop/diagnostics), location-task.ts (background task handler), queue.ts (AsyncStorage sample buffer), register.ts (one-time task registration)
+- Android location background task uses expo-location + expo-task-manager; task must be defined at module scope per Expo docs
+- Location samples are buffered in AsyncStorage (key: `tm:location:pending:{userId}`) then flushed to Supabase via `flushPendingAndroidLocationSamplesToSupabaseAsync()`
+- Pre-existing TS errors exist in the codebase (39 total as of Jan 26 2026) — do not block on these; verify your changes don't add new ones
+- Event save flow: `actual-adjust.tsx` → `useCalendarEventsSync().createActual()/updateActual()` → `calendar-events.ts` Supabase write → store update. Store updates happen AFTER successful write (no optimistic updates).
+- Events with `meta.source: 'actual_adjust'` or `'user'` are protected from: (1) sleep overlap removal in `actual-display-events.ts`, (2) overlap resolution (highest priority), (3) re-derivation in `syncDerivedActualEvents` (time-range overlap check).
+- When adding new `CalendarEventMeta.source` values, update the union type in `events-store.ts` and use `as const` on the literal in object literals to prevent TypeScript widening.
+- `startAndroidBackgroundLocationAsync()` returns `StartAndroidLocationResult` (typed ok/fail union) — callers should check `.ok` and `.reason`
+- `isAndroidBackgroundLocationRunningAsync()` is a lightweight health check for the background task — use it to verify the task is alive without triggering a start
+- The sync hook (`use-location-samples-sync.ts`) now has a 5-min health check that auto-restarts the background task with retry backoff (max 3 attempts, reset on foreground)
+- `SparseLocationFallback` and `EvidenceAvailability` are PRD conceptual terms — they do not exist as code identifiers in the codebase
+- Location data flow: background task → AsyncStorage queue → flush every 2min → `tm.location_samples` → SQL view `tm.location_hourly` (auto-aggregated by PostGIS)
+- The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx is a narrowed subset of `ScheduledEvent` — if you need `meta`, you must add it to this local type
+- To detect "unknown gap" events, always check `meta.kind === 'unknown_gap'` (not just `category === 'unknown'`), because `buildProductiveUnknownEvent` creates events with `category: 'work'` + `kind: 'unknown_gap'`
+- Never put entire Zustand store selector objects in useMemo/useCallback dependency arrays — destructure to individual primitive values to avoid spurious recalculations
+- `buildActualDisplayEvents` has a module-level fingerprint cache — it returns cached results when inputs are identical (no need to add external memoization)
+- `useVerification.refresh()` uses refs for `appCategoryOverrides`, `plannedEvents`, `verificationStrictness`, `onError` to keep a stable callback identity (only depends on `isAuthenticated`, `userId`, `ymd`)
+- User-defined places are in `tm.user_places` table (accessed via `UserPlaceRow` type in evidence-data.ts) — already fetched as `evidence.userPlaces` in `EvidenceBundle`. Use `resolveFromUserPlaces()` in actual-display-events.ts to match location labels to user-defined place names before falling back to generic `mapPlaceToCategory`.
+- Travel events between locations use `kind: 'travel'` and `category: 'travel'` — minimum gap is 5 min (under 5 min = not travel), maximum 90 min
+- When labeling unknown gaps as screen time or productive, require screen time to account for >50% of the block's duration — prevents mislabeling morning routines, church, etc.
+- Hierarchical activity categories live in `tm.activity_categories` (self-referencing parent_id). Types are `ActivityCategory`, `ActivityCategoryInsert`, `ActivityCategoryUpdate` exported from `services/activity-categories.ts`. Seed defaults via `tm.seed_default_activity_categories(user_id)`.
+- `public.update_updated_at_column()` is a shared trigger function — use it for all tables with `updated_at` columns
+- `HierarchicalCategoryPicker` molecule component in `components/molecules/HierarchicalCategoryPicker.tsx` — accepts flat `ActivityCategory[]`, builds tree internally, returns `(categoryId, CategoryPath)` on select. Exported from `molecules/index.ts` with `CategoryPath` and `HierarchicalCategoryPickerProps` types.
+- Molecule components follow NativeWind + Pressable pattern: use `className` for static styles, `style` prop for dynamic values (e.g., per-depth indentation). Exported from `molecules/index.ts`.
+- `seedDefaultActivityCategories(userId)` in `activity-categories.ts` calls `tm.seed_default_activity_categories` via RPC — idempotent, safe to call on every setup screen mount.
+- `ActivityCategory` uses `.name` (not `.label`) — differs from the old `CoreCategory` type which used `.label`. Watch for this when migrating from the flat store system.
+- Setup screens use `SETUP_SCREENS_STEPS` from `constants/setup-screens.ts` for step numbers; full onboarding uses `ONBOARDING_STEPS` from `constants/onboarding.ts` — different step counts.
+- Daily Big 3 priorities live in `tm.daily_big3` (unique on user_id + date). Types: `DailyBig3`, `DailyBig3Insert`, `DailyBig3Update` from `services/daily-big3.ts`. CRUD: `fetchBig3ForDate`, `upsertBig3ForDate`, `deleteBig3ForDate`.
+- `big3_enabled` boolean is a column on `tm.user_data_preferences`, exposed as `big3Enabled` in `UserDataPreferences` interface (default: false). Read/write via `fetchUserDataPreferences` / `upsertUserDataPreferences`.
+- `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses manual `UserPreferencesRow` interface. When adding new columns, update: (1) migration, (2) `UserPreferencesRow`, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()`, (5) fetch select clause, (6) upsert payload.
+- `tm.location_mappings` does NOT exist — the actual table is `tm.user_places`. The PRD references location_mappings but all place label functionality uses user_places. Service is `user-places.ts`, types are `UserPlaceRow` (defined in both `user-places.ts` and `evidence-data.ts` — keep in sync).
+- `upsertUserPlaceFromSamples()` needs raw location samples with lat/lng — use `fetchLocationSamplesForRange()` from `user-places.ts` to get samples for an event's time range.
+- Auto-tagging from user places uses two-tier matching: (1) `place_id` from `location_hourly` SQL view (PostGIS st_dwithin), (2) haversine distance fallback using `EvidenceLocationSample` lat/lng and `UserPlaceRow` lat/lng. `findUserPlaceById()` for SQL matches, `findNearestUserPlaceByHaversine()` for client-side. Auto-tagged events get confidence 0.85 and `evidence.autoTaggedFrom` metadata.
+- PostGIS geography columns are returned as GeoJSON by Supabase (`{ type: "Point", coordinates: [lng, lat] }`). Use `extractLatLngFromCenter()` in evidence-data.ts to parse.
+
+## Critical Issue - Android Physical Device
+- **Problem**: Evidence data (location, screen time) not pulling on physical Android devices
+- **Works**: Android simulator
+- **Fails**: Physical Android device via Play Console internal testing (production build)
+- **Permissions**: All granted (Usage Access, Location)
+- **Symptom**: Nothing being pulled despite permissions granted
+- **Priority**: HIGHEST - US-001 and US-002 must be completed first
+
+---
+
+## 2026-01-26 - US-026
+- **What was implemented**: Investigated Android location canStart failure. Found and fixed a logic bug in `getAndroidLocationDiagnostics()` where canStart could NEVER be true. Added verbose diagnostic logging throughout the diagnostic function, background task callback, and profile diagnostics display. Added `lastSampleTimestamp` and `sampleCount24h` to diagnostics output.
+- **Root cause found**: In `index.ts` line 251 (old code), when `taskStarted=false` and `errors.length === 0`, the code pushed an error "Task not started despite all checks passing - unknown reason". This made `errors.length > 0`, so `canStart = errors.length === 0 && !diagnostics.taskStarted` always evaluated to false. The only scenario where canStart should be true (all checks pass, task not started) was the exact scenario that added a spurious error.
+- **Files changed**:
+  - `apps/mobile/src/lib/android-location/index.ts` — Fixed canStart logic bug, added verbose `[diag]`-prefixed logging to each diagnostic step, added `lastSampleTimestamp` and `sampleCount24h` fields to diagnostics, added `MAX_PENDING_SAMPLES_PER_USER` constant for full sample peek
+  - `apps/mobile/src/lib/android-location/location-task.ts` — Added `[task]`-prefixed logging: task fire timestamp, raw location count, conversion result, authenticated user check, queue result
+  - `apps/mobile/src/app/profile.tsx` — Updated diagnostics Alert to show `canStart`, `lastSampleTimestamp`, and `sampleCount24h` fields
+- **Learnings for future iterations:**
+  - The canStart logic was self-contradictory: it treated "task not started despite checks passing" as an error, but that's the normal state when the app should start the task. Future logic should distinguish "informational" vs "blocking" issues.
+  - Background task error logging was gated behind `__DEV__` — the catch block in defineTask only logged in dev mode. Changed the catch to always log since background task failures are critical.
+  - Location task fires asynchronously by the Android system — adding timestamp logging is critical to verify it actually fires.
+  - `peekPendingAndroidLocationSamplesAsync` with limit=1000 missed samples beyond that; changed to MAX_PENDING_SAMPLES_PER_USER (10000) for accurate diagnostics.
+  - Pre-existing TS errors: `PermissionStatus` type mismatch at lines 46/98 — string literal `'denied'` doesn't match enum. Not blocking; don't fix in unrelated stories.
+---
+
+## 2026-01-26 - US-027
+- **What was implemented**: Fixed Android location background collection by adding robust start result reporting, production logging, error handling, and automatic health-check/restart mechanism.
+- **Changes to `apps/mobile/src/lib/android-location/index.ts`**:
+  - Changed `startAndroidBackgroundLocationAsync()` return type from `Promise<void>` to `Promise<StartAndroidLocationResult>` — a discriminated union with `ok: true/false` and specific `reason` strings
+  - Added `console.log` on every early-return path (support, module, services, fg permission, bg permission) — these are NOT gated behind `__DEV__` so they appear in production logs
+  - Wrapped `Location.startLocationUpdatesAsync()` in try/catch to handle native module failures gracefully, returning `{ ok: false, reason: 'start_failed', detail }` instead of throwing
+  - Added `isAndroidBackgroundLocationRunningAsync()` — lightweight check of whether the background task is running, used by the health check
+- **Changes to `apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts`**:
+  - Updated auth-change start handler to use the typed result, logging failures with reason and detail
+  - Added new `useEffect` for Android health check: runs every 5 minutes and on app foreground
+  - Health check calls `isAndroidBackgroundLocationRunningAsync()`, and if task is stopped, attempts `startAndroidBackgroundLocationAsync()`
+  - Retry backoff: max 3 consecutive restart attempts (via `retryAttemptsRef`), then backs off until next foreground event when the counter resets
+- **Files changed**:
+  - `apps/mobile/src/lib/android-location/index.ts` — New result type, production logging, error handling, health check helper
+  - `apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts` — Health check effect, retry backoff, typed result handling
+- **Learnings for future iterations:**
+  - `SparseLocationFallback`, `EvidenceAvailability`, and `EvidenceFusion` are PRD conceptual terms that do not exist as code identifiers. Don't search for them in code.
+  - `tm.location_hourly` is a SQL view (not a table) — it auto-aggregates from `tm.location_samples` using PostGIS. No ETL or sync job needed.
+  - The sync hook already had two AppState listeners (flush + health check). Each needs its own cleanup. Keep effects separate rather than combining to avoid complexity.
+  - When using TypeScript discriminated unions with optional properties (`detail` only on the error variant), access via `'detail' in result ? result.detail : undefined` to satisfy the compiler.
+  - The existing codebase uses `void functionCall()` for fire-and-forget async calls — this pattern still works when the return type changes from `void` to a result type, since `void` discards the value.
+- Android `UsageStatsManager.queryUsageStats(INTERVAL_DAILY)` often returns `totalTimeInForeground=0` on physical devices because stats aren't aggregated until end-of-day on many OEMs. Always fall back to summing session durations from `queryEvents()`.
+- `syncAndroidUsageSummary` must persist sessions AND hourlyByApp data to Supabase (not just daily totals and app daily rows) — otherwise the evidence pipeline and screen-time-app-sessions queries return empty data for Android
+- The Android UsageSummary has `sessions[].startIso/endIso/packageName/durationSeconds` while iOS has `appSessions[].startedAtIso/endedAtIso/bundleIdentifier/durationSeconds` — different field names for the same concept
+---
+
+## 2026-01-26 - US-028
+- **What was implemented**: Fixed two root causes of the "5 sessions, 0 min" Android screen time bug.
+- **Root cause 1 (Kotlin — AndroidInsightsModule.kt)**: `queryUsageStats(INTERVAL_DAILY)` returns `totalTimeInForeground=0` on many Android OEMs because aggregate stats aren't computed until end-of-day. Meanwhile, `queryEvents()` returns real-time foreground/background events and sessions with correct durations. The fix: when `totalSeconds == 0` but sessions exist, sum `durationSeconds` from all sessions to compute `totalSeconds`, and rebuild `topApps` from session data using the new `buildTopAppsFromSessions()` helper.
+- **Root cause 2 (TypeScript — screen-time-sync.ts)**: `syncAndroidUsageSummary` was calling `replaceAppSessions(dailyId, [])` — always passing an empty array, so no Android sessions were persisted to Supabase. It also never wrote `screen_time_app_hourly` data. The fix: map Android `UsageSummary.sessions[]` to `ScreenTimeAppSessionInsert[]` and persist them, and map `hourlyByApp` to `ScreenTimeAppHourlyInsert[]` rows.
+- **Logging added**: Kotlin `Log.d("AndroidInsights", ...)` logs aggregate stats count, totalSeconds, sessions count, hourly buckets sum. TypeScript `console.log("[insights-sync]")` logs summary stats before sync.
+- **Files changed**:
+  - `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt` — Added `import android.util.Log`, changed `appArray` from `val` to `var`, added session-based `totalSeconds` fallback and `buildTopAppsFromSessions()` helper, added production logging
+  - `apps/mobile/src/lib/supabase/services/screen-time-sync.ts` — `syncAndroidUsageSummary` now maps and persists Android sessions to `screen_time_app_sessions` and hourlyByApp data to `screen_time_app_hourly`
+  - `apps/mobile/src/lib/supabase/hooks/use-insights-sync.ts` — Added `console.log` for Android usage summary stats before sync
+- **Learnings for future iterations:**
+  - Android `queryUsageStats` aggregate data can return 0 for `totalTimeInForeground` even when the user has been actively using apps — this is an OEM/timing issue. Always have a fallback to event-based (`queryEvents`) data.
+  - The `buildUsageHourlyBucketsSeconds` function creates sessions from foreground/background event pairs. These sessions have correct durations even when aggregate stats are empty.
+  - When `totalSeconds` is computed from sessions, the existing fallback `if (hourlyBuckets.sum() == 0L && totalSeconds > 0L)` then fires correctly to rebuild hourly buckets from stats. However, if both aggregate stats AND hourly buckets are empty, the hourly data comes from session-based `hourlyByApp` which is already populated by `buildUsageHourlyBucketsSeconds`.
+  - The iOS and Android screen time data have different type shapes (`ScreenTimeSummary` vs `UsageSummary`, `appSessions` vs `sessions`, `bundleIdentifier` vs `packageName`). The sync functions need to handle these independently.
+  - `screen_time_app_sessions` is queried by `evidence-data.ts::fetchScreenTimeSessionsForDay()` for the evidence pipeline — if sessions aren't persisted, the entire evidence-based screen time detection is blind on Android.
+---
+
+## 2026-01-26 - US-029
+- **What was implemented**: Fixed event edit persistence — diagnosed and fixed three issues causing edits to appear to "revert" after saving.
+- **Root cause analysis**: The save flow in `actual-adjust.tsx` was architecturally correct (store updates happen only after successful Supabase write), but had three issues:
+  1. **Silent failure on save error**: The outer catch block (line 462) only logged in `__DEV__` mode and showed NO user-facing error. If Supabase write failed, the user got no feedback and `router.back()` was never called — but since the store wasn't updated either, navigating back showed old data, making it look like the edit "reverted."
+  2. **TypeScript type mismatch**: `source: 'actual_adjust'` was set in the meta object, but `CalendarEventMeta.source` only allowed `'user' | 'system' | 'evidence' | 'derived'`. The literal was widened to `string` at runtime (accepted as JSON), but TypeScript flagged it as an error.
+  3. **Re-derivation overwrite risk**: When a user edits a derived event (ID like `derived_actual:xxx`), `actual-adjust.tsx` creates a NEW event via `createActual()` with a fresh UUID. But `syncDerivedActualEvents` could re-create the original derived event on the next sync cycle if the time range/kind didn't exactly match (e.g., user changed the time).
+- **Fixes applied**:
+  - `actual-adjust.tsx`: Added `Alert.alert('Save failed', ...)` in the outer catch block (always shown, not just `__DEV__`). Changed `source: 'actual_adjust'` to `source: 'actual_adjust' as const` to fix TypeScript type widening.
+  - `events-store.ts`: Added `'actual_adjust'` to the `CalendarEventMeta.source` union type.
+  - `calendar-events.ts` (`syncDerivedActualEvents`): Added tracking of user-edited event time ranges (`source: 'actual_adjust'` or `source: 'user'`), and added an overlap check that skips derived event insertion if it overlaps any user-edited event.
+- **Verified correct existing behavior**:
+  - `updateActual()` in `calendar-events.ts` correctly calls Supabase `.update().eq('id', eventId).select('*').single()` and returns the mapped `ScheduledEvent`.
+  - Store updates (`updateActualEvent`/`addActualEvent`) happen only AFTER the `await createActual()` / `await updateActual()` calls succeed.
+  - `buildActualDisplayEvents` in `actual-display-events.ts` already protects events with `source: 'actual_adjust'` — they are skipped during sleep overlap removal and given highest priority in overlap resolution sorting.
+  - `source: 'actual_adjust'` was already being set in meta (line 387), so the acceptance criteria for adding it was already met.
+- **Files changed**:
+  - `apps/mobile/src/app/actual-adjust.tsx` — Added user-visible Alert on save failure, added `as const` for source literal
+  - `apps/mobile/src/stores/events-store.ts` — Added `'actual_adjust'` to CalendarEventMeta.source type union
+  - `apps/mobile/src/lib/supabase/services/calendar-events.ts` — `syncDerivedActualEvents` now tracks user-edited event time ranges and skips derived events that overlap them
+- **Learnings for future iterations:**
+  - The save flow correctly uses await-then-store pattern (no optimistic updates). Edits persist because: (1) `await createActual()`/`updateActual()` writes to Supabase, (2) the returned ScheduledEvent is then stored locally via `addActualEvent()`/`updateActualEvent()`. If step 1 fails, step 2 never runs.
+  - `CalendarEventMeta.source` type must include all source values used in the codebase. When adding a new source, update the union in `events-store.ts`.
+  - TypeScript widens string literals in object literals. Use `as const` on the literal value to keep narrow types, rather than annotating the entire object.
+  - `syncDerivedActualEvents` can re-create derived events that a user has already edited if the overlap check isn't robust. The fix adds time-range overlap checking against `source: 'actual_adjust'` and `source: 'user'` events.
+  - The `shouldCreate` check in actual-adjust.tsx (lines 410-413) creates new events for derived IDs. This is correct — derived events are ephemeral display IDs; the user edit creates a permanent Supabase record.
+---
+
+## 2026-01-26 - US-030
+- **What was implemented**: Made all unknown_gap events fully tappable and editable. Previously, "Productive" events (which have `meta.kind: 'unknown_gap'` but `category: 'work'`) were blocked from editing in the planned column because `handleOpenEditor` only checked `category === 'unknown'`, and `TimeEventBlock.handlePress` only routed to review-time for `category === 'unknown'`. Events with `kind: 'unknown_gap'` but different categories fell through to `handleOpenEditor` which blocked all derived non-unknown events.
+- **Root causes found**:
+  1. **CalendarEvent type too narrow**: The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx lacked the `meta` field, so kind-based checks were impossible at the type level.
+  2. **isUnknown only checked category**: `isUnknown = event.category === 'unknown'` missed events like "Productive" which have `kind: 'unknown_gap'` but `category: 'work'`.
+  3. **handleOpenEditor blocked derived non-unknown**: The guard `event.category !== 'unknown'` blocked Productive events (category: 'work') even though they have `kind: 'unknown_gap'`.
+- **Fixes applied**:
+  - Added `meta?: CalendarEventMeta` to local `CalendarEvent` type and imported `CalendarEventMeta`
+  - Expanded `isUnknown` to: `event.category === 'unknown' || event.meta?.kind === 'unknown_gap'`
+  - Added direct actual-adjust routing for all `unknown_gap` kind events in `TimeEventBlock.handlePress()` — these now bypass the review-time shortcut entirely
+  - Updated `handleOpenEditor` guard to also check `event.meta?.kind !== 'unknown_gap'`
+- **Persistence verification**: Editing already uses `source: 'actual_adjust' as const` in actual-adjust.tsx. After save, `buildActualDisplayEvents` overlap check suppresses the original derived Unknown event.
+- **Files changed**:
+  - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` — Added CalendarEventMeta import, meta field to CalendarEvent type, expanded isUnknown check, added unknown_gap direct routing in handlePress, updated handleOpenEditor guard
+- **Learnings for future iterations:**
+  - The local `CalendarEvent` type in ComprehensiveCalendarTemplate.tsx is a subset of `ScheduledEvent`. When adding meta-based checks, the type must be updated to include `meta`.
+  - `buildProductiveUnknownEvent` creates events with `category: 'work'` but `kind: 'unknown_gap'` — always check `meta.kind` when determining if an event is an "unknown gap", not just `category`.
+  - Unknown_gap events should always route to actual-adjust for full editing (title, time, category), not to the simpler review-time interface.
+  - The planned column uses `handleOpenEditor` for inline editing, but unknown_gap events benefit from the full actual-adjust screen. Routing them directly prevents confusion.
+---
+
+## 2026-01-26 - US-031
+- **What was implemented**: Fixed evidence pipeline re-processing loop. The pipeline was running 8+ times per cycle due to three cascading issues in React dependency management and lack of memoization.
+- **Root cause 1 (comprehensive-calendar.tsx)**: The `combinedActualEvents` useMemo (line 491) included the entire `userPreferences` object in its dependency array, but only used 3 primitive fields (`gapFillingPreference`, `confidenceThreshold`, `autoSuggestEvents`). Any Zustand store mutation created a new `userPreferences` reference, triggering full pipeline recalculation even when relevant preferences hadn't changed. Fix: extracted the 3 fields into local variables and used them as individual deps.
+- **Root cause 2 (use-verification.ts)**: The `refresh()` callback (which fetches evidence AND runs verification) and the re-verification effect both ran `verifyPlannedEvents()` + `generateActualBlocks()`. When `refresh()` set new `evidence` state, the re-verification effect fired again because `evidence` was in its dependency array — running the same computation a second time. Fix: added `lastVerificationInputs` fingerprint ref. After `refresh()` computes verification, it stores the fingerprint. The re-verification effect checks fingerprint before computing, and skips if it matches.
+- **Root cause 3 (use-verification.ts)**: The `refresh` callback had `appCategoryOverrides`, `plannedEvents`, `verificationStrictness`, and `onError` in its dependency array. When any of these changed, `refresh` got a new identity, which triggered the auto-fetch effect (which depends on `refresh`). Even though `lastFetched` prevented re-fetching, the callback recreation caused React to re-render. Fix: moved these values to stable refs (`appCategoryOverridesRef`, `plannedEventsRef`, etc.) accessed inside the callback, reducing deps to `[isAuthenticated, userId, ymd, buildVerificationFingerprint]`.
+- **Additional defense (actual-display-events.ts)**: Added module-level fingerprint cache (`_lastPipelineFingerprint` + `_lastPipelineResult`) to `buildActualDisplayEvents`. Before running the full pipeline, it computes a string fingerprint of all inputs (event IDs/times, evidence counts, preference values, etc.) and returns the cached result if the fingerprint matches. This provides a last-line defense against redundant computation even if React deps fire spuriously.
+- **Files changed**:
+  - `apps/mobile/src/app/comprehensive-calendar.tsx` — Decomposed `userPreferences` object into individual primitive deps in useMemo
+  - `apps/mobile/src/lib/calendar/use-verification.ts` — Added fingerprint tracking for re-verification skip, stable refs for refresh callback deps, reduced callback dependency array
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Added `buildPipelineFingerprint()` and module-level cache for input-based deduplication
+- **Learnings for future iterations:**
+  - Zustand stores return new object references on ANY mutation. Never put an entire store selector object in a useMemo dependency array — always destructure to individual primitive values.
+  - When a useCallback fetches data AND processes it (setting multiple states), downstream useEffects that depend on those states will fire redundantly. Use fingerprint refs to deduplicate.
+  - Moving values to refs breaks the React dependency chain intentionally — use this pattern when a callback needs current values but shouldn't re-create when they change (because re-creation causes cascading effects).
+  - Module-level caches (outside React) are a useful last-line defense for pure functions called from useMemo — they work even when React deps fire spuriously.
+  - `SparseLocationFallback`, `EvidenceAvailability`, `EvidenceFusion` log lines come from `buildActualDisplayEvents` sub-functions. Reducing pipeline runs directly reduces these log lines.
+- `location_hourly` is a SQL view using `date_trunc('hour', recorded_at)` — all timestamps snap to :00. To get precise timing, fetch raw `location_samples.recorded_at` and use them to refine boundaries.
+- When converting a `Date` to minutes-from-midnight, use `Math.round(hours*60 + minutes + seconds/60)` instead of `hours*60 + minutes` to preserve nearest-minute accuracy.
+- `EvidenceBundle.locationSamples` contains raw sample timestamps for precise location block boundaries; `locationHourly` contains place labels and categories.
+---
+
+## 2026-01-26 - US-032
+- **What was implemented**: Fixed event time accuracy by eliminating two sources of time rounding/bucketing.
+- **Root cause 1 (buildLocationBlocks)**: The `buildLocationBlocks` function in `actual-display-events.ts` created location blocks by parsing `location_hourly` view rows. Since `location_hourly` uses SQL `date_trunc('hour', recorded_at)`, all `hour_start` values are snapped to hour boundaries (e.g., 9:00, 10:00). The function then assumed each block spanned exactly 60 minutes (`startMinutes + 60`). This meant if a user arrived at a location at 9:32, the event would show starting at 9:00. **Fix**: Added `fetchLocationSamplesForDay()` to fetch raw `location_samples` with precise `recorded_at` timestamps. In `buildLocationBlocks`, built a lookup map of `hour → { first sample minute, last sample minute }` from raw samples, then used these precise boundaries instead of the hour boundary + 60. Adjacent blocks merge with a 1-minute tolerance.
+- **Root cause 2 (session time truncation)**: Six locations in `actual-display-events.ts` converted `Date` objects to minutes-from-midnight using `start.getHours() * 60 + start.getMinutes()`, which truncates seconds (9:32:45 → 572.0 instead of 573). **Fix**: Added `dateToMinutes()` helper that uses `Math.round(hours*60 + minutes + seconds/60)` for nearest-minute precision, and replaced all 6 occurrences.
+- **Audit results for evidence-fusion.ts**: Clean — no timestamp rounding or bucketing. It only computes confidence scores from verification/data-quality/pattern data, not timestamps.
+- **Calendar-sourced events**: Already correct — `buildPlannedActualEvent` uses `planned.startMinutes` directly with `clampMinutes()` (no rounding).
+- **Debug logging added**: `buildLocationBlocks` now logs block count, raw sample count, and each block's precise start/end minutes for runtime verification.
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — Added `EvidenceLocationSample` type, `fetchLocationSamplesForDay()` function, added `locationSamples` to `EvidenceBundle`, updated `fetchAllEvidenceForDay()` to fetch raw samples in parallel
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Rewrote `buildLocationBlocks` to use raw sample timestamps for precise boundaries, added `dateToMinutes()` helper, replaced 6 occurrences of truncating `getHours()*60+getMinutes()` pattern, updated pipeline fingerprint to include `locationSamples` count
+- **Learnings for future iterations:**
+  - `location_hourly` view uses `date_trunc('hour', recorded_at)` which snaps all timestamps to hour boundaries. For precise timing, always use raw `location_samples.recorded_at`.
+  - `Date.getHours()*60 + Date.getMinutes()` truncates seconds. Use `Math.round(hours*60 + minutes + seconds/60)` for nearest-minute accuracy.
+  - When adding new types to `evidence-data.ts`, avoid naming conflicts with existing `location-samples.ts` types — both are re-exported from `services/index.ts`.
+  - The `EvidenceBundle` type is used across many files but only constructed in `fetchAllEvidenceForDay()`. Adding new fields is safe as long as you update that single constructor.
+---
+
+## 2026-01-26 - US-033
+- **What was implemented**: Fixed event inference to stop mislabeling blocks as screen time when the user wasn't actively using their phone. Added user-defined place recognition, travel detection, and >50% screen time threshold.
+- **Root cause 1 (Aggressive productive labeling)**: `replaceUnknownWithProductiveUsage()` converted unknown gaps to "Productive" events whenever ANY productive app usage existed in the time range, regardless of how much of the block was actually phone use. A 60-minute morning routine with 5 minutes of phone checks would be labeled as "Productive Screen Time". Fix: Added `usageInfo.totalMinutes <= blockDuration * 0.5` check — screen time must account for >50% of the block's duration before relabeling.
+- **Root cause 2 (No user place matching)**: `buildLocationEvent()` used `mapPlaceToCategory()` for generic keyword-based inference (e.g., "church" → routine), but never checked the user's own place definitions (`tm.user_places`). So even labeled places fell through to generic matching. Fix: Added `resolveFromUserPlaces()` which checks `evidence.userPlaces` first. User labels take priority. Added `mapPlaceCategoryString()` to convert user-defined category strings to `EventCategory` values.
+- **Root cause 3 (No travel recognition)**: The pipeline detected location changes between stationary points but labeled them as "Commute"/"Driving" with `category: 'comm'` and `kind: 'transition_commute'`. Fix: Changed to `category: 'travel'`, `kind: 'travel'`, with descriptive titles like "Travel: Home → Church". Also lowered minimum travel gap from 15 to 5 minutes (matching AC: <5 min movements within same area are NOT flagged as travel). Added `'travel'` to `CalendarEventMeta.kind` union type.
+- **Threading userPlaces through the pipeline**: `EvidenceBundle.userPlaces` was already fetched but unused. Added `userPlaces` to `LocationReplacementContext` interface, passed `evidence?.userPlaces` through from `buildActualDisplayEvents`, and used it in `buildLocationEvent` → `resolveLocationDetails` → `resolveFromUserPlaces`.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `'travel'` to `CalendarEventMeta.kind` union type
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Added `UserPlaceRow` import, `userPlaces` to `LocationReplacementContext`, >50% threshold in `replaceUnknownWithProductiveUsage`, `resolveFromUserPlaces()` + `mapPlaceCategoryString()` helpers, updated `resolveLocationDetails` to check user places first, changed commute events to travel (`kind: 'travel'`, `category: 'travel'`), lowered travel min gap from 15 to 5 min
+- **Learnings for future iterations:**
+  - `tm.user_places` is already fetched in `EvidenceBundle` via `fetchUserPlaces()` — no need to add a separate fetch. Just thread `evidence.userPlaces` to any function that needs it.
+  - `mapPlaceToCategory` uses keyword matching on the combined `${locationLabel} ${placeCategory}` string. This is fragile — user-defined places should always take priority.
+  - When changing event kinds/categories for travel, also update the ID prefix to avoid collisions (e.g., `commute_` → `travel_`).
+  - The pipeline has layered gap-filling: sleep → location → productive usage → transitions → prep/wind-down → patterns. Each layer only touches `category: 'unknown'` events. The >50% threshold in productive usage prevents over-labeling at that layer.
+  - `EventCategory` already includes `'travel'` (line 14 of events-store.ts), but `CalendarEventMeta.kind` did not — always check both when adding a new activity type.
+---
+
+## 2026-01-26 - US-034
+- **What was implemented**: Created hierarchical activity categories database schema and TypeScript types. This replaces the flat `EventCategory` enum with a user-owned tree structure supporting Category → Subcategory → Sub-subcategory.
+- **Migration (`20260126_create_tm_activity_categories.sql`)**:
+  - Table `tm.activity_categories`: id (UUID PK), user_id (FK → auth.users), parent_id (nullable self-referencing FK → activity_categories, cascade delete), name, icon, color, sort_order, created_at, updated_at
+  - Unique constraint `(user_id, parent_id, name)` prevents duplicate categories at same hierarchy level
+  - Indexes on user_id, parent_id, and (user_id, parent_id, sort_order) for common query patterns
+  - `updated_at` trigger using existing `public.update_updated_at_column()` function
+  - RLS policies: select/insert/update/delete own rows (idempotent DO block pattern)
+  - `seed_default_activity_categories(p_user_id)` SQL function — creates 7 default top-level categories (Faith, Family, Work, Health, Personal Growth, Finances, Other) idempotently (skips if user already has categories)
+- **TypeScript types (`activity-categories.ts`)**:
+  - `ActivityCategory` = Row type from `Database['tm']['Tables']['activity_categories']`
+  - `ActivityCategoryInsert` = Insert type
+  - `ActivityCategoryUpdate` = Update type
+  - All derived from `database.types.ts` to stay in sync with schema
+- **database.types.ts updated**: Added `activity_categories` table definition to `tm.Tables` with Row/Insert/Update/Relationships, and `seed_default_activity_categories` to `tm.Functions`
+- **Exported from** `services/index.ts`
+- **Files changed**:
+  - `supabase/migrations/20260126_create_tm_activity_categories.sql` — New migration
+  - `apps/mobile/src/lib/supabase/database.types.ts` — Added activity_categories table type and seed function type
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — New service file with exported types
+  - `apps/mobile/src/lib/supabase/services/index.ts` — Added re-export
+- **Learnings for future iterations:**
+  - `public.update_updated_at_column()` is a shared trigger function already available in the database — use it for all tables with `updated_at` columns
+  - Self-referencing FKs with `ON DELETE CASCADE` handle subtree deletion automatically — deleting a parent category cascades to all children at all levels
+  - The unique constraint `(user_id, parent_id, name)` uses NULL for parent_id on top-level categories. PostgreSQL treats NULLs as distinct in unique constraints, so this works correctly: two users can both have a top-level "Work" category
+  - Seed functions using `SECURITY DEFINER` bypass RLS — necessary for server-side/admin seeding. The function is idempotent (checks for existing categories first).
+  - Database types are defined in `database.types.ts` following Row/Insert/Update pattern. Service files should derive types from this file using `Database['tm']['Tables']['table_name']` for type safety.
+---
+
+## 2026-01-26 - US-035
+- **What was implemented**: Created Supabase CRUD service for hierarchical activity categories with all required functions and a tree builder helper.
+- **Functions implemented**:
+  - `fetchActivityCategories(userId)` — returns flat list of all categories, ordered by sort_order
+  - `fetchTopLevelCategories(userId)` — returns only root categories (parent_id is null)
+  - `fetchSubcategories(userId, parentId)` — returns direct children of a parent
+  - `createActivityCategory(input)` — inserts a new category, returns the created row
+  - `updateActivityCategory(categoryId, updates)` — updates a category, returns the updated row
+  - `deleteActivityCategory(categoryId)` — deletes a category; blocks with error if children exist
+  - `buildCategoryTree(categories)` — converts flat ActivityCategory[] to nested ActivityCategoryNode[] tree
+- **Types added**: `ActivityCategoryNode` interface extending `ActivityCategory` with `children: ActivityCategoryNode[]`
+- **Design decisions**:
+  - Delete blocks (not cascades) when children exist — chosen per AC "block with error message". The SQL schema has ON DELETE CASCADE, but the service layer adds a pre-check for safety, giving callers a clear error message rather than silently cascading
+  - Uses `tmSchema()` helper (consistent with evidence-data.ts and screen-time-sync.ts patterns)
+  - `buildCategoryTree()` handles orphans (parent_id refers to a category not in the input list) by promoting them to root level
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — Added CRUD functions, tree builder, and ActivityCategoryNode type (file already existed with types from US-034)
+- **Learnings for future iterations:**
+  - The file was already created in US-034 with types only. US-035 added the actual CRUD functions and tree builder to the same file.
+  - `services/index.ts` re-export was already in place from US-034 — no changes needed there.
+  - The `tmSchema()` helper pattern is used across multiple service files to work with the `tm` schema. Each file defines its own local copy since it returns `any` to bypass Supabase client generics.
+  - `buildCategoryTree()` is a pure function (no Supabase calls) — it can be used in React components or anywhere without async concerns.
+---
+
+## 2026-01-26 - US-036
+- **What was implemented**: Created HierarchicalCategoryPicker molecule component for selecting categories from a hierarchical tree with expand/collapse, search, and visual hierarchy.
+- **Component features**:
+  - Accepts flat `ActivityCategory[]` prop and builds tree internally via `buildCategoryTree()` (memoized)
+  - Top-level categories show expand/collapse chevrons (ChevronRight/ChevronDown from lucide-react-native)
+  - Subcategories indented by 20px per depth level, recursively expandable
+  - Selecting any category at any level calls `onSelect(categoryId, path)` where path is `CategoryPath` (string array of names from root to leaf)
+  - Selected category highlighted: blue background (#DBEAFE), bold blue text (#2563EB), Check icon
+  - Top-level categories render with semibold font; subcategories with normal weight
+  - Color dots shown when category has a `color` value
+  - Search input at top with Search icon — filters tree to matching branches, auto-expands all nodes when searching
+  - Matched text highlighted in bold blue via `highlightMatch()` helper
+  - Empty state messages for no results / no categories
+  - Props: `categories` (flat list), `selectedCategoryId` (nullable), `onSelect` callback
+- **Exported types**: `CategoryPath`, `HierarchicalCategoryPickerProps`
+- **Files changed**:
+  - `apps/mobile/src/components/molecules/HierarchicalCategoryPicker.tsx` — New component file
+  - `apps/mobile/src/components/molecules/index.ts` — Added exports for component and types
+- **Learnings for future iterations:**
+  - The `ActivityCategory` type (flat row from DB) does NOT have a `children` field — only `ActivityCategoryNode` (from `buildCategoryTree()`) has children. Don't access `.children` on `ActivityCategory[]` directly.
+  - NativeWind `className` works on React Native components, but dynamic padding (per-depth indentation) needs `style={{ paddingLeft: value }}` since Tailwind can't compute dynamic values.
+  - `Pressable.onPress` with `e.stopPropagation()` works in React Native for nested pressables (e.g., chevron inside row) — prevents the parent row's onPress from firing.
+  - The `buildCategoryTree()` function is pure and memoization-safe — wrap in `useMemo` with `[categories]` dep.
+  - When filtering a tree by search query, collect matching IDs + all ancestor IDs, then recursively prune the tree. Auto-expand all nodes during search for best UX.
+---
+
+## 2026-01-26 - US-037
+- **What was implemented**: Integrated the HierarchicalCategoryPicker into the event editor (actual-adjust screen). Users can now select hierarchical activity categories when editing events, with the selected category_id persisted alongside the existing flat EventCategory enum.
+- **Changes made**:
+  - `events-store.ts`: Added `category_id?: string | null` to `CalendarEventMeta` type
+  - `ActualAdjustTemplate.tsx`: Added imports for `ActivityCategory`, `HierarchicalCategoryPicker`, and `CategoryPath`. Added 3 new optional props: `activityCategories`, `selectedCategoryId`, `onSelectActivityCategory`. Template conditionally renders `HierarchicalCategoryPicker` when categories are loaded; falls back to flat `LIFE_AREA_OPTIONS` pills when no categories exist.
+  - `actual-adjust.tsx`: Added imports for `fetchActivityCategories`, `ActivityCategory`, and `CategoryPath`. Added `activityCategories` and `selectedCategoryId` state. Added `useEffect` to fetch categories on mount (with cleanup). Added `handleSelectActivityCategory` callback. Added `category_id: selectedCategoryId` to meta in `handleSave`. Added `selectedCategoryId` to handleSave dep array. Passes new props to `ActualAdjustTemplate`.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `category_id` to CalendarEventMeta
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — Conditional hierarchical picker rendering
+  - `apps/mobile/src/app/actual-adjust.tsx` — Category loading, state, and persistence
+- **Learnings for future iterations:**
+  - `ActualAdjustTemplate` is a pure presentation component — all data fetching and state management belongs in the screen (`actual-adjust.tsx`). The template receives data via props.
+  - `CalendarEventMeta` is serialized as JSON in Supabase's `meta` JSONB column. Adding new optional fields is backward-compatible — old events without `category_id` will have it as `undefined`, and the `?? null` pattern handles this.
+  - The `fetchActivityCategories` call is non-blocking — if it fails (e.g., user has no categories yet), the UI gracefully falls back to the flat LIFE_AREA_OPTIONS pills.
+  - The existing flat `category` enum (`EventCategory`) is preserved alongside `category_id` for backward compatibility. The pipeline, overlap checks, and other consumers still use the enum. The `category_id` provides a more granular hierarchical classification.
+  - Manual browser verification is needed to confirm the picker renders correctly in the event editor.
+---
+
+## 2026-01-26 - US-038
+- **What was implemented**: Updated the Setup Core Categories screen to use the hierarchical `tm.activity_categories` system instead of the flat `CoreCategory[]` stored in the onboarding Zustand store and `profiles.core_categories` JSON blob.
+- **Architecture change**: Previously, categories were stored locally in the onboarding store as `CoreCategory[]` (with valueId, label, color, isCustom) and synced to `profiles.core_categories` (a JSONB column). Now, categories are stored directly in `tm.activity_categories` (relational table with self-referencing parent_id) and all mutations go through the CRUD service. The onboarding store's `coreCategories` field is no longer used by this screen.
+- **Changes made**:
+  - `activity-categories.ts`: Added `seedDefaultActivityCategories(userId)` function that calls the `tm.seed_default_activity_categories` SQL function via `supabase.schema('tm').rpc()`. This creates 7 default top-level categories (Faith, Family, Work, Health, Personal Growth, Finances, Other) idempotently.
+  - `core-categories.tsx`: Completely rewritten. Removed onboarding store category management (setCoreCategories, addCoreCategory, removeCoreCategory, saveCoreCategories). Added: seedDefaultActivityCategories on mount, fetchActivityCategories to load all categories, createActivityCategory for adding subcategories, deleteActivityCategory for removal. Top-level categories are derived from the flat list (parent_id === null). Subcategories grouped by parent_id. LLM suggestions map top-level categories as "values" and subcategories as "categories" to generate suggestions via the existing `generateOnboardingCategorySuggestionsLlm` endpoint.
+  - `CoreCategoriesTemplate.tsx`: Updated props interface from `CoreValue[]` + `CoreCategory[]` to `ActivityCategory[]` top-level + subcategoriesByParent map. Replaced `CoreCategory` rendering with `ActivityCategory` rendering (uses `.name` instead of `.label`, resolves icons and colors by top-level category name). Added loading state for initial category fetch. The "Other" category renders with Star icon and gray accent.
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/activity-categories.ts` — Added seedDefaultActivityCategories function
+  - `apps/mobile/src/app/core-categories.tsx` — Rewritten to use CRUD service
+  - `apps/mobile/src/components/templates/CoreCategoriesTemplate.tsx` — Rewritten for ActivityCategory data model
+- **Learnings for future iterations:**
+  - `supabase.schema('tm').rpc()` can call functions in the tm schema — no need for a custom SQL helper.
+  - The seed function `tm.seed_default_activity_categories` is idempotent (checks if user already has categories). Safe to call on every mount during setup.
+  - `ActivityCategory` uses `.name` (not `.label`) for the display text — different from the old `CoreCategory` type which used `.label`.
+  - The old `CoreCategory` store data and `profiles.core_categories` JSON blob remain in the codebase (used by `use-onboarding-sync.ts` for loading existing data). They are not deleted to preserve backward compatibility for users who started onboarding before this change.
+  - The EXAMPLE_SUBCATEGORIES map in the template uses lowercase category names as keys (e.g., 'faith', 'personal growth') to match the `name.toLowerCase()` of top-level activity categories from the seed function.
+  - Manual browser verification is needed to confirm the hierarchical categories render correctly during setup.
+---
+
+## 2026-01-26 - US-039
+- **What was implemented**: Created Big 3 Daily Priorities database schema, TypeScript types, CRUD service, and integrated big3_enabled preference into the existing user preferences system.
+- **Migration (`20260126_create_tm_daily_big3.sql`)**:
+  - Table `tm.daily_big3`: id (UUID PK), user_id (FK → auth.users), date (date), priority_1/2/3 (text, default ''), category_id_1/2/3 (nullable FK → tm.activity_categories, ON DELETE SET NULL), created_at, updated_at
+  - Unique constraint `(user_id, date)` — one Big 3 set per day per user
+  - Indexes on user_id and (user_id, date) for common query patterns
+  - `updated_at` trigger using `public.update_updated_at_column()`
+  - RLS policies: select/insert/update/delete own rows (idempotent DO block pattern)
+  - Added `big3_enabled boolean not null default false` column to existing `tm.user_data_preferences` table
+- **TypeScript types (`daily-big3.ts`)**:
+  - `DailyBig3` = Row type from `Database['tm']['Tables']['daily_big3']`
+  - `DailyBig3Insert` = Insert type
+  - `DailyBig3Update` = Update type
+- **CRUD service (`daily-big3.ts`)**:
+  - `fetchBig3ForDate(userId, date)` — returns DailyBig3 | null (uses maybeSingle)
+  - `upsertBig3ForDate(input)` — upserts on (user_id, date) conflict
+  - `deleteBig3ForDate(userId, date)` — deletes the row
+- **User preferences changes**:
+  - `user-preferences-store.ts`: Added `big3Enabled: boolean` to `UserDataPreferences` interface, default `false`
+  - `user-preferences.ts`: Updated `UserPreferencesRow` to include `big3_enabled`, updated `mergePreferences()` to accept and merge `big3Enabled`, updated fetch to select `big3_enabled` column, updated upsert to persist `big3_enabled`
+- **database.types.ts**: Added `daily_big3` table with Row/Insert/Update/Relationships types
+- **Exported from** `services/index.ts`
+- **Files changed**:
+  - `supabase/migrations/20260126_create_tm_daily_big3.sql` — New migration
+  - `apps/mobile/src/lib/supabase/database.types.ts` — Added daily_big3 table types
+  - `apps/mobile/src/lib/supabase/services/daily-big3.ts` — New CRUD service
+  - `apps/mobile/src/lib/supabase/services/index.ts` — Added re-export
+  - `apps/mobile/src/lib/supabase/services/user-preferences.ts` — big3_enabled read/write
+  - `apps/mobile/src/stores/user-preferences-store.ts` — big3Enabled field + default
+- **Learnings for future iterations:**
+  - `tm.user_data_preferences` is NOT in `database.types.ts` — the service uses a manual `UserPreferencesRow` interface. When adding new preference columns, you must update: (1) migration, (2) `UserPreferencesRow` interface, (3) `UserDataPreferences` interface + defaults, (4) `mergePreferences()` function, (5) fetch `.select()` clause, (6) upsert payload object.
+  - Category FKs use `ON DELETE SET NULL` (not CASCADE) since deleting a category shouldn't delete the Big 3 entry — just nullify the category link.
+  - The upsert service uses `onConflict: 'user_id,date'` (comma-separated string) matching the unique constraint columns.
+  - `maybeSingle()` is correct for fetchBig3ForDate since the row may not exist on first access for a given date.
+---
+
+## 2026-01-26 - US-040
+- **What was implemented**: Added Big 3 opt-in screen to the setup flow. Users are asked during setup whether they want to use the Big 3 daily priorities concept. The screen appears between setup-questions (step 12) and ai-summary (step 14) as step 13 of 14.
+- **Screen design**: Big3OptInTemplate shows a Target icon, "What is the Big 3?" explanation ("Each morning, pick 3 things that would make today a success. The app tracks how much time you spend on each priority throughout the day."), two benefit cards (Stay focused with ListChecks icon, See your progress with Sparkles icon), and two action buttons: "Yes, enable Big 3" (GradientButton) and "No thanks, skip" (text link).
+- **Data flow**: On enable/skip, the screen: (1) sets `big3Enabled` in onboarding Zustand store (immediate), (2) fires async `saveBig3Preference` which fetches current user preferences, merges `big3Enabled`, and upserts to `tm.user_data_preferences` via `upsertUserDataPreferences`, and (3) updates the user-preferences Zustand store. Navigation proceeds immediately (fire-and-forget pattern matching other setup screens).
+- **Navigation changes**: `setup-questions.tsx` handleContinue now routes to `/big3-opt-in` (was `/ai-summary`). `ai-summary.tsx` handleBack now routes to `/big3-opt-in` (was `/setup-questions`). Big3OptInScreen routes forward to `/ai-summary` and back to `/setup-questions`.
+- **Files changed**:
+  - `apps/mobile/src/components/templates/Big3OptInTemplate.tsx` — New template component with SetupStepLayout, explanation, benefit cards, enable/skip buttons
+  - `apps/mobile/src/components/templates/index.ts` — Added Big3OptInTemplate export
+  - `apps/mobile/src/app/big3-opt-in.tsx` — New setup screen with auth guard, hydration check, preference saving, navigation
+  - `apps/mobile/src/app/_layout.tsx` — Registered big3-opt-in route
+  - `apps/mobile/src/app/setup-questions.tsx` — Changed forward navigation from /ai-summary to /big3-opt-in
+  - `apps/mobile/src/app/ai-summary.tsx` — Changed back navigation from /setup-questions to /big3-opt-in
+  - `apps/mobile/src/constants/setup-screens.ts` — Added big3OptIn: 13, shifted aiSummary to 14, updated total from 13 to 14
+  - `apps/mobile/src/stores/onboarding-store.ts` — Added big3Enabled state (default false), setBig3Enabled action
+- **Learnings for future iterations:**
+  - Setup screens save preferences using a fire-and-forget async pattern — `void saveFunction()` followed by immediate `router.replace()`. The save doesn't block navigation.
+  - The user-preferences service (`user-preferences.ts`) functions are NOT exported from `services/index.ts` — import directly from `@/lib/supabase/services/user-preferences`.
+  - `SETUP_SCREENS_TOTAL_STEPS` and `SETUP_SCREENS_STEPS` in `constants/setup-screens.ts` must be kept in sync. When inserting a new screen, increment total and shift all subsequent step numbers.
+  - Onboarding store persists to AsyncStorage via Zustand `persist` middleware. Adding a new boolean field with a default is safe — `merge()` in the persist config will use the default for users who don't have the field persisted yet.
+  - Setup screen pattern: auth guard effect, hydration check, loading spinner, template render with step/totalSteps props. Back/forward navigation uses `router.replace()`.
+---
+
+## 2026-01-26 - US-041
+- **What was implemented**: Added Big 3 priority assignment to the event editor. Users can now assign a time block to one of their Big 3 daily priorities when editing events, with full toggle behavior and inline priority creation.
+- **Architecture**:
+  - Replaced the simple `Switch` toggle ("Mark as Big 3") with a full `Big3Section` component that conditionally renders based on `big3Enabled` user preference.
+  - When Big 3 priorities exist for today (loaded from `tm.daily_big3` via `fetchBig3ForDate`): renders 3 tappable priority buttons showing each priority's text, numbered 1-3. Tap to assign (sets `big3_priority` and `isBig3: true`), tap again to unassign (toggle behavior).
+  - When no Big 3 set for today: renders inline input form with 3 text fields and a "Save Big 3" button. Submitting creates the Big 3 via `upsertBig3ForDate` (fire-and-forget pattern) and updates local state so buttons appear immediately.
+- **Changes made**:
+  - `events-store.ts`: Added `big3_priority?: 1 | 2 | 3 | null` to `CalendarEventMeta`.
+  - `ActualAdjustTemplate.tsx`: Removed `Switch` import. Added `Big3Priorities` interface (exported), `Big3SectionProps` internal interface, and `Big3Section` internal component. Updated `ActualAdjustTemplateProps` with `big3Priority`, `big3Enabled`, `big3Priorities`, `onSelectBig3Priority`, `onSetBig3Inline` props. Replaced simple toggle with conditional `Big3Section` rendering (only when `big3Enabled` is true).
+  - `actual-adjust.tsx`: Added imports for `Big3Priorities`, `fetchBig3ForDate`, `upsertBig3ForDate`, `useUserPreferencesStore`. Added `big3Enabled` from user preferences store. Added `big3Priority` and `big3Priorities` state. Added `useEffect` to load today's Big 3 from Supabase when `big3Enabled`. Added `handleSelectBig3Priority` (sets priority + syncs `isBig3`) and `handleSetBig3Inline` (persists to Supabase, updates local state) callbacks. Added `big3_priority: big3Priority` to meta in `handleSave`. Passes all new props to template.
+- **Files changed**:
+  - `apps/mobile/src/stores/events-store.ts` — Added `big3_priority` to `CalendarEventMeta`
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — Big3Section component, updated props
+  - `apps/mobile/src/app/actual-adjust.tsx` — Big 3 data loading, state management, and persistence
+- **Learnings for future iterations:**
+  - `Big3Priorities` is an interface exported from `ActualAdjustTemplate.tsx` (not from the Big 3 service) — it's a simpler UI-oriented type with just `priority_1/2/3` strings.
+  - The `DailyBig3` row from Supabase has `priority_1/2/3` as `string | null` (nullable), while the UI `Big3Priorities` uses `string` (defaults to `''`). Always coerce with `?? ''` when mapping.
+  - `handleSelectBig3Priority` syncs both `big3Priority` state AND `isBig3` state — when a priority is selected, `isBig3` becomes `true`; when unassigned, `isBig3` becomes `false`. This keeps backward compatibility with code that only checks `isBig3`.
+  - The inline Big 3 input uses fire-and-forget `upsertBig3ForDate` (same pattern as setup screens) — the local state updates immediately and the Supabase write happens asynchronously.
+  - Manual browser verification is needed to confirm the Big 3 section renders correctly in the event editor.
+---
+
+## 2026-01-26 - US-042
+- **What was implemented**: Added Big 3 progress card to the home screen. When `big3Enabled` is true, the card shows between the DailyBrief and ScheduleList sections.
+- **Two states**:
+  1. **Big 3 exists for today**: Shows 3 priority rows with text, a green check circle + minutes allocated (from actual events with `meta.big3_priority`), or a gray numbered circle if no time assigned yet. Header shows "YOUR BIG 3" with "N/3" completion badge.
+  2. **No Big 3 for today**: Shows a CTA card ("Set your Big 3 for today") that expands into an inline input form with 3 text fields and Save/Cancel buttons. Persists via `upsertBig3ForDate` (fire-and-forget, local state updates immediately).
+- **Data flow**: `home.tsx` loads Big 3 via `fetchBig3ForDate(userId, todayYmd)` in a useEffect (guarded by `big3Enabled`, `isAuthenticated`, not demo mode). Today's actual events accessed via `useEventsStore.actualEventsByDate[todayYmd]`. Minutes per priority computed by iterating events and summing `duration` for matching `meta.big3_priority` values (1, 2, or 3). Completion count = number of priorities with text AND >0 minutes allocated.
+- **Architecture**: Big3ProgressCard is an organism component at `components/organisms/Big3ProgressCard.tsx`. HomeTemplate receives an optional `big3` prop (data + onSetBig3 callback). home.tsx computes and memoizes `big3Prop` (null when disabled).
+- **Files changed**:
+  - `apps/mobile/src/components/organisms/Big3ProgressCard.tsx` — New organism component with Big3ProgressCard and SetBig3Cta
+  - `apps/mobile/src/components/organisms/index.ts` — Added Big3ProgressCard export
+  - `apps/mobile/src/components/templates/HomeTemplate.tsx` — Added big3 prop, Big3ProgressCard rendering between DailyBrief and ScheduleList
+  - `apps/mobile/src/app/home.tsx` — Added big3Enabled from user preferences store, actualEventsByDate from events store, Big 3 data loading effect, handleSetBig3 callback, todayActualEvents + big3Prop memos
+- **Learnings for future iterations:**
+  - HomeTemplate is a presentational component — all data fetching and business logic belongs in `home.tsx`. The template just renders what it receives via props.
+  - `actualEventsByDate` is a `Record<string, ScheduledEvent[]>` keyed by YYYY-MM-DD. Access with `?? []` since dates without events won't have entries.
+  - When computing Big 3 progress, only check `meta.big3_priority` (1, 2, or 3) — the `isBig3` boolean is a separate flag that doesn't indicate which priority.
+  - The fire-and-forget upsert pattern (update local state immediately, persist async) is used across the app for Big 3 interactions. The local `setBig3Data` call creates a temporary object with `id: 'pending'` that gets replaced by the Supabase-returned row.
+  - Manual browser verification is needed to confirm the Big 3 progress card renders correctly on the home screen.
+---
+
+## 2026-01-26 - US-043
+- **What was implemented**: Added "Label this place" / "Edit place label" inline form to the event editor (actual-adjust) so users can label locations from evidence and have future visits auto-tag correctly.
+- **Key discovery**: The PRD referenced `tm.location_mappings` but this table does not exist. The actual table is `tm.user_places` (created in the `20260112_create_tm_location_samples.sql` migration). The `user-places.ts` service had `upsertUserPlaceFromSamples()` already — it takes location samples, computes a centroid, and upserts a `user_places` row with PostGIS `center` geography.
+- **Migration**: Added `category_id` column (FK → `tm.activity_categories`, ON DELETE SET NULL) to `tm.user_places` via `20260126_add_category_id_to_user_places.sql`.
+- **Service changes** (`user-places.ts`):
+  - Added `category_id` to `UserPlaceRow` interface
+  - Added `fetchUserPlaceByLabel(userId, label)` — fetches existing place by exact label match (used to determine "Label" vs "Edit" button text)
+  - Added `categoryId` parameter to `upsertUserPlaceFromSamples()` input and payload
+  - Extracted `USER_PLACE_SELECT` constant for consistent select clauses
+- **Evidence-data changes** (`evidence-data.ts`):
+  - Added `category_id` to exported `UserPlaceRow` interface
+  - Updated `fetchUserPlaces()` select clause to include `category_id`
+- **Template changes** (`ActualAdjustTemplate.tsx`):
+  - Added `PlaceLabelInfo` interface (locationLabel, hasExistingLabel, isSavingPlace)
+  - Added `PlaceLabelSection` internal component: collapsed state shows location name + "Label this place" or "Edit place label" button; expanded state shows place name TextInput (pre-filled with locationLabel), HierarchicalCategoryPicker for category selection, and Save/Cancel buttons
+  - Added `placeLabelInfo` and `onSavePlaceLabel` props to `ActualAdjustTemplateProps`
+  - Renders `PlaceLabelSection` between Big3Section and LIFE AREA section
+- **Screen changes** (`actual-adjust.tsx`):
+  - Added imports for `fetchUserPlaceByLabel`, `fetchLocationSamplesForRange`, `upsertUserPlaceFromSamples`
+  - Added `hasExistingPlaceLabel` and `isSavingPlace` state
+  - Added `useEffect` to check if the event's `locationLabel` already has a user-defined place label
+  - Added `handleSavePlaceLabel` callback: fetches location samples for the event's time range, calls `upsertUserPlaceFromSamples` with label + categoryId, shows success/failure Alert
+  - Added `placeLabelInfo` memo (null when no locationLabel in evidence)
+  - Passes `placeLabelInfo` and `handleSavePlaceLabel` to template
+- **Files changed**:
+  - `supabase/migrations/20260126_add_category_id_to_user_places.sql` — New migration
+  - `apps/mobile/src/lib/supabase/services/user-places.ts` — category_id support, fetchUserPlaceByLabel
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — category_id in UserPlaceRow
+  - `apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` — PlaceLabelSection component
+  - `apps/mobile/src/app/actual-adjust.tsx` — Place labeling state, handlers, and props
+- **Learnings for future iterations:**
+  - `tm.location_mappings` does NOT exist — the PRD references it but the actual table is `tm.user_places`. Always verify table names against migrations, not PRD notes.
+  - `upsertUserPlaceFromSamples()` requires raw location samples (lat/lng/accuracy_m) to compute a centroid. The event meta does NOT store coordinates — you must fetch samples via `fetchLocationSamplesForRange()` using the event's time range.
+  - The `UserPlaceRow` type is defined in TWO places: `user-places.ts` (service) and `evidence-data.ts` (evidence bundle). Both must be updated when adding fields.
+  - `fetchUserPlaceByLabel()` does exact label match — case-sensitive. Future work may want case-insensitive matching.
+  - The PlaceLabelSection uses the same `HierarchicalCategoryPicker` as the LIFE AREA section — both need `activityCategories` loaded. Since actual-adjust.tsx already loads categories, the place label section reuses them.
+  - Manual browser verification is needed to confirm the place label section renders correctly in the event editor.
+---
+
+## 2026-01-26 - US-044
+- **What was implemented**: Place auto-tagging — labeled user places now auto-populate event title and category when the evidence pipeline builds location events. Two-tier matching: SQL-view-based (PostGIS `st_dwithin`) and client-side haversine distance fallback.
+- **Two-tier auto-tagging architecture**:
+  1. **Primary (SQL view)**: The `location_hourly` view already joins with `user_places` via PostGIS `st_dwithin(center, centroid, radius_m)`. When matched, the view populates `place_id`, `place_label`, `place_category` in `LocationHourlyRow`. `buildLocationBlocks` now carries `place_id` through to `LocationBlock`. `buildLocationEvent` uses `findUserPlaceById()` to look up the matched user place from the `EvidenceBundle.userPlaces` array and resolves title/category/description via `resolveFromAutoTaggedPlace()`.
+  2. **Fallback (Haversine)**: When no `place_id` is available from the SQL view (e.g., user labeled a place after the hourly view was last refreshed), `findNearestUserPlaceByHaversine()` computes haversine distance between the block's average lat/lng and each user place's center coordinates. Matches within `DEFAULT_PLACE_MATCH_RADIUS_METERS` (200m) or the place's own `radius_m` (whichever is smaller).
+- **Auto-tag metadata and confidence**:
+  - Auto-tagged events get `confidence: 0.85` (vs 0.45 for generic location-inferred events)
+  - Evidence metadata includes `autoTaggedFrom: 'Place Name'` for auto-tagged events
+  - `placeCategory` added to evidence metadata for all location events
+- **Data pipeline changes**:
+  - `EvidenceLocationSample` now includes `latitude` and `longitude` (fetched from `location_samples`)
+  - `UserPlaceRow` (in evidence-data.ts) now includes `latitude` and `longitude` (extracted from PostGIS `center` geography via GeoJSON parsing in `extractLatLngFromCenter()`)
+  - `LocationBlock` includes `placeId`, `avgLat`, `avgLng` for geographic matching
+  - Pipeline fingerprint now includes `userPlaces` count (`up:N`) for cache invalidation when places change
+- **New functions added** to `actual-display-events.ts`:
+  - `findUserPlaceById(placeId, userPlaces)` — lookup by ID (for SQL view matches)
+  - `resolveFromAutoTaggedPlace(place, placeCategory)` — resolve title/description/category from matched place
+  - `haversineDistanceMeters(lat1, lng1, lat2, lng2)` — Haversine formula distance calculation
+  - `findNearestUserPlaceByHaversine(lat, lng, userPlaces)` — find closest user place within radius
+- **Files changed**:
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — LocationBlock type, buildLocationBlocks (placeId + avgLat/avgLng), buildLocationEvent (auto-tag logic), new helper functions, pipeline fingerprint
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — EvidenceLocationSample lat/lng, UserPlaceRow lat/lng, fetchLocationSamplesForDay (selects lat/lng), fetchUserPlaces (extracts lat/lng from center geography), extractLatLngFromCenter helper
+  - `apps/mobile/src/stores/events-store.ts` — Added `placeCategory` and `autoTaggedFrom` to CalendarEventMeta.evidence type
+- **Learnings for future iterations:**
+  - The `location_hourly` SQL view already does PostGIS geographic matching with `user_places` via `st_dwithin`. No need to implement separate location matching — just use the `place_id` from the view.
+  - PostGIS returns geography fields as GeoJSON (`{ type: "Point", coordinates: [lng, lat] }`). Extract lat/lng with `coordinates[1]` (lat) and `coordinates[0]` (lng).
+  - The Supabase client returns geography columns as JSON objects — no need for raw SQL. Just select the column and parse the GeoJSON structure.
+  - `UserPlaceRow` is defined in both `evidence-data.ts` and `user-places.ts`. The evidence-data.ts version is used by the pipeline and now includes lat/lng; the user-places.ts version is a local interface used only for CRUD and does not need lat/lng.
+  - Haversine distance is a client-side fallback for cases where the SQL view hasn't re-matched (e.g., recently labeled places). The SQL view match via `place_id` is the primary and more reliable path.
+  - `DEFAULT_PLACE_MATCH_RADIUS_METERS = 200` is the configurable cap. Each user place also has its own `radius_m` (default 150m). The haversine matching uses `Math.min(place.radius_m, DEFAULT_PLACE_MATCH_RADIUS_METERS)`.
+---
+
+## 2026-01-26 - US-045
+- **What was implemented**: Place Labels Management in Settings — new settings screen to view, edit, and delete user-defined place labels with hierarchical category display and auto-tagged event counts.
+- **Key discovery**: No `LocationMappingsTemplate` existed in the codebase. The PRD referenced updating an existing template, but place labeling was only available inline in the event editor (ActualAdjustTemplate). Created the settings screen from scratch following the existing settings sub-screen pattern.
+- **Service additions** (`user-places.ts`):
+  - `fetchAllUserPlaces(userId)` — returns all user places ordered by label
+  - `updateUserPlace(placeId, updates)` — updates label, category, category_id
+  - `deleteUserPlace(placeId)` — deletes a user place
+  - `fetchAutoTagCountsByPlaceLabel(userId)` — queries `actual_events` meta->evidence->autoTaggedFrom to count auto-tagged events per place label. Gracefully returns empty counts if table doesn't exist.
+- **Template** (`PlaceLabelsTemplate.tsx`):
+  - Header with back button, "Place Labels" title
+  - Loading state with ActivityIndicator, empty state with MapPin icon + explanation
+  - Place cards showing: MapPin icon, label, hierarchical category name (via `Tag` icon), auto-tagged event count
+  - Edit mode: inline TextInput for label + HierarchicalCategoryPicker for category + Save/Cancel buttons
+  - Delete with confirmation Alert dialog
+  - Pencil and Trash2 action buttons per card
+- **Screen** (`settings/place-labels.tsx`):
+  - Loads all user places, activity categories, and auto-tag counts in parallel on mount
+  - `buildCategoryDisplayName()` walks up parent chain to build "Family > Dog Walking" display format
+  - `handleUpdatePlace` calls `updateUserPlace` then updates local state
+  - `handleDeletePlace` with confirmation → `deleteUserPlace` → filter local state
+  - Uses Expo Router's settings Stack layout (auto-routed from file name)
+- **Profile integration** (`profile.tsx`):
+  - Added `MapPin` import from lucide-react-native
+  - Added "Place Labels" entry to `personalizationItems` array, routing to `/settings/place-labels`
+- **Files changed**:
+  - `apps/mobile/src/lib/supabase/services/user-places.ts` — 4 new exported functions
+  - `apps/mobile/src/components/templates/PlaceLabelsTemplate.tsx` — New template component
+  - `apps/mobile/src/components/templates/index.ts` — Added PlaceLabelsTemplate and PlaceLabelItem exports
+  - `apps/mobile/src/app/settings/place-labels.tsx` — New settings screen
+  - `apps/mobile/src/app/profile.tsx` — Added MapPin import and Place Labels menu entry
+- **Learnings for future iterations:**
+  - Settings sub-screens in Expo Router auto-register via file name in `app/settings/`. No need to update `_layout.tsx` or `_layout.tsx` for settings — the Stack layout with `screenOptions` handles it.
+  - `fetchAutoTagCountsByPlaceLabel` queries `actual_events.meta` JSONB column. The `meta.evidence.autoTaggedFrom` field stores the place label string (set by US-044). Counting by label match works but is case-sensitive — a place label rename won't match historical events.
+  - The `UserPlaceRow` type in `user-places.ts` does NOT include lat/lng (those are only in `evidence-data.ts` version). The settings screen doesn't need coordinates — just label, category, and ID.
+  - `buildCategoryDisplayName()` is a client-side helper that walks parent_id chain to build "Parent > Child > Grandchild" display names from flat ActivityCategory[]. Reusable wherever hierarchical names are needed.
+  - Manual browser verification is needed to confirm the place labels settings screen renders correctly.
+---
+
+## 2026-01-26 - US-046
+- **What was implemented**: Travel segment detection improvements in the evidence pipeline. Most travel detection was already implemented across US-033 (travel kind/category, buildCommuteEvent, replaceUnknownWithLocationEvidence travel detection) and earlier stories. US-046 made two targeted improvements to ensure travel detection works reliably.
+- **Fix 1 (Always run travel detection)**: `replaceUnknownWithTransitions` was only called when `gapFillingPreference === 'aggressive'` (behind `allowTransitions` flag). Since travel between locations is evidence-based (observable location change), not a speculative gap-filling suggestion, it should always run. Changed from conditional to unconditional execution in the pipeline.
+- **Fix 2 (5-min minimum gap threshold)**: `replaceUnknownWithTransitions` required a 15-min minimum gap to detect travel between events. This was inconsistent with `replaceUnknownWithLocationEvidence` which correctly used 5-min minimum (matching AC: <5 min = not travel). Changed from `gapMinutes < 15` to `gapMinutes < 5`.
+- **Existing travel detection verified**:
+  - Two detection paths: (1) `replaceUnknownWithLocationEvidence` — detects travel in gaps between adjacent location blocks with different labels (5-90 min, calls `buildCommuteEvent`). (2) `replaceUnknownWithTransitions` — detects travel between known events with different location labels (now 5-90 min, creates travel events inline).
+  - Both produce events with `kind: 'travel'`, `category: 'travel'`, title `Travel: A → B`.
+  - `buildCommuteEvent` includes screen time overlay info and data quality metrics.
+  - `'travel'` was already in `EventCategory` (line 14) and `CalendarEventMeta.kind` (line 52) since US-033.
+  - Travel events are editable: actual column routes all events to `/actual-adjust` (ComprehensiveCalendarTemplate lines 578-591).
+  - Short movements <5 min are NOT flagged as travel (both functions check `gapMinutes >= 5`).
+- **Files changed**:
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` — Made `replaceUnknownWithTransitions` unconditional, changed minimum gap from 15 to 5 minutes
+- **Learnings for future iterations:**
+  - Travel detection runs in two pipeline stages: `replaceUnknownWithLocationEvidence` (stage 3, always runs) and `replaceUnknownWithTransitions` (stage 5, now always runs). Stage 3 handles gaps between location blocks; stage 5 handles gaps between arbitrary events with different location labels.
+  - Evidence-based detection (location change → travel) should not be gated behind gap-filling preference. Only speculative suggestions (productive usage, prep/wind-down, patterns) should respect the preference setting.
+  - The prep/wind-down detection (`replaceUnknownWithPrepWindDown`) is correctly kept behind `allowTransitions` since it's more speculative than travel detection.
+---

@@ -1,20 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Modal, Pressable, ScrollView, TextInput, Animated, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, Check } from 'lucide-react-native';
+import { X, Flag, Calendar, Clock, Check } from 'lucide-react-native';
 import DateTimePicker, { DateTimePickerAndroid, DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
 import type { ScheduledEvent, EventCategory } from '@/stores';
 import { LocationSearchModal } from './LocationSearchModal';
 
-// Life areas with icons - same as AddEventTemplate
-const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
-    { id: 'routine', label: 'Faith', icon: Sun },
-    { id: 'family', label: 'Family', icon: Heart },
-    { id: 'work', label: 'Work', icon: Briefcase },
-    { id: 'health', label: 'Health', icon: Dumbbell },
-];
+const CORE_VALUE_TO_EVENT_CATEGORY: Partial<Record<string, EventCategory>> = {
+    faith: 'routine',
+    family: 'family',
+    work: 'work',
+    health: 'health',
+    finances: 'finance',
+    'personal-growth': 'free',
+    other: 'unknown',
+};
+
+const normalizeLabel = (value: string) => value.trim().toLowerCase();
 
 const formatDateFull = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -42,13 +46,22 @@ interface EventEditorModalProps {
     event: ScheduledEvent | null;
     visible: boolean;
     onClose: () => void;
-    onSave?: (updates: { title?: string; location?: string; category?: EventCategory; isBig3?: boolean; startMinutes?: number; duration?: number }) => void | Promise<void>;
+    onSave?: (updates: {
+        title?: string;
+        location?: string;
+        category?: EventCategory;
+        isBig3?: boolean;
+        startMinutes?: number;
+        duration?: number;
+        valueLabel?: string | null;
+        valueSubcategory?: string | null;
+    }) => void | Promise<void>;
     onDelete?: () => void | Promise<void>;
 }
 
 export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: EventEditorModalProps) => {
     const insets = useSafeAreaInsets();
-    const { joySelections, goals, initiatives } = useOnboardingStore();
+    const { coreValues, coreCategories, goals, initiatives } = useOnboardingStore();
     
     // Animated values for backdrop fade and panel slide
     const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -57,9 +70,11 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
     // Local draft state
     const [selectedCategory, setSelectedCategory] = useState<EventCategory>('work');
     const [isBig3, setIsBig3] = useState(false);
-    const [selectedValue, setSelectedValue] = useState<string | null>(null);
+    const [selectedCoreValueId, setSelectedCoreValueId] = useState<string | null>(null);
+    const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [location, setLocation] = useState('');
+    const [hasSelectedCoreValue, setHasSelectedCoreValue] = useState(false);
     
     // Time/Date state
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -118,20 +133,79 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
         }
     }, [visible, event, backdropOpacity, panelTranslateY]);
     
-    // Combine joy selections as "values" - use defaults if empty
-    const values = joySelections.length > 0 
-        ? joySelections 
-        : ['Family', 'Integrity', 'Creativity'];
-    
     // Combine goals and initiatives
     const allGoals = [...goals, ...initiatives].filter(Boolean);
     
-    if (!event) return null;
+    const coreValueOptions = useMemo(() => {
+        const selected = coreValues
+            .filter((value) => value.isSelected)
+            .map((value) => ({ id: value.id, label: value.label }));
+        const hasOther = selected.some(
+            (value) => normalizeLabel(value.label) === 'other' || value.id === 'other'
+        );
+        if (!hasOther) {
+            selected.push({ id: 'other', label: 'Other' });
+        }
+        return selected.filter((value, index, arr) => {
+            const normalized = normalizeLabel(value.label);
+            return arr.findIndex((item) => normalizeLabel(item.label) === normalized) === index;
+        });
+    }, [coreValues]);
+
+    const coreSubcategoryOptions = useMemo(() => {
+        if (!selectedCoreValueId) return [];
+        return coreCategories
+            .filter((category) => category.valueId === selectedCoreValueId)
+            .map((category) => ({ id: category.id, label: category.label }));
+    }, [coreCategories, selectedCoreValueId]);
+
+    useEffect(() => {
+        if (!visible || !event) return;
+        const labelMatch =
+            typeof event.meta?.value_label === 'string'
+                ? coreValueOptions.find(
+                      (value) => normalizeLabel(value.label) === normalizeLabel(event.meta?.value_label ?? ''),
+                  )
+                : null;
+        const categoryMatch = Object.entries(CORE_VALUE_TO_EVENT_CATEGORY).find(
+            ([, category]) => category === event.category,
+        );
+        const fallbackId = categoryMatch ? categoryMatch[0] : null;
+        const nextId = labelMatch?.id ?? fallbackId;
+        setSelectedCoreValueId(nextId ?? null);
+        setHasSelectedCoreValue(Boolean(nextId));
+    }, [coreValueOptions, event, visible]);
+
+    useEffect(() => {
+        if (!visible || !event) return;
+        if (typeof event.meta?.value_subcategory !== 'string') {
+            setSelectedSubcategoryId(null);
+            return;
+        }
+        const match = coreSubcategoryOptions.find(
+            (subcategory) =>
+                normalizeLabel(subcategory.label) === normalizeLabel(event.meta?.value_subcategory ?? ''),
+        );
+        setSelectedSubcategoryId(match?.id ?? null);
+    }, [coreSubcategoryOptions, event, visible]);
+
+    useEffect(() => {
+        if (!selectedCoreValueId) return;
+        const mappedCategory = CORE_VALUE_TO_EVENT_CATEGORY[selectedCoreValueId];
+        if (mappedCategory && mappedCategory !== selectedCategory) {
+            setSelectedCategory(mappedCategory);
+        }
+    }, [selectedCoreValueId, selectedCategory]);
     
     const handleSave = () => {
         const startMins = startTime.getHours() * 60 + startTime.getMinutes();
         const endMins = endTime.getHours() * 60 + endTime.getMinutes();
         const duration = Math.max(endMins - startMins, 15);
+        const valueLabel =
+            coreValueOptions.find((value) => value.id === selectedCoreValueId)?.label ?? null;
+        const valueSubcategory =
+            coreSubcategoryOptions.find((subcategory) => subcategory.id === selectedSubcategoryId)
+                ?.label ?? null;
 
         void onSave?.({
             title: title.trim(),
@@ -140,6 +214,8 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
             isBig3,
             startMinutes: startMins,
             duration: duration,
+            valueLabel,
+            valueSubcategory,
         });
     };
 
@@ -196,6 +272,8 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
         // iOS: inline picker updates time continuously
         if (date) setEndTime(combineDateAndTime(selectedDate, date));
     };
+
+    if (!event) return null;
 
     return (
         <Modal
@@ -395,52 +473,63 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                             </Pressable>
                         </View>
                         
-                        {/* Life Area */}
+                        {/* Core Values */}
                         <View className="mt-8 px-6">
-                            <Text className="text-xs font-semibold tracking-wider text-[#F97316]">
-                                LIFE AREA
+                            <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
+                                CORE VALUES
                             </Text>
                             <View className="mt-3 flex-row flex-wrap gap-2">
-                                {LIFE_AREAS.map((area) => {
-                                    const isSelected = selectedCategory === area.id;
+                                {coreValueOptions.map((value) => {
+                                    const isSelected = selectedCoreValueId === value.id;
                                     return (
                                         <Pressable
-                                            key={area.id}
-                                            onPress={() => setSelectedCategory(area.id)}
-                                            className={`flex-row items-center gap-2 rounded-full border px-4 py-2.5 ${
+                                            key={value.id}
+                                            onPress={() => {
+                                                setSelectedCoreValueId(value.id);
+                                                setSelectedSubcategoryId(null);
+                                                setHasSelectedCoreValue(true);
+                                            }}
+                                            className={`rounded-full border px-4 py-2.5 ${
                                                 isSelected 
                                                     ? 'border-[#2563EB] bg-[#EFF6FF]' 
                                                     : 'border-[#E2E8F0] bg-white'
                                             }`}
                                         >
-                                            <Icon 
-                                                icon={area.icon} 
-                                                size={16} 
-                                                color={isSelected ? '#2563EB' : '#94A3B8'} 
-                                            />
                                             <Text className={`text-sm font-semibold ${
                                                 isSelected ? 'text-[#2563EB]' : 'text-[#64748B]'
                                             }`}>
-                                                {area.label}
+                                                {value.label}
                                             </Text>
                                         </Pressable>
                                     );
                                 })}
                             </View>
                         </View>
-                        
-                        {/* Align with Values */}
+
+                        {/* Time Categories */}
                         <View className="mt-8 px-6">
                             <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
-                                ALIGN WITH VALUES
+                                TIME CATEGORIES
                             </Text>
                             <View className="mt-3 flex-row flex-wrap gap-2">
-                                {values.slice(0, 4).map((value) => {
-                                    const isSelected = selectedValue === value;
+                                {!hasSelectedCoreValue && (
+                                    <Text className="text-sm text-[#94A3B8]">
+                                        Select a core value to see time categories
+                                    </Text>
+                                )}
+                                {hasSelectedCoreValue && coreSubcategoryOptions.length === 0 && (
+                                    <Text className="text-sm text-[#94A3B8]">
+                                        No time categories found
+                                    </Text>
+                                )}
+                                {hasSelectedCoreValue && coreSubcategoryOptions.map((subcategory) => {
+                                    const isSelected = selectedSubcategoryId === subcategory.id;
                                     return (
                                         <Pressable
-                                            key={value}
-                                            onPress={() => setSelectedValue(isSelected ? null : value)}
+                                            key={subcategory.id}
+                                            onPress={() =>
+                                                setSelectedSubcategoryId(isSelected ? null : subcategory.id)
+                                            }
                                             className={`rounded-full border px-4 py-2.5 ${
                                                 isSelected 
                                                     ? 'border-[#1E293B] bg-[#1E293B]' 
@@ -450,14 +539,11 @@ export const EventEditorModal = ({ event, visible, onClose, onSave, onDelete }: 
                                             <Text className={`text-sm font-semibold ${
                                                 isSelected ? 'text-white' : 'text-[#64748B]'
                                             }`}>
-                                                {value}
+                                                {subcategory.label}
                                             </Text>
                                         </Pressable>
                                     );
                                 })}
-                                <Pressable className="rounded-full border border-dashed border-[#CBD5E1] px-4 py-2.5">
-                                    <Text className="text-sm font-semibold text-[#94A3B8]">+ Add</Text>
-                                </Pressable>
                             </View>
                         </View>
 

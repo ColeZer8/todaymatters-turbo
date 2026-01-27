@@ -24,6 +24,7 @@ export interface CalendarEventMeta {
   isBig3?: boolean;
   location?: string | null;
   value_label?: string | null;
+  value_subcategory?: string | null;
   goal_title?: string | null;
   initiative_title?: string | null;
   goal_contribution?: number | null;

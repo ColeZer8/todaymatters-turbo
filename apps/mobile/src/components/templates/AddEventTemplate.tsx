@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Switch, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Flag, Calendar, Clock, Sun, Heart, Briefcase, Dumbbell, ChevronRight, Check } from 'lucide-react-native';
+import { X, Flag, Calendar, Clock, ChevronRight, Check } from 'lucide-react-native';
 import DateTimePicker, { DateTimePickerAndroid, DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Icon } from '../atoms/Icon';
 import { useOnboardingStore } from '@/stores';
@@ -10,13 +10,17 @@ import type { PatternIndex } from '@/lib/calendar/pattern-recognition';
 import { getPatternSuggestionForRange } from '@/lib/calendar/pattern-recognition';
 import { LocationSearchModal } from '../molecules/LocationSearchModal';
 
-// Life areas with icons - same as EventEditorModal
-const LIFE_AREAS: Array<{ id: EventCategory; label: string; icon: typeof Sun }> = [
-    { id: 'routine', label: 'Faith', icon: Sun },
-    { id: 'family', label: 'Family', icon: Heart },
-    { id: 'work', label: 'Work', icon: Briefcase },
-    { id: 'health', label: 'Health', icon: Dumbbell },
-];
+const CORE_VALUE_TO_EVENT_CATEGORY: Partial<Record<string, EventCategory>> = {
+    faith: 'routine',
+    family: 'family',
+    work: 'work',
+    health: 'health',
+    finances: 'finance',
+    'personal-growth': 'free',
+    other: 'unknown',
+};
+
+const normalizeLabel = (value: string) => value.trim().toLowerCase();
 
 const formatDateFull = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -45,6 +49,8 @@ interface AddEventDraft {
     location: string;
     category: EventCategory;
     isBig3: boolean;
+    coreValueLabel: string | null;
+    subcategoryLabel: string | null;
     selectedDate: Date;
     startTime: Date;
     endTime: Date;
@@ -83,17 +89,19 @@ export const AddEventTemplate = ({
     onSave,
 }: AddEventTemplateProps) => {
     const insets = useSafeAreaInsets();
-    const { joySelections, goals, initiatives } = useOnboardingStore();
+    const { coreValues, coreCategories, goals, initiatives } = useOnboardingStore();
     
     // Local draft state
     const [selectedCategory, setSelectedCategory] = useState<EventCategory>('work');
     const [isBig3, setIsBig3] = useState(false);
-    const [selectedValue, setSelectedValue] = useState<string | null>(null);
+    const [selectedCoreValueId, setSelectedCoreValueId] = useState<string | null>(null);
+    const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [location, setLocation] = useState('');
     const [hasCustomTitle, setHasCustomTitle] = useState(false);
     const [hasCustomCategory, setHasCustomCategory] = useState(false);
     const [suggestionApplied, setSuggestionApplied] = useState(false);
+    const [hasSelectedCoreValue, setHasSelectedCoreValue] = useState(false);
     const [selectedDate, setSelectedDate] = useState(initialDate);
     const [startTime, setStartTime] = useState(() => {
         const date = new Date(initialDate);
@@ -122,13 +130,39 @@ export const AddEventTemplate = ({
     const [showLocationPicker, setShowLocationPicker] = useState(false);
     const [allDay, setAllDay] = useState(false);
     
-    // Combine joy selections as "values" - use defaults if empty
-    const values = joySelections.length > 0 
-        ? joySelections 
-        : ['Family', 'Integrity', 'Creativity'];
-    
     // Combine goals and initiatives
     const allGoals = [...goals, ...initiatives].filter(Boolean);
+
+    const coreValueOptions = useMemo(() => {
+        const selected = coreValues
+            .filter((value) => value.isSelected)
+            .map((value) => ({ id: value.id, label: value.label }));
+        const hasOther = selected.some(
+            (value) => normalizeLabel(value.label) === 'other' || value.id === 'other'
+        );
+        if (!hasOther) {
+            selected.push({ id: 'other', label: 'Other' });
+        }
+        return selected.filter((value, index, arr) => {
+            const normalized = normalizeLabel(value.label);
+            return arr.findIndex((item) => normalizeLabel(item.label) === normalized) === index;
+        });
+    }, [coreValues]);
+
+    const coreSubcategoryOptions = useMemo(() => {
+        if (!selectedCoreValueId) return [];
+        return coreCategories
+            .filter((category) => category.valueId === selectedCoreValueId)
+            .map((category) => ({ id: category.id, label: category.label }));
+    }, [coreCategories, selectedCoreValueId]);
+
+    useEffect(() => {
+        if (!selectedCoreValueId) return;
+        const mappedCategory = CORE_VALUE_TO_EVENT_CATEGORY[selectedCoreValueId];
+        if (mappedCategory && mappedCategory !== selectedCategory) {
+            setSelectedCategory(mappedCategory);
+        }
+    }, [selectedCoreValueId, selectedCategory]);
 
     const patternSuggestion = useMemo(() => {
         if (!allowAutoSuggestions || !patternIndex) return null;
@@ -167,11 +201,18 @@ export const AddEventTemplate = ({
     }, [patternSuggestion]);
     
     const handleSave = () => {
+        const coreValueLabel =
+            coreValueOptions.find((value) => value.id === selectedCoreValueId)?.label ?? null;
+        const subcategoryLabel =
+            coreSubcategoryOptions.find((subcategory) => subcategory.id === selectedSubcategoryId)
+                ?.label ?? null;
         void onSave({
             title,
             location,
             category: selectedCategory,
             isBig3,
+            coreValueLabel,
+            subcategoryLabel,
             selectedDate,
             startTime,
             endTime,
@@ -466,56 +507,63 @@ export const AddEventTemplate = ({
                     </Pressable>
                 </View>
                 
-                {/* Life Area */}
+                {/* Core Values */}
                 <View className="mt-8 px-6">
-                    <Text className="text-xs font-semibold tracking-wider text-[#F97316]">
-                        LIFE AREA
+                    <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
+                        CORE VALUES
                     </Text>
                     <View className="mt-3 flex-row flex-wrap gap-2">
-                        {LIFE_AREAS.map((area) => {
-                            const isSelected = selectedCategory === area.id;
+                        {coreValueOptions.map((value) => {
+                            const isSelected = selectedCoreValueId === value.id;
                             return (
                                 <Pressable
-                                    key={area.id}
+                                    key={value.id}
                                     onPress={() => {
-                                        setSelectedCategory(area.id);
+                                        setSelectedCoreValueId(value.id);
+                                        setSelectedSubcategoryId(null);
+                                        setHasSelectedCoreValue(true);
                                         setHasCustomCategory(true);
                                         setSuggestionApplied(false);
                                     }}
-                                    className={`flex-row items-center gap-2 rounded-full border px-4 py-2.5 ${
+                                    className={`rounded-full border px-4 py-2.5 ${
                                         isSelected 
                                             ? 'border-[#2563EB] bg-[#EFF6FF]' 
                                             : 'border-[#E2E8F0] bg-white'
                                     }`}
                                 >
-                                    <Icon 
-                                        icon={area.icon} 
-                                        size={16} 
-                                        color={isSelected ? '#2563EB' : '#94A3B8'} 
-                                    />
                                     <Text className={`text-sm font-semibold ${
                                         isSelected ? 'text-[#2563EB]' : 'text-[#64748B]'
                                     }`}>
-                                        {area.label}
+                                        {value.label}
                                     </Text>
                                 </Pressable>
                             );
                         })}
                     </View>
                 </View>
-                
-                {/* Align with Values */}
+
+                {/* Time Categories */}
                 <View className="mt-8 px-6">
                     <Text className="text-xs font-semibold tracking-wider text-[#94A3B8]">
-                        ALIGN WITH VALUES
+                        TIME CATEGORIES
                     </Text>
                     <View className="mt-3 flex-row flex-wrap gap-2">
-                        {values.slice(0, 4).map((value) => {
-                            const isSelected = selectedValue === value;
+                        {!hasSelectedCoreValue && (
+                            <Text className="text-sm text-[#94A3B8]">
+                                Select a core value to see time categories
+                            </Text>
+                        )}
+                        {hasSelectedCoreValue && coreSubcategoryOptions.length === 0 && (
+                            <Text className="text-sm text-[#94A3B8]">
+                                No time categories found
+                            </Text>
+                        )}
+                        {hasSelectedCoreValue && coreSubcategoryOptions.map((subcategory) => {
+                            const isSelected = selectedSubcategoryId === subcategory.id;
                             return (
                                 <Pressable
-                                    key={value}
-                                    onPress={() => setSelectedValue(isSelected ? null : value)}
+                                    key={subcategory.id}
+                                    onPress={() => setSelectedSubcategoryId(isSelected ? null : subcategory.id)}
                                     className={`rounded-full border px-4 py-2.5 ${
                                         isSelected 
                                             ? 'border-[#1E293B] bg-[#1E293B]' 
@@ -525,14 +573,11 @@ export const AddEventTemplate = ({
                                     <Text className={`text-sm font-semibold ${
                                         isSelected ? 'text-white' : 'text-[#64748B]'
                                     }`}>
-                                        {value}
+                                        {subcategory.label}
                                     </Text>
                                 </Pressable>
                             );
                         })}
-                        <Pressable className="rounded-full border border-dashed border-[#CBD5E1] px-4 py-2.5">
-                            <Text className="text-sm font-semibold text-[#94A3B8]">+ Add</Text>
-                        </Pressable>
                     </View>
                 </View>
                 

@@ -26,6 +26,35 @@ const REVIEW_CATEGORY_TO_EVENT: Record<ReviewCategoryId, EventCategory> = {
   other: 'unknown',
 };
 
+const EVENT_CATEGORY_TO_CORE_VALUE: Partial<Record<EventCategory, string>> = {
+  routine: 'faith',
+  family: 'family',
+  work: 'work',
+  meeting: 'work',
+  health: 'health',
+  sleep: 'health',
+  digital: 'work',
+  finance: 'finances',
+  meal: 'health',
+  social: 'family',
+  travel: 'other',
+  comm: 'other',
+  free: 'personal-growth',
+  unknown: 'other',
+};
+
+const CORE_VALUE_TO_EVENT_CATEGORY: Partial<Record<string, EventCategory>> = {
+  faith: 'routine',
+  family: 'family',
+  work: 'work',
+  health: 'health',
+  finances: 'finance',
+  'personal-growth': 'free',
+  other: 'unknown',
+};
+
+const normalizeLabel = (value: string) => value.trim().toLowerCase();
+
 const formatMinutesToTime = (totalMinutes: number): string => {
   const minutes = Math.max(0, totalMinutes);
   const hours24 = Math.floor(minutes / 60) % 24;
@@ -66,7 +95,7 @@ export default function ActualAdjustScreen() {
   const upsertAppOverride = useAppCategoryOverridesStore((s) => s.upsertOverride);
   const { createActual, updateActual } = useCalendarEventsSync();
   const coreValues = useOnboardingStore((s) => s.coreValues);
-  const joySelections = useOnboardingStore((s) => s.joySelections);
+  const coreCategories = useOnboardingStore((s) => s.coreCategories);
   const goals = useOnboardingStore((s) => s.goals);
   const initiatives = useOnboardingStore((s) => s.initiatives);
 
@@ -234,9 +263,8 @@ export default function ActualAdjustScreen() {
   const [note, setNote] = useState('');
   const [isBig3, setIsBig3] = useState(Boolean(event.isBig3));
   const [titleInput, setTitleInput] = useState(event.title || 'Actual');
-  const [selectedValue, setSelectedValue] = useState<string | null>(
-    typeof event.meta?.value_label === 'string' ? event.meta.value_label : null,
-  );
+  const [selectedCoreValueId, setSelectedCoreValueId] = useState<string | null>(null);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(() => {
     if (typeof event.meta?.goal_title === 'string' && event.meta.goal_title.trim()) {
       return `goal:${event.meta.goal_title}`;
@@ -262,7 +290,6 @@ export default function ActualAdjustScreen() {
     setTitleInput(event.title || 'Actual');
     setStartMinutes(Math.max(0, Math.round(event.startMinutes)));
     setDurationMinutes(Math.max(1, Math.round(event.duration)));
-    setSelectedValue(typeof event.meta?.value_label === 'string' ? event.meta.value_label : null);
     if (typeof event.meta?.goal_title === 'string' && event.meta.goal_title.trim()) {
       setSelectedGoalId(`goal:${event.meta.goal_title}`);
     } else if (typeof event.meta?.initiative_title === 'string' && event.meta.initiative_title.trim()) {
@@ -275,18 +302,89 @@ export default function ActualAdjustScreen() {
     );
   }, [event.duration, event.meta, event.startMinutes, event.title]);
 
-  const valuesOptions = useMemo(() => {
-    const valueLabels = coreValues.filter((value) => value.isSelected).map((value) => value.label);
-    const all = [...valueLabels, ...joySelections];
-    const deduped: string[] = [];
-    for (const item of all) {
-      const next = item.trim();
-      if (!next) continue;
-      if (deduped.some((value) => value.toLowerCase() === next.toLowerCase())) continue;
-      deduped.push(next);
+  const coreValueOptions = useMemo(() => {
+    const selected = coreValues
+      .filter((value) => value.isSelected)
+      .map((value) => ({ id: value.id, label: value.label }));
+    const hasOther = selected.some(
+      (value) => normalizeLabel(value.label) === 'other' || value.id === 'other',
+    );
+    if (!hasOther) {
+      selected.push({ id: 'other', label: 'Other' });
     }
-    return deduped;
-  }, [coreValues, joySelections]);
+    return selected;
+  }, [coreValues]);
+
+  const resolveCoreValueIdFromLabel = useCallback(
+    (label?: string | null) => {
+      if (!label) return null;
+      const normalized = normalizeLabel(label);
+      const byLabel = coreValueOptions.find(
+        (value) => normalizeLabel(value.label) === normalized,
+      );
+      if (byLabel) return byLabel.id;
+      const byId = coreValueOptions.find((value) => value.id === normalized);
+      return byId?.id ?? null;
+    },
+    [coreValueOptions],
+  );
+
+  const resolveDefaultCoreValueId = useCallback(() => {
+    const fromMeta = resolveCoreValueIdFromLabel(event.meta?.value_label);
+    if (fromMeta) return fromMeta;
+    if (event.meta?.kind === 'screen_time') {
+      const workMatch = coreValueOptions.find(
+        (value) => value.id === 'work' || normalizeLabel(value.label) === 'work',
+      );
+      if (workMatch) return workMatch.id;
+    }
+    const mappedId = EVENT_CATEGORY_TO_CORE_VALUE[event.category];
+    if (mappedId) {
+      const mapped = coreValueOptions.find((value) => value.id === mappedId);
+      if (mapped) return mapped.id;
+    }
+    return coreValueOptions[0]?.id ?? null;
+  }, [coreValueOptions, event.category, event.meta?.kind, event.meta?.value_label, resolveCoreValueIdFromLabel]);
+
+  useEffect(() => {
+    setSelectedCoreValueId(resolveDefaultCoreValueId());
+  }, [resolveDefaultCoreValueId]);
+
+  const coreSubcategoryOptions = useMemo(() => {
+    if (!selectedCoreValueId) return [];
+    const options = coreCategories
+      .filter((category) => category.valueId === selectedCoreValueId)
+      .map((category) => ({ id: category.id, label: category.label }));
+    if (options.length === 0 && selectedCoreValueId === 'other') {
+      return [{ id: 'other', label: 'Other' }];
+    }
+    return options;
+  }, [coreCategories, selectedCoreValueId]);
+
+  useEffect(() => {
+    setSelectedSubcategoryId((current) => {
+      if (current && coreSubcategoryOptions.some((option) => option.id === current)) {
+        return current;
+      }
+      const subLabel =
+        typeof event.meta?.value_subcategory === 'string' ? event.meta.value_subcategory : null;
+      if (subLabel) {
+        const match = coreSubcategoryOptions.find(
+          (option) => normalizeLabel(option.label) === normalizeLabel(subLabel),
+        );
+        if (match) return match.id;
+      }
+      return null;
+    });
+  }, [coreSubcategoryOptions, event.meta?.value_subcategory]);
+
+  useEffect(() => {
+    if (!selectedCoreValueId) return;
+    const mappedCategory = CORE_VALUE_TO_EVENT_CATEGORY[selectedCoreValueId];
+    if (mappedCategory && mappedCategory !== selectedCategory) {
+      setSelectedCategory(mappedCategory);
+    }
+  }, [selectedCoreValueId, selectedCategory]);
 
   const linkedGoals = useMemo(() => {
     const goalOptions = goals
@@ -338,6 +436,15 @@ export default function ActualAdjustScreen() {
     [selectedGoalId]
   );
 
+  const handleSelectCoreValue = useCallback((valueId: string) => {
+    setSelectedCoreValueId(valueId);
+    setSelectedSubcategoryId(null);
+  }, []);
+
+  const handleSelectSubcategory = useCallback((valueId: string | null) => {
+    setSelectedSubcategoryId(valueId);
+  }, []);
+
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
@@ -380,6 +487,11 @@ export default function ActualAdjustScreen() {
       const finalCategory = nextSuggestion?.category ?? selectedCategory;
       const linkedGoal = selectedGoalId?.startsWith('goal:') ? selectedGoalId.slice(5) : null;
       const linkedInitiative = selectedGoalId?.startsWith('initiative:') ? selectedGoalId.slice(11) : null;
+      const selectedCoreValueLabel =
+        coreValueOptions.find((value) => value.id === selectedCoreValueId)?.label ?? null;
+      const selectedSubcategoryLabel =
+        coreSubcategoryOptions.find((subcategory) => subcategory.id === selectedSubcategoryId)?.label ??
+        null;
 
       const meta = {
         category: finalCategory,
@@ -387,7 +499,8 @@ export default function ActualAdjustScreen() {
         source: 'actual_adjust',
         actual: true,
         tags: ['actual'],
-        value_label: selectedValue ?? null,
+        value_label: selectedCoreValueLabel,
+        value_subcategory: selectedSubcategoryLabel,
         goal_title: linkedGoal,
         initiative_title: linkedInitiative,
         goal_contribution: goalContribution ?? null,
@@ -475,7 +588,10 @@ export default function ActualAdjustScreen() {
     startMinutes,
     goalContribution,
     selectedGoalId,
-    selectedValue,
+    selectedCoreValueId,
+    selectedSubcategoryId,
+    coreValueOptions,
+    coreSubcategoryOptions,
     note,
     params.id,
     router,
@@ -501,8 +617,10 @@ export default function ActualAdjustScreen() {
         isSleep={selectedCategory === 'sleep'}
         selectedCategory={selectedCategory}
         isBig3={isBig3}
-        values={valuesOptions}
-        selectedValue={selectedValue}
+        coreValues={coreValueOptions}
+        selectedCoreValueId={selectedCoreValueId}
+        coreSubcategories={coreSubcategoryOptions}
+        selectedSubcategoryId={selectedSubcategoryId}
         linkedGoals={linkedGoals}
         selectedGoalId={selectedGoalId}
         goalContribution={goalContribution}
@@ -533,8 +651,8 @@ export default function ActualAdjustScreen() {
         onChangeTitle={setTitleInput}
         onChangeNote={setNote}
         onToggleBig3={setIsBig3}
-        onSelectCategory={setSelectedCategory}
-        onSelectValue={setSelectedValue}
+        onSelectCoreValue={handleSelectCoreValue}
+        onSelectSubcategory={handleSelectSubcategory}
         onSelectGoal={handleSelectGoal}
         onSelectGoalContribution={setGoalContribution}
       />
