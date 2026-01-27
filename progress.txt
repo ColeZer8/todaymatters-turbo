@@ -23,6 +23,8 @@
 - Movement detection: `classifyMovementByDistance(samples)` takes `LocationSampleInput[]`, filters by accuracy <=50m, ignores GPS drift <10m, classifies as moving (>200m/15min) or stationary (<50m/30min) with confidence 0.7-1.0; returns null state for ambiguous/insufficient data
 - Adaptive sync: Android uses movement-aware sync intervals (30 min stationary, 15 min moving/unknown) plus queue-size threshold checks (10 stationary, 20 moving/unknown); iOS uses fixed 2-min interval
 - Sync timing: `recordLastSyncTime()` / `getLastSyncTime()` persist to AsyncStorage key `tm:location:lastSyncTime`
+- Health check retries: `getHealthCheckRetries()` / `incrementHealthCheckRetries()` / `resetHealthCheckRetries()` persist to AsyncStorage key `tm:location:healthCheckRetries`; tracks retryCount and lastRetryAt
+- Health check runs every 5 min on Android, checks heartbeat staleness (15 min stationary, 5 min moving), task registration, permissions, services; auto-restarts with exponential backoff (30s, 2min, 5min), max 3 attempts; resets on app foreground or successful restart
 
 ---
 
@@ -215,5 +217,22 @@
   - `recordLastSyncTime()` is fire-and-forget (no await needed) - same pattern as other AsyncStorage writes in the location system
   - The `isFlushingRef` is shared between iOS and Android effects since only one platform runs at a time - this prevents concurrent flushes from time-based and queue-based triggers
   - US-010 (health check) and US-012 (diagnostics) can use `getLastSyncTime()` to check sync recency
+---
+
+## 2026-01-27 - US-010
+- What was implemented: Enhanced health check with movement-aware intervals, automatic recovery with exponential backoff, and retry tracking via AsyncStorage
+- Files changed:
+  - apps/mobile/src/lib/android-location/health-check-retries.ts (new: getHealthCheckRetries(), incrementHealthCheckRetries(), resetHealthCheckRetries() with AsyncStorage key tm:location:healthCheckRetries)
+  - apps/mobile/src/lib/android-location/index.ts (added barrel exports for health-check-retries module)
+  - apps/mobile/src/lib/supabase/hooks/use-location-samples-sync.ts (added health check useEffect for Android: heartbeat staleness check, diagnostics verification, automatic restart with backoff, retry count management, foreground reset)
+- **Learnings for future iterations:**
+  - The health check is a separate useEffect in the sync hook, running independently from the sync effects — this keeps concerns separated and cleanup straightforward
+  - `getAndroidLocationDiagnostics()` already exists in index.ts and checks task registration, permissions, services, and pending samples — reuse it rather than duplicating checks
+  - `getLastTaskHeartbeat()` returns `TaskHeartbeat | null` — null means no heartbeat was ever recorded (fresh install or task never fired), which should defer to diagnostics rather than immediately flagging as stale
+  - Exponential backoff pattern: `RETRY_BACKOFF_MS[Math.min(retryCount - 1, array.length - 1)]` ensures safe indexing even if retryCount exceeds array size
+  - After exhausting max retries, the health check stops scheduling further checks — the app foreground event resets retries and the next effect cycle restarts checking
+  - The `stopAndroidBackgroundLocationAsync()` then `startAndroidBackgroundLocationAsync()` sequence is the safest restart pattern — stop first handles the case where the task is registered but stuck
+  - US-011 (persistent notification) should be triggered when `retryData.retryCount > MAX_HEALTH_CHECK_RETRIES` — the health check already logs this condition
+  - AsyncStorage key uses `tm:location:healthCheckRetries` (following the `tm:location:<purpose>` convention), not the PRD's `tm:androidLocation:healthCheckRetries`
 ---
 

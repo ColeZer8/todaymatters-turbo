@@ -170,8 +170,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added health check as a new useEffect in use-location-samples-sync.ts for Android. Checks task heartbeat recency (15 min stationary, 5 min moving) and runs full diagnostics (task registration, permissions, services). On failure: exponential backoff restart (30s, 2min, 5min), max 3 attempts. Created health-check-retries.ts for AsyncStorage persistence (key: tm:location:healthCheckRetries) with getHealthCheckRetries(), incrementHealthCheckRetries(), resetHealthCheckRetries(). Retry count resets on app foreground or successful restart. Exported from barrel index.ts."
     },
     {
       "id": "US-011",
