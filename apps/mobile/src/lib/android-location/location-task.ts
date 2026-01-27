@@ -8,9 +8,49 @@ import type { AndroidLocationSample } from './types';
 import { ErrorCategory, logError } from './error-logger';
 import { getAndroidApiLevel } from './android-version';
 import { recordTaskHeartbeat } from './task-heartbeat';
+import { classifyMovementByDistance } from './movement-detector';
+import type { LocationSampleInput } from './movement-detector';
+import { getMovementState, setMovementState } from './movement-state';
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
+
+/** In-memory buffer of recent samples for movement classification (max 10). Cleared on task restart. */
+const recentSamplesBuffer: LocationSampleInput[] = [];
+const MAX_RECENT_SAMPLES = 10;
+
+/** Minimum confidence required to update movement state. */
+const MIN_CLASSIFICATION_CONFIDENCE = 0.7;
+
+/**
+ * Run movement detection on the in-memory sample buffer and update
+ * persisted movement state if classification changes with sufficient confidence.
+ */
+async function updateMovementDetection(): Promise<void> {
+  try {
+    const classification = classifyMovementByDistance(recentSamplesBuffer);
+
+    // Only act on definitive classifications with sufficient confidence
+    if (classification.state === null || classification.confidence < MIN_CLASSIFICATION_CONFIDENCE) {
+      return;
+    }
+
+    const current = await getMovementState();
+
+    if (current.state !== classification.state) {
+      await setMovementState(classification.state, 'distance');
+
+      if (__DEV__) {
+        console.log(
+          `📍 Movement state changed: ${current.state} → ${classification.state} ` +
+          `(confidence=${classification.confidence.toFixed(2)}, distance=${classification.totalDistance.toFixed(0)}m)`
+        );
+      }
+    }
+  } catch {
+    // Movement detection must never crash the location task
+  }
+}
 
 type RawLocationObject = {
   timestamp: number;
@@ -138,6 +178,23 @@ if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager'))
       if (__DEV__) {
         console.log(`📍 queued ${samples.length} Android location samples (pending=${pendingCount})`);
       }
+
+      // Feed samples into in-memory buffer for movement classification.
+      for (const s of samples) {
+        recentSamplesBuffer.push({
+          latitude: s.latitude,
+          longitude: s.longitude,
+          accuracy_m: s.accuracy_m,
+          recorded_at: s.recorded_at,
+        });
+      }
+      // Keep only the last MAX_RECENT_SAMPLES entries.
+      if (recentSamplesBuffer.length > MAX_RECENT_SAMPLES) {
+        recentSamplesBuffer.splice(0, recentSamplesBuffer.length - MAX_RECENT_SAMPLES);
+      }
+
+      // Run movement detection and update state if classification changed.
+      await updateMovementDetection();
     } catch (e) {
       if (__DEV__) console.error('📍 Android background location task failed:', e);
       logError(ErrorCategory.TASK_EXECUTION_FAILED, 'Background location task threw an exception', {
