@@ -1,43 +1,52 @@
-import { Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { IOS_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-import { peekPendingLocationSamplesAsync, removePendingLocationSamplesByKeyAsync } from './queue';
-import type { IosLocationSupportStatus, IosLocationSample } from './types';
-import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
-import { requireOptionalNativeModule } from 'expo-modules-core';
+import { Platform } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
+import { IOS_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+import {
+  peekPendingLocationSamplesAsync,
+  removePendingLocationSamplesByKeyAsync,
+} from "./queue";
+import type { IosLocationSupportStatus, IosLocationSample } from "./types";
+import {
+  sanitizeLocationSamplesForUpload,
+  upsertLocationSamples,
+} from "@/lib/supabase/services/location-samples";
+import { requireOptionalNativeModule } from "expo-modules-core";
 
-export type { IosLocationSupportStatus, IosLocationSample } from './types';
-export { IOS_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-export { clearPendingLocationSamplesAsync } from './queue';
+export type { IosLocationSupportStatus, IosLocationSample } from "./types";
+export { IOS_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+export { clearPendingLocationSamplesAsync } from "./queue";
 
 export function getIosLocationSupportStatus(): IosLocationSupportStatus {
-  if (Platform.OS !== 'ios') return 'notIos';
+  if (Platform.OS !== "ios") return "notIos";
   // Background tasks aren’t reliably supported in Expo Go; require a dev client / production build.
-  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return 'expoGo';
-  return 'available';
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient)
+    return "expoGo";
+  return "available";
 }
 
-async function loadExpoLocationAsync(): Promise<typeof import('expo-location') | null> {
+async function loadExpoLocationAsync(): Promise<
+  typeof import("expo-location") | null
+> {
   // Avoid hard-crashing the app if the native module isn't compiled into this build.
-  if (!requireOptionalNativeModule('ExpoLocation')) return null;
+  if (!requireOptionalNativeModule("ExpoLocation")) return null;
   try {
-    return await import('expo-location');
+    return await import("expo-location");
   } catch {
     return null;
   }
 }
 
 export async function requestIosLocationPermissionsAsync(): Promise<{
-  foreground: 'granted' | 'denied' | 'undetermined';
-  background: 'granted' | 'denied' | 'undetermined';
+  foreground: "granted" | "denied" | "undetermined";
+  background: "granted" | "denied" | "undetermined";
   canAskAgainForeground: boolean;
   canAskAgainBackground: boolean;
   hasNativeModule: boolean;
 }> {
-  if (Platform.OS !== 'ios') {
+  if (Platform.OS !== "ios") {
     return {
-      foreground: 'denied',
-      background: 'denied',
+      foreground: "denied",
+      background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
       hasNativeModule: false,
@@ -47,8 +56,8 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
   const Location = await loadExpoLocationAsync();
   if (!Location) {
     return {
-      foreground: 'denied',
-      background: 'denied',
+      foreground: "denied",
+      background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
       hasNativeModule: false,
@@ -59,27 +68,33 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
   const bgBefore = await Location.getBackgroundPermissionsAsync();
 
   let foreground = fgBefore;
-  if (foreground.status !== 'granted') {
+  if (foreground.status !== "granted") {
     foreground = await Location.requestForegroundPermissionsAsync();
   }
 
   let background = bgBefore;
-  if (foreground.status === 'granted' && background.status !== 'granted') {
+  if (foreground.status === "granted" && background.status !== "granted") {
     background = await Location.requestBackgroundPermissionsAsync();
   }
 
   return {
     foreground: foreground.status,
     background: background.status,
-    canAskAgainForeground: typeof foreground.canAskAgain === 'boolean' ? foreground.canAskAgain : true,
-    canAskAgainBackground: typeof background.canAskAgain === 'boolean' ? background.canAskAgain : true,
+    canAskAgainForeground:
+      typeof foreground.canAskAgain === "boolean"
+        ? foreground.canAskAgain
+        : true,
+    canAskAgainBackground:
+      typeof background.canAskAgain === "boolean"
+        ? background.canAskAgain
+        : true,
     hasNativeModule: true,
   };
 }
 
 export async function startIosBackgroundLocationAsync(): Promise<void> {
   const support = getIosLocationSupportStatus();
-  if (support !== 'available') return;
+  if (support !== "available") return;
 
   const Location = await loadExpoLocationAsync();
   if (!Location) return;
@@ -90,10 +105,12 @@ export async function startIosBackgroundLocationAsync(): Promise<void> {
   // IMPORTANT: Don't auto-request permissions here. Onboarding should drive the permission prompts.
   const fg = await Location.getForegroundPermissionsAsync();
   const bg = await Location.getBackgroundPermissionsAsync();
-  if (fg.status !== 'granted') return;
-  if (bg.status !== 'granted') return;
+  if (fg.status !== "granted") return;
+  if (bg.status !== "granted") return;
 
-  const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(IOS_BACKGROUND_LOCATION_TASK_NAME);
+  const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(
+    IOS_BACKGROUND_LOCATION_TASK_NAME,
+  );
   if (alreadyStarted) return;
 
   // Production defaults: venue-level tracking with reasonable battery usage.
@@ -110,19 +127,23 @@ export async function startIosBackgroundLocationAsync(): Promise<void> {
 }
 
 export async function stopIosBackgroundLocationAsync(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+  if (Platform.OS !== "ios") return;
   const Location = await loadExpoLocationAsync();
   if (!Location) return;
-  const started = await Location.hasStartedLocationUpdatesAsync(IOS_BACKGROUND_LOCATION_TASK_NAME);
+  const started = await Location.hasStartedLocationUpdatesAsync(
+    IOS_BACKGROUND_LOCATION_TASK_NAME,
+  );
   if (!started) return;
   await Location.stopLocationUpdatesAsync(IOS_BACKGROUND_LOCATION_TASK_NAME);
 }
 
-export async function flushPendingLocationSamplesToSupabaseAsync(userId: string): Promise<{
+export async function flushPendingLocationSamplesToSupabaseAsync(
+  userId: string,
+): Promise<{
   uploaded: number;
   remaining: number;
 }> {
-  if (Platform.OS !== 'ios') return { uploaded: 0, remaining: 0 };
+  if (Platform.OS !== "ios") return { uploaded: 0, remaining: 0 };
 
   const BATCH_SIZE = 250;
   let uploaded = 0;
@@ -131,10 +152,13 @@ export async function flushPendingLocationSamplesToSupabaseAsync(userId: string)
     const batch = await peekPendingLocationSamplesAsync(userId, BATCH_SIZE);
     if (batch.length === 0) break;
 
-    const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
+    const { validSamples, droppedKeys } =
+      sanitizeLocationSamplesForUpload(batch);
     if (droppedKeys.length > 0) {
       if (__DEV__) {
-        console.warn(`📍 Dropped ${droppedKeys.length} iOS location samples with invalid fields.`);
+        console.warn(
+          `📍 Dropped ${droppedKeys.length} iOS location samples with invalid fields.`,
+        );
       }
       await removePendingLocationSamplesByKeyAsync(userId, droppedKeys);
     }
@@ -146,13 +170,14 @@ export async function flushPendingLocationSamplesToSupabaseAsync(userId: string)
     await upsertLocationSamples(userId, validSamples);
     await removePendingLocationSamplesByKeyAsync(
       userId,
-      validSamples.map((s) => s.dedupe_key)
+      validSamples.map((s) => s.dedupe_key),
     );
 
     uploaded += validSamples.length;
   }
 
-  const remaining = (await peekPendingLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;
+  const remaining = (
+    await peekPendingLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)
+  ).length;
   return { uploaded, remaining };
 }
-

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,8 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ArrowLeft,
   MapPin,
@@ -17,9 +17,9 @@ import {
   X,
   Check,
   Tag,
-} from 'lucide-react-native';
-import { HierarchicalCategoryPicker } from '@/components/molecules';
-import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
+} from "lucide-react-native";
+import { HierarchicalCategoryPicker } from "@/components/molecules";
+import type { ActivityCategory } from "@/lib/supabase/services/activity-categories";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,7 +45,7 @@ export interface PlaceLabelsTemplateProps {
   onUpdatePlace: (
     placeId: string,
     label: string,
-    categoryId: string | null
+    categoryId: string | null,
   ) => Promise<void>;
   onDeletePlace: (placeId: string, placeLabel: string) => void;
 }
@@ -64,22 +64,19 @@ export const PlaceLabelsTemplate = ({
 }: PlaceLabelsTemplateProps) => {
   const insets = useSafeAreaInsets();
   const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
-  const [editLabel, setEditLabel] = useState('');
+  const [editLabel, setEditLabel] = useState("");
   const [editCategoryId, setEditCategoryId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleStartEdit = useCallback(
-    (place: PlaceLabelItem) => {
-      setEditingPlaceId(place.id);
-      setEditLabel(place.label);
-      setEditCategoryId(place.category_id);
-    },
-    []
-  );
+  const handleStartEdit = useCallback((place: PlaceLabelItem) => {
+    setEditingPlaceId(place.id);
+    setEditLabel(place.label);
+    setEditCategoryId(place.category_id);
+  }, []);
 
   const handleCancelEdit = useCallback(() => {
     setEditingPlaceId(null);
-    setEditLabel('');
+    setEditLabel("");
     setEditCategoryId(null);
   }, []);
 
@@ -89,10 +86,10 @@ export const PlaceLabelsTemplate = ({
     try {
       await onUpdatePlace(editingPlaceId, editLabel.trim(), editCategoryId);
       setEditingPlaceId(null);
-      setEditLabel('');
+      setEditLabel("");
       setEditCategoryId(null);
     } catch {
-      Alert.alert('Error', 'Failed to update place label. Please try again.');
+      Alert.alert("Error", "Failed to update place label. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -101,19 +98,19 @@ export const PlaceLabelsTemplate = ({
   const handleDelete = useCallback(
     (place: PlaceLabelItem) => {
       Alert.alert(
-        'Delete Place Label',
+        "Delete Place Label",
         `Are you sure you want to delete "${place.label}"? Future visits will no longer auto-tag.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: "Cancel", style: "cancel" },
           {
-            text: 'Delete',
-            style: 'destructive',
+            text: "Delete",
+            style: "destructive",
             onPress: () => onDeletePlace(place.id, place.label),
           },
-        ]
+        ],
       );
     },
-    [onDeletePlace]
+    [onDeletePlace],
   );
 
   return (
@@ -124,7 +121,7 @@ export const PlaceLabelsTemplate = ({
         style={{
           paddingTop: Math.max(insets.top - 11, 0),
           paddingBottom: 12,
-          shadowColor: '#0f172a',
+          shadowColor: "#0f172a",
           shadowOpacity: 0.03,
           shadowRadius: 6,
           shadowOffset: { width: 0, height: 2 },
@@ -274,9 +271,7 @@ export const PlaceLabelsTemplate = ({
                     accessibilityLabel={`Edit ${place.label}`}
                     onPress={() => handleStartEdit(place)}
                     className="p-4"
-                    style={({ pressed }) => [
-                      { opacity: pressed ? 0.85 : 1 },
-                    ]}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
                   >
                     <View className="flex-row items-center">
                       {/* Pin icon */}
@@ -308,7 +303,7 @@ export const PlaceLabelsTemplate = ({
                         {place.autoTagCount > 0 ? (
                           <Text className="mt-0.5 text-xs text-[#94A3B8]">
                             {place.autoTagCount} auto-tagged event
-                            {place.autoTagCount !== 1 ? 's' : ''}
+                            {place.autoTagCount !== 1 ? "s" : ""}
                           </Text>
                         ) : null}
                       </View>

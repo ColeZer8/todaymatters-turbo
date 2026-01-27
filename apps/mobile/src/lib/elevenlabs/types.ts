@@ -16,7 +16,7 @@ export interface VoiceCoachCallbacks {
 }
 
 export interface ConversationMessage {
-  role: 'agent' | 'user';
+  role: "agent" | "user";
   message: string;
   timestamp?: number;
 }
@@ -51,7 +51,7 @@ export interface ClientToolResult {
 }
 
 export type ClientToolHandler<TParams = Record<string, unknown>> = (
-  params: TParams
+  params: TParams,
 ) => string | ClientToolResult | Promise<string | ClientToolResult>;
 
 export interface VoiceCoachClientTools {
@@ -81,7 +81,12 @@ export interface StartConversationOptions {
 }
 
 // Matches the SDK's Status type from @elevenlabs/types
-export type ConversationStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error';
+export type ConversationStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "disconnecting"
+  | "error";
 
 export interface VoiceCoachState {
   /** Current connection status */
@@ -97,11 +102,3 @@ export interface VoiceCoachState {
   /** Error message if status is 'error' */
   errorMessage: string | null;
 }
-
-
-
-
-
-
-
-

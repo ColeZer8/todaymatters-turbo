@@ -9,14 +9,18 @@ The `startAndroidBackgroundLocationAsync()` function has **6 silent early return
 I've added a diagnostic function you can call. Add this to your dev location screen or create a test button:
 
 ```typescript
-import { getAndroidLocationDiagnostics } from '@/lib/android-location';
+import { getAndroidLocationDiagnostics } from "@/lib/android-location";
 
 // Call this function to see what's wrong
 const diagnostics = await getAndroidLocationDiagnostics();
-console.log('Android Location Diagnostics:', JSON.stringify(diagnostics, null, 2));
+console.log(
+  "Android Location Diagnostics:",
+  JSON.stringify(diagnostics, null, 2),
+);
 ```
 
 This will tell you:
+
 - ✅ What's working
 - ❌ What's failing
 - 📊 How many samples are queued locally
@@ -27,12 +31,14 @@ This will tell you:
 ### 1. **Background Permission Not Actually Granted** (90% likely)
 
 Even if the user thinks they granted it, Android 10+ requires:
+
 1. First grant **foreground** permission (runtime prompt)
 2. Then separately grant **background** permission (may require Settings)
 
 **The diagnostic will show:** `backgroundPermission: 'denied'` or `'undetermined'`
 
 **Fix:**
+
 - Settings > Apps > TodayMatters > Permissions > Location
 - Must show **"Allow all the time"** (not "While using the app")
 - If it shows "While using the app", change it to "Allow all the time"
@@ -48,13 +54,15 @@ Even with all permissions, battery optimization can kill background tasks.
 ### 3. **Foreground Service Notification Missing** (50% likely)
 
 If the notification **"TodayMatters is tracking your day"** is not visible:
+
 - Background location task is NOT running
 - Android killed the service
 - Notification permission denied
 
 **Check:** Pull down notification shade - should see persistent notification
 
-**Fix:** 
+**Fix:**
+
 - Settings > Apps > TodayMatters > Notifications > Enable all
 - Restart app
 
@@ -92,6 +100,7 @@ console.log(diag);
 ### Step 2: Check Each Error
 
 For each error in `diag.errors`:
+
 1. Read the error message
 2. Follow the fix instructions above
 3. Re-run diagnostic
@@ -100,20 +109,23 @@ For each error in `diag.errors`:
 
 ```typescript
 const Location = await loadExpoLocationAsync();
-const isStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
-console.log('Task started:', isStarted);
+const isStarted = await Location.hasStartedLocationUpdatesAsync(
+  ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+);
+console.log("Task started:", isStarted);
 ```
 
 ### Step 4: Check Pending Samples
 
 ```typescript
-import { peekPendingAndroidLocationSamplesAsync } from '@/lib/android-location/queue';
+import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
 
 const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
-console.log('Pending samples:', pending.length);
+console.log("Pending samples:", pending.length);
 ```
 
 If `pending.length > 0` but no data in database:
+
 - Samples are being collected ✅
 - Upload is failing ❌
 - Check network, Supabase, or manually flush
@@ -123,6 +135,7 @@ If `pending.length > 0` but no data in database:
 Look for notification: **"TodayMatters is tracking your day"**
 
 If missing:
+
 - Task is not running
 - Check all permissions again
 - Check battery optimization
@@ -131,12 +144,14 @@ If missing:
 ## Why Simulator Works But Physical Device Doesn't
 
 **Simulator:**
+
 - Often has relaxed permission restrictions
 - May auto-grant background permissions
 - Battery optimization typically disabled
 - Foreground service restrictions relaxed
 
 **Physical Device:**
+
 - Strict permission enforcement
 - Background permission requires explicit Settings change
 - Battery optimization often enabled by default

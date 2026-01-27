@@ -17,11 +17,13 @@
 ## Current Status
 
 ### ✅ Completed
+
 - **Profile Values** - Service layer created (`profile-values.ts`)
   - Ready to test once `profile_values` table is created in `tm` schema
   - All queries use `.schema('tm')`
 
 ### ⏳ Waiting for Supabase Team
+
 1. **Expose `tm` schema** in API settings (Dashboard → Settings → API → Exposed schemas)
 2. **Create `profile_values` table** in `tm` schema
 
@@ -33,6 +35,7 @@
 
 **Table**: `tm.profiles`  
 **Fields Available**:
+
 - `user_id` (uuid)
 - `full_name` (text) - Profile name
 - `ideal_work_day` (text) - Wake time "06:30"
@@ -41,9 +44,11 @@
 - `timezone` (text) - User timezone
 
 **Fields Needed** (ask team to add):
+
 - `role` (text) - Setup questions role selection
 
 **What to Build**:
+
 - `apps/mobile/src/lib/supabase/services/profiles.ts` (already exists, but expand it)
 - Functions:
   - `fetchProfile(userId)` - Get full profile
@@ -54,6 +59,7 @@
   - `updateRole(userId, role)` - Once column exists
 
 **Data Sources**:
+
 - `onboarding-store.ts` → `role`, `wakeTime`, `sleepTime`, `purpose`
 - `profile.tsx` → Profile name editing
 
@@ -63,6 +69,7 @@
 
 **Table**: `tm.events`  
 **Fields Available**:
+
 - `user_id` (uuid)
 - `type` (enum) - Includes `"goal"` ✅
 - `title` (text) - Goal/initiative name
@@ -70,6 +77,7 @@
 - `created_at`, `updated_at` (timestamps)
 
 **What to Build**:
+
 - `apps/mobile/src/lib/supabase/services/events.ts`
 - Functions:
   - `fetchGoals(userId)` - Get all goals (`type='goal'`, `meta.category='goal'`)
@@ -80,11 +88,13 @@
   - `deleteEvent(eventId)`
 
 **Data Sources**:
+
 - `goals-store.ts` → Goals with tasks, progress, colors
 - `initiatives-store.ts` → Initiatives with milestones, progress
 - `onboarding-store.ts` → Initial goals/initiatives from onboarding
 
 **Mapping Strategy**:
+
 ```typescript
 // Simple goals (from onboarding) → events table
 {
@@ -113,18 +123,21 @@
 
 **Table**: `tm.ideal_day`  
 **Fields Available**:
+
 - `user_id` (uuid)
 - `category_id` (integer, nullable) - Unclear structure
 - `day_type` (text) - "weekdays" | "weekends" | "custom"
 - `minutes` (integer) - Hours as minutes
 
 **Fields Missing** (need to ask team):
+
 - `category_name` (text)
 - `color` (text)
 - `max_minutes` (integer)
 - `selected_days` (jsonb) - For custom day types
 
 **What to Build** (once schema is clarified):
+
 - `apps/mobile/src/lib/supabase/services/ideal-day.ts`
 - Functions:
   - `fetchIdealDay(userId, dayType)` - Get categories for day type
@@ -132,6 +145,7 @@
   - `updateSelectedDays(userId, dayType, selectedDays)` - Save custom day selections
 
 **Data Sources**:
+
 - `ideal-day-store.ts` → Categories, hours, selected days
 
 ---
@@ -139,11 +153,13 @@
 ## Implementation Priority
 
 ### Phase 1: Quick Wins (Can Build Service Layers Now)
+
 1. ✅ **Profile Values** - Already done, waiting for table
 2. 🔨 **Profiles Service** - Build now, test when schema exposed
 3. 🔨 **Events Service** - Build now, test when schema exposed
 
 ### Phase 2: Schema-Dependent (Need Team Input)
+
 1. ⏳ **Ideal Day** - Need schema clarification first
 2. ⏳ **Routine Items** - Need decision on storage strategy
 
@@ -155,17 +171,17 @@ All services follow this pattern:
 
 ```typescript
 // apps/mobile/src/lib/supabase/services/[feature].ts
-import { supabase } from '../client';
-import type { Database } from '../database.types';
+import { supabase } from "../client";
+import type { Database } from "../database.types";
 
 // Use tm schema explicitly
-const fromTable = (table: string) => supabase.schema('tm').from(table);
+const fromTable = (table: string) => supabase.schema("tm").from(table);
 
 export async function fetchFeature(userId: string) {
-  const { data, error } = await fromTable('table_name')
-    .select('*')
-    .eq('user_id', userId);
-  
+  const { data, error } = await fromTable("table_name")
+    .select("*")
+    .eq("user_id", userId);
+
   if (error) throw error;
   return data;
 }
@@ -176,7 +192,7 @@ export async function fetchFeature(userId: string) {
 ## Next Steps
 
 1. **Build Profiles Service** - Can do now
-2. **Build Events Service** - Can do now  
+2. **Build Events Service** - Can do now
 3. **Update Documentation** - Add `tm` schema notes
 4. **Wait for Team** - Schema exposure + `profile_values` table
 5. **Test & Integrate** - Connect services to stores once access works

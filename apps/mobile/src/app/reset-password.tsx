@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { ResetPasswordTemplate } from '@/components/templates';
-import { updatePassword } from '@/lib/supabase';
-import { useAuthStore } from '@/stores';
+import { useEffect, useState } from "react";
+import { InteractionManager } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { ResetPasswordTemplate } from "@/components/templates";
+import { updatePassword } from "@/lib/supabase";
+import { useAuthStore } from "@/stores";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isPasswordHidden, setIsPasswordHidden] = useState(true);
   const [isConfirmPasswordHidden, setIsConfirmPasswordHidden] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,24 +26,24 @@ export default function ResetPasswordScreen() {
     }
     if (isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/home');
+        router.replace("/home");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
   const handleSubmit = async () => {
     if (!password || !confirmPassword) {
-      setErrorMessage('Please enter and confirm your new password.');
+      setErrorMessage("Please enter and confirm your new password.");
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match. Please try again.');
+      setErrorMessage("Passwords do not match. Please try again.");
       return;
     }
 
     if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.');
+      setErrorMessage("Password must be at least 6 characters long.");
       return;
     }
 
@@ -52,9 +53,13 @@ export default function ResetPasswordScreen() {
     try {
       await updatePassword(password);
       // Password updated successfully - redirect to sign in
-      router.replace('/');
+      router.replace("/");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to update password. Please try again.');
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to update password. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -71,7 +76,9 @@ export default function ResetPasswordScreen() {
       onPasswordChange={setPassword}
       onConfirmPasswordChange={setConfirmPassword}
       onTogglePasswordVisibility={() => setIsPasswordHidden((prev) => !prev)}
-      onToggleConfirmPasswordVisibility={() => setIsConfirmPasswordHidden((prev) => !prev)}
+      onToggleConfirmPasswordVisibility={() =>
+        setIsConfirmPasswordHidden((prev) => !prev)
+      }
       onSubmit={handleSubmit}
     />
   );

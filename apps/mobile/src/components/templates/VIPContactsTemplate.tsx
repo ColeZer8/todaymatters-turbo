@@ -1,33 +1,50 @@
-import { useState } from 'react';
-import { ArrowRight, Plus, X, Users, Heart, Briefcase, User, Phone, Mail } from 'lucide-react-native';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { VIPContact, VIPRelationship } from '@/stores/onboarding-store';
+import { useState } from "react";
+import {
+  ArrowRight,
+  Plus,
+  X,
+  Users,
+  Heart,
+  Briefcase,
+  User,
+  Phone,
+  Mail,
+} from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { VIPContact, VIPRelationship } from "@/stores/onboarding-store";
 
 interface VIPContactsTemplateProps {
   step?: number;
   totalSteps?: number;
   contacts: VIPContact[];
-  onAddContact: (contact: Omit<VIPContact, 'id'>) => void;
+  onAddContact: (contact: Omit<VIPContact, "id">) => void;
   onRemoveContact: (contactId: string) => void;
   onContinue: () => void;
   onSkip?: () => void;
   onBack?: () => void;
 }
 
-const RELATIONSHIP_OPTIONS: { value: VIPRelationship; label: string; icon: typeof Users }[] = [
-  { value: 'spouse', label: 'Spouse', icon: Heart },
-  { value: 'child', label: 'Child', icon: Users },
-  { value: 'parent', label: 'Parent', icon: Users },
-  { value: 'friend', label: 'Friend', icon: User },
-  { value: 'colleague', label: 'Colleague', icon: Briefcase },
-  { value: 'other', label: 'Other', icon: User },
+const RELATIONSHIP_OPTIONS: {
+  value: VIPRelationship;
+  label: string;
+  icon: typeof Users;
+}[] = [
+  { value: "spouse", label: "Spouse", icon: Heart },
+  { value: "child", label: "Child", icon: Users },
+  { value: "parent", label: "Parent", icon: Users },
+  { value: "friend", label: "Friend", icon: User },
+  { value: "colleague", label: "Colleague", icon: Briefcase },
+  { value: "other", label: "Other", icon: User },
 ];
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -36,14 +53,14 @@ const cardShadowStyle = {
 
 const getRelationshipColor = (relationship: VIPRelationship) => {
   const colors: Record<VIPRelationship, string> = {
-    spouse: '#EC4899',
-    child: '#F59E0B',
-    parent: '#8B5CF6',
-    friend: '#10B981',
-    colleague: '#3B82F6',
-    other: '#6B7280',
+    spouse: "#EC4899",
+    child: "#F59E0B",
+    parent: "#8B5CF6",
+    friend: "#10B981",
+    colleague: "#3B82F6",
+    other: "#6B7280",
   };
-  return colors[relationship] || '#6B7280';
+  return colors[relationship] || "#6B7280";
 };
 
 export const VIPContactsTemplate = ({
@@ -57,10 +74,11 @@ export const VIPContactsTemplate = ({
   onBack,
 }: VIPContactsTemplateProps) => {
   const [isAdding, setIsAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newRelationship, setNewRelationship] = useState<VIPRelationship>('spouse');
-  const [newPhone, setNewPhone] = useState('');
-  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState("");
+  const [newRelationship, setNewRelationship] =
+    useState<VIPRelationship>("spouse");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
 
   const handleAddContact = () => {
     if (newName.trim()) {
@@ -70,18 +88,18 @@ export const VIPContactsTemplate = ({
         phone: newPhone.trim() || undefined,
         email: newEmail.trim() || undefined,
       });
-      setNewName('');
-      setNewPhone('');
-      setNewEmail('');
+      setNewName("");
+      setNewPhone("");
+      setNewEmail("");
       setIsAdding(false);
     }
   };
 
   const resetForm = () => {
-    setNewName('');
-    setNewRelationship('spouse');
-    setNewPhone('');
-    setNewEmail('');
+    setNewName("");
+    setNewRelationship("spouse");
+    setNewPhone("");
+    setNewEmail("");
     setIsAdding(false);
   };
 
@@ -94,7 +112,11 @@ export const VIPContactsTemplate = ({
       onBack={onBack}
       footer={
         <View className="gap-3">
-          <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
+          <GradientButton
+            label="Continue"
+            onPress={onContinue}
+            rightIcon={ArrowRight}
+          />
           {onSkip && (
             <Pressable
               accessibilityRole="button"
@@ -102,7 +124,9 @@ export const VIPContactsTemplate = ({
               className="items-center py-2"
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text className="text-sm font-semibold text-[#94A3B8]">Skip for now</Text>
+              <Text className="text-sm font-semibold text-[#94A3B8]">
+                Skip for now
+              </Text>
             </Pressable>
           )}
         </View>
@@ -115,8 +139,8 @@ export const VIPContactsTemplate = ({
           style={cardShadowStyle}
         >
           <Text className="text-sm leading-5 text-text-secondary">
-            Add the people who matter most - family, close friends, key colleagues.
-            We'll help you prioritize time with them.
+            Add the people who matter most - family, close friends, key
+            colleagues. We'll help you prioritize time with them.
           </Text>
         </View>
 
@@ -133,7 +157,7 @@ export const VIPContactsTemplate = ({
                 >
                   <View
                     className="h-11 w-11 items-center justify-center rounded-xl mr-3"
-                    style={{ backgroundColor: color + '20' }}
+                    style={{ backgroundColor: color + "20" }}
                   >
                     <Text className="text-lg font-bold" style={{ color }}>
                       {contact.name.charAt(0).toUpperCase()}
@@ -174,7 +198,9 @@ export const VIPContactsTemplate = ({
 
             {/* Name */}
             <View className="mb-3">
-              <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">NAME</Text>
+              <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
+                NAME
+              </Text>
               <TextInput
                 value={newName}
                 onChangeText={setNewName}
@@ -182,13 +208,15 @@ export const VIPContactsTemplate = ({
                 placeholderTextColor="#94A3B8"
                 autoFocus
                 className="rounded-xl bg-[#F8FAFC] px-4 py-3 text-sm text-text-primary"
-                style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
+                style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
               />
             </View>
 
             {/* Relationship */}
             <View className="mb-3">
-              <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">RELATIONSHIP</Text>
+              <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
+                RELATIONSHIP
+              </Text>
               <View className="flex-row flex-wrap gap-2">
                 {RELATIONSHIP_OPTIONS.map((option) => {
                   const isSelected = newRelationship === option.value;
@@ -200,16 +228,16 @@ export const VIPContactsTemplate = ({
                       accessibilityState={{ checked: isSelected }}
                       onPress={() => setNewRelationship(option.value)}
                       className={`rounded-full px-3 py-2 ${
-                        isSelected ? 'border-2' : 'border border-[#E4E8F0]'
+                        isSelected ? "border-2" : "border border-[#E4E8F0]"
                       }`}
                       style={{
-                        backgroundColor: isSelected ? color + '15' : '#fff',
-                        borderColor: isSelected ? color : '#E4E8F0',
+                        backgroundColor: isSelected ? color + "15" : "#fff",
+                        borderColor: isSelected ? color : "#E4E8F0",
                       }}
                     >
                       <Text
                         className="text-xs font-semibold"
-                        style={{ color: isSelected ? color : '#64748B' }}
+                        style={{ color: isSelected ? color : "#64748B" }}
                       >
                         {option.label}
                       </Text>
@@ -224,7 +252,10 @@ export const VIPContactsTemplate = ({
               <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
                 PHONE <Text className="text-[#C7D2FE]">(optional)</Text>
               </Text>
-              <View className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <View
+                className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
+                style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
                 <Phone size={16} color="#94A3B8" />
                 <TextInput
                   value={newPhone}
@@ -242,7 +273,10 @@ export const VIPContactsTemplate = ({
               <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
                 EMAIL <Text className="text-[#C7D2FE]">(optional)</Text>
               </Text>
-              <View className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <View
+                className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
+                style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+              >
                 <Mail size={16} color="#94A3B8" />
                 <TextInput
                   value={newEmail}
@@ -264,7 +298,9 @@ export const VIPContactsTemplate = ({
                 className="flex-1 items-center py-3 rounded-xl bg-[#F1F5F9]"
                 style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
               >
-                <Text className="text-sm font-semibold text-[#64748B]">Cancel</Text>
+                <Text className="text-sm font-semibold text-[#64748B]">
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -275,7 +311,9 @@ export const VIPContactsTemplate = ({
                   { opacity: !newName.trim() ? 0.5 : pressed ? 0.9 : 1 },
                 ]}
               >
-                <Text className="text-sm font-semibold text-white">Add Contact</Text>
+                <Text className="text-sm font-semibold text-white">
+                  Add Contact
+                </Text>
               </Pressable>
             </View>
           </View>

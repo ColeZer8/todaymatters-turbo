@@ -1,8 +1,8 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Database } from '../database.types';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Database } from "../database.types";
 
-export type TmEventRow = Database['tm']['Tables']['events']['Row'];
+export type TmEventRow = Database["tm"]["Tables"]["events"]["Row"];
 
 export interface FetchGmailEmailsOptions {
   limit?: number;
@@ -20,18 +20,23 @@ export interface FetchGmailEmailsOptions {
  */
 export async function fetchGmailEmailEvents(
   userId: string,
-  options: FetchGmailEmailsOptions = {}
+  options: FetchGmailEmailsOptions = {},
 ): Promise<TmEventRow[]> {
-  const { limit = 50, includeRead = true, includeArchived = false, sinceHours } = options;
+  const {
+    limit = 50,
+    includeRead = true,
+    includeArchived = false,
+    sinceHours,
+  } = options;
 
   try {
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('id,user_id,type,title,meta,created_at,updated_at')
-      .eq('user_id', userId)
-      .eq('type', 'email')
-      .order('created_at', { ascending: false })
+      .schema("tm")
+      .from("events")
+      .select("id,user_id,type,title,meta,created_at,updated_at")
+      .eq("user_id", userId)
+      .eq("type", "email")
+      .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) throw handleSupabaseError(error);
@@ -43,16 +48,19 @@ export async function fetchGmailEmailEvents(
       filtered = filtered.filter((row) => isGmailInboxFromMeta(row.meta));
     }
 
-    if (typeof sinceHours === 'number' && Number.isFinite(sinceHours)) {
+    if (typeof sinceHours === "number" && Number.isFinite(sinceHours)) {
       const cutoff = Date.now() - sinceHours * 60 * 60 * 1000;
       filtered = filtered.filter((row) => {
-        const created = row.created_at ? new Date(row.created_at).getTime() : NaN;
+        const created = row.created_at
+          ? new Date(row.created_at).getTime()
+          : NaN;
         return Number.isFinite(created) && created >= cutoff;
       });
     }
 
     // Unread filter is client-side (labelIds are nested in JSON, and JSON-path filtering can be brittle across PostgREST versions).
-    if (!includeRead) return filtered.filter((r) => isGmailUnreadFromMeta(r.meta));
+    if (!includeRead)
+      return filtered.filter((r) => isGmailUnreadFromMeta(r.meta));
 
     return filtered;
   } catch (error) {
@@ -61,21 +69,23 @@ export async function fetchGmailEmailEvents(
 }
 
 function isGmailUnreadFromMeta(meta: unknown): boolean {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
   const raw = (meta as Record<string, unknown>).raw;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
   const labelIds = (raw as Record<string, unknown>).labelIds;
   if (!Array.isArray(labelIds)) return false;
-  return labelIds.some((v) => typeof v === 'string' && v.toUpperCase() === 'UNREAD');
+  return labelIds.some(
+    (v) => typeof v === "string" && v.toUpperCase() === "UNREAD",
+  );
 }
 
 function isGmailInboxFromMeta(meta: unknown): boolean {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
   const raw = (meta as Record<string, unknown>).raw;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
   const labelIds = (raw as Record<string, unknown>).labelIds;
   if (!Array.isArray(labelIds)) return true;
-  return labelIds.some((v) => typeof v === 'string' && v.toUpperCase() === 'INBOX');
+  return labelIds.some(
+    (v) => typeof v === "string" && v.toUpperCase() === "INBOX",
+  );
 }
-
-

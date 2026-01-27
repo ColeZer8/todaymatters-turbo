@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import type { LucideIcon } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
 
 interface IconChoiceCardProps {
   title: string;
@@ -10,7 +10,7 @@ interface IconChoiceCardProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -30,7 +30,9 @@ export const IconChoiceCard = ({
       accessibilityState={{ selected }}
       onPress={onPress}
       className={`flex flex-col items-center justify-center basis-[48%] min-h-[148px] gap-3 px-6 py-7 rounded-[28px] border ${
-        selected ? 'border-brand-primary bg-[#F5F9FF]' : 'border-[#E4E8F0] bg-white'
+        selected
+          ? "border-brand-primary bg-[#F5F9FF]"
+          : "border-[#E4E8F0] bg-white"
       }`}
       style={({ pressed }) => [
         cardShadowStyle,
@@ -39,13 +41,15 @@ export const IconChoiceCard = ({
     >
       <View
         className={`flex items-center justify-center h-12 w-12 rounded-2xl ${
-          selected ? 'bg-[#E1ECFF]' : 'bg-[#F3F4F6]'
+          selected ? "bg-[#E1ECFF]" : "bg-[#F3F4F6]"
         }`}
       >
-        <Icon size={22} color={selected ? '#2563EB' : '#6B7280'} />
+        <Icon size={22} color={selected ? "#2563EB" : "#6B7280"} />
       </View>
       <View className="items-center gap-1.5">
-        <Text className={`text-center ${selected ? 'text-brand-primary' : 'text-text-primary'} text-base font-semibold`}>
+        <Text
+          className={`text-center ${selected ? "text-brand-primary" : "text-text-primary"} text-base font-semibold`}
+        >
           {title}
         </Text>
         {description ? (

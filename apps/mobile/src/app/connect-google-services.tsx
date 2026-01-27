@@ -1,45 +1,63 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { ConnectGoogleServicesTemplate } from '@/components/templates/ConnectGoogleServicesTemplate';
-import { startGoogleServicesOAuth, fetchConnectedGoogleServices, type GoogleService } from '@/lib/google-services-oauth';
-import { useAuthStore, useGoogleServicesOAuthStore } from '@/stores';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { ConnectGoogleServicesTemplate } from "@/components/templates/ConnectGoogleServicesTemplate";
+import {
+  startGoogleServicesOAuth,
+  fetchConnectedGoogleServices,
+  type GoogleService,
+} from "@/lib/google-services-oauth";
+import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
 
 export default function ConnectGoogleServicesScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const accessToken = useAuthStore((state) => state.session?.access_token ?? null);
+  const accessToken = useAuthStore(
+    (state) => state.session?.access_token ?? null,
+  );
 
-  const isProcessingOAuth = useGoogleServicesOAuthStore((state) => state.isProcessing);
+  const isProcessingOAuth = useGoogleServicesOAuthStore(
+    (state) => state.isProcessing,
+  );
   const oauthResult = useGoogleServicesOAuthStore((state) => state.result);
-  const clearOAuthResult = useGoogleServicesOAuthStore((state) => state.clearResult);
+  const clearOAuthResult = useGoogleServicesOAuthStore(
+    (state) => state.clearResult,
+  );
 
   const [selectedServices, setSelectedServices] = useState<GoogleService[]>([]);
-  const [expandedService, setExpandedService] = useState<GoogleService | null>(null);
+  const [expandedService, setExpandedService] = useState<GoogleService | null>(
+    null,
+  );
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [fetchedConnectedServices, setFetchedConnectedServices] = useState<GoogleService[]>([]);
+  const [fetchedConnectedServices, setFetchedConnectedServices] = useState<
+    GoogleService[]
+  >([]);
   const [isLoadingConnected, setIsLoadingConnected] = useState(false);
   const [hasAttemptedConnection, setHasAttemptedConnection] = useState(false);
 
   // Combine OAuth result (from recent connection) with fetched services (from backend)
   const connectedServices = useMemo(() => {
-    const fromOAuth = oauthResult?.success ? oauthResult.services ?? [] : [];
+    const fromOAuth = oauthResult?.success ? (oauthResult.services ?? []) : [];
     // Merge and deduplicate
     const all = [...new Set([...fromOAuth, ...fetchedConnectedServices])];
     return all;
   }, [oauthResult, fetchedConnectedServices]);
-  const connectedServicesKey = connectedServices.join(',');
+  const connectedServicesKey = connectedServices.join(",");
 
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -58,7 +76,7 @@ export default function ConnectGoogleServicesScreen() {
         }
       } catch (error) {
         if (__DEV__ && !cancelled) {
-          console.warn('⚠️ Could not fetch connected Google services:', error);
+          console.warn("⚠️ Could not fetch connected Google services:", error);
         }
         // Don't show error to user - graceful degradation
       } finally {
@@ -85,7 +103,9 @@ export default function ConnectGoogleServicesScreen() {
 
     setHasAttemptedConnection(true);
     setIsConnecting(false);
-    setErrorMessage(oauthResult.error ?? 'Unable to complete Google connection.');
+    setErrorMessage(
+      oauthResult.error ?? "Unable to complete Google connection.",
+    );
   }, [oauthResult]);
 
   useEffect(() => {
@@ -114,12 +134,18 @@ export default function ConnectGoogleServicesScreen() {
     setIsConnecting(true);
     try {
       if (!accessToken) {
-        throw new Error('Missing access token. Please sign in again and retry.');
+        throw new Error(
+          "Missing access token. Please sign in again and retry.",
+        );
       }
       await startGoogleServicesOAuth(selectedServices, accessToken);
       // We intentionally do not navigate here; the deep-link callback will drive state updates.
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Unable to open Google connection.');
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to open Google connection.",
+      );
     } finally {
       setIsConnecting(false);
     }
@@ -127,7 +153,7 @@ export default function ConnectGoogleServicesScreen() {
 
   const handleContinue = useCallback(() => {
     clearOAuthResult();
-    router.replace('/core-values');
+    router.replace("/core-values");
   }, [clearOAuthResult, router]);
 
   const handleRetryConnection = useCallback(() => {
@@ -138,7 +164,7 @@ export default function ConnectGoogleServicesScreen() {
 
   const handleSkip = useCallback(() => {
     clearOAuthResult();
-    router.replace('/core-values');
+    router.replace("/core-values");
   }, [clearOAuthResult, router]);
 
   if (!isNavigationReady) {
@@ -165,7 +191,7 @@ export default function ConnectGoogleServicesScreen() {
       onContinue={handleContinue}
       onRetryConnection={handleRetryConnection}
       onSkip={handleSkip}
-      onBack={() => router.replace('/permissions')}
+      onBack={() => router.replace("/permissions")}
       // key to ensure updated "connected services" state fully refreshes selection UI if needed
       key={`connect-google-${connectedServicesKey}`}
     />

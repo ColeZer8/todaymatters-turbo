@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Text, View } from "react-native";
 
 interface AnalyticsBarChartProps {
   data: number[];
@@ -21,17 +21,27 @@ export const AnalyticsBarChart = ({
     <View className="w-full">
       <View className="flex-row items-end" style={{ height }}>
         {data.map((value, index) => {
-          const barHeight = computedMax === 0 ? 0 : (value / computedMax) * height;
+          const barHeight =
+            computedMax === 0 ? 0 : (value / computedMax) * height;
           const label = labels?.[index];
 
           return (
-            <View key={`bar-${index}`} className="items-center" style={{ width: 18, marginHorizontal: 8 }}>
+            <View
+              key={`bar-${index}`}
+              className="items-center"
+              style={{ width: 18, marginHorizontal: 8 }}
+            >
               <View
                 className="w-4 rounded-2xl"
-                style={{ height: Math.max(barHeight, 6), backgroundColor: color }}
+                style={{
+                  height: Math.max(barHeight, 6),
+                  backgroundColor: color,
+                }}
               />
               {label ? (
-                <Text className="mt-2 text-xs font-semibold text-text-tertiary">{label}</Text>
+                <Text className="mt-2 text-xs font-semibold text-text-tertiary">
+                  {label}
+                </Text>
               ) : null}
             </View>
           );

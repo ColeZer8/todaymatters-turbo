@@ -1,8 +1,8 @@
-import type { Json } from '@/lib/supabase/database.types';
+import type { Json } from "@/lib/supabase/database.types";
 
-export type IosLocationSupportStatus = 'notIos' | 'expoGo' | 'available';
+export type IosLocationSupportStatus = "notIos" | "expoGo" | "available";
 
-export type IosLocationSampleSource = 'background';
+export type IosLocationSampleSource = "background";
 
 export interface IosLocationSample {
   recorded_at: string; // ISO timestamp
@@ -17,5 +17,3 @@ export interface IosLocationSample {
   dedupe_key: string;
   raw: Json | null;
 }
-
-

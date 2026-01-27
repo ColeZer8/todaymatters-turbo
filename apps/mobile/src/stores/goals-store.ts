@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ============================================================================
 // Types
@@ -29,12 +29,19 @@ interface GoalsState {
 
   // CRUD Actions
   addGoal: (title: string) => void;
-  updateGoal: (id: string, updates: Partial<Pick<Goal, 'title' | 'color'>>) => void;
+  updateGoal: (
+    id: string,
+    updates: Partial<Pick<Goal, "title" | "color">>,
+  ) => void;
   deleteGoal: (id: string) => void;
 
   // Task Actions
   addTask: (goalId: string, taskName: string) => void;
-  updateTask: (goalId: string, taskId: string, updates: Partial<Pick<GoalTask, 'name' | 'done'>>) => void;
+  updateTask: (
+    goalId: string,
+    taskId: string,
+    updates: Partial<Pick<GoalTask, "name" | "done">>,
+  ) => void;
   toggleTask: (goalId: string, taskId: string) => void;
   deleteTask: (goalId: string, taskId: string) => void;
 
@@ -53,9 +60,17 @@ interface GoalsState {
 // Helpers
 // ============================================================================
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const generateId = () =>
+  `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-const GOAL_COLORS = ['#2563EB', '#16A34A', '#F59E0B', '#EC4899', '#8B5CF6', '#EF4444'];
+const GOAL_COLORS = [
+  "#2563EB",
+  "#16A34A",
+  "#F59E0B",
+  "#EC4899",
+  "#8B5CF6",
+  "#EF4444",
+];
 
 const calculateProgress = (tasks: GoalTask[]): number => {
   if (tasks.length === 0) return 0;
@@ -93,7 +108,7 @@ export const useGoalsStore = create<GoalsState>()(
       updateGoal: (id, updates) => {
         set((state) => ({
           goals: state.goals.map((goal) =>
-            goal.id === id ? { ...goal, ...updates } : goal
+            goal.id === id ? { ...goal, ...updates } : goal,
           ),
         }));
       },
@@ -133,7 +148,7 @@ export const useGoalsStore = create<GoalsState>()(
           goals: state.goals.map((goal) => {
             if (goal.id !== goalId) return goal;
             const updatedTasks = goal.tasks.map((task) =>
-              task.id === taskId ? { ...task, ...updates } : task
+              task.id === taskId ? { ...task, ...updates } : task,
             );
             return {
               ...goal,
@@ -149,7 +164,7 @@ export const useGoalsStore = create<GoalsState>()(
           goals: state.goals.map((goal) => {
             if (goal.id !== goalId) return goal;
             const updatedTasks = goal.tasks.map((task) =>
-              task.id === taskId ? { ...task, done: !task.done } : task
+              task.id === taskId ? { ...task, done: !task.done } : task,
             );
             const progress = calculateProgress(updatedTasks);
             return {
@@ -166,7 +181,9 @@ export const useGoalsStore = create<GoalsState>()(
         set((state) => ({
           goals: state.goals.map((goal) => {
             if (goal.id !== goalId) return goal;
-            const updatedTasks = goal.tasks.filter((task) => task.id !== taskId);
+            const updatedTasks = goal.tasks.filter(
+              (task) => task.id !== taskId,
+            );
             return {
               ...goal,
               tasks: updatedTasks,
@@ -181,15 +198,21 @@ export const useGoalsStore = create<GoalsState>()(
       // ========================================================================
 
       importFromOnboarding: (goalTitles) => {
-        const existingTitles = new Set(get().goals.map((g) => g.title.toLowerCase()));
+        const existingTitles = new Set(
+          get().goals.map((g) => g.title.toLowerCase()),
+        );
         const newGoals: Goal[] = goalTitles
-          .filter((title) => title.trim() && !existingTitles.has(title.toLowerCase().trim()))
+          .filter(
+            (title) =>
+              title.trim() && !existingTitles.has(title.toLowerCase().trim()),
+          )
           .map((title, index) => ({
             id: generateId(),
             title: title.trim(),
             progress: 0,
             tasks: [],
-            color: GOAL_COLORS[(get().goals.length + index) % GOAL_COLORS.length],
+            color:
+              GOAL_COLORS[(get().goals.length + index) % GOAL_COLORS.length],
             createdAt: new Date().toISOString(),
             completedAt: null,
           }));
@@ -213,26 +236,29 @@ export const useGoalsStore = create<GoalsState>()(
       getOverallProgress: () => {
         const { goals } = get();
         if (goals.length === 0) return 0;
-        const totalProgress = goals.reduce((sum, goal) => sum + goal.progress, 0);
+        const totalProgress = goals.reduce(
+          (sum, goal) => sum + goal.progress,
+          0,
+        );
         return totalProgress / goals.length;
       },
 
       getCompletedTasksCount: () => {
         return get().goals.reduce(
           (sum, goal) => sum + goal.tasks.filter((t) => t.done).length,
-          0
+          0,
         );
       },
 
       getPendingTasksCount: () => {
         return get().goals.reduce(
           (sum, goal) => sum + goal.tasks.filter((t) => !t.done).length,
-          0
+          0,
         );
       },
     }),
     {
-      name: 'goals-storage',
+      name: "goals-storage",
       storage: createJSONStorage(() => AsyncStorage),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GoalsState> | undefined;
@@ -243,10 +269,10 @@ export const useGoalsStore = create<GoalsState>()(
         };
       },
       onRehydrateStorage: () => () => {
-        console.log('✅ Goals Store - Hydration complete');
+        console.log("✅ Goals Store - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );
 
 // ============================================================================
@@ -257,9 +283,3 @@ export const selectGoals = (state: GoalsState) => state.goals;
 export const selectGoalById = (id: string) => (state: GoalsState) =>
   state.goals.find((g) => g.id === id);
 export const selectHasHydrated = (state: GoalsState) => state._hasHydrated;
-
-
-
-
-
-

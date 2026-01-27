@@ -1,11 +1,21 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Moon, Briefcase, Users, HeartPulse, Dumbbell, Sparkles } from 'lucide-react-native';
-import type { ComponentType } from 'react';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  Moon,
+  Briefcase,
+  Users,
+  HeartPulse,
+  Dumbbell,
+  Sparkles,
+} from "lucide-react-native";
+import type { ComponentType } from "react";
 
 // Icon name to component mapping for serialization
-const ICON_MAP: Record<string, ComponentType<{ size?: number; color?: string }>> = {
+const ICON_MAP: Record<
+  string,
+  ComponentType<{ size?: number; color?: string }>
+> = {
   Moon,
   Briefcase,
   Users,
@@ -14,7 +24,9 @@ const ICON_MAP: Record<string, ComponentType<{ size?: number; color?: string }>>
   Sparkles,
 };
 
-export function getIdealDayIconByName(iconName: string): ComponentType<{ size?: number; color?: string }> {
+export function getIdealDayIconByName(
+  iconName: string,
+): ComponentType<{ size?: number; color?: string }> {
   return ICON_MAP[iconName] ?? Sparkles;
 }
 
@@ -28,7 +40,7 @@ export interface IdealDayCategory {
   maxHours: number;
 }
 
-export type DayType = 'weekdays' | 'saturday' | 'sunday' | 'custom';
+export type DayType = "weekdays" | "saturday" | "sunday" | "custom";
 
 interface IdealDayState {
   dayType: DayType;
@@ -51,11 +63,51 @@ interface IdealDayState {
 }
 
 const DEFAULT_CATEGORIES: IdealDayCategory[] = [
-  { id: 'sleep', name: 'Sleep', hours: 8, maxHours: 12, color: '#4F8BFF', icon: Moon, iconName: 'Moon' },
-  { id: 'work', name: 'Work', hours: 6.5, maxHours: 12, color: '#1FA56E', icon: Briefcase, iconName: 'Briefcase' },
-  { id: 'family', name: 'Family', hours: 3, maxHours: 6, color: '#F59E0B', icon: Users, iconName: 'Users' },
-  { id: 'prayer', name: 'Prayer', hours: 1, maxHours: 3, color: '#F33C83', icon: HeartPulse, iconName: 'HeartPulse' },
-  { id: 'fitness', name: 'Fitness', hours: 1, maxHours: 3, color: '#F95C2E', icon: Dumbbell, iconName: 'Dumbbell' },
+  {
+    id: "sleep",
+    name: "Sleep",
+    hours: 8,
+    maxHours: 12,
+    color: "#4F8BFF",
+    icon: Moon,
+    iconName: "Moon",
+  },
+  {
+    id: "work",
+    name: "Work",
+    hours: 6.5,
+    maxHours: 12,
+    color: "#1FA56E",
+    icon: Briefcase,
+    iconName: "Briefcase",
+  },
+  {
+    id: "family",
+    name: "Family",
+    hours: 3,
+    maxHours: 6,
+    color: "#F59E0B",
+    icon: Users,
+    iconName: "Users",
+  },
+  {
+    id: "prayer",
+    name: "Prayer",
+    hours: 1,
+    maxHours: 3,
+    color: "#F33C83",
+    icon: HeartPulse,
+    iconName: "HeartPulse",
+  },
+  {
+    id: "fitness",
+    name: "Fitness",
+    hours: 1,
+    maxHours: 3,
+    color: "#F95C2E",
+    icon: Dumbbell,
+    iconName: "Dumbbell",
+  },
 ];
 
 export function getIdealDayDefaultCategories(): IdealDayCategory[] {
@@ -90,7 +142,7 @@ const restoreIcon = (cat: SerializableCategory): IdealDayCategory => ({
 
 // Strip icons from all categories for storage
 const serializeCategoriesByType = (
-  categoriesByType: Record<DayType, IdealDayCategory[]>
+  categoriesByType: Record<DayType, IdealDayCategory[]>,
 ): Record<DayType, SerializableCategory[]> => ({
   weekdays: categoriesByType.weekdays.map(stripIcon),
   saturday: categoriesByType.saturday.map(stripIcon),
@@ -100,7 +152,7 @@ const serializeCategoriesByType = (
 
 // Restore icons to all categories after hydration
 const hydrateCategoriesByType = (
-  categoriesByType: Record<DayType, SerializableCategory[]>
+  categoriesByType: Record<DayType, SerializableCategory[]>,
 ): Record<DayType, IdealDayCategory[]> => ({
   weekdays: (categoriesByType.weekdays || []).map(restoreIcon),
   saturday: (categoriesByType.saturday || []).map(restoreIcon),
@@ -122,7 +174,7 @@ const clampHours = (
 export const useIdealDayStore = create<IdealDayState>()(
   persist(
     (set, get) => ({
-      dayType: 'weekdays',
+      dayType: "weekdays",
       categoriesByType: {
         weekdays: [...DEFAULT_CATEGORIES],
         saturday: [...DEFAULT_CATEGORIES],
@@ -154,30 +206,38 @@ export const useIdealDayStore = create<IdealDayState>()(
 
           // If leaving custom mode while editing a specific day, persist the current custom buffer
           // so switching tabs doesn't "lose" edits or cause confusing UI.
-          if (state.dayType === 'custom' && type !== 'custom') {
+          if (state.dayType === "custom" && type !== "custom") {
             const editingDay = state.selectedDaysByType.custom?.[0];
             if (editingDay !== undefined) {
               nextCustomDayConfigs = {
                 ...state.customDayConfigs,
-                [editingDay]: state.categoriesByType.custom.map((cat) => ({ ...cat })),
+                [editingDay]: state.categoriesByType.custom.map((cat) => ({
+                  ...cat,
+                })),
               };
             }
           }
 
           // If entering custom mode and a day is already selected, ensure we load that day's buffer
           // (or derive it from the base template) so the UI doesn't flicker/blank.
-          if (type === 'custom') {
+          if (type === "custom") {
             const editingDay = state.selectedDaysByType.custom?.[0];
             if (editingDay !== undefined) {
               const existing = nextCustomDayConfigs[editingDay];
               const baseType: DayType =
-                editingDay < 5 ? 'weekdays' : editingDay === 5 ? 'saturday' : 'sunday';
+                editingDay < 5
+                  ? "weekdays"
+                  : editingDay === 5
+                    ? "saturday"
+                    : "sunday";
               const fallbackBase = state.categoriesByType[baseType];
-              const nextCustom =
-                existing?.length
-                  ? existing.map((cat) => ({ ...cat }))
-                  : fallbackBase.map((cat) => ({ ...cat }));
-              nextCategoriesByType = { ...state.categoriesByType, custom: nextCustom };
+              const nextCustom = existing?.length
+                ? existing.map((cat) => ({ ...cat }))
+                : fallbackBase.map((cat) => ({ ...cat }));
+              nextCategoriesByType = {
+                ...state.categoriesByType,
+                custom: nextCustom,
+              };
             }
           }
 
@@ -191,15 +251,21 @@ export const useIdealDayStore = create<IdealDayState>()(
         set((state) => {
           const current = state.categoriesByType[state.dayType] || [];
           const total = current.reduce((sum, cat) => sum + cat.hours, 0);
-          const newHours = clampHours(hours, 24, total, current.find(c => c.id === id)?.hours || 0, current.find(c => c.id === id)?.maxHours || 12);
-          console.log(`⏱️ setHours: ${id} -> ${newHours} (dayType: ${state.dayType})`);
+          const newHours = clampHours(
+            hours,
+            24,
+            total,
+            current.find((c) => c.id === id)?.hours || 0,
+            current.find((c) => c.id === id)?.maxHours || 12,
+          );
+          console.log(
+            `⏱️ setHours: ${id} -> ${newHours} (dayType: ${state.dayType})`,
+          );
           return {
             categoriesByType: {
               ...state.categoriesByType,
               [state.dayType]: current.map((cat) =>
-                cat.id === id
-                  ? { ...cat, hours: newHours }
-                  : cat
+                cat.id === id ? { ...cat, hours: newHours } : cat,
               ),
             },
           };
@@ -217,7 +283,7 @@ export const useIdealDayStore = create<IdealDayState>()(
                 maxHours: 6,
                 color,
                 icon: Sparkles,
-                iconName: 'Sparkles',
+                iconName: "Sparkles",
               },
             ],
           },
@@ -226,22 +292,25 @@ export const useIdealDayStore = create<IdealDayState>()(
         set((state) => ({
           categoriesByType: {
             ...state.categoriesByType,
-            [state.dayType]: state.categoriesByType[state.dayType].filter((cat) => cat.id !== id),
+            [state.dayType]: state.categoriesByType[state.dayType].filter(
+              (cat) => cat.id !== id,
+            ),
           },
         })),
       toggleDay: (dayIndex) =>
         set((state) => {
           // Only custom mode allows toggling days
-          if (state.dayType !== 'custom') return state;
-          
+          if (state.dayType !== "custom") return state;
+
           const currentSelection = state.selectedDaysByType.custom || [];
           const currentlyEditingDay = currentSelection[0]; // Single day or undefined
           const isSelected = currentSelection.includes(dayIndex);
-          
+
           if (isSelected) {
             // Tapping the same day = REMOVE custom override entirely
             // Delete from customDayConfigs, clear selection, day reverts to base
-            const { [dayIndex]: _, ...remainingConfigs } = state.customDayConfigs;
+            const { [dayIndex]: _, ...remainingConfigs } =
+              state.customDayConfigs;
             return {
               selectedDaysByType: {
                 ...state.selectedDaysByType,
@@ -254,22 +323,30 @@ export const useIdealDayStore = create<IdealDayState>()(
             // First, SAVE current editing day's config (if any)
             let updatedConfigs = { ...state.customDayConfigs };
             if (currentlyEditingDay !== undefined) {
-              updatedConfigs[currentlyEditingDay] = state.categoriesByType.custom.map(cat => ({ ...cat }));
+              updatedConfigs[currentlyEditingDay] =
+                state.categoriesByType.custom.map((cat) => ({ ...cat }));
             }
-            
+
             // Load the new day's config (from saved custom or from base template)
             const existingConfig = updatedConfigs[dayIndex];
             let newCustomCategories: IdealDayCategory[];
-            
+
             if (existingConfig) {
               // Day already has a saved custom config - load it
-              newCustomCategories = existingConfig.map(cat => ({ ...cat }));
+              newCustomCategories = existingConfig.map((cat) => ({ ...cat }));
             } else {
               // No saved config - copy from base template
-              const baseType = dayIndex < 5 ? 'weekdays' : dayIndex === 5 ? 'saturday' : 'sunday';
-              newCustomCategories = state.categoriesByType[baseType].map(cat => ({ ...cat }));
+              const baseType =
+                dayIndex < 5
+                  ? "weekdays"
+                  : dayIndex === 5
+                    ? "saturday"
+                    : "sunday";
+              newCustomCategories = state.categoriesByType[baseType].map(
+                (cat) => ({ ...cat }),
+              );
             }
-            
+
             return {
               selectedDaysByType: {
                 ...state.selectedDaysByType,
@@ -285,15 +362,18 @@ export const useIdealDayStore = create<IdealDayState>()(
         }),
     }),
     {
-      name: 'ideal-day-storage',
+      name: "ideal-day-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => {
         // Serialize customDayConfigs (strip icons)
-        const serializedCustomConfigs: Record<number, SerializableCategory[]> = {};
-        for (const [dayIdx, categories] of Object.entries(state.customDayConfigs)) {
+        const serializedCustomConfigs: Record<number, SerializableCategory[]> =
+          {};
+        for (const [dayIdx, categories] of Object.entries(
+          state.customDayConfigs,
+        )) {
           serializedCustomConfigs[Number(dayIdx)] = categories.map(stripIcon);
         }
-        
+
         const serialized = {
           dayType: state.dayType,
           // Strip non-serializable icon functions before saving
@@ -302,21 +382,31 @@ export const useIdealDayStore = create<IdealDayState>()(
           customDayConfigs: serializedCustomConfigs,
         };
         // Log what we're saving
-        const weekdayHours = serialized.categoriesByType.weekdays.map(c => `${c.name}:${c.hours}`).join(', ');
-        const customDays = Object.keys(serializedCustomConfigs).join(', ') || 'none';
-        console.log(`💾 Saving: ${serialized.dayType} | weekdays: ${weekdayHours} | custom days: ${customDays}`);
+        const weekdayHours = serialized.categoriesByType.weekdays
+          .map((c) => `${c.name}:${c.hours}`)
+          .join(", ");
+        const customDays =
+          Object.keys(serializedCustomConfigs).join(", ") || "none";
+        console.log(
+          `💾 Saving: ${serialized.dayType} | weekdays: ${weekdayHours} | custom days: ${customDays}`,
+        );
         return serialized;
       },
       // Custom merge to restore icons from persisted data
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as {
-          dayType?: DayType;
-          categoriesByType?: Record<DayType, SerializableCategory[]>;
-          selectedDaysByType?: Record<DayType, number[]>;
-          customDayConfigs?: Record<number, SerializableCategory[]>;
-        } | undefined;
+        const persisted = persistedState as
+          | {
+              dayType?: DayType;
+              categoriesByType?: Record<DayType, SerializableCategory[]>;
+              selectedDaysByType?: Record<DayType, number[]>;
+              customDayConfigs?: Record<number, SerializableCategory[]>;
+            }
+          | undefined;
 
-        console.log('🔀 Ideal Day - Merging persisted state:', persisted ? 'has data' : 'no data');
+        console.log(
+          "🔀 Ideal Day - Merging persisted state:",
+          persisted ? "has data" : "no data",
+        );
 
         if (!persisted) {
           return { ...currentState, _hasHydrated: true };
@@ -324,8 +414,11 @@ export const useIdealDayStore = create<IdealDayState>()(
 
         // Log what we're restoring
         if (persisted.categoriesByType?.weekdays) {
-          console.log('🔀 Ideal Day - Persisted weekday hours:', 
-            persisted.categoriesByType.weekdays.map(c => `${c.name}:${c.hours}`).join(', ')
+          console.log(
+            "🔀 Ideal Day - Persisted weekday hours:",
+            persisted.categoriesByType.weekdays
+              .map((c) => `${c.name}:${c.hours}`)
+              .join(", "),
           );
         }
 
@@ -337,29 +430,35 @@ export const useIdealDayStore = create<IdealDayState>()(
         // Restore customDayConfigs with icons
         const hydratedCustomConfigs: Record<number, IdealDayCategory[]> = {};
         if (persisted.customDayConfigs) {
-          for (const [dayIdx, categories] of Object.entries(persisted.customDayConfigs)) {
+          for (const [dayIdx, categories] of Object.entries(
+            persisted.customDayConfigs,
+          )) {
             hydratedCustomConfigs[Number(dayIdx)] = categories.map(restoreIcon);
           }
         }
 
-        console.log('🔀 Ideal Day - Restored dayType:', persisted.dayType);
-        console.log('🔀 Ideal Day - Restored custom days:', Object.keys(hydratedCustomConfigs).join(', ') || 'none');
+        console.log("🔀 Ideal Day - Restored dayType:", persisted.dayType);
+        console.log(
+          "🔀 Ideal Day - Restored custom days:",
+          Object.keys(hydratedCustomConfigs).join(", ") || "none",
+        );
 
         return {
           ...currentState,
           dayType: persisted.dayType ?? currentState.dayType,
           categoriesByType: hydratedCategories,
-          selectedDaysByType: persisted.selectedDaysByType ?? currentState.selectedDaysByType,
+          selectedDaysByType:
+            persisted.selectedDaysByType ?? currentState.selectedDaysByType,
           customDayConfigs: hydratedCustomConfigs,
           _hasHydrated: true,
         };
       },
       onRehydrateStorage: () => (state, error) => {
         if (error) {
-          console.error('❌ Ideal Day - Rehydration error:', error);
+          console.error("❌ Ideal Day - Rehydration error:", error);
         }
-        console.log('✅ Ideal Day - Hydration complete');
+        console.log("✅ Ideal Day - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );

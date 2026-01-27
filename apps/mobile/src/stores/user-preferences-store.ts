@@ -1,7 +1,7 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type GapFillingPreference = 'conservative' | 'aggressive' | 'manual';
-export type VerificationStrictness = 'lenient' | 'balanced' | 'strict';
+export type GapFillingPreference = "conservative" | "aggressive" | "manual";
+export type VerificationStrictness = "lenient" | "balanced" | "strict";
 
 export interface UserDataPreferences {
   gapFillingPreference: GapFillingPreference;
@@ -14,12 +14,12 @@ export interface UserDataPreferences {
 }
 
 export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
-  gapFillingPreference: 'conservative',
+  gapFillingPreference: "conservative",
   confidenceThreshold: 0.6,
   autoSuggestEvents: true,
   verificationAlerts: true,
   realTimeUpdates: false,
-  verificationStrictness: 'balanced',
+  verificationStrictness: "balanced",
   big3Enabled: true, // TEMPORARY: Set to true for testing without database tables
 };
 

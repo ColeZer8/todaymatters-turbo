@@ -1,10 +1,33 @@
-import { useState } from 'react';
-import { ArrowRight, Plus, X, Cross, Users, Briefcase, Moon, TrendingUp, Heart, Home, Palette, Star } from 'lucide-react-native';
-import { Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { CoreValue } from '@/stores/onboarding-store';
+import { useState } from "react";
+import {
+  ArrowRight,
+  Plus,
+  X,
+  Cross,
+  Users,
+  Briefcase,
+  Moon,
+  TrendingUp,
+  Heart,
+  Home,
+  Palette,
+  Star,
+} from "lucide-react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  StyleSheet,
+} from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { CoreValue } from "@/stores/onboarding-store";
 
 interface CoreValuesTemplateProps {
   step?: number;
@@ -23,7 +46,7 @@ const ICON_MAP: Record<string, typeof Cross> = {
   users: Users,
   briefcase: Briefcase,
   moon: Moon,
-  'trending-up': TrendingUp,
+  "trending-up": TrendingUp,
   heart: Heart,
   home: Home,
   palette: Palette,
@@ -31,47 +54,54 @@ const ICON_MAP: Record<string, typeof Cross> = {
 };
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
   elevation: 3,
 };
 
-const VALUE_EXPLANATIONS: Record<string, { description: string; answer: string }> = {
+const VALUE_EXPLANATIONS: Record<
+  string,
+  { description: string; answer: string }
+> = {
   faith: {
-    description: 'Meaning and spiritual life rooted in purpose and eternal perspective.',
-    answer: 'Why do I live the way I live?',
+    description:
+      "Meaning and spiritual life rooted in purpose and eternal perspective.",
+    answer: "Why do I live the way I live?",
   },
   family: {
-    description: 'Relationships and the people you are called to love and lead.',
-    answer: 'Who am I responsible to love well?',
+    description:
+      "Relationships and the people you are called to love and lead.",
+    answer: "Who am I responsible to love well?",
   },
   health: {
-    description: 'Physical, mental, and emotional vitality that gives you capacity.',
-    answer: 'Do I have the capacity to live fully?',
+    description:
+      "Physical, mental, and emotional vitality that gives you capacity.",
+    answer: "Do I have the capacity to live fully?",
   },
   work: {
-    description: 'Calling and contribution through how you create value and serve.',
-    answer: 'How do I use my gifts to serve and provide?',
+    description:
+      "Calling and contribution through how you create value and serve.",
+    answer: "How do I use my gifts to serve and provide?",
   },
-  'personal-growth': {
-    description: 'Intentional growth in character, skills, and mindset.',
-    answer: 'Am I becoming a better version of myself?',
+  "personal-growth": {
+    description: "Intentional growth in character, skills, and mindset.",
+    answer: "Am I becoming a better version of myself?",
   },
   finances: {
-    description: 'Stewardship and security in how you manage resources.',
-    answer: 'Am I stewarding resources wisely and responsibly?',
+    description: "Stewardship and security in how you manage resources.",
+    answer: "Am I stewarding resources wisely and responsibly?",
   },
 };
 
 const VALUE_COLORS: Record<string, string> = {
-  faith: '#F33C83',
-  family: '#F59E0B',
-  health: '#F95C2E',
-  work: '#1FA56E',
-  'personal-growth': '#8B5CF6',
-  finances: '#10B981',
+  faith: "#F33C83",
+  family: "#F59E0B",
+  health: "#F95C2E",
+  work: "#1FA56E",
+  "personal-growth": "#8B5CF6",
+  finances: "#10B981",
 };
 
 export const CoreValuesTemplate = ({
@@ -85,7 +115,7 @@ export const CoreValuesTemplate = ({
   onBack,
   isSelectionLocked = false,
 }: CoreValuesTemplateProps) => {
-  const [newValueText, setNewValueText] = useState('');
+  const [newValueText, setNewValueText] = useState("");
   const [isAddingCustom, setIsAddingCustom] = useState(false);
 
   const selectedCount = coreValues.filter((v) => v.isSelected).length;
@@ -94,7 +124,7 @@ export const CoreValuesTemplate = ({
     if (!onAddValue) return;
     if (newValueText.trim()) {
       onAddValue(newValueText.trim());
-      setNewValueText('');
+      setNewValueText("");
       setIsAddingCustom(false);
     }
   };
@@ -106,8 +136,8 @@ export const CoreValuesTemplate = ({
       title="Core Values Framework"
       subtitle={
         isSelectionLocked
-          ? 'These six values shape how Today Matters classifies your time.'
-          : 'Start with the six core values. Add more if you want.'
+          ? "These six values shape how Today Matters classifies your time."
+          : "Start with the six core values. Add more if you want."
       }
       onBack={onBack}
       footer={
@@ -136,14 +166,14 @@ export const CoreValuesTemplate = ({
             </View>
           </View>
           <Text className="mt-3 text-sm leading-5 text-text-secondary">
-            We use one shared framework so your calendar, habits, and coaching all speak the same
-            language. Every activity gets tagged to one primary value, then (optionally) a
-            sub-category to explain why.
+            We use one shared framework so your calendar, habits, and coaching
+            all speak the same language. Every activity gets tagged to one
+            primary value, then (optionally) a sub-category to explain why.
           </Text>
           {isSelectionLocked && (
             <Text className="mt-3 text-sm leading-5 text-text-secondary">
-              These six values are fixed so your time stays consistent. Next you'll add
-              sub-categories that explain why each activity matters.
+              These six values are fixed so your time stays consistent. Next
+              you'll add sub-categories that explain why each activity matters.
             </Text>
           )}
         </View>
@@ -166,7 +196,7 @@ export const CoreValuesTemplate = ({
             const isSelected = value.isSelected;
             const details = VALUE_EXPLANATIONS[value.id];
 
-            const accentColor = VALUE_COLORS[value.id] ?? '#2563EB';
+            const accentColor = VALUE_COLORS[value.id] ?? "#2563EB";
 
             if (isSelectionLocked) {
               return (
@@ -194,7 +224,10 @@ export const CoreValuesTemplate = ({
                     </View>
                   </View>
                   {details ? (
-                    <Text className="mt-3 text-sm font-semibold" style={{ color: accentColor }}>
+                    <Text
+                      className="mt-3 text-sm font-semibold"
+                      style={{ color: accentColor }}
+                    >
                       {details.answer}
                     </Text>
                   ) : null}
@@ -211,21 +244,24 @@ export const CoreValuesTemplate = ({
                 disabled={isSelectionLocked}
                 className={`flex-row items-center gap-2 rounded-2xl border px-4 py-3 ${
                   isSelected
-                    ? 'border-brand-primary bg-[#EEF2FF]'
-                    : 'border-[#E4E8F0] bg-white'
+                    ? "border-brand-primary bg-[#EEF2FF]"
+                    : "border-[#E4E8F0] bg-white"
                 }`}
                 style={[cardShadowStyle, { opacity: isSelected ? 1 : 0.85 }]}
               >
                 <View
                   className={`h-9 w-9 items-center justify-center rounded-xl ${
-                    isSelected ? 'bg-brand-primary' : 'bg-[#F1F5F9]'
+                    isSelected ? "bg-brand-primary" : "bg-[#F1F5F9]"
                   }`}
                 >
-                  <IconComponent size={18} color={isSelected ? '#fff' : '#64748B'} />
+                  <IconComponent
+                    size={18}
+                    color={isSelected ? "#fff" : "#64748B"}
+                  />
                 </View>
                 <Text
                   className={`text-[15px] font-semibold ${
-                    isSelected ? 'text-brand-primary' : 'text-text-primary'
+                    isSelected ? "text-brand-primary" : "text-text-primary"
                   }`}
                 >
                   {value.label}
@@ -267,7 +303,7 @@ export const CoreValuesTemplate = ({
                     placeholderTextColor="#94A3B8"
                     autoFocus
                     className="flex-1 rounded-xl bg-[#F8FAFC] px-4 py-3 text-[15px] text-text-primary"
-                    style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
+                    style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
                     onSubmitEditing={handleAddCustom}
                   />
                   <Pressable
@@ -276,22 +312,28 @@ export const CoreValuesTemplate = ({
                     disabled={!newValueText.trim()}
                     className="rounded-xl bg-brand-primary px-4 py-3"
                     style={({ pressed }) => [
-                      { opacity: !newValueText.trim() ? 0.5 : pressed ? 0.9 : 1 },
+                      {
+                        opacity: !newValueText.trim() ? 0.5 : pressed ? 0.9 : 1,
+                      },
                     ]}
                   >
-                    <Text className="text-[15px] font-semibold text-white">Add</Text>
+                    <Text className="text-[15px] font-semibold text-white">
+                      Add
+                    </Text>
                   </Pressable>
                 </View>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {
                     setIsAddingCustom(false);
-                    setNewValueText('');
+                    setNewValueText("");
                   }}
                   className="items-center py-2 mt-2"
                   style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
                 >
-                  <Text className="text-[14px] font-semibold text-[#94A3B8]">Cancel</Text>
+                  <Text className="text-[14px] font-semibold text-[#94A3B8]">
+                    Cancel
+                  </Text>
                 </Pressable>
               </View>
             ) : (

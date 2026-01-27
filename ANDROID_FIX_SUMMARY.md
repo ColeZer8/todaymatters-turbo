@@ -15,11 +15,13 @@ The app was opening **general Android Settings** instead of the **specific Usage
 **File:** `apps/mobile/src/app/permissions.tsx`
 
 **Before:**
+
 ```typescript
 await Linking.openSettings(); // ❌ Opens general Settings
 ```
 
 **After:**
+
 ```typescript
 await openUsageAccessSettingsSafeAsync(); // ✅ Opens Usage Access screen directly
 ```
@@ -31,18 +33,21 @@ This now opens the **exact Settings screen** where the user needs to enable Usag
 ## What Your Client Needs to Do
 
 ### Step 1: Update the App
+
 - Pull the latest code with this fix
 - Rebuild and reinstall the app on the physical device
 
 ### Step 2: Enable Usage Access (Screen Time)
 
 When the client taps "Enable Screen Time" in the app:
+
 1. The app will now open the **Usage Access settings screen** directly
 2. Client should see "TodayMatters" in the list
 3. Client must **toggle it ON**
 4. Return to the app
 
 **Manual Path (if needed):**
+
 - Settings > Apps > Special app access > Usage access > TodayMatters > Enable
 
 ### Step 3: Verify Background Location
@@ -54,15 +59,18 @@ When the client taps "Enable Screen Time" in the app:
 ### Step 4: Check Battery Optimization (Optional but Recommended)
 
 Some devices kill background tasks even with permissions:
+
 1. Settings > Apps > TodayMatters > Battery
 2. Select **"Unrestricted"** or **"Not optimized"**
 
 **Alternative path:**
+
 - Settings > Battery > Battery optimization > TodayMatters > Don't optimize
 
 ### Step 5: Restart App
 
 After making changes:
+
 1. Force stop the app
 2. Reopen it
 3. Wait 5-10 minutes
@@ -84,7 +92,7 @@ The app should show a persistent notification: **"TodayMatters is tracking your 
 Some manufacturers have additional restrictions:
 
 - **Samsung**: May need "Allow background activity" toggle
-- **Xiaomi**: May need "Autostart" permission  
+- **Xiaomi**: May need "Autostart" permission
 - **Huawei**: May need "Protected apps" whitelist
 - **OnePlus**: May need battery optimization exemption
 
@@ -96,7 +104,7 @@ After the fix, run this SQL to verify data collection:
 
 ```sql
 -- Check if data is being collected
-SELECT 
+SELECT
   'Location Samples (last 24h)' AS type,
   COUNT(*) AS count,
   MAX(recorded_at) AS latest
@@ -106,7 +114,7 @@ WHERE user_id = 'CLIENT_USER_ID'
 
 UNION ALL
 
-SELECT 
+SELECT
   'Screen Time Daily (last 7 days)' AS type,
   COUNT(*) AS count,
   MAX(local_date)::text AS latest
@@ -121,11 +129,13 @@ WHERE user_id = 'CLIENT_USER_ID'
 ## Why Simulator Works But Physical Device Doesn't
 
 **Simulator:**
+
 - Often has relaxed permission restrictions
 - May auto-grant certain permissions
 - Battery optimization typically disabled
 
 **Physical Device:**
+
 - Strict permission enforcement
 - Usage Access **must** be manually enabled
 - Battery optimization often enabled by default

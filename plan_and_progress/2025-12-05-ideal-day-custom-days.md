@@ -68,10 +68,10 @@ Enhance the Ideal Day page with visual indicators showing which days have been c
 
 ### Visual Design
 
-| Indicator | Position | Color | Meaning |
-|-----------|----------|-------|---------|
-| Blue dot (6px) | Top-right | `#2563EB` | Base template configured |
-| Orange dot (10px) | Top-left | `#F59E0B` + white border | Custom override active |
+| Indicator         | Position  | Color                    | Meaning                  |
+| ----------------- | --------- | ------------------------ | ------------------------ |
+| Blue dot (6px)    | Top-right | `#2563EB`                | Base template configured |
+| Orange dot (10px) | Top-left  | `#F59E0B` + white border | Custom override active   |
 
 ### User Flow
 
@@ -88,10 +88,3 @@ Enhance the Ideal Day page with visual indicators showing which days have been c
 - Consider adding visual feedback when auto-saving (subtle toast or animation)
 - May want to show which base template a custom day inherited from
 - Could add "reset to base" button in custom mode UI
-
-
-
-
-
-
-

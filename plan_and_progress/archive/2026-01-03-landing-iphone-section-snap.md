@@ -26,7 +26,7 @@ Make the iPhone/feature scroller section snap with the same “panel-by-panel”
 ## Verification
 
 - Manual QA: scroll `http://localhost:3000` through the iPhone section and confirm snapping locks each panel.
- - Programmatic check: confirmed 4 snap points with `scrollSnapStop: always`, `scrollSnapAlign: start`, and scroll snaps to each panel boundary.
+- Programmatic check: confirmed 4 snap points with `scrollSnapStop: always`, `scrollSnapAlign: start`, and scroll snaps to each panel boundary.
 
 ## Outcomes
 
@@ -35,4 +35,3 @@ Make the iPhone/feature scroller section snap with the same “panel-by-panel”
 ## Follow-ups
 
 - None.
-

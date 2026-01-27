@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ============================================================================
 // Types
@@ -33,12 +33,24 @@ interface InitiativesState {
 
   // CRUD Actions
   addInitiative: (title: string, description?: string) => void;
-  updateInitiative: (id: string, updates: Partial<Pick<Initiative, 'title' | 'description' | 'dueDate' | 'teamSize' | 'color'>>) => void;
+  updateInitiative: (
+    id: string,
+    updates: Partial<
+      Pick<
+        Initiative,
+        "title" | "description" | "dueDate" | "teamSize" | "color"
+      >
+    >,
+  ) => void;
   deleteInitiative: (id: string) => void;
 
   // Milestone Actions
   addMilestone: (initiativeId: string, name: string, dueDate?: string) => void;
-  updateMilestone: (initiativeId: string, milestoneId: string, updates: Partial<Pick<Milestone, 'name' | 'completed' | 'dueDate'>>) => void;
+  updateMilestone: (
+    initiativeId: string,
+    milestoneId: string,
+    updates: Partial<Pick<Milestone, "name" | "completed" | "dueDate">>,
+  ) => void;
   toggleMilestone: (initiativeId: string, milestoneId: string) => void;
   deleteMilestone: (initiativeId: string, milestoneId: string) => void;
 
@@ -54,16 +66,26 @@ interface InitiativesState {
   getOverallProgress: () => number;
   getCompletedMilestonesCount: () => number;
   getPendingMilestonesCount: () => number;
-  getUpcomingDeadlines: (daysAhead?: number) => { initiative: Initiative; milestone: Milestone }[];
+  getUpcomingDeadlines: (
+    daysAhead?: number,
+  ) => { initiative: Initiative; milestone: Milestone }[];
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const generateId = () =>
+  `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-const INITIATIVE_COLORS = ['#2563EB', '#16A34A', '#F59E0B', '#EC4899', '#8B5CF6', '#EF4444'];
+const INITIATIVE_COLORS = [
+  "#2563EB",
+  "#16A34A",
+  "#F59E0B",
+  "#EC4899",
+  "#8B5CF6",
+  "#EF4444",
+];
 
 const calculateProgress = (milestones: Milestone[]): number => {
   if (milestones.length === 0) return 0;
@@ -75,7 +97,7 @@ const calculateProgress = (milestones: Milestone[]): number => {
 const getDefaultDueDate = () => {
   const date = new Date();
   date.setDate(date.getDate() + 30);
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 };
 
 // ============================================================================
@@ -92,7 +114,7 @@ export const useInitiativesStore = create<InitiativesState>()(
       // CRUD Actions
       // ========================================================================
 
-      addInitiative: (title, description = '') => {
+      addInitiative: (title, description = "") => {
         const newInitiative: Initiative = {
           id: generateId(),
           title: title.trim(),
@@ -101,24 +123,31 @@ export const useInitiativesStore = create<InitiativesState>()(
           dueDate: getDefaultDueDate(),
           teamSize: 1,
           milestones: [],
-          color: INITIATIVE_COLORS[get().initiatives.length % INITIATIVE_COLORS.length],
+          color:
+            INITIATIVE_COLORS[
+              get().initiatives.length % INITIATIVE_COLORS.length
+            ],
           createdAt: new Date().toISOString(),
           completedAt: null,
         };
-        set((state) => ({ initiatives: [...state.initiatives, newInitiative] }));
+        set((state) => ({
+          initiatives: [...state.initiatives, newInitiative],
+        }));
       },
 
       updateInitiative: (id, updates) => {
         set((state) => ({
           initiatives: state.initiatives.map((initiative) =>
-            initiative.id === id ? { ...initiative, ...updates } : initiative
+            initiative.id === id ? { ...initiative, ...updates } : initiative,
           ),
         }));
       },
 
       deleteInitiative: (id) => {
         set((state) => ({
-          initiatives: state.initiatives.filter((initiative) => initiative.id !== id),
+          initiatives: state.initiatives.filter(
+            (initiative) => initiative.id !== id,
+          ),
         }));
       },
 
@@ -152,7 +181,9 @@ export const useInitiativesStore = create<InitiativesState>()(
           initiatives: state.initiatives.map((initiative) => {
             if (initiative.id !== initiativeId) return initiative;
             const updatedMilestones = initiative.milestones.map((milestone) =>
-              milestone.id === milestoneId ? { ...milestone, ...updates } : milestone
+              milestone.id === milestoneId
+                ? { ...milestone, ...updates }
+                : milestone,
             );
             return {
               ...initiative,
@@ -170,7 +201,7 @@ export const useInitiativesStore = create<InitiativesState>()(
             const updatedMilestones = initiative.milestones.map((milestone) =>
               milestone.id === milestoneId
                 ? { ...milestone, completed: !milestone.completed }
-                : milestone
+                : milestone,
             );
             const progress = calculateProgress(updatedMilestones);
             return {
@@ -188,7 +219,7 @@ export const useInitiativesStore = create<InitiativesState>()(
           initiatives: state.initiatives.map((initiative) => {
             if (initiative.id !== initiativeId) return initiative;
             const updatedMilestones = initiative.milestones.filter(
-              (milestone) => milestone.id !== milestoneId
+              (milestone) => milestone.id !== milestoneId,
             );
             return {
               ...initiative,
@@ -212,7 +243,7 @@ export const useInitiativesStore = create<InitiativesState>()(
                   progress: Math.max(0, Math.min(1, progress)),
                   completedAt: progress >= 1 ? new Date().toISOString() : null,
                 }
-              : initiative
+              : initiative,
           ),
         }));
       },
@@ -223,27 +254,33 @@ export const useInitiativesStore = create<InitiativesState>()(
 
       importFromOnboarding: (initiativeTitles) => {
         const existingTitles = new Set(
-          get().initiatives.map((i) => i.title.toLowerCase())
+          get().initiatives.map((i) => i.title.toLowerCase()),
         );
         const newInitiatives: Initiative[] = initiativeTitles
           .filter(
-            (title) => title.trim() && !existingTitles.has(title.toLowerCase().trim())
+            (title) =>
+              title.trim() && !existingTitles.has(title.toLowerCase().trim()),
           )
           .map((title, index) => ({
             id: generateId(),
             title: title.trim(),
-            description: '',
+            description: "",
             progress: 0,
             dueDate: getDefaultDueDate(),
             teamSize: 1,
             milestones: [],
-            color: INITIATIVE_COLORS[(get().initiatives.length + index) % INITIATIVE_COLORS.length],
+            color:
+              INITIATIVE_COLORS[
+                (get().initiatives.length + index) % INITIATIVE_COLORS.length
+              ],
             createdAt: new Date().toISOString(),
             completedAt: null,
           }));
 
         if (newInitiatives.length > 0) {
-          set((state) => ({ initiatives: [...state.initiatives, ...newInitiatives] }));
+          set((state) => ({
+            initiatives: [...state.initiatives, ...newInitiatives],
+          }));
         }
       },
 
@@ -261,7 +298,10 @@ export const useInitiativesStore = create<InitiativesState>()(
       getOverallProgress: () => {
         const { initiatives } = get();
         if (initiatives.length === 0) return 0;
-        const totalProgress = initiatives.reduce((sum, i) => sum + i.progress, 0);
+        const totalProgress = initiatives.reduce(
+          (sum, i) => sum + i.progress,
+          0,
+        );
         return totalProgress / initiatives.length;
       },
 
@@ -269,7 +309,7 @@ export const useInitiativesStore = create<InitiativesState>()(
         return get().initiatives.reduce(
           (sum, initiative) =>
             sum + initiative.milestones.filter((m) => m.completed).length,
-          0
+          0,
         );
       },
 
@@ -277,7 +317,7 @@ export const useInitiativesStore = create<InitiativesState>()(
         return get().initiatives.reduce(
           (sum, initiative) =>
             sum + initiative.milestones.filter((m) => !m.completed).length,
-          0
+          0,
         );
       },
 
@@ -286,7 +326,8 @@ export const useInitiativesStore = create<InitiativesState>()(
         const cutoff = new Date();
         cutoff.setDate(now.getDate() + daysAhead);
 
-        const deadlines: { initiative: Initiative; milestone: Milestone }[] = [];
+        const deadlines: { initiative: Initiative; milestone: Milestone }[] =
+          [];
 
         get().initiatives.forEach((initiative) => {
           initiative.milestones.forEach((milestone) => {
@@ -307,10 +348,12 @@ export const useInitiativesStore = create<InitiativesState>()(
       },
     }),
     {
-      name: 'initiatives-storage',
+      name: "initiatives-storage",
       storage: createJSONStorage(() => AsyncStorage),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<InitiativesState> | undefined;
+        const persisted = persistedState as
+          | Partial<InitiativesState>
+          | undefined;
         return {
           ...currentState,
           ...persisted,
@@ -318,10 +361,10 @@ export const useInitiativesStore = create<InitiativesState>()(
         };
       },
       onRehydrateStorage: () => () => {
-        console.log('✅ Initiatives Store - Hydration complete');
+        console.log("✅ Initiatives Store - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );
 
 // ============================================================================
@@ -331,10 +374,5 @@ export const useInitiativesStore = create<InitiativesState>()(
 export const selectInitiatives = (state: InitiativesState) => state.initiatives;
 export const selectInitiativeById = (id: string) => (state: InitiativesState) =>
   state.initiatives.find((i) => i.id === id);
-export const selectHasHydrated = (state: InitiativesState) => state._hasHydrated;
-
-
-
-
-
-
+export const selectHasHydrated = (state: InitiativesState) =>
+  state._hasHydrated;

@@ -33,6 +33,7 @@ We store **raw location samples** (lat/lng + accuracy + timestamp) and derive â€
 - **Local queue first**: background task writes to local storage; upload happens when app is foreground + authenticated.
 
 Rationale:
+
 - Background tasks can fire with limited network/time.
 - We must avoid losing data when offline.
 - Hour-level analysis does not require sub-second sampling.
@@ -58,5 +59,3 @@ Rationale:
   - Why (match schedule to reality)
   - How itâ€™s protected (RLS + encryption at rest)
   - How to disable (system settings + app toggle)
-
-

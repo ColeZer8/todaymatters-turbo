@@ -38,9 +38,11 @@ Add a notification indicator on the home page that appears when there are unassi
 ## Outcomes
 
 ### Files Created
+
 - `apps/mobile/src/stores/review-time-store.ts` - Zustand store for time block assignments
 
 ### Files Modified
+
 - `apps/mobile/src/stores/index.ts` - Export new store
 - `apps/mobile/src/components/molecules/Greeting.tsx` - Added badge with pulse animation
 - `apps/mobile/src/components/organisms/DailyBrief.tsx` - Pass unassigned count to Greeting
@@ -48,6 +50,7 @@ Add a notification indicator on the home page that appears when there are unassi
 - `apps/mobile/src/components/templates/HomeTemplate.tsx` - Convert to NativeWind styling
 
 ### Design
+
 - Minimal 28×28px circle badge
 - Brand blue (#2563EB) at 15% opacity background
 - Solid brand blue text
@@ -59,11 +62,3 @@ Add a notification indicator on the home page that appears when there are unassi
 - Connect to real API data instead of mock time blocks
 - Persist assignments to Supabase
 - Add time-based logic (show yesterday's unassigned blocks in the morning)
-
-
-
-
-
-
-
-

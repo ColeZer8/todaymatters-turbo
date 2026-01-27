@@ -1,4 +1,4 @@
-export { useAuth } from './use-auth';
+export { useAuth } from "./use-auth";
 
 // NOTE: useVoiceCoach requires native modules (LiveKit/WebRTC) and cannot run in Expo Go.
 // To use voice features, build a development client with: npx expo run:ios

@@ -1,11 +1,17 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BookOpenCheck, Droplet, Moon, Sun, UtensilsCrossed } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import type { RoutineItem } from '@/components/templates/RoutineBuilderTemplate';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  BookOpenCheck,
+  Droplet,
+  Moon,
+  Sun,
+  UtensilsCrossed,
+} from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+import type { RoutineItem } from "@/components/templates/RoutineBuilderTemplate";
 
-export type IconKey = 'droplet' | 'book' | 'utensils' | 'moon' | 'sun';
+export type IconKey = "droplet" | "book" | "utensils" | "moon" | "sun";
 
 const iconMap: Record<IconKey, LucideIcon> = {
   droplet: Droplet,
@@ -28,19 +34,33 @@ type RoutineState = {
   items: Array<RoutineItem & { iconKey: IconKey }>;
   _hasHydrated: boolean;
   setWakeTime: (wakeTime: string) => void;
-  setItems: (items: RoutineState['items']) => void;
+  setItems: (items: RoutineState["items"]) => void;
   updateMinutes: (id: string, minutes: number) => void;
   addItem: (title: string) => void;
   deleteItem: (id: string) => void;
 };
 
-const DEFAULT_ITEMS: RoutineState['items'] = [
-  { id: 'hydrate', title: 'Hydrate', minutes: 2, icon: Droplet, iconKey: 'droplet' },
-  { id: 'prayer', title: 'Prayer Time', minutes: 15, icon: BookOpenCheck, iconKey: 'book' },
+const DEFAULT_ITEMS: RoutineState["items"] = [
+  {
+    id: "hydrate",
+    title: "Hydrate",
+    minutes: 2,
+    icon: Droplet,
+    iconKey: "droplet",
+  },
+  {
+    id: "prayer",
+    title: "Prayer Time",
+    minutes: 15,
+    icon: BookOpenCheck,
+    iconKey: "book",
+  },
 ];
 
 // Restore icon from iconKey
-const restoreIcon = (item: SerializableRoutineItem): RoutineState['items'][0] => ({
+const restoreIcon = (
+  item: SerializableRoutineItem,
+): RoutineState["items"][0] => ({
   ...item,
   icon: iconMap[item.iconKey] || Droplet,
 });
@@ -48,7 +68,7 @@ const restoreIcon = (item: SerializableRoutineItem): RoutineState['items'][0] =>
 export const useRoutineBuilderStore = create<RoutineState>()(
   persist(
     (set) => ({
-      wakeTime: '06:30',
+      wakeTime: "06:30",
       items: DEFAULT_ITEMS,
       _hasHydrated: false,
       setWakeTime: (wakeTime) => set({ wakeTime }),
@@ -56,17 +76,26 @@ export const useRoutineBuilderStore = create<RoutineState>()(
       updateMinutes: (id, minutes) =>
         set((state) => ({
           items: state.items.map((item) =>
-            item.id === id ? { ...item, minutes: Math.max(1, minutes) } : item
+            item.id === id ? { ...item, minutes: Math.max(1, minutes) } : item,
           ),
         })),
       addItem: (title) =>
         set((state) => {
-          const icons: IconKey[] = ['droplet', 'book', 'utensils', 'moon', 'sun'];
+          const icons: IconKey[] = [
+            "droplet",
+            "book",
+            "utensils",
+            "moon",
+            "sun",
+          ];
           const iconKey = icons[state.items.length % icons.length];
           const Icon = iconMap[iconKey];
           const id = `${Date.now()}`;
           return {
-            items: [...state.items, { id, title, minutes: 5, icon: Icon, iconKey }],
+            items: [
+              ...state.items,
+              { id, title, minutes: 5, icon: Icon, iconKey },
+            ],
           };
         }),
       deleteItem: (id) =>
@@ -75,7 +104,7 @@ export const useRoutineBuilderStore = create<RoutineState>()(
         })),
     }),
     {
-      name: 'routine-builder-storage',
+      name: "routine-builder-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         wakeTime: state.wakeTime,
@@ -83,12 +112,14 @@ export const useRoutineBuilderStore = create<RoutineState>()(
         items: state.items.map(({ icon, ...rest }) => rest),
       }),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as {
-          wakeTime?: string;
-          items?: SerializableRoutineItem[];
-        } | undefined;
+        const persisted = persistedState as
+          | {
+              wakeTime?: string;
+              items?: SerializableRoutineItem[];
+            }
+          | undefined;
 
-        console.log('🔀 Routine Builder - Loading saved data');
+        console.log("🔀 Routine Builder - Loading saved data");
 
         if (!persisted) {
           return { ...currentState, _hasHydrated: true };
@@ -97,15 +128,17 @@ export const useRoutineBuilderStore = create<RoutineState>()(
         return {
           ...currentState,
           wakeTime: persisted.wakeTime ?? currentState.wakeTime,
-          items: persisted.items ? persisted.items.map(restoreIcon) : currentState.items,
+          items: persisted.items
+            ? persisted.items.map(restoreIcon)
+            : currentState.items,
           _hasHydrated: true,
         };
       },
       onRehydrateStorage: () => () => {
-        console.log('✅ Routine Builder - Hydration complete');
+        console.log("✅ Routine Builder - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );
 
 export const getIconByKey = (key: IconKey) => iconMap[key];

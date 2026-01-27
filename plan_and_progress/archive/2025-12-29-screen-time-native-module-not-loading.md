@@ -43,5 +43,3 @@ Fix the Screen Time demo UX so it reports the **real root cause** when Screen Ti
 ## Follow-ups
 
 - If you hit `missingNativeModule`: run `pnpm --filter mobile ios`, install the dev client, and reopen the installed app.
-
-

@@ -20,27 +20,29 @@ The `startAndroidBackgroundLocationAsync` function has **multiple silent early r
 Add this to the dev location screen or create a diagnostic function:
 
 ```typescript
-import { loadExpoLocationAsync } from '@/lib/android-location';
-import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from '@/lib/android-location/task-names';
+import { loadExpoLocationAsync } from "@/lib/android-location";
+import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "@/lib/android-location/task-names";
 
 async function checkAndroidLocationStatus() {
   const Location = await loadExpoLocationAsync();
   if (!Location) {
-    console.error('❌ Location module not loaded');
+    console.error("❌ Location module not loaded");
     return;
   }
-  
-  const isStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
-  console.log('📍 Background location task started:', isStarted);
-  
+
+  const isStarted = await Location.hasStartedLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
+  console.log("📍 Background location task started:", isStarted);
+
   const servicesEnabled = await Location.hasServicesEnabledAsync();
-  console.log('📍 Location services enabled:', servicesEnabled);
-  
+  console.log("📍 Location services enabled:", servicesEnabled);
+
   const fg = await Location.getForegroundPermissionsAsync();
-  console.log('📍 Foreground permission:', fg.status);
-  
+  console.log("📍 Foreground permission:", fg.status);
+
   const bg = await Location.getBackgroundPermissionsAsync();
-  console.log('📍 Background permission:', bg.status);
+  console.log("📍 Background permission:", bg.status);
 }
 ```
 
@@ -49,10 +51,10 @@ async function checkAndroidLocationStatus() {
 The samples might be collected but not uploaded. Check local queue:
 
 ```typescript
-import { peekPendingAndroidLocationSamplesAsync } from '@/lib/android-location/queue';
+import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
 
 const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
-console.log('📍 Pending samples in queue:', pending.length);
+console.log("📍 Pending samples in queue:", pending.length);
 ```
 
 If there are pending samples but no data in database, the **flush is failing**.
@@ -60,6 +62,7 @@ If there are pending samples but no data in database, the **flush is failing**.
 ### Step 3: Check Foreground Service Notification
 
 The foreground service notification should be visible. If it's not:
+
 - Background location task is NOT running
 - Android killed the service
 - Notification permission denied
@@ -73,14 +76,16 @@ On physical devices, if it's a **production build** (`__DEV__ = false`), all the
 ### 1. **Background Permission Not Actually Granted**
 
 Even if the user thinks they granted it, Android 10+ requires:
+
 - First grant foreground permission
 - Then separately grant background permission
 - Background permission might require going to Settings
 
 **Check:**
+
 ```typescript
 const bg = await Location.getBackgroundPermissionsAsync();
-if (bg.status !== 'granted') {
+if (bg.status !== "granted") {
   // This is silently failing!
 }
 ```
@@ -127,54 +132,56 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     support: getAndroidLocationSupportStatus(),
     locationModule: false,
     servicesEnabled: false,
-    foregroundPermission: 'unknown',
-    backgroundPermission: 'unknown',
+    foregroundPermission: "unknown",
+    backgroundPermission: "unknown",
     taskStarted: false,
     pendingSamples: 0,
     errors,
   };
-  
-  if (diagnostics.support !== 'available') {
+
+  if (diagnostics.support !== "available") {
     errors.push(`Support status: ${diagnostics.support}`);
     return diagnostics;
   }
-  
+
   const Location = await loadExpoLocationAsync();
   if (!Location) {
-    errors.push('Location module not loaded');
+    errors.push("Location module not loaded");
     return diagnostics;
   }
   diagnostics.locationModule = true;
-  
+
   diagnostics.servicesEnabled = await Location.hasServicesEnabledAsync();
   if (!diagnostics.servicesEnabled) {
-    errors.push('Location services disabled on device');
+    errors.push("Location services disabled on device");
   }
-  
+
   const fg = await Location.getForegroundPermissionsAsync();
   diagnostics.foregroundPermission = fg.status;
-  if (fg.status !== 'granted') {
+  if (fg.status !== "granted") {
     errors.push(`Foreground permission: ${fg.status}`);
   }
-  
+
   const bg = await getBackgroundPermissionsSafeAsync(Location);
   diagnostics.backgroundPermission = bg.status;
-  if (bg.status !== 'granted') {
+  if (bg.status !== "granted") {
     errors.push(`Background permission: ${bg.status}`);
   }
-  
-  diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+
+  diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
   if (!diagnostics.taskStarted && errors.length === 0) {
-    errors.push('Task not started (unknown reason)');
+    errors.push("Task not started (unknown reason)");
   }
-  
+
   // Check pending samples
   const userId = (await supabase.auth.getSession()).data.session?.user?.id;
   if (userId) {
     const pending = await peekPendingAndroidLocationSamplesAsync(userId, 1000);
     diagnostics.pendingSamples = pending.length;
   }
-  
+
   return diagnostics;
 }
 ```

@@ -1,8 +1,14 @@
-import { Icon } from '@/components/atoms/Icon';
-import type { LucideIcon } from 'lucide-react-native';
-import { Text, TextInput, TextInputProps, TouchableOpacity, View } from 'react-native';
+import { Icon } from "@/components/atoms/Icon";
+import type { LucideIcon } from "lucide-react-native";
+import {
+  Text,
+  TextInput,
+  TextInputProps,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-interface AuthInputProps extends Omit<TextInputProps, 'className'> {
+interface AuthInputProps extends Omit<TextInputProps, "className"> {
   label: string;
   icon: LucideIcon;
   onToggleSecureEntry?: () => void;

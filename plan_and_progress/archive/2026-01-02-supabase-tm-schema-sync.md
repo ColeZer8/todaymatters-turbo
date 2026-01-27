@@ -38,5 +38,3 @@ Align the mobile app’s Supabase integration with the updated `tm` schema so on
 ## Follow-ups
 
 - Move this file to `plan_and_progress/archive/` (completion housekeeping).
-
-

@@ -8,6 +8,7 @@
 ## Objective
 
 Polish the routine builder's drag-and-drop reordering animation and time editing panel UX. Fix issues where:
+
 1. Dragged items didn't follow the user's finger
 2. Items could only be dropped at top/bottom, not in the middle
 3. Time panel closed when trying to adjust time
@@ -18,7 +19,7 @@ Polish the routine builder's drag-and-drop reordering animation and time editing
 
 1. Fix drag animation to follow finger exactly
 2. Fix drop position calculation to allow middle placement
-3. Move gesture callback from `onBegin` to `onStart` 
+3. Move gesture callback from `onBegin` to `onStart`
 4. Add hold-to-repeat for time buttons
 5. Connect time panel visually to category card
 6. Tune spring animation for smoother expand/collapse
@@ -74,6 +75,7 @@ Polish the routine builder's drag-and-drop reordering animation and time editing
 ## Outcomes
 
 Files modified:
+
 - `apps/mobile/src/components/organisms/DraggableRoutineList.tsx`
   - Rewrote drag logic with `absoluteY`/`startY` approach
   - Added `findIndexForCenterExcluding()` worklet
@@ -91,12 +93,3 @@ Files modified:
 - Consider adding haptic feedback on drag start and item swap
 - Could add visual indicator (slight highlight) when item is being dragged over a drop zone
 - Time panel could animate its height when expanding (currently just appears)
-
-
-
-
-
-
-
-
-

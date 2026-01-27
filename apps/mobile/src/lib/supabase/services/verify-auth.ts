@@ -1,108 +1,123 @@
-import { supabase } from '../client';
-import { fetchProfileValues } from './profile-values';
-import { handleSupabaseError } from '../utils/error-handler';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from "../client";
+import { fetchProfileValues } from "./profile-values";
+import { handleSupabaseError } from "../utils/error-handler";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * Verification helper to check auth status and saved data
  * Call this from the console or a debug screen to verify everything is working
  */
 export async function verifyAuthAndData() {
-  console.log('🔍 Verifying Auth and Data...\n');
+  console.log("🔍 Verifying Auth and Data...\n");
 
   // Check session
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
   if (sessionError) {
-    console.error('❌ Session Error:', sessionError);
+    console.error("❌ Session Error:", sessionError);
     return { success: false, error: sessionError };
   }
 
   if (!session?.user) {
-    console.log('⚠️ No active session - user is not authenticated');
+    console.log("⚠️ No active session - user is not authenticated");
     if (__DEV__) {
       try {
         const keys = await AsyncStorage.getAllKeys();
-        const supabaseKeys = keys.filter((key) => key.includes('sb-') || key.includes('supabase') || key.includes('auth'));
-        console.log('🔍 AsyncStorage keys (filtered):', supabaseKeys);
+        const supabaseKeys = keys.filter(
+          (key) =>
+            key.includes("sb-") ||
+            key.includes("supabase") ||
+            key.includes("auth"),
+        );
+        console.log("🔍 AsyncStorage keys (filtered):", supabaseKeys);
       } catch (error) {
-        console.log('⚠️ Unable to read AsyncStorage keys:', error);
+        console.log("⚠️ Unable to read AsyncStorage keys:", error);
       }
     }
     return { success: false, authenticated: false };
   }
 
   const user = session.user;
-  console.log('✅ Authentication Status:');
-  console.log('   User ID:', user.id);
-  console.log('   Email:', user.email);
-  console.log('   Created:', user.created_at);
-  console.log('   Email Confirmed:', user.email_confirmed_at ? 'Yes' : 'No\n');
+  console.log("✅ Authentication Status:");
+  console.log("   User ID:", user.id);
+  console.log("   Email:", user.email);
+  console.log("   Created:", user.created_at);
+  console.log("   Email Confirmed:", user.email_confirmed_at ? "Yes" : "No\n");
 
   // Extra verification: validate token against Supabase (network)
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) {
-    console.log('⚠️ getUser() error:', userError);
+    console.log("⚠️ getUser() error:", userError);
   } else {
-    console.log('✅ getUser() ok:', { userId: userData.user?.id ?? null });
+    console.log("✅ getUser() ok:", { userId: userData.user?.id ?? null });
   }
 
   // Check profile record
-  console.log('📋 Checking Profile Record...');
+  console.log("📋 Checking Profile Record...");
   try {
     const { data: profile, error: profileError } = await supabase
-      .schema('tm')
-      .from('profiles')
-      .select('user_id, created_at')
-      .eq('user_id', user.id)
+      .schema("tm")
+      .from("profiles")
+      .select("user_id, created_at")
+      .eq("user_id", user.id)
       .single();
 
     if (profileError) {
       const error = handleSupabaseError(profileError);
-      console.log('⚠️ Profile record:', profileError.code === 'PGRST116' ? 'Not found' : error.message);
+      console.log(
+        "⚠️ Profile record:",
+        profileError.code === "PGRST116" ? "Not found" : error.message,
+      );
     } else {
-      console.log('✅ Profile record exists');
-      console.log('   User ID:', profile.user_id);
-      console.log('   Created:', profile.created_at);
+      console.log("✅ Profile record exists");
+      console.log("   User ID:", profile.user_id);
+      console.log("   Created:", profile.created_at);
     }
   } catch (error) {
-    console.error('❌ Error checking profile:', error);
+    console.error("❌ Error checking profile:", error);
   }
 
   // Check profile values
-  console.log('\n📊 Checking Profile Values...');
+  console.log("\n📊 Checking Profile Values...");
   try {
     const { data: valuesData, error: valuesError } = await supabase
-      .schema('tm')
-      .from('profile_values')
-      .select('id, value_label, rank, created_at')
-      .eq('user_id', user.id)
-      .order('rank', { ascending: true });
+      .schema("tm")
+      .from("profile_values")
+      .select("id, value_label, rank, created_at")
+      .eq("user_id", user.id)
+      .order("rank", { ascending: true });
 
     if (valuesError) {
       // If table isn't created yet (or schema cache not refreshed), don't spam errors in dev.
-      if (valuesError.code === 'PGRST205') {
-        console.log('⚠️ tm.profile_values not available yet (missing table or schema cache not refreshed).');
+      if (valuesError.code === "PGRST205") {
+        console.log(
+          "⚠️ tm.profile_values not available yet (missing table or schema cache not refreshed).",
+        );
       } else {
         const error = handleSupabaseError(valuesError);
-        console.error('❌ Error fetching profile values:', error.message);
+        console.error("❌ Error fetching profile values:", error.message);
       }
     } else {
       const values = valuesData || [];
-      console.log('✅ Profile Values Found in Supabase:', values.length);
+      console.log("✅ Profile Values Found in Supabase:", values.length);
       if (values.length > 0) {
         values.forEach((value, index) => {
-          console.log(`   ${index + 1}. "${value.value_label}" (rank: ${value.rank}, id: ${value.id})`);
+          console.log(
+            `   ${index + 1}. "${value.value_label}" (rank: ${value.rank}, id: ${value.id})`,
+          );
         });
       } else {
-        console.log('   (No values saved yet)');
+        console.log("   (No values saved yet)");
       }
     }
   } catch (error) {
-    console.error('❌ Error fetching profile values:', error);
+    console.error("❌ Error fetching profile values:", error);
   }
 
-  console.log('\n✅ Verification Complete');
+  console.log("\n✅ Verification Complete");
   return {
     success: true,
     authenticated: true,
@@ -112,7 +127,7 @@ export async function verifyAuthAndData() {
 }
 
 // Make it available globally for easy console access
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   window.verifyAuth = verifyAuthAndData;
 }
 

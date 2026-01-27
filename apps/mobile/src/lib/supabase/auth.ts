@@ -1,9 +1,9 @@
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
-import * as Linking from 'expo-linking';
-import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-import { supabase } from './client';
-import type { Session } from '@supabase/supabase-js';
+import * as QueryParams from "expo-auth-session/build/QueryParams";
+import * as Linking from "expo-linking";
+import { makeRedirectUri } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { supabase } from "./client";
+import type { Session } from "@supabase/supabase-js";
 
 // Required for web OAuth flows
 WebBrowser.maybeCompleteAuthSession();
@@ -13,14 +13,16 @@ const redirectTo = makeRedirectUri();
 /**
  * Creates a session from a URL containing OAuth callback parameters or email confirmation tokens.
  * Used for handling OAuth redirects and email confirmation links.
- * 
+ *
  * Flow for email confirmation:
  * 1. User clicks link in email → goes to Supabase server
  * 2. Supabase verifies token server-side
  * 3. Supabase redirects to our app deep link with access_token & refresh_token
  * 4. This function processes those tokens and creates a session
  */
-export const createSessionFromUrl = async (url: string): Promise<Session | null> => {
+export const createSessionFromUrl = async (
+  url: string,
+): Promise<Session | null> => {
   const { params, errorCode } = QueryParams.getQueryParams(url);
 
   if (errorCode) {
@@ -45,10 +47,10 @@ export const createSessionFromUrl = async (url: string): Promise<Session | null>
 
   // Handle token_hash format (alternative email confirmation format)
   const { token_hash, type } = params;
-  if (token_hash && type === 'email') {
+  if (token_hash && type === "email") {
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: 'email',
+      type: "email",
     });
 
     if (error) {
@@ -59,7 +61,7 @@ export const createSessionFromUrl = async (url: string): Promise<Session | null>
   }
 
   // Handle password reset tokens (type=recovery)
-  if (token_hash && type === 'recovery') {
+  if (token_hash && type === "recovery") {
     // Password reset tokens don't create a session immediately
     // They need to be verified, then user updates password
     // Return null here - the reset password screen will handle verification
@@ -73,7 +75,9 @@ export const createSessionFromUrl = async (url: string): Promise<Session | null>
 /**
  * Performs OAuth sign-in with a provider (Google, Apple, GitHub, etc.)
  */
-export const performOAuth = async (provider: 'google' | 'apple' | 'github'): Promise<void> => {
+export const performOAuth = async (
+  provider: "google" | "apple" | "github",
+): Promise<void> => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
@@ -84,26 +88,28 @@ export const performOAuth = async (provider: 'google' | 'apple' | 'github'): Pro
 
   if (error) {
     // Improve error messages for OAuth provider issues
-    if (error.message.includes('provider is not enabled')) {
+    if (error.message.includes("provider is not enabled")) {
       const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
-      throw new Error(`${providerName} sign-in is not enabled. Please use email/password or contact support.`);
+      throw new Error(
+        `${providerName} sign-in is not enabled. Please use email/password or contact support.`,
+      );
     }
     throw error;
   }
 
   if (!data?.url) {
-    throw new Error('No OAuth URL returned from Supabase');
+    throw new Error("No OAuth URL returned from Supabase");
   }
 
   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
-  if (res.type === 'success') {
+  if (res.type === "success") {
     const { url } = res;
     await createSessionFromUrl(url);
-  } else if (res.type === 'cancel') {
-    throw new Error('Sign-in was cancelled');
+  } else if (res.type === "cancel") {
+    throw new Error("Sign-in was cancelled");
   } else {
-    throw new Error('Failed to complete sign-in. Please try again.');
+    throw new Error("Failed to complete sign-in. Please try again.");
   }
 };
 
@@ -128,10 +134,10 @@ export const sendMagicLink = async (email: string): Promise<void> => {
  */
 export const resendEmailConfirmation = async (email: string): Promise<void> => {
   // Use the app's deep link scheme for email confirmation redirects
-  const emailRedirectTo = 'todaymatters://auth/confirm';
-  
+  const emailRedirectTo = "todaymatters://auth/confirm";
+
   const { error } = await supabase.auth.resend({
-    type: 'signup',
+    type: "signup",
     email,
     options: {
       emailRedirectTo,
@@ -149,16 +155,18 @@ export const resendEmailConfirmation = async (email: string): Promise<void> => {
 export const sendPasswordResetEmail = async (email: string): Promise<void> => {
   // Use the app's deep link scheme for password reset redirects
   // This URL will be used when user clicks the reset link in their email
-  const emailRedirectTo = 'todaymatters://reset-password';
-  
+  const emailRedirectTo = "todaymatters://reset-password";
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: emailRedirectTo,
   });
 
   if (error) {
     // Improve error messages
-    if (error.message.includes('provider is not enabled')) {
-      throw new Error('Email authentication is not enabled. Please contact support.');
+    if (error.message.includes("provider is not enabled")) {
+      throw new Error(
+        "Email authentication is not enabled. Please contact support.",
+      );
     }
     throw error;
   }
@@ -173,8 +181,8 @@ export const updatePassword = async (newPassword: string): Promise<void> => {
   });
 
   if (error) {
-    if (error.message.includes('Password')) {
-      throw new Error('Password is too weak. Please use a stronger password.');
+    if (error.message.includes("Password")) {
+      throw new Error("Password is too weak. Please use a stronger password.");
     }
     throw error;
   }
@@ -194,7 +202,7 @@ export const handleAuthCallback = (): (() => void) => {
   });
 
   // Listen for deep links while app is running
-  const subscription = Linking.addEventListener('url', (event) => {
+  const subscription = Linking.addEventListener("url", (event) => {
     handleAuthUrl(event.url).catch(console.error);
   });
 
@@ -209,12 +217,12 @@ export const handleAuthCallback = (): (() => void) => {
  */
 const handleAuthUrl = async (url: string): Promise<void> => {
   const { params } = QueryParams.getQueryParams(url);
-  
+
   // Check if this is a password reset link
   // Password reset links from Supabase contain access_token/refresh_token
   // after Supabase verifies the token server-side
-  const isPasswordReset = url.includes('reset-password');
-  
+  const isPasswordReset = url.includes("reset-password");
+
   if (isPasswordReset) {
     // For password reset, Supabase verifies the token server-side and redirects
     // with access_token/refresh_token. Create a session first (this allows updatePassword to work).
@@ -226,7 +234,7 @@ const handleAuthUrl = async (url: string): Promise<void> => {
     } catch (error) {
       // If session creation fails, still allow navigation
       // The reset-password screen will show an error if updatePassword fails
-      console.error('Failed to create session from reset link:', error);
+      console.error("Failed to create session from reset link:", error);
     }
     // The deep link will automatically navigate to /reset-password route
     return;

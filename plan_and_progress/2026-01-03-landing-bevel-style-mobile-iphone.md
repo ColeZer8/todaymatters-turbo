@@ -35,4 +35,3 @@ Make the landing page iPhone/features section match the “Bevel” mobile aesth
 ## Follow-ups
 
 - None.
-

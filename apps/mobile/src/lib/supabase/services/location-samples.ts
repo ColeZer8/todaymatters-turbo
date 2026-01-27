@@ -1,8 +1,9 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Database } from '../database.types';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Database } from "../database.types";
 
-type LocationSamplesInsert = Database['tm']['Tables']['location_samples']['Insert'];
+type LocationSamplesInsert =
+  Database["tm"]["Tables"]["location_samples"]["Insert"];
 
 interface LocationSampleLike {
   recorded_at: string;
@@ -15,7 +16,7 @@ interface LocationSampleLike {
   is_mocked: boolean | null;
   source: string;
   dedupe_key: string;
-  raw: LocationSamplesInsert['raw'];
+  raw: LocationSamplesInsert["raw"];
 }
 
 export interface LocationSampleRow {
@@ -29,11 +30,11 @@ export interface LocationSampleRow {
   is_mocked: boolean | null;
   source: string;
   dedupe_key: string;
-  raw: LocationSamplesInsert['raw'];
+  raw: LocationSamplesInsert["raw"];
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function normalizeNonNegative(value: number | null): number | null {
@@ -52,7 +53,9 @@ function hasValidTimestamp(value: string): boolean {
   return Number.isFinite(Date.parse(value));
 }
 
-export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]): {
+export function sanitizeLocationSamplesForUpload(
+  samples: LocationSampleLike[],
+): {
   validSamples: LocationSampleLike[];
   droppedKeys: string[];
 } {
@@ -65,18 +68,26 @@ export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]):
       continue;
     }
 
-    if (!isFiniteNumber(sample.latitude) || sample.latitude < -90 || sample.latitude > 90) {
+    if (
+      !isFiniteNumber(sample.latitude) ||
+      sample.latitude < -90 ||
+      sample.latitude > 90
+    ) {
       droppedKeys.push(sample.dedupe_key);
       continue;
     }
 
-    if (!isFiniteNumber(sample.longitude) || sample.longitude < -180 || sample.longitude > 180) {
+    if (
+      !isFiniteNumber(sample.longitude) ||
+      sample.longitude < -180 ||
+      sample.longitude > 180
+    ) {
       droppedKeys.push(sample.dedupe_key);
       continue;
     }
 
     // Supabase constraint currently allows only 'background'.
-    if (sample.source !== 'background') {
+    if (sample.source !== "background") {
       droppedKeys.push(sample.dedupe_key);
       continue;
     }
@@ -93,7 +104,10 @@ export function sanitizeLocationSamplesForUpload(samples: LocationSampleLike[]):
   return { validSamples, droppedKeys };
 }
 
-export async function upsertLocationSamples(userId: string, samples: LocationSampleLike[]): Promise<void> {
+export async function upsertLocationSamples(
+  userId: string,
+  samples: LocationSampleLike[],
+): Promise<void> {
   if (samples.length === 0) return;
 
   const rows: LocationSamplesInsert[] = samples.map((s) => ({
@@ -112,9 +126,9 @@ export async function upsertLocationSamples(userId: string, samples: LocationSam
   }));
 
   const { error } = await supabase
-    .schema('tm')
-    .from('location_samples')
-    .upsert(rows, { onConflict: 'user_id,dedupe_key', ignoreDuplicates: true });
+    .schema("tm")
+    .from("location_samples")
+    .upsert(rows, { onConflict: "user_id,dedupe_key", ignoreDuplicates: true });
 
   if (error) {
     throw handleSupabaseError(error);
@@ -123,23 +137,24 @@ export async function upsertLocationSamples(userId: string, samples: LocationSam
 
 export async function fetchRecentLocationSamples(
   userId: string,
-  options: { limit?: number; sinceIso?: string } = {}
+  options: { limit?: number; sinceIso?: string } = {},
 ): Promise<LocationSampleRow[]> {
   const limit = options.limit ?? 200;
   let query = supabase
-    .schema('tm')
-    .from('location_samples')
-    .select('recorded_at, latitude, longitude, accuracy_m, altitude_m, speed_mps, heading_deg, is_mocked, source, dedupe_key, raw')
-    .eq('user_id', userId)
-    .order('recorded_at', { ascending: false })
+    .schema("tm")
+    .from("location_samples")
+    .select(
+      "recorded_at, latitude, longitude, accuracy_m, altitude_m, speed_mps, heading_deg, is_mocked, source, dedupe_key, raw",
+    )
+    .eq("user_id", userId)
+    .order("recorded_at", { ascending: false })
     .limit(limit);
 
   if (options.sinceIso) {
-    query = query.gte('recorded_at', options.sinceIso);
+    query = query.gte("recorded_at", options.sinceIso);
   }
 
   const { data, error } = await query;
   if (error) throw handleSupabaseError(error);
   return (data ?? []) as LocationSampleRow[];
 }
-

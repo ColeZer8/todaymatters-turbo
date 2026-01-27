@@ -43,5 +43,3 @@ Replace the rough Screen Time demo UI with a single, on-theme “Digital Wellbei
 ## Follow-ups
 
 - Evaluate whether we can refresh the report in the background without presenting a sheet; if Apple APIs require UI, keep the polished sheet.
-
-

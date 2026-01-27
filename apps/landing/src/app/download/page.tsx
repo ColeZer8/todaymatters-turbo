@@ -12,13 +12,15 @@ export default function DownloadPage() {
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-[#0a0a0a]">iOS</h2>
           <p className="mt-2 text-sm text-[#52525b] leading-relaxed">
-            Coming soon. When we publish to the App Store, this page will link directly.
+            Coming soon. When we publish to the App Store, this page will link
+            directly.
           </p>
         </div>
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-[#0a0a0a]">Android</h2>
           <p className="mt-2 text-sm text-[#52525b] leading-relaxed">
-            Coming soon. When we publish to Google Play, this page will link directly.
+            Coming soon. When we publish to Google Play, this page will link
+            directly.
           </p>
         </div>
       </div>
@@ -26,8 +28,9 @@ export default function DownloadPage() {
       <div className="rounded-3xl border border-gray-100 bg-[#fafafa] p-6">
         <h2 className="text-lg font-bold text-[#0a0a0a]">Want early access?</h2>
         <p className="mt-2 text-sm text-[#52525b] leading-relaxed">
-          Tell us what you’re trying to change in your daily life—sleep, focus, family time, faith rhythms, or something
-          else—and we’ll prioritize the right onboarding.
+          Tell us what you’re trying to change in your daily life—sleep, focus,
+          family time, faith rhythms, or something else—and we’ll prioritize the
+          right onboarding.
         </p>
         <Link
           href="/contact"
@@ -39,5 +42,3 @@ export default function DownloadPage() {
     </PageLayout>
   );
 }
-
-

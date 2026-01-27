@@ -1,7 +1,7 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Json } from '../database.types';
-import type { AiSetupResponses } from '@/lib/ai-setup';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Json } from "../database.types";
+import type { AiSetupResponses } from "@/lib/ai-setup";
 
 /**
  * Profile preferences stored in meta JSONB
@@ -23,7 +23,7 @@ export interface ProfilePreferences extends Record<string, Json> {
   focus_style?: string | null;
   coach_persona?: string | null;
   morning_mindset?: string | null;
-  ideal_day_day_type?: 'weekdays' | 'saturday' | 'sunday' | 'custom' | null;
+  ideal_day_day_type?: "weekdays" | "saturday" | "sunday" | "custom" | null;
   home_address?: string | null;
   work_address?: string | null;
   ai_setup_responses?: AiSetupResponses;
@@ -61,7 +61,7 @@ export interface ProfileData {
 /**
  * Ensure a profile record exists for the user in tm schema
  * Creates one if it doesn't exist, otherwise returns existing
- * 
+ *
  * Note: Using tm schema - profiles table must exist in tm schema
  */
 export async function ensureProfileExists(userId: string): Promise<void> {
@@ -69,33 +69,33 @@ export async function ensureProfileExists(userId: string): Promise<void> {
     // Check if profile exists in profiles table
     // Note: Don't select 'id' - it may not exist in tm.profiles table
     const { data: existing, error: checkError } = await supabase
-      .schema('tm')
-      .from('profiles')
-      .select('user_id')
-      .eq('user_id', userId)
+      .schema("tm")
+      .from("profiles")
+      .select("user_id")
+      .eq("user_id", userId)
       .limit(1)
       .maybeSingle();
 
     // Profile exists, we're done
     if (existing && !checkError) {
-      console.log('✅ Profile already exists for user:', userId);
+      console.log("✅ Profile already exists for user:", userId);
       return;
     }
 
     // If error is not "not found", something else went wrong
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('❌ Error checking profile:', checkError);
+    if (checkError && checkError.code !== "PGRST116") {
+      console.error("❌ Error checking profile:", checkError);
       throw handleSupabaseError(checkError);
     }
 
     // Profile doesn't exist, create it
-    console.log('➕ Creating profile for user:', userId);
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    
+    console.log("➕ Creating profile for user:", userId);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
     // Create in profiles table
     const { error: insertError } = await supabase
-      .schema('tm')
-      .from('profiles')
+      .schema("tm")
+      .from("profiles")
       .insert({
         user_id: userId,
         timezone,
@@ -103,17 +103,17 @@ export async function ensureProfileExists(userId: string): Promise<void> {
 
     if (insertError) {
       // If unique constraint violation, profile already exists (that's okay)
-      if (insertError.code === '23505') {
-        console.log('✅ Profile already exists (unique constraint)');
+      if (insertError.code === "23505") {
+        console.log("✅ Profile already exists (unique constraint)");
         return;
       }
-      console.error('❌ Error creating profile:', insertError);
+      console.error("❌ Error creating profile:", insertError);
       throw handleSupabaseError(insertError);
     }
 
-    console.log('✅ Profile created successfully');
+    console.log("✅ Profile created successfully");
   } catch (error) {
-    console.error('❌ Failed to ensure profile exists:', error);
+    console.error("❌ Failed to ensure profile exists:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -121,30 +121,32 @@ export async function ensureProfileExists(userId: string): Promise<void> {
 /**
  * Fetch full profile for a user
  */
-export async function fetchProfile(userId: string): Promise<ProfileData | null> {
+export async function fetchProfile(
+  userId: string,
+): Promise<ProfileData | null> {
   try {
-    console.log('📥 Fetching profile for user:', userId);
+    console.log("📥 Fetching profile for user:", userId);
     const { data, error } = await supabase
-      .schema('tm')
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
+      .schema("tm")
+      .from("profiles")
+      .select("*")
+      .eq("user_id", userId)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (error.code === "PGRST116") {
         // Profile doesn't exist yet - this is okay
-        console.log('⚠️ Profile not found for user:', userId);
+        console.log("⚠️ Profile not found for user:", userId);
         return null;
       }
-      console.error('❌ Error fetching profile:', error);
+      console.error("❌ Error fetching profile:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Fetched profile:', data?.full_name || '(no name set)');
+    console.log("✅ Fetched profile:", data?.full_name || "(no name set)");
     return data as ProfileData;
   } catch (error) {
-    console.error('❌ Failed to fetch profile:', error);
+    console.error("❌ Failed to fetch profile:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -154,31 +156,38 @@ export async function fetchProfile(userId: string): Promise<ProfileData | null> 
  */
 export async function updateProfile(
   userId: string,
-  updates: Partial<Omit<ProfileData, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+  updates: Partial<
+    Omit<ProfileData, "id" | "user_id" | "created_at" | "updated_at">
+  >,
 ): Promise<ProfileData> {
   try {
-    console.log('💾 Updating profile for user:', userId, 'Updates:', Object.keys(updates));
-    
+    console.log(
+      "💾 Updating profile for user:",
+      userId,
+      "Updates:",
+      Object.keys(updates),
+    );
+
     // Ensure profile exists first
     await ensureProfileExists(userId);
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('profiles')
+      .schema("tm")
+      .from("profiles")
       .update(updates)
-      .eq('user_id', userId)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) {
-      console.error('❌ Error updating profile:', error);
+      console.error("❌ Error updating profile:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Profile updated successfully');
+    console.log("✅ Profile updated successfully");
     return data as ProfileData;
   } catch (error) {
-    console.error('❌ Failed to update profile:', error);
+    console.error("❌ Failed to update profile:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -186,15 +195,23 @@ export async function updateProfile(
 /**
  * Update full name
  */
-export async function updateFullName(userId: string, fullName: string): Promise<void> {
+export async function updateFullName(
+  userId: string,
+  fullName: string,
+): Promise<void> {
   await updateProfile(userId, { full_name: fullName.trim() || null });
 }
 
 /**
  * Update birthday (stored as YYYY-MM-DD).
  */
-export async function updateBirthday(userId: string, birthday: Date | null): Promise<void> {
-  await updateProfile(userId, { birthday: birthday ? dateToYmdLocal(birthday) : null });
+export async function updateBirthday(
+  userId: string,
+  birthday: Date | null,
+): Promise<void> {
+  await updateProfile(userId, {
+    birthday: birthday ? dateToYmdLocal(birthday) : null,
+  });
 }
 
 /**
@@ -204,7 +221,7 @@ export async function updateBirthday(userId: string, birthday: Date | null): Pro
 export async function updateDailyRhythm(
   userId: string,
   wakeTime: string,
-  sleepTime: string
+  sleepTime: string,
 ): Promise<void> {
   await updateProfile(userId, {
     ideal_work_day: wakeTime,
@@ -215,14 +232,20 @@ export async function updateDailyRhythm(
 /**
  * Update mission/purpose
  */
-export async function updateMission(userId: string, mission: string | null): Promise<void> {
+export async function updateMission(
+  userId: string,
+  mission: string | null,
+): Promise<void> {
   await updateProfile(userId, { mission: mission?.trim() || null });
 }
 
 /**
  * Update role (requires role column in database)
  */
-export async function updateRole(userId: string, role: string | null): Promise<void> {
+export async function updateRole(
+  userId: string,
+  role: string | null,
+): Promise<void> {
   await updateProfile(userId, { role: role?.trim() || null });
 }
 
@@ -230,15 +253,15 @@ export async function updateRole(userId: string, role: string | null): Promise<v
  * Convert Date to "HH:MM" format for time fields
  */
 export function dateToTimeString(date: Date): string {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
 }
 
 function dateToYmdLocal(date: Date): string {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -246,7 +269,7 @@ function dateToYmdLocal(date: Date): string {
  * Convert "HH:MM" format to Date (uses today's date)
  */
 export function timeStringToDate(timeString: string): Date {
-  const [hours, minutes] = timeString.split(':').map(Number);
+  const [hours, minutes] = timeString.split(":").map(Number);
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return date;
@@ -258,11 +281,16 @@ export function timeStringToDate(timeString: string): Date {
  */
 export async function updateProfilePreferences(
   userId: string,
-  preferences: Partial<ProfilePreferences>
+  preferences: Partial<ProfilePreferences>,
 ): Promise<ProfileData> {
   try {
-    console.log('💾 Updating profile preferences for user:', userId, 'Preferences:', Object.keys(preferences));
-    
+    console.log(
+      "💾 Updating profile preferences for user:",
+      userId,
+      "Preferences:",
+      Object.keys(preferences),
+    );
+
     // Ensure profile exists first
     await ensureProfileExists(userId);
 
@@ -278,30 +306,30 @@ export async function updateProfilePreferences(
 
     // Update profile with merged meta
     const { data, error } = await supabase
-      .schema('tm')
-      .from('profiles')
+      .schema("tm")
+      .from("profiles")
       .update({ meta: updatedMeta })
-      .eq('user_id', userId)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) {
-      if (error.code === 'PGRST204') {
+      if (error.code === "PGRST204") {
         throw new Error(
           "Supabase schema mismatch: PostgREST can't see `tm.profiles.meta` (column missing OR schema cache stale). " +
-            'Apply the latest migrations to your Supabase project, then refresh the schema cache. ' +
+            "Apply the latest migrations to your Supabase project, then refresh the schema cache. " +
             "Quick fix (SQL editor): `alter table tm.profiles add column if not exists meta jsonb not null default '{}'::jsonb;` " +
-            "and then `select pg_notify('pgrst','reload schema');`"
+            "and then `select pg_notify('pgrst','reload schema');`",
         );
       }
-      console.error('❌ Error updating profile preferences:', error);
+      console.error("❌ Error updating profile preferences:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Profile preferences updated successfully');
+    console.log("✅ Profile preferences updated successfully");
     return data as ProfileData;
   } catch (error) {
-    console.error('❌ Failed to update profile preferences:', error);
+    console.error("❌ Failed to update profile preferences:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -309,64 +337,91 @@ export async function updateProfilePreferences(
 /**
  * Update joy selections
  */
-export async function updateJoySelections(userId: string, selections: string[]): Promise<void> {
+export async function updateJoySelections(
+  userId: string,
+  selections: string[],
+): Promise<void> {
   await updateProfilePreferences(userId, { joy_selections: selections });
 }
 
 /**
  * Update drain selections
  */
-export async function updateDrainSelections(userId: string, selections: string[]): Promise<void> {
+export async function updateDrainSelections(
+  userId: string,
+  selections: string[],
+): Promise<void> {
   await updateProfilePreferences(userId, { drain_selections: selections });
 }
 
 /**
  * Update focus style
  */
-export async function updateFocusStyle(userId: string, focusStyle: string | null): Promise<void> {
+export async function updateFocusStyle(
+  userId: string,
+  focusStyle: string | null,
+): Promise<void> {
   await updateProfilePreferences(userId, { focus_style: focusStyle });
 }
 
 /**
  * Update coach persona
  */
-export async function updateCoachPersona(userId: string, coachPersona: string | null): Promise<void> {
+export async function updateCoachPersona(
+  userId: string,
+  coachPersona: string | null,
+): Promise<void> {
   await updateProfilePreferences(userId, { coach_persona: coachPersona });
 }
 
 /**
  * Update morning mindset
  */
-export async function updateMorningMindset(userId: string, morningMindset: string | null): Promise<void> {
+export async function updateMorningMindset(
+  userId: string,
+  morningMindset: string | null,
+): Promise<void> {
   await updateProfilePreferences(userId, { morning_mindset: morningMindset });
 }
 
 export async function updatePermissions(
   userId: string,
-  permissions: ProfilePreferences['permissions'] | null
+  permissions: ProfilePreferences["permissions"] | null,
 ): Promise<void> {
-  await updateProfilePreferences(userId, { permissions: permissions ?? undefined });
+  await updateProfilePreferences(userId, {
+    permissions: permissions ?? undefined,
+  });
 }
 
-export async function updateJoyCustomOptions(userId: string, options: string[]): Promise<void> {
+export async function updateJoyCustomOptions(
+  userId: string,
+  options: string[],
+): Promise<void> {
   await updateProfilePreferences(userId, { joy_custom_options: options });
 }
 
-export async function updateDrainCustomOptions(userId: string, options: string[]): Promise<void> {
+export async function updateDrainCustomOptions(
+  userId: string,
+  options: string[],
+): Promise<void> {
   await updateProfilePreferences(userId, { drain_custom_options: options });
 }
 
 export async function updateIdealDayUiState(
   userId: string,
-  dayType: ProfilePreferences['ideal_day_day_type']
+  dayType: ProfilePreferences["ideal_day_day_type"],
 ): Promise<void> {
-  await updateProfilePreferences(userId, { ideal_day_day_type: dayType ?? undefined });
+  await updateProfilePreferences(userId, {
+    ideal_day_day_type: dayType ?? undefined,
+  });
 }
 
 /**
  * Get profile preferences from meta
  */
-export function getProfilePreferences(profile: ProfileData | null): ProfilePreferences {
+export function getProfilePreferences(
+  profile: ProfileData | null,
+): ProfilePreferences {
   if (!profile?.meta) {
     return {};
   }

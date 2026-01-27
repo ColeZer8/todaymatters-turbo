@@ -1,4 +1,8 @@
-import type { CalendarEventMeta, ScheduledEvent, EventCategory } from '@/stores';
+import type {
+  CalendarEventMeta,
+  ScheduledEvent,
+  EventCategory,
+} from "@/stores";
 import type {
   EvidenceBundle,
   EvidenceLocationSample,
@@ -6,23 +10,26 @@ import type {
   LocationHourlyRow,
   ScreenTimeSessionRow,
   UserPlaceRow,
-} from '@/lib/supabase/services/evidence-data';
-import type { UsageSummary } from '@/lib/android-insights';
-import type { ActualBlock, VerificationResult } from './verification-engine';
-import { classifyAppUsage, type AppCategoryOverrides } from './app-classification';
-import { buildSleepQualityMetrics } from './sleep-analysis';
-import { buildDataQualityMetrics } from './data-quality';
-import { buildEvidenceFusion } from './evidence-fusion';
-import { getReadableAppName } from '@/lib/app-names';
+} from "@/lib/supabase/services/evidence-data";
+import type { UsageSummary } from "@/lib/android-insights";
+import type { ActualBlock, VerificationResult } from "./verification-engine";
+import {
+  classifyAppUsage,
+  type AppCategoryOverrides,
+} from "./app-classification";
+import { buildSleepQualityMetrics } from "./sleep-analysis";
+import { buildDataQualityMetrics } from "./data-quality";
+import { buildEvidenceFusion } from "./evidence-fusion";
+import { getReadableAppName } from "@/lib/app-names";
 import {
   applyPatternSuggestions,
   buildPatternSummary,
   getPatternSuggestionForRange,
   type PatternIndex,
-} from './pattern-recognition';
+} from "./pattern-recognition";
 
-export const DERIVED_ACTUAL_PREFIX = 'derived_actual:';
-export const DERIVED_EVIDENCE_PREFIX = 'derived_evidence:';
+export const DERIVED_ACTUAL_PREFIX = "derived_actual:";
+export const DERIVED_EVIDENCE_PREFIX = "derived_evidence:";
 
 // ============================================================================
 // Input fingerprinting cache — prevents redundant pipeline runs when
@@ -32,40 +39,71 @@ export const DERIVED_EVIDENCE_PREFIX = 'derived_evidence:';
 let _lastPipelineFingerprint: string | null = null;
 let _lastPipelineResult: ScheduledEvent[] = [];
 
-function buildPipelineFingerprint(input: BuildActualDisplayEventsInput): string {
+function buildPipelineFingerprint(
+  input: BuildActualDisplayEventsInput,
+): string {
   const parts: string[] = [input.ymd];
   // Planned events: id + time
-  parts.push(input.plannedEvents.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(','));
+  parts.push(
+    input.plannedEvents
+      .map((e) => `${e.id}:${e.startMinutes}:${e.duration}`)
+      .join(","),
+  );
   // Actual events: id + time + meta source
-  parts.push(input.actualEvents.map((e) => `${e.id}:${e.startMinutes}:${e.duration}:${e.meta?.source ?? ''}`).join(','));
+  parts.push(
+    input.actualEvents
+      .map(
+        (e) =>
+          `${e.id}:${e.startMinutes}:${e.duration}:${e.meta?.source ?? ""}`,
+      )
+      .join(","),
+  );
   // Derived actual events
-  parts.push(input.derivedActualEvents?.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(',') ?? '');
+  parts.push(
+    input.derivedActualEvents
+      ?.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`)
+      .join(",") ?? "",
+  );
   // Actual blocks
-  parts.push((input.actualBlocks ?? []).map((b) => `${b.source}:${b.startMinutes}:${b.endMinutes}`).join(','));
+  parts.push(
+    (input.actualBlocks ?? [])
+      .map((b) => `${b.source}:${b.startMinutes}:${b.endMinutes}`)
+      .join(","),
+  );
   // Evidence fingerprint — key counts and timestamps
   if (input.evidence) {
     const ev = input.evidence;
-    parts.push(`loc:${ev.locationHourly?.length ?? 0}|ls:${ev.locationSamples?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}|up:${ev.userPlaces?.length ?? 0}`);
+    parts.push(
+      `loc:${ev.locationHourly?.length ?? 0}|ls:${ev.locationSamples?.length ?? 0}|st:${ev.screenTimeSessions?.length ?? 0}|hw:${ev.healthWorkouts?.length ?? 0}|up:${ev.userPlaces?.length ?? 0}`,
+    );
   } else {
-    parts.push('ev:null');
+    parts.push("ev:null");
   }
   // Verification results
   if (input.verificationResults) {
     const entries: string[] = [];
-    input.verificationResults.forEach((v, k) => entries.push(`${k}:${v.status}`));
-    parts.push(entries.join(','));
+    input.verificationResults.forEach((v, k) =>
+      entries.push(`${k}:${v.status}`),
+    );
+    parts.push(entries.join(","));
   }
   // Usage summary
   if (input.usageSummary) {
-    parts.push(`usage:${input.usageSummary.totalSeconds ?? 0}:${input.usageSummary.sessions?.length ?? 0}`);
+    parts.push(
+      `usage:${input.usageSummary.totalSeconds ?? 0}:${input.usageSummary.sessions?.length ?? 0}`,
+    );
   }
   // Pattern index presence
-  parts.push(`pat:${input.patternIndex ? 'y' : 'n'}`);
+  parts.push(`pat:${input.patternIndex ? "y" : "n"}`);
   // App overrides count
-  parts.push(`ov:${input.appCategoryOverrides ? Object.keys(input.appCategoryOverrides).length : 0}`);
+  parts.push(
+    `ov:${input.appCategoryOverrides ? Object.keys(input.appCategoryOverrides).length : 0}`,
+  );
   // Preferences
-  parts.push(`${input.gapFillingPreference ?? 'conservative'}|${input.confidenceThreshold ?? 0.6}|${input.allowAutoSuggestions ?? true}`);
-  return parts.join('|');
+  parts.push(
+    `${input.gapFillingPreference ?? "conservative"}|${input.confidenceThreshold ?? 0.6}|${input.allowAutoSuggestions ?? true}`,
+  );
+  return parts.join("|");
 }
 
 const MIN_EVIDENCE_BLOCK_MINUTES = 10;
@@ -91,7 +129,7 @@ interface BuildActualDisplayEventsInput {
   patternMinConfidence?: number;
   minEvidenceBlockMinutes?: number;
   appCategoryOverrides?: AppCategoryOverrides;
-  gapFillingPreference?: 'conservative' | 'aggressive' | 'manual';
+  gapFillingPreference?: "conservative" | "aggressive" | "manual";
   confidenceThreshold?: number;
   allowAutoSuggestions?: boolean;
 }
@@ -115,7 +153,11 @@ interface TransitionContext {
   locationBlocks: LocationBlock[];
 }
 
-const TRANSITION_TARGET_CATEGORIES: EventCategory[] = ['work', 'health', 'meeting'];
+const TRANSITION_TARGET_CATEGORIES: EventCategory[] = [
+  "work",
+  "health",
+  "meeting",
+];
 
 interface SleepStartAdjustment {
   sleepStartMinutes: number;
@@ -162,50 +204,78 @@ export function buildActualDisplayEvents({
   patternMinConfidence,
   minEvidenceBlockMinutes = MIN_EVIDENCE_BLOCK_MINUTES,
   appCategoryOverrides,
-  gapFillingPreference = 'conservative',
+  gapFillingPreference = "conservative",
   confidenceThreshold = 0.6,
   allowAutoSuggestions = true,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
   // Check fingerprint cache — skip full pipeline if inputs are unchanged
   const fingerprint = buildPipelineFingerprint({
-    ymd, plannedEvents, actualEvents, derivedActualEvents, actualBlocks,
-    verificationResults, evidence, usageSummary, patternIndex,
-    appCategoryOverrides, gapFillingPreference, confidenceThreshold, allowAutoSuggestions,
+    ymd,
+    plannedEvents,
+    actualEvents,
+    derivedActualEvents,
+    actualBlocks,
+    verificationResults,
+    evidence,
+    usageSummary,
+    patternIndex,
+    appCategoryOverrides,
+    gapFillingPreference,
+    confidenceThreshold,
+    allowAutoSuggestions,
   });
-  if (fingerprint === _lastPipelineFingerprint && _lastPipelineResult.length > 0) {
+  if (
+    fingerprint === _lastPipelineFingerprint &&
+    _lastPipelineResult.length > 0
+  ) {
     return _lastPipelineResult;
   }
 
   const todayYmd = (() => {
     const now = new Date();
     const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   })();
-  const locationBlocks = evidence ? buildLocationBlocks(ymd, evidence.locationHourly, evidence.locationSamples) : [];
+  const locationBlocks = evidence
+    ? buildLocationBlocks(
+        ymd,
+        evidence.locationHourly,
+        evidence.locationSamples,
+      )
+    : [];
   const dataQuality = buildDataQualityMetrics({ evidence, usageSummary });
-  const plannedSorted = [...plannedEvents].sort((a, b) => a.startMinutes - b.startMinutes);
+  const plannedSorted = [...plannedEvents].sort(
+    (a, b) => a.startMinutes - b.startMinutes,
+  );
 
   const sleepOverrideIntervals = buildSleepScheduleIntervals(plannedSorted);
 
-  const filteredActualEvents = actualEvents.filter((event) => event.category !== 'sleep');
+  const filteredActualEvents = actualEvents.filter(
+    (event) => event.category !== "sleep",
+  );
 
   const results: ScheduledEvent[] = [...filteredActualEvents];
-  const occupied: Array<{ start: number; end: number }> = results.map((event) => ({
-    start: event.startMinutes,
-    end: event.startMinutes + event.duration,
-  }));
+  const occupied: Array<{ start: number; end: number }> = results.map(
+    (event) => ({
+      start: event.startMinutes,
+      end: event.startMinutes + event.duration,
+    }),
+  );
 
   // Track saved derived events by their source_id to avoid duplicates
   const savedDerivedEventKeys = new Set<string>();
   for (const event of filteredActualEvents) {
     const meta = event.meta as Record<string, unknown> | undefined;
-    if (meta?.source_id && typeof meta.source_id === 'string') {
+    if (meta?.source_id && typeof meta.source_id === "string") {
       // Check if this is a saved derived event
-      if (meta.source_id.startsWith('derived_actual:') || meta.source_id.startsWith('derived_evidence:')) {
+      if (
+        meta.source_id.startsWith("derived_actual:") ||
+        meta.source_id.startsWith("derived_evidence:")
+      ) {
         // Create a key based on time range and kind to detect duplicates
-        const key = `${event.startMinutes}_${event.startMinutes + event.duration}_${meta.kind ?? 'unknown'}`;
+        const key = `${event.startMinutes}_${event.startMinutes + event.duration}_${meta.kind ?? "unknown"}`;
         savedDerivedEventKeys.add(key);
       }
     }
@@ -215,18 +285,21 @@ export function buildActualDisplayEvents({
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
     if (end <= start) return;
-    
+
     // Check for overlap with existing events
     if (hasOverlap(start, end, occupied, minOverlapMinutes)) return;
-    
+
     // For derived events, check if we already have a saved version with the same time range
-    if (event.id.startsWith('derived_actual:') || event.id.startsWith('derived_evidence:')) {
-      const key = `${start}_${end}_${event.meta?.kind ?? 'unknown'}`;
+    if (
+      event.id.startsWith("derived_actual:") ||
+      event.id.startsWith("derived_evidence:")
+    ) {
+      const key = `${start}_${end}_${event.meta?.kind ?? "unknown"}`;
       if (savedDerivedEventKeys.has(key)) {
         return; // Skip - we already have this event saved
       }
     }
-    
+
     results.push(event);
     occupied.push({ start, end });
   };
@@ -234,10 +307,17 @@ export function buildActualDisplayEvents({
   const removeSleepOverlaps = (start: number, end: number) => {
     for (let i = results.length - 1; i >= 0; i -= 1) {
       const existing = results[i];
-      if (existing.category !== 'sleep') continue;
+      if (existing.category !== "sleep") continue;
       const source = existing.meta?.source;
-      if (source === 'user' || source === 'actual_adjust') continue;
-      if (!intervalsOverlap(start, end, existing.startMinutes, existing.startMinutes + existing.duration)) {
+      if (source === "user" || source === "actual_adjust") continue;
+      if (
+        !intervalsOverlap(
+          start,
+          end,
+          existing.startMinutes,
+          existing.startMinutes + existing.duration,
+        )
+      ) {
         continue;
       }
       results.splice(i, 1);
@@ -247,7 +327,9 @@ export function buildActualDisplayEvents({
 
   if (derivedActualEvents && derivedActualEvents.length > 0) {
     for (const event of derivedActualEvents) {
-      const existingIndex = results.findIndex((candidate) => candidate.id === event.id);
+      const existingIndex = results.findIndex(
+        (candidate) => candidate.id === event.id,
+      );
       if (existingIndex >= 0) {
         results[existingIndex] = event;
         occupied[existingIndex] = {
@@ -257,7 +339,7 @@ export function buildActualDisplayEvents({
         continue;
       }
       const nextEvent =
-        event.id.startsWith('st_') || event.id.startsWith('st_session_')
+        event.id.startsWith("st_") || event.id.startsWith("st_session_")
           ? { ...event, id: `${DERIVED_EVIDENCE_PREFIX}${event.id}` }
           : event;
       addIfFree(nextEvent);
@@ -265,7 +347,6 @@ export function buildActualDisplayEvents({
   }
 
   if (usageSummary) {
-
     if (sleepOverrideIntervals.length > 0) {
       const sleepOverrideBlocks = buildSleepOverrideBlocksFromUsageSummary({
         usageSummary,
@@ -292,11 +373,11 @@ export function buildActualDisplayEvents({
     for (const block of actualBlocks) {
       const duration = Math.max(1, block.endMinutes - block.startMinutes);
       if (duration < minEvidenceBlockMinutes) continue;
-      const isScreenTimeBlock = block.source === 'screen_time';
+      const isScreenTimeBlock = block.source === "screen_time";
       const meta: CalendarEventMeta = {
         category: block.category,
-        source: 'evidence',
-        kind: isScreenTimeBlock ? 'screen_time' : 'evidence_block',
+        source: "evidence",
+        kind: isScreenTimeBlock ? "screen_time" : "evidence_block",
         confidence: block.confidence ?? 0.55,
         dataQuality,
         evidence: {
@@ -308,7 +389,7 @@ export function buildActualDisplayEvents({
       const nextEvent: ScheduledEvent = {
         id: `${DERIVED_EVIDENCE_PREFIX}${block.id}`,
         title: block.title,
-        description: block.description ?? '',
+        description: block.description ?? "",
         startMinutes: block.startMinutes,
         duration,
         category: block.category,
@@ -320,8 +401,13 @@ export function buildActualDisplayEvents({
         const end = start + nextEvent.duration;
         const overlapsSleep = results.some(
           (event) =>
-            event.category === 'sleep' &&
-            intervalsOverlap(start, end, event.startMinutes, event.startMinutes + event.duration),
+            event.category === "sleep" &&
+            intervalsOverlap(
+              start,
+              end,
+              event.startMinutes,
+              event.startMinutes + event.duration,
+            ),
         );
         const overlapsLocation = locationBlocks.some((block) =>
           intervalsOverlap(start, end, block.startMinutes, block.endMinutes),
@@ -358,7 +444,7 @@ export function buildActualDisplayEvents({
     let plannedForDerivation = planned;
     let sleepAdjustment: SleepStartAdjustment | null = null;
     const isSleepOverridden =
-      planned.category === 'sleep' &&
+      planned.category === "sleep" &&
       sleepOverrideIntervals.some((interval) =>
         intervalsOverlap(
           planned.startMinutes,
@@ -372,7 +458,7 @@ export function buildActualDisplayEvents({
       continue;
     }
 
-    if (planned.category === 'sleep' && usageSummary) {
+    if (planned.category === "sleep" && usageSummary) {
       sleepAdjustment = buildSleepStartAdjustmentFromUsageSummary({
         usageSummary,
         sleepEvent: planned,
@@ -395,7 +481,8 @@ export function buildActualDisplayEvents({
     }
 
     const plannedStart = plannedForDerivation.startMinutes;
-    const plannedEnd = plannedForDerivation.startMinutes + plannedForDerivation.duration;
+    const plannedEnd =
+      plannedForDerivation.startMinutes + plannedForDerivation.duration;
     if (hasOverlap(plannedStart, plannedEnd, occupied, 10)) {
       continue;
     }
@@ -424,42 +511,65 @@ export function buildActualDisplayEvents({
   const sleepOverrideApplied = sleepOverrideIntervals.length > 0;
   const filteredResults = sleepOverrideApplied
     ? results.filter((event) => {
-        if (event.category !== 'sleep') return true;
+        if (event.category !== "sleep") return true;
         const start = event.startMinutes;
         const end = event.startMinutes + event.duration;
         const overlapsOverride = sleepOverrideIntervals.some((interval) =>
-          intervalsOverlap(start, end, interval.startMinutes, interval.endMinutes),
+          intervalsOverlap(
+            start,
+            end,
+            interval.startMinutes,
+            interval.endMinutes,
+          ),
         );
         return !overlapsOverride;
       })
     : results;
 
   const withUnknowns = fillUnknownGaps(filteredResults);
-  const withSleepFilled = replaceUnknownWithSleepSchedule(withUnknowns, sleepOverrideIntervals, {
-    ymd,
-    usageSummary,
-    screenTimeSessions: evidence?.screenTimeSessions ?? null,
-    healthDaily: evidence?.healthDaily ?? null,
-    dataQuality,
-  });
-  const withLocationFilled = replaceUnknownWithLocationEvidence(withSleepFilled, {
-    ymd,
-    locationBlocks,
-    usageSummary,
-    screenTimeSessions: evidence?.screenTimeSessions ?? null,
-    appCategoryOverrides,
-    dataQuality,
-    minMinutes: minEvidenceBlockMinutes,
-    userPlaces: evidence?.userPlaces,
-  });
-  const allowGapFilling = gapFillingPreference !== 'manual';
-  const allowProductiveFill = gapFillingPreference === 'aggressive';
-  const allowTransitions = gapFillingPreference === 'aggressive';
+  const withSleepFilled = replaceUnknownWithSleepSchedule(
+    withUnknowns,
+    sleepOverrideIntervals,
+    {
+      ymd,
+      usageSummary,
+      screenTimeSessions: evidence?.screenTimeSessions ?? null,
+      healthDaily: evidence?.healthDaily ?? null,
+      dataQuality,
+    },
+  );
+  const withLocationFilled = replaceUnknownWithLocationEvidence(
+    withSleepFilled,
+    {
+      ymd,
+      locationBlocks,
+      usageSummary,
+      screenTimeSessions: evidence?.screenTimeSessions ?? null,
+      appCategoryOverrides,
+      dataQuality,
+      minMinutes: minEvidenceBlockMinutes,
+      userPlaces: evidence?.userPlaces,
+    },
+  );
+  const allowGapFilling = gapFillingPreference !== "manual";
+  const allowProductiveFill = gapFillingPreference === "aggressive";
+  const allowTransitions = gapFillingPreference === "aggressive";
   const allowPatterns = allowGapFilling && allowAutoSuggestions;
-  const preferenceOffset = gapFillingPreference === 'aggressive' ? -0.1 : gapFillingPreference === 'conservative' ? 0.1 : 0;
+  const preferenceOffset =
+    gapFillingPreference === "aggressive"
+      ? -0.1
+      : gapFillingPreference === "conservative"
+        ? 0.1
+        : 0;
   const effectivePatternMinConfidence = Math.max(
     0.4,
-    Math.min(0.95, Math.max(patternMinConfidence ?? 0.6, confidenceThreshold + preferenceOffset)),
+    Math.min(
+      0.95,
+      Math.max(
+        patternMinConfidence ?? 0.6,
+        confidenceThreshold + preferenceOffset,
+      ),
+    ),
   );
 
   const withProductiveFilled = allowProductiveFill
@@ -510,7 +620,7 @@ export function buildActualDisplayEvents({
  * Only removes events if there's significant overlap (more than 10 minutes) to avoid
  * removing events that just touch at boundaries or have minor overlaps.
  * This ensures no visual overlaps in the calendar display while preserving events.
- * 
+ *
  * Priority: Keep events in this order:
  * 1. Events from Supabase (already saved)
  * 2. Derived events with higher confidence
@@ -518,22 +628,32 @@ export function buildActualDisplayEvents({
  */
 function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
   const sorted = [...events].sort((a, b) => {
-    const aMeta = a.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
-    const bMeta = b.meta as { confidence?: number; source?: string; actual?: boolean } | undefined;
+    const aMeta = a.meta as
+      | { confidence?: number; source?: string; actual?: boolean }
+      | undefined;
+    const bMeta = b.meta as
+      | { confidence?: number; source?: string; actual?: boolean }
+      | undefined;
 
-    const aIsUserActual = Boolean(aMeta?.actual) || aMeta?.source === 'user' || aMeta?.source === 'actual_adjust';
-    const bIsUserActual = Boolean(bMeta?.actual) || bMeta?.source === 'user' || bMeta?.source === 'actual_adjust';
+    const aIsUserActual =
+      Boolean(aMeta?.actual) ||
+      aMeta?.source === "user" ||
+      aMeta?.source === "actual_adjust";
+    const bIsUserActual =
+      Boolean(bMeta?.actual) ||
+      bMeta?.source === "user" ||
+      bMeta?.source === "actual_adjust";
     if (aIsUserActual && !bIsUserActual) return -1;
     if (!aIsUserActual && bIsUserActual) return 1;
 
-    const aIsDerived = aMeta?.source === 'derived';
-    const bIsDerived = bMeta?.source === 'derived';
+    const aIsDerived = aMeta?.source === "derived";
+    const bIsDerived = bMeta?.source === "derived";
     if (!aIsDerived && bIsDerived) return -1;
     if (aIsDerived && !bIsDerived) return 1;
 
     // Sort by priority: non-unknown events first, then by confidence, then by start time
-    if (a.category !== 'unknown' && b.category === 'unknown') return -1;
-    if (a.category === 'unknown' && b.category !== 'unknown') return 1;
+    if (a.category !== "unknown" && b.category === "unknown") return -1;
+    if (a.category === "unknown" && b.category !== "unknown") return 1;
 
     const aConfidence = aMeta?.confidence ?? 0;
     const bConfidence = bMeta?.confidence ?? 0;
@@ -548,7 +668,7 @@ function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
   for (const event of sorted) {
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
-    
+
     // Check for significant overlap (more than 10 minutes) with any existing event
     const hasSignificantOverlap = occupied.some((interval) => {
       const overlapStart = Math.max(start, interval.start);
@@ -594,12 +714,22 @@ function buildPlannedActualEvent(options: {
   const plannedEnd = clampMinutes(planned.startMinutes + planned.duration);
   if (plannedEnd <= startMinutes) return null;
 
-  const nextPlannedStart = plannedEvents.find((e) => e.startMinutes > planned.startMinutes)?.startMinutes;
-  const maxEnd = nextPlannedStart !== undefined ? Math.min(nextPlannedStart, 24 * 60) : 24 * 60;
+  const nextPlannedStart = plannedEvents.find(
+    (e) => e.startMinutes > planned.startMinutes,
+  )?.startMinutes;
+  const maxEnd =
+    nextPlannedStart !== undefined
+      ? Math.min(nextPlannedStart, 24 * 60)
+      : 24 * 60;
 
   const locationEvidence = verification?.evidence.location;
   const matchingLocation = locationEvidence?.matchesExpected
-    ? findMatchingLocationBlock(locationBlocks, startMinutes, plannedEnd, locationEvidence)
+    ? findMatchingLocationBlock(
+        locationBlocks,
+        startMinutes,
+        plannedEnd,
+        locationEvidence,
+      )
     : null;
 
   let actualEnd = plannedEnd;
@@ -611,39 +741,64 @@ function buildPlannedActualEvent(options: {
   }
 
   const usageInfo = usageSummary
-    ? getUsageOverlapInfo(usageSummary, startMinutes, actualEnd, appCategoryOverrides)
+    ? getUsageOverlapInfo(
+        usageSummary,
+        startMinutes,
+        actualEnd,
+        appCategoryOverrides,
+      )
     : null;
 
   const description = buildActualDescription({
     planned,
     verification,
     extendedMinutes: Math.max(0, actualEnd - plannedEnd),
-    locationLabel: matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
+    locationLabel:
+      matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
     usageInfo,
   });
 
   const sleepQuality = buildSleepQualityMetrics(healthDaily ?? null);
 
-  const conflicts: Array<{ source: 'location' | 'screen_time' | 'health'; detail: string }> = [];
-  if (planned.category === 'work' && usageInfo?.isDistraction) {
-    conflicts.push({ source: 'screen_time', detail: 'Distraction apps during work' });
+  const conflicts: Array<{
+    source: "location" | "screen_time" | "health";
+    detail: string;
+  }> = [];
+  if (planned.category === "work" && usageInfo?.isDistraction) {
+    conflicts.push({
+      source: "screen_time",
+      detail: "Distraction apps during work",
+    });
   }
   if (
-    planned.category === 'sleep' &&
+    planned.category === "sleep" &&
     usageInfo &&
     usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
   ) {
-    conflicts.push({ source: 'screen_time', detail: 'Phone use during sleep window' });
+    conflicts.push({
+      source: "screen_time",
+      detail: "Phone use during sleep window",
+    });
   }
-  if (planned.category === 'work' && sleepQuality?.qualityScore && sleepQuality.qualityScore < 50) {
-    conflicts.push({ source: 'health', detail: 'Low sleep quality before work' });
+  if (
+    planned.category === "work" &&
+    sleepQuality?.qualityScore &&
+    sleepQuality.qualityScore < 50
+  ) {
+    conflicts.push({
+      source: "health",
+      detail: "Low sleep quality before work",
+    });
   }
   if (
     planned.location &&
     matchingLocation?.placeLabel &&
     planned.location.toLowerCase() !== matchingLocation.placeLabel.toLowerCase()
   ) {
-    conflicts.push({ source: 'location', detail: 'Location differs from plan' });
+    conflicts.push({
+      source: "location",
+      detail: "Location differs from plan",
+    });
   }
 
   const patternSuggestion = getPatternSuggestionForRange(
@@ -652,9 +807,13 @@ function buildPlannedActualEvent(options: {
     startMinutes,
     actualEnd,
   );
-  if (patternSuggestion && patternSuggestion.category !== planned.category && patternSuggestion.confidence >= 0.6) {
+  if (
+    patternSuggestion &&
+    patternSuggestion.category !== planned.category &&
+    patternSuggestion.confidence >= 0.6
+  ) {
     conflicts.push({
-      source: 'pattern',
+      source: "pattern",
       detail: `Typical ${patternSuggestion.category} at this time`,
     });
   }
@@ -676,10 +835,10 @@ function buildPlannedActualEvent(options: {
           ...(patternSummary?.deviation && patternSummary.typicalCategory
             ? [
                 {
-                  type: 'pattern',
+                  type: "pattern",
                   expected: `Typical ${patternSummary.typicalCategory}`,
                   actual: planned.category,
-                  severity: 'minor',
+                  severity: "minor",
                 },
               ]
             : []),
@@ -698,18 +857,21 @@ function buildPlannedActualEvent(options: {
 
   const meta: CalendarEventMeta = {
     category: planned.category,
-    source: 'derived',
+    source: "derived",
     plannedEventId: planned.id,
     confidence: fusion.confidence,
     dataQuality,
     patternSummary: patternSummary ?? undefined,
     verificationReport,
     evidence: {
-      locationLabel: matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
-      screenTimeMinutes: usageInfo ? Math.round(usageInfo.totalMinutes) : undefined,
+      locationLabel:
+        matchingLocation?.placeLabel ?? locationEvidence?.placeLabel ?? null,
+      screenTimeMinutes: usageInfo
+        ? Math.round(usageInfo.totalMinutes)
+        : undefined,
       topApp: usageInfo?.topApp ?? null,
       sleep:
-        planned.category === 'sleep'
+        planned.category === "sleep"
           ? {
               asleepMinutes: sleepQuality?.asleepMinutes,
               deepMinutes: sleepQuality?.deepMinutes ?? null,
@@ -727,9 +889,11 @@ function buildPlannedActualEvent(options: {
     },
     evidenceFusion: fusion,
     kind:
-      planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
-        ? 'sleep_late'
-        : 'planned_actual',
+      planned.category === "sleep" &&
+      usageInfo &&
+      usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+        ? "sleep_late"
+        : "planned_actual",
   };
 
   return {
@@ -738,7 +902,8 @@ function buildPlannedActualEvent(options: {
     description,
     startMinutes,
     duration: Math.max(1, actualEnd - startMinutes),
-    location: planned.location ?? matchingLocation?.placeLabel ?? planned.location,
+    location:
+      planned.location ?? matchingLocation?.placeLabel ?? planned.location,
     meta,
   };
 }
@@ -750,21 +915,26 @@ function buildActualDescription(options: {
   locationLabel: string | null;
   usageInfo: UsageOverlapInfo | null;
 }): string {
-  const { planned, verification, extendedMinutes, locationLabel, usageInfo } = options;
+  const { planned, verification, extendedMinutes, locationLabel, usageInfo } =
+    options;
   const parts: string[] = [];
 
   if (planned.description?.trim()) {
     parts.push(planned.description.trim());
   }
 
-  if (planned.category === 'sleep' && usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
+  if (
+    planned.category === "sleep" &&
+    usageInfo &&
+    usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+  ) {
     parts.push(
       buildSleepLateDescription({
         minutes: usageInfo.totalMinutes,
         topAppName: usageInfo.topApp,
       }),
     );
-    return parts.join(' • ');
+    return parts.join(" • ");
   }
 
   if (extendedMinutes >= MIN_EVIDENCE_BLOCK_MINUTES) {
@@ -782,40 +952,73 @@ function buildActualDescription(options: {
     const topApp = screenTime.topApps[0]?.app;
 
     if (distractionMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
-      parts.push(`Distracted: ${distractionMinutes} min${topApp ? ` on ${topApp}` : ''}`);
-    } else if (totalMinutes >= DISTRACTION_THRESHOLD_MINUTES && planned.category !== 'digital') {
-      parts.push(`Phone use: ${totalMinutes} min${topApp ? ` on ${topApp}` : ''}`);
+      parts.push(
+        `Distracted: ${distractionMinutes} min${topApp ? ` on ${topApp}` : ""}`,
+      );
+    } else if (
+      totalMinutes >= DISTRACTION_THRESHOLD_MINUTES &&
+      planned.category !== "digital"
+    ) {
+      parts.push(
+        `Phone use: ${totalMinutes} min${topApp ? ` on ${topApp}` : ""}`,
+      );
     }
-  } else if (usageInfo && usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
+  } else if (
+    usageInfo &&
+    usageInfo.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES
+  ) {
     const minutes = Math.round(usageInfo.totalMinutes);
     if (usageInfo.isDistraction) {
-      parts.push(`Distracted: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ''}`);
+      parts.push(
+        `Distracted: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ""}`,
+      );
     } else if (usageInfo.isProductive) {
-      parts.push(`Productive: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ''}`);
+      parts.push(
+        `Productive: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ""}`,
+      );
     } else {
-      parts.push(`Phone use: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ''}`);
+      parts.push(
+        `Phone use: ${minutes} min${usageInfo.topApp ? ` on ${usageInfo.topApp}` : ""}`,
+      );
     }
   }
 
-  if (verification?.status === 'contradicted' && verification.reason) {
+  if (verification?.status === "contradicted" && verification.reason) {
     parts.push(verification.reason);
   }
 
-  return parts.join(' • ');
+  return parts.join(" • ");
 }
 
-function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: EvidenceLocationSample[]): LocationBlock[] {
+function buildLocationBlocks(
+  ymd: string,
+  rows: LocationHourlyRow[],
+  samples?: EvidenceLocationSample[],
+): LocationBlock[] {
   const blocks: LocationBlock[] = [];
   const dayStart = ymdToDate(ymd);
-  const sorted = [...rows].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
+  const sorted = [...rows].sort((a, b) =>
+    a.hour_start.localeCompare(b.hour_start),
+  );
 
   // Build a map of hour -> { firstSampleMinute, lastSampleMinute, avgLat, avgLng } from raw samples
   // so we can refine hour boundaries to the actual first/last sample time and compute avg coordinates.
-  const hourSampleBounds = new Map<number, { first: number; last: number; sumLat: number; sumLng: number; coordCount: number }>();
+  const hourSampleBounds = new Map<
+    number,
+    {
+      first: number;
+      last: number;
+      sumLat: number;
+      sumLng: number;
+      coordCount: number;
+    }
+  >();
   if (samples && samples.length > 0) {
     for (const sample of samples) {
       const sampleTime = parseDbTimestamp(sample.recorded_at);
-      const sampleMinute = Math.round((sampleTime.getTime() - dayStart.getTime()) / 60_000);
+      const sampleMinute = Math.round(
+        (sampleTime.getTime() - dayStart.getTime()) / 60_000,
+      );
       if (sampleMinute < 0 || sampleMinute >= 24 * 60) continue;
       const hourKey = Math.floor(sampleMinute / 60);
       const existing = hourSampleBounds.get(hourKey);
@@ -833,7 +1036,8 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
           last: sampleMinute,
           sumLat: sample.latitude ?? 0,
           sumLng: sample.longitude ?? 0,
-          coordCount: (sample.latitude != null && sample.longitude != null) ? 1 : 0,
+          coordCount:
+            sample.latitude != null && sample.longitude != null ? 1 : 0,
         });
       }
     }
@@ -843,10 +1047,12 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
 
   for (const row of sorted) {
     const hourStart = parseDbTimestamp(row.hour_start);
-    const hourStartMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
+    const hourStartMinutes = Math.floor(
+      (hourStart.getTime() - dayStart.getTime()) / 60_000,
+    );
     if (hourStartMinutes < 0 || hourStartMinutes >= 24 * 60) continue;
 
-    const placeLabel = row.place_label || row.place_category || '';
+    const placeLabel = row.place_label || row.place_category || "";
     const placeCategory = row.place_category ?? null;
     const placeId = row.place_id ?? null;
     const hourKey = Math.floor(hourStartMinutes / 60);
@@ -856,11 +1062,19 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
     const nextStart = bounds ? bounds.first : hourStartMinutes;
     // End is last sample minute + 1 (to cover the minute the sample occurred in),
     // but at most the full hour end boundary.
-    const nextEnd = bounds ? Math.min(bounds.last + 1, hourStartMinutes + 60) : hourStartMinutes + 60;
+    const nextEnd = bounds
+      ? Math.min(bounds.last + 1, hourStartMinutes + 60)
+      : hourStartMinutes + 60;
 
     // Compute average coordinates for this hour from raw samples
-    const hourAvgLat = bounds && bounds.coordCount > 0 ? bounds.sumLat / bounds.coordCount : null;
-    const hourAvgLng = bounds && bounds.coordCount > 0 ? bounds.sumLng / bounds.coordCount : null;
+    const hourAvgLat =
+      bounds && bounds.coordCount > 0
+        ? bounds.sumLat / bounds.coordCount
+        : null;
+    const hourAvgLng =
+      bounds && bounds.coordCount > 0
+        ? bounds.sumLng / bounds.coordCount
+        : null;
 
     if (nextEnd <= nextStart) continue;
 
@@ -893,9 +1107,13 @@ function buildLocationBlocks(ymd: string, rows: LocationHourlyRow[], samples?: E
     blocks.push(current);
   }
 
-  console.log(`[location-blocks] Built ${blocks.length} blocks from ${rows.length} hourly rows and ${samples?.length ?? 0} raw samples`);
+  console.log(
+    `[location-blocks] Built ${blocks.length} blocks from ${rows.length} hourly rows and ${samples?.length ?? 0} raw samples`,
+  );
   for (const block of blocks) {
-    console.log(`[location-blocks]   ${block.placeLabel}: ${block.startMinutes}-${block.endMinutes} (${block.endMinutes - block.startMinutes} min)`);
+    console.log(
+      `[location-blocks]   ${block.placeLabel}: ${block.startMinutes}-${block.endMinutes} (${block.endMinutes - block.startMinutes} min)`,
+    );
   }
 
   return blocks;
@@ -905,13 +1123,20 @@ function findMatchingLocationBlock(
   blocks: LocationBlock[],
   startMinutes: number,
   endMinutes: number,
-  evidence: { placeLabel: string | null; placeCategory: string | null }
+  evidence: { placeLabel: string | null; placeCategory: string | null },
 ): LocationBlock | null {
   const label = evidence.placeLabel?.toLowerCase() ?? null;
   const category = evidence.placeCategory?.toLowerCase() ?? null;
 
   for (const block of blocks) {
-    if (!intervalsOverlap(startMinutes, endMinutes, block.startMinutes, block.endMinutes)) {
+    if (
+      !intervalsOverlap(
+        startMinutes,
+        endMinutes,
+        block.startMinutes,
+        block.endMinutes,
+      )
+    ) {
       continue;
     }
     const blockLabel = block.placeLabel.toLowerCase();
@@ -930,18 +1155,31 @@ function hasOverlap(
   start: number,
   end: number,
   intervals: Array<{ start: number; end: number }>,
-  minMinutes: number
+  minMinutes: number,
 ): boolean {
-  return intervals.some((interval) => overlapMinutes(start, end, interval.start, interval.end) >= minMinutes);
+  return intervals.some(
+    (interval) =>
+      overlapMinutes(start, end, interval.start, interval.end) >= minMinutes,
+  );
 }
 
-function overlapMinutes(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
+function overlapMinutes(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+): number {
   const start = Math.max(aStart, bStart);
   const end = Math.min(aEnd, bEnd);
   return Math.max(0, end - start);
 }
 
-function intervalsOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+function intervalsOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+): boolean {
   return overlapMinutes(aStart, aEnd, bStart, bEnd) > 0;
 }
 
@@ -956,7 +1194,9 @@ function clampMinutes(minutes: number): number {
  * Preserves seconds precision (e.g., 9:32:45 → 573 not 572).
  */
 function dateToMinutes(date: Date): number {
-  return Math.round((date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60));
+  return Math.round(
+    date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60,
+  );
 }
 
 function ymdToDate(ymd: string): Date {
@@ -976,7 +1216,7 @@ function parseDbTimestamp(timestamp: string): Date {
   if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
     return new Date(timestamp);
   }
-  return new Date(timestamp + 'Z');
+  return new Date(timestamp + "Z");
 }
 
 function fillUnknownGaps(events: ScheduledEvent[]): ScheduledEvent[] {
@@ -1031,7 +1271,7 @@ function replaceUnknownWithSleepSchedule(
   let unknownCounter = 0;
 
   for (const event of events) {
-    if (event.category !== 'unknown') {
+    if (event.category !== "unknown") {
       updated.push(event);
       continue;
     }
@@ -1049,11 +1289,19 @@ function replaceUnknownWithSleepSchedule(
       const overlapEnd = Math.min(end, interval.endMinutes);
 
       if (overlapStart > cursor) {
-        updated.push(buildUnknownEvent(cursor, overlapStart - cursor, unknownCounter++));
+        updated.push(
+          buildUnknownEvent(cursor, overlapStart - cursor, unknownCounter++),
+        );
       }
 
       if (overlapEnd > overlapStart) {
-        updated.push(buildInterruptedSleepEvent(overlapStart, overlapEnd - overlapStart, context));
+        updated.push(
+          buildInterruptedSleepEvent(
+            overlapStart,
+            overlapEnd - overlapStart,
+            context,
+          ),
+        );
       }
 
       cursor = Math.max(cursor, overlapEnd);
@@ -1079,7 +1327,7 @@ function replaceUnknownWithLocationEvidence(
   let unknownCounter = 0;
 
   for (const event of sorted) {
-    if (event.category !== 'unknown') {
+    if (event.category !== "unknown") {
       updated.push(event);
       continue;
     }
@@ -1089,7 +1337,10 @@ function replaceUnknownWithLocationEvidence(
     if (end <= start) continue;
 
     const startLocation = findLocationLabelAtMinute(locationBlocks, start);
-    const endLocation = findLocationLabelAtMinute(locationBlocks, Math.max(start, end - 1));
+    const endLocation = findLocationLabelAtMinute(
+      locationBlocks,
+      Math.max(start, end - 1),
+    );
     const startLabel = startLocation.label?.trim() ?? null;
     const endLabel = endLocation.label?.trim() ?? null;
     const gapMinutes = end - start;
@@ -1117,7 +1368,9 @@ function replaceUnknownWithLocationEvidence(
     }
 
     const overlaps = locationBlocks
-      .filter((block) => intervalsOverlap(start, end, block.startMinutes, block.endMinutes))
+      .filter((block) =>
+        intervalsOverlap(start, end, block.startMinutes, block.endMinutes),
+      )
       .sort((a, b) => a.startMinutes - b.startMinutes);
 
     if (overlaps.length === 0) {
@@ -1133,15 +1386,19 @@ function replaceUnknownWithLocationEvidence(
 
       const duration = overlapEnd - overlapStart;
       if (duration < minMinutes) {
-        updated.push(buildUnknownEvent(overlapStart, duration, unknownCounter++));
+        updated.push(
+          buildUnknownEvent(overlapStart, duration, unknownCounter++),
+        );
         cursor = Math.max(cursor, overlapEnd);
         continue;
       }
 
-      const locationLabel = block.placeLabel?.trim() ?? '';
+      const locationLabel = block.placeLabel?.trim() ?? "";
       const placeCategory = block.placeCategory?.trim() ?? null;
       if (!locationLabel && !placeCategory) {
-        updated.push(buildUnknownEvent(overlapStart, duration, unknownCounter++));
+        updated.push(
+          buildUnknownEvent(overlapStart, duration, unknownCounter++),
+        );
         cursor = Math.max(cursor, overlapEnd);
         continue;
       }
@@ -1150,7 +1407,7 @@ function replaceUnknownWithLocationEvidence(
         buildLocationEvent({
           startMinutes: overlapStart,
           duration,
-          locationLabel: locationLabel || placeCategory || 'Unknown location',
+          locationLabel: locationLabel || placeCategory || "Unknown location",
           placeCategory,
           placeId: block.placeId,
           avgLat: block.avgLat,
@@ -1181,7 +1438,7 @@ function replaceUnknownWithProductiveUsage(
   const updated: ScheduledEvent[] = [];
 
   for (const event of events) {
-    if (event.category !== 'unknown') {
+    if (event.category !== "unknown") {
       updated.push(event);
       continue;
     }
@@ -1190,8 +1447,17 @@ function replaceUnknownWithProductiveUsage(
     const end = clampMinutes(event.startMinutes + event.duration);
     if (end <= start) continue;
 
-    const usageInfo = getUsageOverlapInfo(usageSummary, start, end, appCategoryOverrides);
-    if (!usageInfo || !usageInfo.isProductive || usageInfo.totalMinutes < minMinutes) {
+    const usageInfo = getUsageOverlapInfo(
+      usageSummary,
+      start,
+      end,
+      appCategoryOverrides,
+    );
+    if (
+      !usageInfo ||
+      !usageInfo.isProductive ||
+      usageInfo.totalMinutes < minMinutes
+    ) {
       updated.push(event);
       continue;
     }
@@ -1203,8 +1469,12 @@ function replaceUnknownWithProductiveUsage(
       continue;
     }
 
-    const durationMinutes = Math.round(Math.min(usageInfo.totalMinutes, blockDuration));
-    updated.push(buildProductiveUnknownEvent(start, durationMinutes, usageInfo.topApp));
+    const durationMinutes = Math.round(
+      Math.min(usageInfo.totalMinutes, blockDuration),
+    );
+    updated.push(
+      buildProductiveUnknownEvent(start, durationMinutes, usageInfo.topApp),
+    );
   }
 
   return updated;
@@ -1231,7 +1501,7 @@ function replaceUnknownWithTransitions(
 
   for (let i = 0; i < sorted.length; i += 1) {
     const event = sorted[i];
-    if (event.category !== 'unknown') {
+    if (event.category !== "unknown") {
       updated.push(event);
       continue;
     }
@@ -1251,20 +1521,30 @@ function replaceUnknownWithTransitions(
 
     const startMinute = event.startMinutes;
     const endMinute = event.startMinutes + event.duration;
-    const fromLocation = findLocationLabelAtMinute(context.locationBlocks, startMinute);
-    const toLocation = findLocationLabelAtMinute(context.locationBlocks, endMinute);
+    const fromLocation = findLocationLabelAtMinute(
+      context.locationBlocks,
+      startMinute,
+    );
+    const toLocation = findLocationLabelAtMinute(
+      context.locationBlocks,
+      endMinute,
+    );
     const fromLabel = fromLocation.label ?? prev.location ?? null;
     const toLabel = toLocation.label ?? next.location ?? null;
 
-    if (!fromLabel || !toLabel || fromLabel.toLowerCase() === toLabel.toLowerCase()) {
+    if (
+      !fromLabel ||
+      !toLabel ||
+      fromLabel.toLowerCase() === toLabel.toLowerCase()
+    ) {
       updated.push(event);
       continue;
     }
 
     const meta: CalendarEventMeta = {
-      category: 'travel',
-      source: 'derived',
-      kind: 'travel',
+      category: "travel",
+      source: "derived",
+      kind: "travel",
       confidence: 0.45,
       evidence: {
         locationLabel: `${fromLabel} → ${toLabel}`,
@@ -1275,7 +1555,7 @@ function replaceUnknownWithTransitions(
       ...event,
       title: `Travel: ${fromLabel} → ${toLabel}`,
       description: `${fromLabel} → ${toLabel}`,
-      category: 'travel',
+      category: "travel",
       meta,
     });
   }
@@ -1292,7 +1572,7 @@ function replaceUnknownWithPrepWindDown(
 
   for (let i = 0; i < sorted.length; i += 1) {
     const event = sorted[i];
-    if (event.category !== 'unknown') {
+    if (event.category !== "unknown") {
       updated.push(event);
       continue;
     }
@@ -1311,7 +1591,9 @@ function replaceUnknownWithPrepWindDown(
     }
 
     const sameCategory = prev.category === next.category;
-    const isTargetCategory = TRANSITION_TARGET_CATEGORIES.includes(prev.category);
+    const isTargetCategory = TRANSITION_TARGET_CATEGORIES.includes(
+      prev.category,
+    );
     if (!sameCategory || !isTargetCategory) {
       updated.push(event);
       continue;
@@ -1319,22 +1601,32 @@ function replaceUnknownWithPrepWindDown(
 
     const startMinute = event.startMinutes;
     const endMinute = event.startMinutes + event.duration;
-    const fromLocation = findLocationLabelAtMinute(context.locationBlocks, startMinute);
-    const toLocation = findLocationLabelAtMinute(context.locationBlocks, endMinute);
+    const fromLocation = findLocationLabelAtMinute(
+      context.locationBlocks,
+      startMinute,
+    );
+    const toLocation = findLocationLabelAtMinute(
+      context.locationBlocks,
+      endMinute,
+    );
     const fromLabel = fromLocation.label ?? prev.location ?? null;
     const toLabel = toLocation.label ?? next.location ?? null;
 
-    if (fromLabel && toLabel && fromLabel.toLowerCase() !== toLabel.toLowerCase()) {
+    if (
+      fromLabel &&
+      toLabel &&
+      fromLabel.toLowerCase() !== toLabel.toLowerCase()
+    ) {
       updated.push(event);
       continue;
     }
 
     const isPrep = next.category === prev.category;
-    const title = isPrep ? 'Prep' : 'Wind down';
-    const kind = isPrep ? 'transition_prep' : 'transition_wind_down';
+    const title = isPrep ? "Prep" : "Wind down";
+    const kind = isPrep ? "transition_prep" : "transition_wind_down";
     const meta: CalendarEventMeta = {
       category: prev.category,
-      source: 'derived',
+      source: "derived",
       kind,
       confidence: 0.35,
       evidence: {
@@ -1392,9 +1684,9 @@ function buildCommuteEvent(options: {
     screenTime,
   });
   const meta: CalendarEventMeta = {
-    category: 'travel',
-    source: 'derived',
-    kind: 'travel',
+    category: "travel",
+    source: "derived",
+    kind: "travel",
     confidence: 0.5,
     dataQuality: context.dataQuality,
     evidence: {
@@ -1410,7 +1702,7 @@ function buildCommuteEvent(options: {
     description,
     startMinutes,
     duration,
-    category: 'travel',
+    category: "travel",
     meta,
   };
 }
@@ -1426,14 +1718,36 @@ function buildLocationEvent(options: {
   context: LocationReplacementContext;
   uniqueId: number;
 }): ScheduledEvent {
-  const { startMinutes, duration, locationLabel, placeCategory, placeId, avgLat, avgLng, context, uniqueId } = options;
+  const {
+    startMinutes,
+    duration,
+    locationLabel,
+    placeCategory,
+    placeId,
+    avgLat,
+    avgLng,
+    context,
+    uniqueId,
+  } = options;
 
   // Auto-tag from user place:
   // 1. If placeId is set, the SQL view already matched geographically via PostGIS st_dwithin
   // 2. If no placeId but we have coordinates, try haversine distance matching as fallback
-  let autoTaggedPlace = placeId ? findUserPlaceById(placeId, context.userPlaces) : null;
-  if (!autoTaggedPlace && avgLat != null && avgLng != null && context.userPlaces && context.userPlaces.length > 0) {
-    autoTaggedPlace = findNearestUserPlaceByHaversine(avgLat, avgLng, context.userPlaces);
+  let autoTaggedPlace = placeId
+    ? findUserPlaceById(placeId, context.userPlaces)
+    : null;
+  if (
+    !autoTaggedPlace &&
+    avgLat != null &&
+    avgLng != null &&
+    context.userPlaces &&
+    context.userPlaces.length > 0
+  ) {
+    autoTaggedPlace = findNearestUserPlaceByHaversine(
+      avgLat,
+      avgLng,
+      context.userPlaces,
+    );
   }
   const resolved = autoTaggedPlace
     ? resolveFromAutoTaggedPlace(autoTaggedPlace, placeCategory)
@@ -1458,8 +1772,8 @@ function buildLocationEvent(options: {
 
   const meta: CalendarEventMeta = {
     category: resolved.category,
-    source: 'derived',
-    kind: 'location_inferred',
+    source: "derived",
+    kind: "location_inferred",
     confidence,
     dataQuality: context.dataQuality,
     evidence: {
@@ -1487,7 +1801,10 @@ function buildLocationEvent(options: {
  * Find a user place by its ID from the user places array.
  * Used when the location_hourly view has already matched a place geographically via PostGIS.
  */
-function findUserPlaceById(placeId: string, userPlaces?: UserPlaceRow[]): UserPlaceRow | null {
+function findUserPlaceById(
+  placeId: string,
+  userPlaces?: UserPlaceRow[],
+): UserPlaceRow | null {
   if (!userPlaces || userPlaces.length === 0) return null;
   return userPlaces.find((p) => p.id === placeId) ?? null;
 }
@@ -1501,10 +1818,13 @@ function resolveFromAutoTaggedPlace(
   place: UserPlaceRow,
   placeCategory: string | null,
 ): { title: string; description: string; category: EventCategory } {
-  const category = place.category ? mapPlaceCategoryString(place.category) : 'free';
-  const description = placeCategory && formatPlaceLabel(placeCategory) !== place.label
-    ? formatPlaceLabel(placeCategory)
-    : '';
+  const category = place.category
+    ? mapPlaceCategoryString(place.category)
+    : "free";
+  const description =
+    placeCategory && formatPlaceLabel(placeCategory) !== place.label
+      ? formatPlaceLabel(placeCategory)
+      : "";
   return { title: place.label, description, category };
 }
 
@@ -1513,8 +1833,10 @@ function resolveFromAutoTaggedPlace(
  * Used for client-side geographic matching with configurable radius.
  */
 function haversineDistanceMeters(
-  lat1: number, lng1: number,
-  lat2: number, lng2: number,
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
 ): number {
   const R = 6_371_000; // Earth's radius in meters
   const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -1522,8 +1844,10 @@ function haversineDistanceMeters(
   const dLng = toRad(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -1544,8 +1868,16 @@ function findNearestUserPlaceByHaversine(
 
   for (const place of userPlaces) {
     if (place.latitude == null || place.longitude == null) continue;
-    const distance = haversineDistanceMeters(lat, lng, place.latitude, place.longitude);
-    const matchRadius = Math.min(place.radius_m || DEFAULT_PLACE_MATCH_RADIUS_METERS, DEFAULT_PLACE_MATCH_RADIUS_METERS);
+    const distance = haversineDistanceMeters(
+      lat,
+      lng,
+      place.latitude,
+      place.longitude,
+    );
+    const matchRadius = Math.min(
+      place.radius_m || DEFAULT_PLACE_MATCH_RADIUS_METERS,
+      DEFAULT_PLACE_MATCH_RADIUS_METERS,
+    );
     if (distance <= matchRadius && distance < bestDistance) {
       bestPlace = place;
       bestDistance = distance;
@@ -1571,7 +1903,9 @@ function resolveFromUserPlaces(
     const placeLabel = place.label.toLowerCase().trim();
     // Match if the location label contains the user place label or vice versa
     if (needle.includes(placeLabel) || placeLabel.includes(needle)) {
-      const category = place.category ? mapPlaceCategoryString(place.category) : 'free';
+      const category = place.category
+        ? mapPlaceCategoryString(place.category)
+        : "free";
       return { title: place.label, category };
     }
   }
@@ -1584,32 +1918,36 @@ function resolveFromUserPlaces(
 function mapPlaceCategoryString(category: string): EventCategory {
   const lower = category.toLowerCase().trim();
   const mapping: Record<string, EventCategory> = {
-    faith: 'routine',
-    church: 'routine',
-    worship: 'routine',
-    family: 'family',
-    home: 'family',
-    work: 'work',
-    office: 'work',
-    health: 'health',
-    gym: 'health',
-    fitness: 'health',
-    meal: 'meal',
-    food: 'meal',
-    restaurant: 'meal',
-    travel: 'travel',
-    finance: 'finance',
-    social: 'social',
-    digital: 'digital',
-    sleep: 'sleep',
-    routine: 'routine',
-    meeting: 'meeting',
-    commute: 'comm',
+    faith: "routine",
+    church: "routine",
+    worship: "routine",
+    family: "family",
+    home: "family",
+    work: "work",
+    office: "work",
+    health: "health",
+    gym: "health",
+    fitness: "health",
+    meal: "meal",
+    food: "meal",
+    restaurant: "meal",
+    travel: "travel",
+    finance: "finance",
+    social: "social",
+    digital: "digital",
+    sleep: "sleep",
+    routine: "routine",
+    meeting: "meeting",
+    commute: "comm",
   };
-  return mapping[lower] ?? 'free';
+  return mapping[lower] ?? "free";
 }
 
-function resolveLocationDetails(locationLabel: string, placeCategory: string | null, userPlaces?: UserPlaceRow[]): {
+function resolveLocationDetails(
+  locationLabel: string,
+  placeCategory: string | null,
+  userPlaces?: UserPlaceRow[],
+): {
   title: string;
   description: string;
   category: EventCategory;
@@ -1617,54 +1955,99 @@ function resolveLocationDetails(locationLabel: string, placeCategory: string | n
   // Check user-defined places first — user labels take priority over generic inference
   const userMatch = resolveFromUserPlaces(locationLabel, userPlaces);
   if (userMatch) {
-    const description = placeCategory && formatPlaceLabel(placeCategory) !== userMatch.title ? formatPlaceLabel(placeCategory) : '';
-    return { title: userMatch.title, description, category: userMatch.category };
+    const description =
+      placeCategory && formatPlaceLabel(placeCategory) !== userMatch.title
+        ? formatPlaceLabel(placeCategory)
+        : "";
+    return {
+      title: userMatch.title,
+      description,
+      category: userMatch.category,
+    };
   }
 
-  const raw = [locationLabel, placeCategory].find(Boolean) ?? 'Location';
+  const raw = [locationLabel, placeCategory].find(Boolean) ?? "Location";
   const label = formatPlaceLabel(raw);
   const category = mapPlaceToCategory(locationLabel, placeCategory);
-  const description = placeCategory && formatPlaceLabel(placeCategory) !== label ? formatPlaceLabel(placeCategory) : '';
+  const description =
+    placeCategory && formatPlaceLabel(placeCategory) !== label
+      ? formatPlaceLabel(placeCategory)
+      : "";
   return { title: label, description, category };
 }
 
 function formatPlaceLabel(value: string): string {
-  const cleaned = value.replace(/[_-]+/g, ' ').trim();
-  if (!cleaned) return 'Location';
+  const cleaned = value.replace(/[_-]+/g, " ").trim();
+  if (!cleaned) return "Location";
   return cleaned
-    .split(' ')
+    .split(" ")
     .filter(Boolean)
     .map((word) => word[0]?.toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
-function mapPlaceToCategory(locationLabel: string, placeCategory: string | null): EventCategory {
-  const combined = `${locationLabel} ${placeCategory ?? ''}`.toLowerCase();
-  if (combined.includes('coffee') || combined.includes('cafe') || combined.includes('restaurant') || combined.includes('diner') || combined.includes('food') || combined.includes('bar')) {
-    return 'meal';
+function mapPlaceToCategory(
+  locationLabel: string,
+  placeCategory: string | null,
+): EventCategory {
+  const combined = `${locationLabel} ${placeCategory ?? ""}`.toLowerCase();
+  if (
+    combined.includes("coffee") ||
+    combined.includes("cafe") ||
+    combined.includes("restaurant") ||
+    combined.includes("diner") ||
+    combined.includes("food") ||
+    combined.includes("bar")
+  ) {
+    return "meal";
   }
-  if (combined.includes('gym') || combined.includes('fitness') || combined.includes('workout') || combined.includes('yoga') || combined.includes('park')) {
-    return 'health';
+  if (
+    combined.includes("gym") ||
+    combined.includes("fitness") ||
+    combined.includes("workout") ||
+    combined.includes("yoga") ||
+    combined.includes("park")
+  ) {
+    return "health";
   }
-  if (combined.includes('office') || combined.includes('work') || combined.includes('cowork') || combined.includes('studio') || combined.includes('school') || combined.includes('university')) {
-    return 'work';
+  if (
+    combined.includes("office") ||
+    combined.includes("work") ||
+    combined.includes("cowork") ||
+    combined.includes("studio") ||
+    combined.includes("school") ||
+    combined.includes("university")
+  ) {
+    return "work";
   }
-  if (combined.includes('church') || combined.includes('chapel') || combined.includes('temple')) {
-    return 'routine';
+  if (
+    combined.includes("church") ||
+    combined.includes("chapel") ||
+    combined.includes("temple")
+  ) {
+    return "routine";
   }
-  if (combined.includes('home')) {
-    return 'family';
+  if (combined.includes("home")) {
+    return "family";
   }
-  if (combined.includes('bank') || combined.includes('finance')) {
-    return 'finance';
+  if (combined.includes("bank") || combined.includes("finance")) {
+    return "finance";
   }
-  if (combined.includes('airport') || combined.includes('station') || combined.includes('transit') || combined.includes('travel')) {
-    return 'travel';
+  if (
+    combined.includes("airport") ||
+    combined.includes("station") ||
+    combined.includes("transit") ||
+    combined.includes("travel")
+  ) {
+    return "travel";
   }
-  return 'free';
+  return "free";
 }
 
-function buildLocationDescription(options: { base: string; screenTime: ScreenTimeOverlapInfo | null }): string {
+function buildLocationDescription(options: {
+  base: string;
+  screenTime: ScreenTimeOverlapInfo | null;
+}): string {
   const parts: string[] = [];
   const base = options.base.trim();
   if (base) parts.push(base);
@@ -1672,14 +2055,20 @@ function buildLocationDescription(options: { base: string; screenTime: ScreenTim
   if (screenTime && screenTime.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
     const minutes = Math.round(screenTime.totalMinutes);
     if (screenTime.isDistraction) {
-      parts.push(`Distracted: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+      parts.push(
+        `Distracted: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
+      );
     } else if (screenTime.isProductive) {
-      parts.push(`Productive: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+      parts.push(
+        `Productive: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
+      );
     } else {
-      parts.push(`Phone use: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ''}`);
+      parts.push(
+        `Phone use: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
+      );
     }
   }
-  return parts.join(' • ');
+  return parts.join(" • ");
 }
 
 interface SleepInterruptionSummary {
@@ -1703,21 +2092,30 @@ function buildSleepInterruptionSummaryFromSessions(
   for (const session of sessions) {
     const sessionStart = parseDbTimestamp(session.started_at);
     const sessionEnd = parseDbTimestamp(session.ended_at);
-    const sessionStartMinutes = (sessionStart.getTime() - dayStart.getTime()) / 60_000;
-    const sessionEndMinutes = (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
+    const sessionStartMinutes =
+      (sessionStart.getTime() - dayStart.getTime()) / 60_000;
+    const sessionEndMinutes =
+      (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
     const overlapStart = Math.max(startMinutes, sessionStartMinutes);
     const overlapEnd = Math.min(endMinutes, sessionEndMinutes);
     if (overlapEnd <= overlapStart) continue;
 
     intervals.push({ startMinutes: overlapStart, endMinutes: overlapEnd });
     const overlapMinutes = overlapEnd - overlapStart;
-    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
+    const appName =
+      getReadableAppName({
+        appId: session.app_id,
+        displayName: session.display_name,
+      }) ?? session.app_id;
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }
 
   if (intervals.length === 0) return null;
-  const mergedIntervals = mergeIntervals(intervals, SLEEP_SCREEN_TIME_GAP_MINUTES);
+  const mergedIntervals = mergeIntervals(
+    intervals,
+    SLEEP_SCREEN_TIME_GAP_MINUTES,
+  );
   const interruptionCount = Math.max(1, mergedIntervals.length);
   const interruptionMinutes = mergedIntervals.reduce(
     (total, interval) => total + (interval.endMinutes - interval.startMinutes),
@@ -1741,13 +2139,27 @@ function getScreenTimeOverlapInfo(options: {
   screenTimeSessions?: ScreenTimeSessionRow[] | null;
   appCategoryOverrides?: AppCategoryOverrides;
 }): ScreenTimeOverlapInfo | null {
-  const { ymd, startMinutes, endMinutes, usageSummary, screenTimeSessions, appCategoryOverrides } = options;
+  const {
+    ymd,
+    startMinutes,
+    endMinutes,
+    usageSummary,
+    screenTimeSessions,
+    appCategoryOverrides,
+  } = options;
   if (endMinutes <= startMinutes) return null;
 
   if (screenTimeSessions && screenTimeSessions.length > 0) {
-    const overlap = buildScreenTimeOverlapFromSessions(screenTimeSessions, ymd, startMinutes, endMinutes);
+    const overlap = buildScreenTimeOverlapFromSessions(
+      screenTimeSessions,
+      ymd,
+      startMinutes,
+      endMinutes,
+    );
     if (!overlap || overlap.totalMinutes <= 0) return null;
-    const classification = overlap.topApp ? classifyAppUsage(overlap.topApp, appCategoryOverrides) : null;
+    const classification = overlap.topApp
+      ? classifyAppUsage(overlap.topApp, appCategoryOverrides)
+      : null;
     return {
       totalMinutes: overlap.totalMinutes,
       topApp: overlap.topApp,
@@ -1757,7 +2169,12 @@ function getScreenTimeOverlapInfo(options: {
   }
 
   if (usageSummary) {
-    const usageInfo = getUsageOverlapInfo(usageSummary, startMinutes, endMinutes, appCategoryOverrides);
+    const usageInfo = getUsageOverlapInfo(
+      usageSummary,
+      startMinutes,
+      endMinutes,
+      appCategoryOverrides,
+    );
     if (!usageInfo) return null;
     return {
       totalMinutes: usageInfo.totalMinutes,
@@ -1783,20 +2200,30 @@ function buildScreenTimeOverlapFromSessions(
   for (const session of sessions) {
     const sessionStart = parseDbTimestamp(session.started_at);
     const sessionEnd = parseDbTimestamp(session.ended_at);
-    const sessionStartMinutes = (sessionStart.getTime() - dayStart.getTime()) / 60_000;
-    const sessionEndMinutes = (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
+    const sessionStartMinutes =
+      (sessionStart.getTime() - dayStart.getTime()) / 60_000;
+    const sessionEndMinutes =
+      (sessionEnd.getTime() - dayStart.getTime()) / 60_000;
     const overlapStart = Math.max(startMinutes, sessionStartMinutes);
     const overlapEnd = Math.min(endMinutes, sessionEndMinutes);
     if (overlapEnd <= overlapStart) continue;
     const overlapMinutes = overlapEnd - overlapStart;
-    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
+    const appName =
+      getReadableAppName({
+        appId: session.app_id,
+        displayName: session.display_name,
+      }) ?? session.app_id;
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }
 
   if (appUsage.size === 0) return null;
-  const totalMinutes = Array.from(appUsage.values()).reduce((sum, minutes) => sum + minutes, 0);
-  const topApp = Array.from(appUsage.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const totalMinutes = Array.from(appUsage.values()).reduce(
+    (sum, minutes) => sum + minutes,
+    0,
+  );
+  const topApp =
+    Array.from(appUsage.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   return { totalMinutes, topApp };
 }
 
@@ -1811,7 +2238,9 @@ function buildSleepInterruptionSummary(
 
   let interruptionCount = 1;
   if (usageSummary.sessions && usageSummary.sessions.length > 0) {
-    const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+    const appIdToName = new Map(
+      usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+    );
     const intervals = buildSleepSessionIntervals({
       sessions: usageSummary.sessions,
       sleepStart: startMinutes,
@@ -1819,7 +2248,10 @@ function buildSleepInterruptionSummary(
       appIdToName,
     });
     if (intervals.length > 0) {
-      const mergedIntervals = mergeIntervals(intervals, SLEEP_SCREEN_TIME_GAP_MINUTES);
+      const mergedIntervals = mergeIntervals(
+        intervals,
+        SLEEP_SCREEN_TIME_GAP_MINUTES,
+      );
       interruptionCount = Math.max(1, mergedIntervals.length);
     }
   }
@@ -1831,11 +2263,13 @@ function buildSleepInterruptionSummary(
   };
 }
 
-function buildSleepInterruptedDescription(summary: SleepInterruptionSummary | null): string {
-  if (!summary) return 'Sleep schedule • Interrupted';
+function buildSleepInterruptedDescription(
+  summary: SleepInterruptionSummary | null,
+): string {
+  if (!summary) return "Sleep schedule • Interrupted";
   const rounded = Math.round(summary.interruptionMinutes);
-  const timesLabel = summary.interruptionCount === 1 ? 'time' : 'times';
-  const appLabel = summary.topAppName ? ` on ${summary.topAppName}` : '';
+  const timesLabel = summary.interruptionCount === 1 ? "time" : "times";
+  const appLabel = summary.topAppName ? ` on ${summary.topAppName}` : "";
   return `Sleep schedule • Interrupted ${summary.interruptionCount} ${timesLabel} (${rounded} min${appLabel})`;
 }
 
@@ -1854,15 +2288,19 @@ function buildInterruptedSleepEvent(
           endMinutes,
         )
       : context.usageSummary
-        ? buildSleepInterruptionSummary(context.usageSummary, startMinutes, endMinutes)
+        ? buildSleepInterruptionSummary(
+            context.usageSummary,
+            startMinutes,
+            endMinutes,
+          )
         : null;
 
   const sleepQuality = buildSleepQualityMetrics(context.healthDaily ?? null);
 
   const meta: CalendarEventMeta = {
-    category: 'sleep',
-    source: 'derived',
-    kind: 'sleep_interrupted',
+    category: "sleep",
+    source: "derived",
+    kind: "sleep_interrupted",
     confidence: interruptionSummary ? 0.7 : 0.5,
     dataQuality: context.dataQuality,
     evidence: {
@@ -1883,25 +2321,29 @@ function buildInterruptedSleepEvent(
 
   return {
     id: `${DERIVED_ACTUAL_PREFIX}sleep_interrupted_${startMinutes}_${duration}`,
-    title: 'Sleep',
+    title: "Sleep",
     description: buildSleepInterruptedDescription(interruptionSummary),
     startMinutes,
     duration,
-    category: 'sleep',
+    category: "sleep",
     meta,
   };
 }
 
-function buildProductiveUnknownEvent(startMinutes: number, duration: number, topAppName: string | null): ScheduledEvent {
+function buildProductiveUnknownEvent(
+  startMinutes: number,
+  duration: number,
+  topAppName: string | null,
+): ScheduledEvent {
   const minutes = Math.max(1, Math.round(duration));
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
   const durationLabel = hours > 0 ? `${hours}h ${remaining}m` : `${remaining}m`;
-  const appLabel = topAppName ? ` on ${topAppName}` : '';
+  const appLabel = topAppName ? ` on ${topAppName}` : "";
   const meta: CalendarEventMeta = {
-    category: 'work',
-    source: 'derived',
-    kind: 'unknown_gap',
+    category: "work",
+    source: "derived",
+    kind: "unknown_gap",
     confidence: 0.45,
     evidence: {
       topApp: topAppName,
@@ -1910,20 +2352,24 @@ function buildProductiveUnknownEvent(startMinutes: number, duration: number, top
 
   return {
     id: `${DERIVED_ACTUAL_PREFIX}productive_${startMinutes}_${minutes}`,
-    title: 'Productive',
+    title: "Productive",
     description: `${durationLabel}${appLabel}`,
     startMinutes,
     duration: minutes,
-    category: 'work',
+    category: "work",
     meta,
   };
 }
 
-function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: number): ScheduledEvent {
+function buildUnknownEvent(
+  startMinutes: number,
+  duration: number,
+  uniqueId?: number,
+): ScheduledEvent {
   const meta: CalendarEventMeta = {
-    category: 'unknown',
-    source: 'derived',
-    kind: 'unknown_gap',
+    category: "unknown",
+    source: "derived",
+    kind: "unknown_gap",
     confidence: 0.2,
   };
 
@@ -1931,11 +2377,11 @@ function buildUnknownEvent(startMinutes: number, duration: number, uniqueId?: nu
   const uniqueSuffix = uniqueId !== undefined ? uniqueId : Date.now();
   return {
     id: `${DERIVED_ACTUAL_PREFIX}unknown_${startMinutes}_${duration}_${uniqueSuffix}`,
-    title: 'Unknown',
-    description: 'Tap to assign',
+    title: "Unknown",
+    description: "Tap to assign",
     startMinutes,
     duration,
-    category: 'unknown',
+    category: "unknown",
     meta,
   };
 }
@@ -1948,8 +2394,8 @@ function mergeAdjacentUnknowns(events: ScheduledEvent[]): ScheduledEvent[] {
     const last = merged[merged.length - 1];
     if (
       last &&
-      last.category === 'unknown' &&
-      event.category === 'unknown' &&
+      last.category === "unknown" &&
+      event.category === "unknown" &&
       last.startMinutes + last.duration === event.startMinutes
     ) {
       // Merge by updating duration and regenerating ID to ensure uniqueness
@@ -1971,8 +2417,8 @@ function mergeAdjacentSleep(events: ScheduledEvent[]): ScheduledEvent[] {
     const last = merged[merged.length - 1];
     if (
       last &&
-      last.category === 'sleep' &&
-      event.category === 'sleep' &&
+      last.category === "sleep" &&
+      event.category === "sleep" &&
       last.description === event.description &&
       last.startMinutes + last.duration === event.startMinutes
     ) {
@@ -1991,18 +2437,31 @@ function deriveUsageSummaryBlocks(options: {
   minMinutes: number;
   appCategoryOverrides?: AppCategoryOverrides;
 }): ScheduledEvent[] {
-  const { usageSummary, plannedEvents, minMinutes, appCategoryOverrides } = options;
+  const { usageSummary, plannedEvents, minMinutes, appCategoryOverrides } =
+    options;
   const plannedIntervals = plannedEvents.map((event) => ({
     start: event.startMinutes,
     end: event.startMinutes + event.duration,
   }));
 
-  const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+  const appIdToName = new Map(
+    usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+  );
 
   if (usageSummary.sessions && usageSummary.sessions.length > 0) {
-    const sessions = [...usageSummary.sessions].sort((a, b) => a.startIso.localeCompare(b.startIso));
-    const blocks: Array<{ startMinutes: number; endMinutes: number; topApp: string }> = [];
-    let current: { startMinutes: number; endMinutes: number; topApp: string } | null = null;
+    const sessions = [...usageSummary.sessions].sort((a, b) =>
+      a.startIso.localeCompare(b.startIso),
+    );
+    const blocks: Array<{
+      startMinutes: number;
+      endMinutes: number;
+      topApp: string;
+    }> = [];
+    let current: {
+      startMinutes: number;
+      endMinutes: number;
+      topApp: string;
+    } | null = null;
 
     for (const session of sessions) {
       const start = new Date(session.startIso);
@@ -2015,7 +2474,10 @@ function deriveUsageSummaryBlocks(options: {
           displayName: appIdToName.get(session.packageName) ?? null,
         }) ?? session.packageName;
 
-      if (current && startMinutes - current.endMinutes <= SCREEN_TIME_GAP_MINUTES) {
+      if (
+        current &&
+        startMinutes - current.endMinutes <= SCREEN_TIME_GAP_MINUTES
+      ) {
         current.endMinutes = Math.max(current.endMinutes, endMinutes);
         continue;
       }
@@ -2031,7 +2493,9 @@ function deriveUsageSummaryBlocks(options: {
 
     return blocks
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
-      .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
+      .filter(
+        (b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5),
+      )
       .map((b) =>
         buildScreenTimeEvent(
           b.startMinutes,
@@ -2043,8 +2507,12 @@ function deriveUsageSummaryBlocks(options: {
       );
   }
 
-  if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
-    const hourlyTotals: Record<number, { seconds: number; topApp: string }> = {};
+  if (
+    usageSummary.hourlyByApp &&
+    Object.keys(usageSummary.hourlyByApp).length > 0
+  ) {
+    const hourlyTotals: Record<number, { seconds: number; topApp: string }> =
+      {};
     for (const [appId, hours] of Object.entries(usageSummary.hourlyByApp)) {
       for (const [hourKey, seconds] of Object.entries(hours)) {
         const hour = Number(hourKey);
@@ -2066,11 +2534,16 @@ function deriveUsageSummaryBlocks(options: {
         const startMinutes = hour * 60;
         const endMinutes = startMinutes + durationMinutes;
         const topApp =
-          getReadableAppName({ appId: data.topApp, displayName: appIdToName.get(data.topApp) ?? null }) ?? data.topApp;
+          getReadableAppName({
+            appId: data.topApp,
+            displayName: appIdToName.get(data.topApp) ?? null,
+          }) ?? data.topApp;
         return { startMinutes, endMinutes, topApp };
       })
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
-      .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
+      .filter(
+        (b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5),
+      )
       .map((b) =>
         buildScreenTimeEvent(
           b.startMinutes,
@@ -2082,11 +2555,16 @@ function deriveUsageSummaryBlocks(options: {
       );
   }
 
-  if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
+  if (
+    usageSummary.hourlyBucketsSeconds &&
+    usageSummary.hourlyBucketsSeconds.length > 0
+  ) {
     const first = usageSummary.topApps[0] ?? null;
     const topApp =
-      getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null }) ??
-      'Phone usage';
+      getReadableAppName({
+        appId: first?.packageName ?? null,
+        displayName: first?.displayName ?? null,
+      }) ?? "Phone usage";
     return usageSummary.hourlyBucketsSeconds
       .map((seconds, hour) => {
         const durationMinutes = Math.round(seconds / 60);
@@ -2095,7 +2573,9 @@ function deriveUsageSummaryBlocks(options: {
         return { startMinutes, endMinutes, topApp };
       })
       .filter((b) => b.endMinutes - b.startMinutes >= minMinutes)
-      .filter((b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5))
+      .filter(
+        (b) => !hasOverlap(b.startMinutes, b.endMinutes, plannedIntervals, 5),
+      )
       .map((b) =>
         buildScreenTimeEvent(
           b.startMinutes,
@@ -2127,9 +2607,9 @@ function buildSleepOverrideBlocksFromUsageSummary(options: {
     });
     for (const block of intervalBlocks) {
       const meta: CalendarEventMeta = {
-        category: 'digital',
-        source: 'derived',
-        kind: 'screen_time',
+        category: "digital",
+        source: "derived",
+        kind: "screen_time",
         confidence: 0.6,
         evidence: {
           topApp: block.description || interval.topAppName || null,
@@ -2138,11 +2618,11 @@ function buildSleepOverrideBlocksFromUsageSummary(options: {
       };
       blocks.push({
         ...block,
-        title: 'Screen Time',
+        title: "Screen Time",
         description: buildSleepOverrideDescription({
           topAppName: block.description || interval.topAppName,
         }),
-        category: 'digital',
+        category: "digital",
         meta,
       });
     }
@@ -2151,9 +2631,11 @@ function buildSleepOverrideBlocksFromUsageSummary(options: {
   return blocks;
 }
 
-function buildSleepScheduleIntervals(plannedEvents: ScheduledEvent[]): SleepOverrideInterval[] {
+function buildSleepScheduleIntervals(
+  plannedEvents: ScheduledEvent[],
+): SleepOverrideInterval[] {
   return plannedEvents
-    .filter((event) => event.category === 'sleep')
+    .filter((event) => event.category === "sleep")
     .map((event) => ({
       startMinutes: clampMinutes(event.startMinutes),
       endMinutes: clampMinutes(event.startMinutes + event.duration),
@@ -2169,22 +2651,38 @@ function buildSleepOverrideIntervals(options: {
   verificationResults?: Map<string, VerificationResult>;
   locationBlocks: LocationBlock[];
 }): SleepOverrideInterval[] {
-  const { usageSummary, plannedEvents, actualEvents, verificationResults, locationBlocks } = options;
+  const {
+    usageSummary,
+    plannedEvents,
+    actualEvents,
+    verificationResults,
+    locationBlocks,
+  } = options;
 
   const plannedOverrides = plannedEvents
-    .filter((event) => event.category === 'sleep')
+    .filter((event) => event.category === "sleep")
     .map((event) => {
       const startMinutes = clampMinutes(event.startMinutes);
       const plannedEnd = clampMinutes(event.startMinutes + event.duration);
       if (plannedEnd <= startMinutes) return null;
 
-      const nextPlannedStart = plannedEvents.find((e) => e.startMinutes > event.startMinutes)?.startMinutes;
-      const maxEnd = nextPlannedStart !== undefined ? Math.min(nextPlannedStart, 24 * 60) : 24 * 60;
+      const nextPlannedStart = plannedEvents.find(
+        (e) => e.startMinutes > event.startMinutes,
+      )?.startMinutes;
+      const maxEnd =
+        nextPlannedStart !== undefined
+          ? Math.min(nextPlannedStart, 24 * 60)
+          : 24 * 60;
 
       const verification = verificationResults?.get(event.id) ?? null;
       const locationEvidence = verification?.evidence.location;
       const matchingLocation = locationEvidence?.matchesExpected
-        ? findMatchingLocationBlock(locationBlocks, startMinutes, plannedEnd, locationEvidence)
+        ? findMatchingLocationBlock(
+            locationBlocks,
+            startMinutes,
+            plannedEnd,
+            locationEvidence,
+          )
         : null;
 
       let actualEnd = plannedEnd;
@@ -2198,10 +2696,18 @@ function buildSleepOverrideIntervals(options: {
       const duration = Math.max(0, actualEnd - startMinutes);
       if (duration === 0) return null;
 
-      const usageInfo = getUsageOverlapInfo(usageSummary, startMinutes, actualEnd);
+      const usageInfo = getUsageOverlapInfo(
+        usageSummary,
+        startMinutes,
+        actualEnd,
+      );
       if (!usageInfo) return null;
       const isOverride =
-        usageInfo.totalMinutes >= Math.max(SLEEP_OVERRIDE_MIN_MINUTES, duration * SLEEP_OVERRIDE_MIN_COVERAGE);
+        usageInfo.totalMinutes >=
+        Math.max(
+          SLEEP_OVERRIDE_MIN_MINUTES,
+          duration * SLEEP_OVERRIDE_MIN_COVERAGE,
+        );
       if (!isOverride) return null;
 
       return {
@@ -2213,16 +2719,24 @@ function buildSleepOverrideIntervals(options: {
     .filter((interval): interval is SleepOverrideInterval => Boolean(interval));
 
   const actualOverrides = actualEvents
-    .filter((event) => event.category === 'sleep')
+    .filter((event) => event.category === "sleep")
     .map((event) => {
       const startMinutes = clampMinutes(event.startMinutes);
       const endMinutes = clampMinutes(event.startMinutes + event.duration);
       const duration = Math.max(0, endMinutes - startMinutes);
       if (duration === 0) return null;
-      const usageInfo = getUsageOverlapInfo(usageSummary, startMinutes, endMinutes);
+      const usageInfo = getUsageOverlapInfo(
+        usageSummary,
+        startMinutes,
+        endMinutes,
+      );
       if (!usageInfo) return null;
       const isOverride =
-        usageInfo.totalMinutes >= Math.max(SLEEP_OVERRIDE_MIN_MINUTES, duration * SLEEP_OVERRIDE_MIN_COVERAGE);
+        usageInfo.totalMinutes >=
+        Math.max(
+          SLEEP_OVERRIDE_MIN_MINUTES,
+          duration * SLEEP_OVERRIDE_MIN_COVERAGE,
+        );
       if (!isOverride) return null;
       return {
         startMinutes,
@@ -2236,15 +2750,24 @@ function buildSleepOverrideIntervals(options: {
   if (overrides.length === 0) return [];
 
   const merged = mergeIntervals(
-    overrides.map((interval) => ({ startMinutes: interval.startMinutes, endMinutes: interval.endMinutes })),
+    overrides.map((interval) => ({
+      startMinutes: interval.startMinutes,
+      endMinutes: interval.endMinutes,
+    })),
     SLEEP_SCREEN_TIME_GAP_MINUTES,
   );
 
   return merged.map((interval) => ({
     ...interval,
-    topAppName: overrides.find((candidate) =>
-      intervalsOverlap(interval.startMinutes, interval.endMinutes, candidate.startMinutes, candidate.endMinutes),
-    )?.topAppName ?? null,
+    topAppName:
+      overrides.find((candidate) =>
+        intervalsOverlap(
+          interval.startMinutes,
+          interval.endMinutes,
+          candidate.startMinutes,
+          candidate.endMinutes,
+        ),
+      )?.topAppName ?? null,
   }));
 }
 
@@ -2257,11 +2780,15 @@ function deriveUsageSummaryBlocksForInterval(options: {
   const { usageSummary, startMinutes, endMinutes, minMinutes } = options;
   if (endMinutes <= startMinutes) return [];
 
-  const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+  const appIdToName = new Map(
+    usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+  );
   const blocks: Array<{ startMinutes: number; endMinutes: number }> = [];
 
   if (usageSummary.sessions && usageSummary.sessions.length > 0) {
-    const sessions = [...usageSummary.sessions].sort((a, b) => a.startIso.localeCompare(b.startIso));
+    const sessions = [...usageSummary.sessions].sort((a, b) =>
+      a.startIso.localeCompare(b.startIso),
+    );
     let current: { startMinutes: number; endMinutes: number } | null = null;
 
     for (const session of sessions) {
@@ -2273,29 +2800,44 @@ function deriveUsageSummaryBlocksForInterval(options: {
       const clippedEnd = Math.min(endMinutes, sessionEnd);
       if (clippedEnd <= clippedStart) continue;
 
-      if (current && clippedStart - current.endMinutes <= SLEEP_SCREEN_TIME_GAP_MINUTES) {
+      if (
+        current &&
+        clippedStart - current.endMinutes <= SLEEP_SCREEN_TIME_GAP_MINUTES
+      ) {
         current.endMinutes = Math.max(current.endMinutes, clippedEnd);
         continue;
       }
 
       if (current) blocks.push(current);
-      current = { startMinutes: clampMinutes(clippedStart), endMinutes: clampMinutes(clippedEnd) };
+      current = {
+        startMinutes: clampMinutes(clippedStart),
+        endMinutes: clampMinutes(clippedEnd),
+      };
     }
     if (current) blocks.push(current);
-  } else if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
+  } else if (
+    usageSummary.hourlyByApp &&
+    Object.keys(usageSummary.hourlyByApp).length > 0
+  ) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
     for (let hour = startHour; hour <= endHour; hour++) {
       const hourStart = hour * 60;
       const hourEnd = hourStart + 60;
-      const overlapMinutesInHour = Math.max(0, Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart));
+      const overlapMinutesInHour = Math.max(
+        0,
+        Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart),
+      );
       if (overlapMinutesInHour < minMinutes) continue;
       blocks.push({
         startMinutes: Math.max(startMinutes, hourStart),
         endMinutes: Math.min(endMinutes, hourEnd),
       });
     }
-  } else if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
+  } else if (
+    usageSummary.hourlyBucketsSeconds &&
+    usageSummary.hourlyBucketsSeconds.length > 0
+  ) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
     for (let hour = startHour; hour <= endHour; hour++) {
@@ -2322,11 +2864,11 @@ function deriveUsageSummaryBlocksForInterval(options: {
       });
       return {
         id: `${DERIVED_EVIDENCE_PREFIX}android_sleep_override_${usageSummary.generatedAtIso}_${b.startMinutes}`,
-        title: 'Screen Time',
-        description: topApp ?? 'Phone use',
+        title: "Screen Time",
+        description: topApp ?? "Phone use",
         startMinutes: b.startMinutes,
         duration: Math.max(1, b.endMinutes - b.startMinutes),
-        category: 'digital',
+        category: "digital",
       };
     });
 }
@@ -2348,7 +2890,12 @@ function getTopAppLabelForUsageInterval(options: {
       const end = new Date(session.endIso);
       const sessionStart = dateToMinutes(start);
       const sessionEnd = dateToMinutes(end);
-      const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
+      const overlap = overlapMinutes(
+        startMinutes,
+        endMinutes,
+        sessionStart,
+        sessionEnd,
+      );
       if (overlap <= 0) continue;
       const appName =
         getReadableAppName({
@@ -2357,38 +2904,60 @@ function getTopAppLabelForUsageInterval(options: {
         }) ?? session.packageName;
       usageByApp.set(appName, (usageByApp.get(appName) ?? 0) + overlap);
     }
-  } else if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
+  } else if (
+    usageSummary.hourlyByApp &&
+    Object.keys(usageSummary.hourlyByApp).length > 0
+  ) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
     for (let hour = startHour; hour <= endHour; hour++) {
       const hourStart = hour * 60;
       const hourEnd = hourStart + 60;
-      const overlapMinutesInHour = Math.max(0, Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart));
+      const overlapMinutesInHour = Math.max(
+        0,
+        Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart),
+      );
       if (overlapMinutesInHour <= 0) continue;
       const fraction = overlapMinutesInHour / 60;
       for (const [appId, hours] of Object.entries(usageSummary.hourlyByApp)) {
         const seconds = hours[hour] ?? 0;
         if (seconds <= 0) continue;
         const appName =
-          getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }) ?? appId;
-        usageByApp.set(appName, (usageByApp.get(appName) ?? 0) + (seconds / 60) * fraction);
+          getReadableAppName({
+            appId,
+            displayName: appIdToName.get(appId) ?? null,
+          }) ?? appId;
+        usageByApp.set(
+          appName,
+          (usageByApp.get(appName) ?? 0) + (seconds / 60) * fraction,
+        );
       }
     }
-  } else if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
+  } else if (
+    usageSummary.hourlyBucketsSeconds &&
+    usageSummary.hourlyBucketsSeconds.length > 0
+  ) {
     const first = usageSummary.topApps[0] ?? null;
-    return getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null });
+    return getReadableAppName({
+      appId: first?.packageName ?? null,
+      displayName: first?.displayName ?? null,
+    });
   }
 
   if (usageByApp.size === 0) return null;
-  return Array.from(usageByApp.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return (
+    Array.from(usageByApp.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  );
 }
 
-function buildSleepOverrideDescription(options: { topAppName: string | null }): string {
+function buildSleepOverrideDescription(options: {
+  topAppName: string | null;
+}): string {
   const { topAppName } = options;
   if (topAppName) {
     return `Sleep scheduled • ${topAppName}`;
   }
-  return 'Sleep scheduled • Phone use';
+  return "Sleep scheduled • Phone use";
 }
 
 interface UsageOverlapInfo {
@@ -2406,7 +2975,9 @@ function getUsageOverlapInfo(
 ): UsageOverlapInfo | null {
   if (endMinutes <= startMinutes) return null;
 
-  const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+  const appIdToName = new Map(
+    usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+  );
   const appUsage = new Map<string, number>();
 
   if (usageSummary.sessions && usageSummary.sessions.length > 0) {
@@ -2415,7 +2986,12 @@ function getUsageOverlapInfo(
       const end = new Date(session.endIso);
       const sessionStart = dateToMinutes(start);
       const sessionEnd = dateToMinutes(end);
-      const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
+      const overlap = overlapMinutes(
+        startMinutes,
+        endMinutes,
+        sessionStart,
+        sessionEnd,
+      );
       if (overlap <= 0) continue;
       const appName =
         getReadableAppName({
@@ -2425,13 +3001,19 @@ function getUsageOverlapInfo(
       const current = appUsage.get(appName) ?? 0;
       appUsage.set(appName, current + overlap);
     }
-  } else if (usageSummary.hourlyByApp && Object.keys(usageSummary.hourlyByApp).length > 0) {
+  } else if (
+    usageSummary.hourlyByApp &&
+    Object.keys(usageSummary.hourlyByApp).length > 0
+  ) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
     for (let hour = startHour; hour <= endHour; hour++) {
       const hourStart = hour * 60;
       const hourEnd = hourStart + 60;
-      const overlapMinutesInHour = Math.max(0, Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart));
+      const overlapMinutesInHour = Math.max(
+        0,
+        Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart),
+      );
       if (overlapMinutesInHour <= 0) continue;
       const fraction = overlapMinutesInHour / 60;
 
@@ -2439,28 +3021,42 @@ function getUsageOverlapInfo(
         const seconds = hours[hour] ?? 0;
         if (seconds <= 0) continue;
         const appName =
-          getReadableAppName({ appId, displayName: appIdToName.get(appId) ?? null }) ?? appId;
+          getReadableAppName({
+            appId,
+            displayName: appIdToName.get(appId) ?? null,
+          }) ?? appId;
         const current = appUsage.get(appName) ?? 0;
         appUsage.set(appName, current + (seconds / 60) * fraction);
       }
     }
-  } else if (usageSummary.hourlyBucketsSeconds && usageSummary.hourlyBucketsSeconds.length > 0) {
+  } else if (
+    usageSummary.hourlyBucketsSeconds &&
+    usageSummary.hourlyBucketsSeconds.length > 0
+  ) {
     const startHour = Math.floor(startMinutes / 60);
     const endHour = Math.floor((endMinutes - 1) / 60);
     const first = usageSummary.topApps[0] ?? null;
-    const topApp = getReadableAppName({ appId: first?.packageName ?? null, displayName: first?.displayName ?? null });
+    const topApp = getReadableAppName({
+      appId: first?.packageName ?? null,
+      displayName: first?.displayName ?? null,
+    });
     let totalMinutes = 0;
     for (let hour = startHour; hour <= endHour; hour++) {
       const seconds = usageSummary.hourlyBucketsSeconds[hour] ?? 0;
       if (seconds <= 0) continue;
       const hourStart = hour * 60;
       const hourEnd = hourStart + 60;
-      const overlapMinutesInHour = Math.max(0, Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart));
+      const overlapMinutesInHour = Math.max(
+        0,
+        Math.min(endMinutes, hourEnd) - Math.max(startMinutes, hourStart),
+      );
       if (overlapMinutesInHour <= 0) continue;
       totalMinutes += (seconds / 60) * (overlapMinutesInHour / 60);
     }
     if (totalMinutes <= 0) return null;
-    const classification = topApp ? classifyAppUsage(topApp, appCategoryOverrides) : null;
+    const classification = topApp
+      ? classifyAppUsage(topApp, appCategoryOverrides)
+      : null;
     return {
       totalMinutes,
       topApp,
@@ -2476,7 +3072,9 @@ function getUsageOverlapInfo(
     .sort((a, b) => b.minutes - a.minutes);
   const totalMinutes = sorted.reduce((sum, entry) => sum + entry.minutes, 0);
   const topApp = sorted[0]?.app ?? null;
-  const classification = topApp ? classifyAppUsage(topApp, appCategoryOverrides) : null;
+  const classification = topApp
+    ? classifyAppUsage(topApp, appCategoryOverrides)
+    : null;
 
   return {
     totalMinutes,
@@ -2509,7 +3107,9 @@ function buildSleepStartAdjustmentFromUsageSummary(options: {
   const sleepEnd = clampMinutes(sleepEvent.startMinutes + sleepEvent.duration);
   if (sleepEnd <= sleepStart) return null;
 
-  const appIdToName = new Map(usageSummary.topApps.map((app) => [app.packageName, app.displayName]));
+  const appIdToName = new Map(
+    usageSummary.topApps.map((app) => [app.packageName, app.displayName]),
+  );
   const intervals = buildSleepSessionIntervals({
     sessions: usageSummary.sessions,
     sleepStart,
@@ -2545,15 +3145,17 @@ function buildSleepStartAdjustmentFromUsageSummary(options: {
     topAppName,
     screenTimeBlock: {
       id: `${DERIVED_EVIDENCE_PREFIX}android_sleep_${usageSummary.generatedAtIso}_${candidate.startMinutes}`,
-      title: 'Screen Time',
-      description: topAppName ? toSleepScreenTimePhrase(topAppName) : 'Phone use',
+      title: "Screen Time",
+      description: topAppName
+        ? toSleepScreenTimePhrase(topAppName)
+        : "Phone use",
       startMinutes: candidate.startMinutes,
       duration: candidate.durationMinutes,
-      category: 'digital',
+      category: "digital",
       meta: {
-        category: 'digital',
-        source: 'derived',
-        kind: 'screen_time',
+        category: "digital",
+        source: "derived",
+        kind: "screen_time",
         confidence: 0.6,
         evidence: {
           screenTimeMinutes: Math.round(candidate.durationMinutes),
@@ -2564,7 +3166,10 @@ function buildSleepStartAdjustmentFromUsageSummary(options: {
   };
 }
 
-function buildSleepLateDescription(options: { minutes: number; topAppName: string | null }): string {
+function buildSleepLateDescription(options: {
+  minutes: number;
+  topAppName: string | null;
+}): string {
   const { minutes, topAppName } = options;
   const rounded = Math.round(minutes);
   if (topAppName) {
@@ -2580,7 +3185,11 @@ function buildSleepSessionIntervals(options: {
   appIdToName: Map<string, string>;
 }): Array<{ startMinutes: number; endMinutes: number }> {
   const { sessions, sleepStart, sleepEnd, appIdToName } = options;
-  const intervals: Array<{ startMinutes: number; endMinutes: number; appName: string }> = [];
+  const intervals: Array<{
+    startMinutes: number;
+    endMinutes: number;
+    appName: string;
+  }> = [];
 
   for (const session of sessions) {
     const start = new Date(session.startIso);
@@ -2595,7 +3204,11 @@ function buildSleepSessionIntervals(options: {
         appId: session.packageName,
         displayName: appIdToName.get(session.packageName) ?? null,
       }) ?? session.packageName;
-    intervals.push({ startMinutes: overlapStart, endMinutes: overlapEnd, appName });
+    intervals.push({
+      startMinutes: overlapStart,
+      endMinutes: overlapEnd,
+      appName,
+    });
   }
 
   intervals.sort((a, b) => a.startMinutes - b.startMinutes);
@@ -2608,7 +3221,11 @@ function buildSleepSessionIntervals(options: {
 function mergeIntervals(
   intervals: Array<{ startMinutes: number; endMinutes: number }>,
   gapMinutes: number,
-): Array<{ startMinutes: number; endMinutes: number; durationMinutes: number }> {
+): Array<{
+  startMinutes: number;
+  endMinutes: number;
+  durationMinutes: number;
+}> {
   if (intervals.length === 0) return [];
   const merged: Array<{ startMinutes: number; endMinutes: number }> = [];
 
@@ -2645,7 +3262,12 @@ function getTopAppForInterval(options: {
     const end = new Date(session.endIso);
     const sessionStart = dateToMinutes(start);
     const sessionEnd = dateToMinutes(end);
-    const overlap = overlapMinutes(startMinutes, endMinutes, sessionStart, sessionEnd);
+    const overlap = overlapMinutes(
+      startMinutes,
+      endMinutes,
+      sessionStart,
+      sessionEnd,
+    );
     if (overlap <= 0) continue;
     const appName =
       getReadableAppName({
@@ -2656,15 +3278,18 @@ function getTopAppForInterval(options: {
   }
 
   if (usageByApp.size === 0) return null;
-  return Array.from(usageByApp.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  return (
+    Array.from(usageByApp.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  );
 }
 
 function toSleepScreenTimePhrase(appName: string): string {
   const name = appName.toLowerCase();
-  if (name.includes('youtube')) return 'YouTube rabbit hole';
-  if (name.includes('instagram')) return 'Instagram scroll';
-  if (name.includes('tiktok')) return 'TikTok spiral';
-  if (name.includes('x ') || name === 'x' || name.includes('twitter')) return 'Endless scroll';
+  if (name.includes("youtube")) return "YouTube rabbit hole";
+  if (name.includes("instagram")) return "Instagram scroll";
+  if (name.includes("tiktok")) return "TikTok spiral";
+  if (name.includes("x ") || name === "x" || name.includes("twitter"))
+    return "Endless scroll";
   return appName;
 }
 
@@ -2678,8 +3303,8 @@ function buildScreenTimeEvent(
   const classification = classifyAppUsage(topApp, appCategoryOverrides);
   const meta: CalendarEventMeta = {
     category: classification.category,
-    source: 'derived',
-    kind: 'screen_time',
+    source: "derived",
+    kind: "screen_time",
     confidence: classification.confidence,
     evidence: {
       topApp,

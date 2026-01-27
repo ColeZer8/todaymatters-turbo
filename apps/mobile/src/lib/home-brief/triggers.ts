@@ -1,5 +1,5 @@
-import type { ScheduledEvent } from '@/stores';
-import { addMinutes } from './time';
+import type { ScheduledEvent } from "@/stores";
+import { addMinutes } from "./time";
 
 export interface NextBoundary {
   /** Date when we should reevaluate */
@@ -17,20 +17,20 @@ export function getNextTimeOfDayBoundary(nowDate: Date): NextBoundary {
   if (next != null) {
     const at = new Date(nowDate);
     at.setHours(Math.floor(next / 60), next % 60, 0, 0);
-    return { at, reason: 'timeOfDayBoundary' };
+    return { at, reason: "timeOfDayBoundary" };
   }
 
   // Next day at 5:00
   const at = new Date(nowDate);
   at.setDate(at.getDate() + 1);
   at.setHours(5, 0, 0, 0);
-  return { at, reason: 'timeOfDayBoundaryNextDay' };
+  return { at, reason: "timeOfDayBoundaryNextDay" };
 }
 
 export function getNextScheduleBoundary(
   nowDate: Date,
   nowMinutesFromMidnight: number,
-  scheduledEvents: ScheduledEvent[]
+  scheduledEvents: ScheduledEvent[],
 ): NextBoundary | null {
   let bestMinutes: number | null = null;
   let bestReason: string | null = null;
@@ -44,7 +44,7 @@ export function getNextScheduleBoundary(
       const delta = start - nowMinutesFromMidnight;
       if (bestMinutes == null || delta < bestMinutes) {
         bestMinutes = delta;
-        bestReason = 'eventStart';
+        bestReason = "eventStart";
       }
     }
 
@@ -53,7 +53,7 @@ export function getNextScheduleBoundary(
       const delta = end - nowMinutesFromMidnight;
       if (bestMinutes == null || delta < bestMinutes) {
         bestMinutes = delta;
-        bestReason = 'eventEnd';
+        bestReason = "eventEnd";
       }
     }
   }
@@ -63,7 +63,3 @@ export function getNextScheduleBoundary(
   const at = addMinutes(nowDate, bestMinutes);
   return { at, reason: bestReason };
 }
-
-
-
-

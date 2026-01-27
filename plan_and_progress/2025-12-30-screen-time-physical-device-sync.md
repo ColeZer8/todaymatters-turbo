@@ -38,5 +38,3 @@ Restore Screen Time syncing on physical devices while keeping the report-generat
 ## Follow-ups
 
 - Add a small in-app debug panel (dev-only) to show available native methods + last cache timestamps.
-
-

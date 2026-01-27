@@ -1,6 +1,6 @@
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Target, LucideIcon, Plus } from 'lucide-react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Target, LucideIcon, Plus } from "lucide-react-native";
 import {
   EditableValuePill,
   ProfileAddInput,
@@ -8,10 +8,10 @@ import {
   ProfileMenuItem,
   ProfilePill,
   ProfileSummaryCard,
-} from '@/components/molecules';
-import { BottomToolbar } from '@/components/organisms';
+} from "@/components/molecules";
+import { BottomToolbar } from "@/components/organisms";
 
-type AccentTone = 'blue' | 'purple';
+type AccentTone = "blue" | "purple";
 
 interface ProfileItem {
   id: string;
@@ -58,7 +58,7 @@ interface ProfileTemplateProps {
 }
 
 const sectionTitleClass =
-  'text-[#94A3B8] text-xs font-semibold uppercase tracking-[0.18em]';
+  "text-[#94A3B8] text-xs font-semibold uppercase tracking-[0.18em]";
 
 export const ProfileTemplate = ({
   name,
@@ -69,20 +69,20 @@ export const ProfileTemplate = ({
   initiatives,
   menuItems,
   personalizationItems = [],
-  nameValue = '',
+  nameValue = "",
   onChangeName,
   onEditPress,
   onDonePress,
   isEditing = false,
-  newValueText = '',
+  newValueText = "",
   onChangeNewValue,
   onAddValue,
   onRemoveValue,
-  newGoalText = '',
+  newGoalText = "",
   onChangeNewGoal,
   onAddGoal,
   onRemoveGoal,
-  newInitiativeText = '',
+  newInitiativeText = "",
   onChangeNewInitiative,
   onAddInitiative,
   onRemoveInitiative,
@@ -99,7 +99,7 @@ export const ProfileTemplate = ({
         style={{
           paddingTop: Math.max(insets.top - 11, 0),
           paddingBottom: 12,
-          shadowColor: '#0f172a',
+          shadowColor: "#0f172a",
           shadowOpacity: 0.03,
           shadowRadius: 6,
           shadowOffset: { width: 0, height: 2 },
@@ -118,7 +118,9 @@ export const ProfileTemplate = ({
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={isEditingHeader ? 'Save profile changes' : 'Edit profile'}
+            accessibilityLabel={
+              isEditingHeader ? "Save profile changes" : "Edit profile"
+            }
             hitSlop={10}
             disabled={!headerActionEnabled}
             onPress={handleHeaderAction}
@@ -131,11 +133,11 @@ export const ProfileTemplate = ({
           >
             <View
               className={`${
-                isEditingHeader ? 'rounded-lg bg-[#E9F2FF] px-2.5 py-1.5' : ''
+                isEditingHeader ? "rounded-lg bg-[#E9F2FF] px-2.5 py-1.5" : ""
               }`}
             >
               <Text className="text-[15px] font-semibold text-[#2563EB]">
-                {isEditingHeader ? 'Done' : 'Edit'}
+                {isEditingHeader ? "Done" : "Edit"}
               </Text>
             </View>
           </Pressable>
@@ -174,7 +176,11 @@ export const ProfileTemplate = ({
           <View className="flex-row flex-wrap mt-3 gap-3">
             {coreValues.map((value) =>
               isEditing && onRemoveValue ? (
-                <EditableValuePill key={value} label={value} onRemove={() => onRemoveValue(value)} />
+                <EditableValuePill
+                  key={value}
+                  label={value}
+                  onRemove={() => onRemoveValue(value)}
+                />
               ) : (
                 <ProfilePill key={value} label={value} />
               ),
@@ -197,7 +203,12 @@ export const ProfileTemplate = ({
                   className="items-center justify-center h-11 w-11 rounded-full bg-[#111827]"
                   style={({ pressed }) => [
                     {
-                      opacity: !newValueText.trim() || !onAddValue ? 0.4 : pressed ? 0.85 : 1,
+                      opacity:
+                        !newValueText.trim() || !onAddValue
+                          ? 0.4
+                          : pressed
+                            ? 0.85
+                            : 1,
                     },
                   ]}
                 >
@@ -216,9 +227,11 @@ export const ProfileTemplate = ({
                 key={goal.id}
                 label={goal.label}
                 icon={goal.icon || Target}
-                accent={goal.accent || 'blue'}
+                accent={goal.accent || "blue"}
                 onRemove={
-                  isEditing && onRemoveGoal ? () => onRemoveGoal(goal.id) : undefined
+                  isEditing && onRemoveGoal
+                    ? () => onRemoveGoal(goal.id)
+                    : undefined
                 }
               />
             ))}
@@ -242,7 +255,7 @@ export const ProfileTemplate = ({
                 key={initiative.id}
                 label={initiative.label}
                 icon={initiative.icon || Target}
-                accent={initiative.accent || 'purple'}
+                accent={initiative.accent || "purple"}
                 onRemove={
                   isEditing && onRemoveInitiative
                     ? () => onRemoveInitiative(initiative.id)

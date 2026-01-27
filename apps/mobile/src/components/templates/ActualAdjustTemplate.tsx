@@ -1,11 +1,17 @@
-import { useMemo, useState } from 'react';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Target, Plus } from 'lucide-react-native';
-import type { EventCategory } from '@/stores';
-import type { ActivityCategory } from '@/lib/supabase/services/activity-categories';
-import { HierarchicalCategoryPicker, Big3InputModal } from '@/components/molecules';
-import type { CategoryPath } from '@/components/molecules/HierarchicalCategoryPicker';
+import { useMemo, useState } from "react";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Target, Plus } from "lucide-react-native";
+import type { EventCategory } from "@/stores";
+import type { ActivityCategory } from "@/lib/supabase/services/activity-categories";
+import {
+  HierarchicalCategoryPicker,
+  Big3InputModal,
+} from "@/components/molecules";
+import type { CategoryPath } from "@/components/molecules/HierarchicalCategoryPicker";
 
 export interface ActualAdjustSuggestion {
   category: EventCategory;
@@ -86,13 +92,13 @@ export interface ActualAdjustTemplateProps {
 }
 
 const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
-  { id: 'routine', label: 'Faith' },
-  { id: 'family', label: 'Family' },
-  { id: 'work', label: 'Work' },
-  { id: 'health', label: 'Health' },
-  { id: 'sleep', label: 'Sleep' },
-  { id: 'digital', label: 'Digital' },
-  { id: 'unknown', label: 'Other' },
+  { id: "routine", label: "Faith" },
+  { id: "family", label: "Family" },
+  { id: "work", label: "Work" },
+  { id: "health", label: "Health" },
+  { id: "sleep", label: "Sleep" },
+  { id: "digital", label: "Digital" },
+  { id: "unknown", label: "Other" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -116,20 +122,22 @@ const Big3Section = ({
 
   const hasPriorities =
     big3Priorities &&
-    (big3Priorities.priority_1.trim() !== '' ||
-      big3Priorities.priority_2.trim() !== '' ||
-      big3Priorities.priority_3.trim() !== '');
+    (big3Priorities.priority_1.trim() !== "" ||
+      big3Priorities.priority_2.trim() !== "" ||
+      big3Priorities.priority_3.trim() !== "");
 
   if (hasPriorities) {
     const priorities = [
       { num: 1 as const, text: big3Priorities.priority_1 },
       { num: 2 as const, text: big3Priorities.priority_2 },
       { num: 3 as const, text: big3Priorities.priority_3 },
-    ].filter((p) => p.text.trim() !== '');
+    ].filter((p) => p.text.trim() !== "");
 
     return (
       <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-        <Text className="text-[13px] font-semibold text-[#111827]">Mark as Big 3</Text>
+        <Text className="text-[13px] font-semibold text-[#111827]">
+          Mark as Big 3
+        </Text>
         <Text className="mt-1 text-[12px] text-[#64748B]">
           Assign this time block to one of today's priorities.
         </Text>
@@ -142,19 +150,19 @@ const Big3Section = ({
                 onPress={() => onSelectBig3Priority(isSelected ? null : p.num)}
                 className={`flex-row items-center rounded-xl border px-4 py-3 ${
                   isSelected
-                    ? 'border-[#2563EB] bg-[#DBEAFE]'
-                    : 'border-[#E2E8F0] bg-[#F8FAFC]'
+                    ? "border-[#2563EB] bg-[#DBEAFE]"
+                    : "border-[#E2E8F0] bg-[#F8FAFC]"
                 }`}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
                 <View
                   className={`mr-3 h-6 w-6 items-center justify-center rounded-full ${
-                    isSelected ? 'bg-[#2563EB]' : 'bg-[#E2E8F0]'
+                    isSelected ? "bg-[#2563EB]" : "bg-[#E2E8F0]"
                   }`}
                 >
                   <Text
                     className={`text-[12px] font-bold ${
-                      isSelected ? 'text-white' : 'text-[#64748B]'
+                      isSelected ? "text-white" : "text-[#64748B]"
                     }`}
                   >
                     {p.num}
@@ -162,14 +170,18 @@ const Big3Section = ({
                 </View>
                 <Text
                   className={`flex-1 text-[13px] ${
-                    isSelected ? 'font-semibold text-[#1D4ED8]' : 'text-[#374151]'
+                    isSelected
+                      ? "font-semibold text-[#1D4ED8]"
+                      : "text-[#374151]"
                   }`}
                   numberOfLines={2}
                 >
                   {p.text}
                 </Text>
                 {isSelected && (
-                  <Text className="text-[12px] font-semibold text-[#2563EB]">Assigned</Text>
+                  <Text className="text-[12px] font-semibold text-[#2563EB]">
+                    Assigned
+                  </Text>
                 )}
               </Pressable>
             );
@@ -237,8 +249,8 @@ const PlaceLabelSection = ({
   const [placeCategoryId, setPlaceCategoryId] = useState<string | null>(null);
 
   const buttonLabel = placeLabelInfo.hasExistingLabel
-    ? 'Edit place label'
-    : 'Label this place';
+    ? "Edit place label"
+    : "Label this place";
 
   if (!isExpanded) {
     return (
@@ -250,8 +262,8 @@ const PlaceLabelSection = ({
             </Text>
             <Text className="mt-1 text-[12px] text-[#64748B]">
               {placeLabelInfo.hasExistingLabel
-                ? 'This place has a label. Tap to edit.'
-                : 'Label this place so future visits auto-tag correctly.'}
+                ? "This place has a label. Tap to edit."
+                : "Label this place so future visits auto-tag correctly."}
             </Text>
           </View>
           <Pressable
@@ -259,7 +271,9 @@ const PlaceLabelSection = ({
             className="ml-3 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2"
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
-            <Text className="text-[12px] font-semibold text-[#2563EB]">{buttonLabel}</Text>
+            <Text className="text-[12px] font-semibold text-[#2563EB]">
+              {buttonLabel}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -268,13 +282,18 @@ const PlaceLabelSection = ({
 
   return (
     <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-      <Text className="text-[13px] font-semibold text-[#111827]">{buttonLabel}</Text>
+      <Text className="text-[13px] font-semibold text-[#111827]">
+        {buttonLabel}
+      </Text>
       <Text className="mt-1 text-[12px] text-[#64748B]">
-        Name this place and assign a category. Future visits will be auto-tagged.
+        Name this place and assign a category. Future visits will be
+        auto-tagged.
       </Text>
 
       <View className="mt-3">
-        <Text className="text-[11px] font-semibold text-[#64748B]">Place name</Text>
+        <Text className="text-[11px] font-semibold text-[#64748B]">
+          Place name
+        </Text>
         <TextInput
           value={placeName}
           onChangeText={setPlaceName}
@@ -288,7 +307,9 @@ const PlaceLabelSection = ({
 
       {activityCategories && activityCategories.length > 0 && (
         <View className="mt-3">
-          <Text className="text-[11px] font-semibold text-[#64748B]">Category</Text>
+          <Text className="text-[11px] font-semibold text-[#64748B]">
+            Category
+          </Text>
           <View className="mt-1 max-h-[200px] rounded-xl border border-[#E5E7EB] px-2 py-2">
             <HierarchicalCategoryPicker
               categories={activityCategories}
@@ -309,11 +330,16 @@ const PlaceLabelSection = ({
           disabled={!placeName.trim() || placeLabelInfo.isSavingPlace}
           className="rounded-full bg-[#2563EB] px-4 py-2"
           style={({ pressed }) => ({
-            opacity: !placeName.trim() || placeLabelInfo.isSavingPlace ? 0.4 : pressed ? 0.7 : 1,
+            opacity:
+              !placeName.trim() || placeLabelInfo.isSavingPlace
+                ? 0.4
+                : pressed
+                  ? 0.7
+                  : 1,
           })}
         >
           <Text className="text-[12px] font-semibold text-white">
-            {placeLabelInfo.isSavingPlace ? 'Saving…' : 'Save label'}
+            {placeLabelInfo.isSavingPlace ? "Saving…" : "Save label"}
           </Text>
         </Pressable>
         <Pressable
@@ -321,7 +347,9 @@ const PlaceLabelSection = ({
           className="rounded-full border border-[#E2E8F0] px-4 py-2"
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
-          <Text className="text-[12px] font-semibold text-[#64748B]">Cancel</Text>
+          <Text className="text-[12px] font-semibold text-[#64748B]">
+            Cancel
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -373,7 +401,9 @@ export const ActualAdjustTemplate = ({
   const [isEvidenceExpanded, setIsEvidenceExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const confidenceRow = useMemo(
-    () => evidenceRows.find((row) => row.label.toLowerCase() === 'confidence') ?? null,
+    () =>
+      evidenceRows.find((row) => row.label.toLowerCase() === "confidence") ??
+      null,
     [evidenceRows],
   );
 
@@ -384,9 +414,13 @@ export const ActualAdjustTemplate = ({
         style={{ paddingTop: insets.top + 8 }}
       >
         <Pressable onPress={onCancel} className="px-3 py-2" disabled={isSaving}>
-          <Text className="text-[14px] font-semibold text-[#64748B]">Cancel</Text>
+          <Text className="text-[14px] font-semibold text-[#64748B]">
+            Cancel
+          </Text>
         </Pressable>
-        <Text className="text-[16px] font-semibold text-[#111827]">Adjust Actual</Text>
+        <Text className="text-[16px] font-semibold text-[#111827]">
+          Adjust Actual
+        </Text>
         <Pressable
           onPress={onSave}
           className="px-3 py-2"
@@ -394,7 +428,7 @@ export const ActualAdjustTemplate = ({
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
           <Text className="text-[14px] font-semibold text-[#2563EB]">
-            {isSaving ? 'Saving…' : 'Done'}
+            {isSaving ? "Saving…" : "Done"}
           </Text>
         </Pressable>
       </View>
@@ -423,14 +457,18 @@ export const ActualAdjustTemplate = ({
               className="mt-3 self-start rounded-full border border-[#E2E8F0] bg-white px-3 py-2"
               style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
             >
-              <Text className="text-[12px] font-semibold text-[#2563EB]">Split event</Text>
+              <Text className="text-[12px] font-semibold text-[#2563EB]">
+                Split event
+              </Text>
             </Pressable>
           )}
         </View>
 
         {isSleep && (
           <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-            <Text className="text-[13px] font-semibold text-[#111827]">Sleep timing</Text>
+            <Text className="text-[13px] font-semibold text-[#111827]">
+              Sleep timing
+            </Text>
             <Text className="mt-1 text-[12px] text-[#64748B]">
               Adjust the start and end time to match when you actually slept.
             </Text>
@@ -440,9 +478,11 @@ export const ActualAdjustTemplate = ({
                 className="flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3"
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Text className="text-[11px] font-semibold text-[#64748B]">Start</Text>
+                <Text className="text-[11px] font-semibold text-[#64748B]">
+                  Start
+                </Text>
                 <Text className="mt-1 text-[14px] font-semibold text-[#111827]">
-                  {sleepStartLabel ?? 'Set time'}
+                  {sleepStartLabel ?? "Set time"}
                 </Text>
               </Pressable>
               <Pressable
@@ -450,9 +490,11 @@ export const ActualAdjustTemplate = ({
                 className="flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3"
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
-                <Text className="text-[11px] font-semibold text-[#64748B]">End</Text>
+                <Text className="text-[11px] font-semibold text-[#64748B]">
+                  End
+                </Text>
                 <Text className="mt-1 text-[14px] font-semibold text-[#111827]">
-                  {sleepEndLabel ?? 'Set time'}
+                  {sleepEndLabel ?? "Set time"}
                 </Text>
               </Pressable>
             </View>
@@ -477,8 +519,12 @@ export const ActualAdjustTemplate = ({
         )}
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#F97316]">LIFE AREA</Text>
-          {activityCategories && activityCategories.length > 0 && onSelectActivityCategory ? (
+          <Text className="text-[12px] font-semibold text-[#F97316]">
+            LIFE AREA
+          </Text>
+          {activityCategories &&
+          activityCategories.length > 0 &&
+          onSelectActivityCategory ? (
             <View className="mt-3 max-h-[280px] rounded-2xl border border-[#E5E7EB] bg-white px-2 py-2">
               <HierarchicalCategoryPicker
                 categories={activityCategories}
@@ -495,13 +541,15 @@ export const ActualAdjustTemplate = ({
                     key={option.id}
                     onPress={() => onSelectCategory(option.id)}
                     className={`rounded-full border px-4 py-2 ${
-                      isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
+                      isSelected
+                        ? "border-[#2563EB] bg-[#DBEAFE]"
+                        : "border-[#E2E8F0] bg-white"
                     }`}
                     style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                   >
                     <Text
                       className={`text-[12px] font-semibold ${
-                        isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+                        isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
                       }`}
                     >
                       {option.label}
@@ -514,10 +562,14 @@ export const ActualAdjustTemplate = ({
         </View>
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#94A3B8]">ALIGN WITH VALUES</Text>
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">
+            ALIGN WITH VALUES
+          </Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             {values.length === 0 && (
-              <Text className="text-[12px] text-[#94A3B8]">No values found</Text>
+              <Text className="text-[12px] text-[#94A3B8]">
+                No values found
+              </Text>
             )}
             {values.map((value) => {
               const isSelected = selectedValue === value;
@@ -526,13 +578,15 @@ export const ActualAdjustTemplate = ({
                   key={value}
                   onPress={() => onSelectValue(isSelected ? null : value)}
                   className={`rounded-full border px-4 py-2 ${
-                    isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
+                    isSelected
+                      ? "border-[#2563EB] bg-[#DBEAFE]"
+                      : "border-[#E2E8F0] bg-white"
                   }`}
                   style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                 >
                   <Text
                     className={`text-[12px] font-semibold ${
-                      isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+                      isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
                     }`}
                   >
                     {value}
@@ -544,16 +598,22 @@ export const ActualAdjustTemplate = ({
         </View>
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#94A3B8]">LINKED GOAL</Text>
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">
+            LINKED GOAL
+          </Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             <Pressable
               onPress={() => onSelectGoal(null)}
               className={`rounded-full border px-4 py-2 ${
-                !selectedGoalId ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
+                !selectedGoalId
+                  ? "border-[#2563EB] bg-[#DBEAFE]"
+                  : "border-[#E2E8F0] bg-white"
               }`}
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
-              <Text className={`text-[12px] font-semibold ${!selectedGoalId ? 'text-[#1D4ED8]' : 'text-[#64748B]'}`}>
+              <Text
+                className={`text-[12px] font-semibold ${!selectedGoalId ? "text-[#1D4ED8]" : "text-[#64748B]"}`}
+              >
                 None
               </Text>
             </Pressable>
@@ -564,13 +624,15 @@ export const ActualAdjustTemplate = ({
                   key={goal.id}
                   onPress={() => onSelectGoal(isSelected ? null : goal.id)}
                   className={`rounded-full border px-4 py-2 ${
-                    isSelected ? 'border-[#2563EB] bg-[#DBEAFE]' : 'border-[#E2E8F0] bg-white'
+                    isSelected
+                      ? "border-[#2563EB] bg-[#DBEAFE]"
+                      : "border-[#E2E8F0] bg-white"
                   }`}
                   style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
                 >
                   <Text
                     className={`text-[12px] font-semibold ${
-                      isSelected ? 'text-[#1D4ED8]' : 'text-[#64748B]'
+                      isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
                     }`}
                   >
                     {goal.label}
@@ -583,15 +645,17 @@ export const ActualAdjustTemplate = ({
 
         {selectedGoalId && (
           <View className="mt-4 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-            <Text className="text-[13px] font-semibold text-[#111827]">Contribution</Text>
+            <Text className="text-[13px] font-semibold text-[#111827]">
+              Contribution
+            </Text>
             <Text className="mt-1 text-[12px] text-[#64748B]">
               How much did this activity contribute to that goal?
             </Text>
             <View className="mt-3 flex-row flex-wrap gap-2">
               {[
-                { label: 'Not set', value: null },
-                { label: 'Partial (50%)', value: 50 },
-                { label: 'Complete (100%)', value: 100 },
+                { label: "Not set", value: null },
+                { label: "Partial (50%)", value: 50 },
+                { label: "Complete (100%)", value: 100 },
               ].map((option) => {
                 const isSelected = goalContribution === option.value;
                 return (
@@ -599,13 +663,15 @@ export const ActualAdjustTemplate = ({
                     key={option.label}
                     onPress={() => onSelectGoalContribution(option.value)}
                     className={`rounded-full border px-3 py-2 ${
-                      isSelected ? 'border-[#6366F1] bg-[#EEF2FF]' : 'border-[#E2E8F0] bg-white'
+                      isSelected
+                        ? "border-[#6366F1] bg-[#EEF2FF]"
+                        : "border-[#E2E8F0] bg-white"
                     }`}
                     style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                   >
                     <Text
                       className={`text-[12px] font-semibold ${
-                        isSelected ? 'text-[#4338CA]' : 'text-[#64748B]'
+                        isSelected ? "text-[#4338CA]" : "text-[#64748B]"
                       }`}
                     >
                       {option.label}
@@ -618,7 +684,9 @@ export const ActualAdjustTemplate = ({
         )}
 
         <View className="mt-6 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-          <Text className="text-[13px] font-semibold text-[#111827]">Tell us what really happened</Text>
+          <Text className="text-[13px] font-semibold text-[#111827]">
+            Tell us what really happened
+          </Text>
           <TextInput
             value={note}
             onChangeText={onChangeNote}
@@ -633,7 +701,9 @@ export const ActualAdjustTemplate = ({
             </Text>
           )}
           {suggestion?.reason && (
-            <Text className="mt-2 text-[12px] text-[#6B7280]">{suggestion.reason}</Text>
+            <Text className="mt-2 text-[12px] text-[#6B7280]">
+              {suggestion.reason}
+            </Text>
           )}
         </View>
 
@@ -643,17 +713,27 @@ export const ActualAdjustTemplate = ({
               onPress={() => setIsEvidenceExpanded((prev) => !prev)}
               className="flex-row items-center justify-between"
             >
-              <Text className="text-[13px] font-semibold text-[#111827]">Why we marked this</Text>
+              <Text className="text-[13px] font-semibold text-[#111827]">
+                Why we marked this
+              </Text>
               <Text className="text-[12px] font-semibold text-[#2563EB]">
-                {confidenceRow?.value ?? (isEvidenceExpanded ? 'Hide' : 'Details')}
+                {confidenceRow?.value ??
+                  (isEvidenceExpanded ? "Hide" : "Details")}
               </Text>
             </Pressable>
             {isEvidenceExpanded && (
               <View className="mt-3 gap-2">
                 {evidenceRows.map((row) => (
-                  <View key={row.label} className="flex-row items-center justify-between">
-                    <Text className="text-[12px] text-[#64748B]">{row.label}</Text>
-                    <Text className="text-[12px] font-semibold text-[#111827]">{row.value}</Text>
+                  <View
+                    key={row.label}
+                    className="flex-row items-center justify-between"
+                  >
+                    <Text className="text-[12px] text-[#64748B]">
+                      {row.label}
+                    </Text>
+                    <Text className="text-[12px] font-semibold text-[#111827]">
+                      {row.value}
+                    </Text>
                   </View>
                 ))}
               </View>

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { Icon } from '../atoms';
+import { useMemo, useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Icon } from "../atoms";
 
 interface DatePickerPopupProps {
   visible: boolean;
@@ -10,10 +10,20 @@ interface DatePickerPopupProps {
   onClose: () => void;
 }
 
-const DAYS_OF_WEEK = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const DAYS_OF_WEEK = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 const getDaysInMonth = (year: number, month: number) => {
@@ -38,19 +48,19 @@ export const DatePickerPopup = ({
   const calendarData = useMemo(() => {
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = getFirstDayOfMonth(year, month);
-    
+
     const days: (number | null)[] = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDay; i++) {
       days.push(null);
     }
-    
+
     // Add the days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(day);
     }
-    
+
     return days;
   }, [year, month]);
 
@@ -168,95 +178,86 @@ export const DatePickerPopup = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 24,
   },
   popup: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 16,
-    width: '100%',
+    width: "100%",
     maxWidth: 340,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 16,
     paddingHorizontal: 4,
   },
   navButton: {
     width: 32,
     height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   monthTitle: {
     fontSize: 17,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
   },
   daysHeader: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 8,
   },
   dayHeaderCell: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 8,
   },
   dayHeaderText: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#9CA3AF',
+    fontWeight: "500",
+    color: "#9CA3AF",
   },
   calendarGrid: {
     gap: 4,
   },
   weekRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   dayCell: {
     flex: 1,
     aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 2,
   },
   dayContent: {
     width: 36,
     height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 18,
   },
   selectedDay: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
   },
   dayText: {
     fontSize: 15,
-    fontWeight: '500',
-    color: '#111827',
+    fontWeight: "500",
+    color: "#111827",
   },
   selectedDayText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });
-
-
-
-
-
-
-
-
-

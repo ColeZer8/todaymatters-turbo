@@ -1,13 +1,21 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
-import { ArrowLeft, Settings2, Sparkles, Smartphone } from 'lucide-react-native';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card, Icon } from '@/components/atoms';
-import { AnalyticsDonutChart } from '@/components/molecules/AnalyticsDonutChart';
-import { BottomToolbar } from '@/components/organisms/BottomToolbar';
+import { LinearGradient } from "expo-linear-gradient";
+import type { ReactNode } from "react";
+import {
+  ArrowLeft,
+  Settings2,
+  Sparkles,
+  Smartphone,
+} from "lucide-react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { Card, Icon } from "@/components/atoms";
+import { AnalyticsDonutChart } from "@/components/molecules/AnalyticsDonutChart";
+import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 
-type RangeKey = 'today' | 'week' | 'month' | 'year';
+type RangeKey = "today" | "week" | "month" | "year";
 
 interface TopAppRow {
   id: string;
@@ -55,7 +63,7 @@ interface ScreenTimeAnalyticsTemplateProps {
   showAuthorizationCta: boolean;
   isSyncing: boolean;
   bannerText?: string | null;
-  bannerTone?: 'info' | 'warning';
+  bannerTone?: "info" | "warning";
   extraContent?: ReactNode;
 }
 
@@ -80,7 +88,7 @@ export const ScreenTimeAnalyticsTemplate = ({
   showAuthorizationCta,
   isSyncing,
   bannerText,
-  bannerTone = 'info',
+  bannerTone = "info",
   extraContent,
   onPressBack,
   onPressSettings,
@@ -91,14 +99,14 @@ export const ScreenTimeAnalyticsTemplate = ({
   const maxHourly = Math.max(...(hourlyBuckets ?? []), 1);
 
   const rangeOptions: Array<{ label: string; value: RangeKey }> = [
-    { label: 'Today', value: 'today' },
-    { label: 'Week', value: 'week' },
-    { label: 'Month', value: 'month' },
-    { label: 'Year', value: 'year' },
+    { label: "Today", value: "today" },
+    { label: "Week", value: "week" },
+    { label: "Month", value: "month" },
+    { label: "Year", value: "year" },
   ];
 
   return (
-    <LinearGradient colors={['#FBFCFF', '#F4F7FF']} style={{ flex: 1 }}>
+    <LinearGradient colors={["#FBFCFF", "#F4F7FF"]} style={{ flex: 1 }}>
       <SafeAreaView className="flex-1">
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -115,7 +123,9 @@ export const ScreenTimeAnalyticsTemplate = ({
               onPress={onPressBack}
               disabled={!onPressBack}
               className="h-11 w-11 items-center justify-center rounded-full bg-white"
-              style={({ pressed }) => [{ opacity: !onPressBack ? 0 : pressed ? 0.75 : 1 }]}
+              style={({ pressed }) => [
+                { opacity: !onPressBack ? 0 : pressed ? 0.75 : 1 },
+              ]}
             >
               <Icon icon={ArrowLeft} size={20} color="#111827" />
             </Pressable>
@@ -129,7 +139,9 @@ export const ScreenTimeAnalyticsTemplate = ({
               onPress={onPressSettings}
               disabled={!onPressSettings}
               className="h-11 w-11 items-center justify-center rounded-full bg-white"
-              style={({ pressed }) => [{ opacity: !onPressSettings ? 0 : pressed ? 0.75 : 1 }]}
+              style={({ pressed }) => [
+                { opacity: !onPressSettings ? 0 : pressed ? 0.75 : 1 },
+              ]}
             >
               <Icon icon={Settings2} size={18} color="#111827" />
             </Pressable>
@@ -140,22 +152,29 @@ export const ScreenTimeAnalyticsTemplate = ({
             <View className="flex-row items-center gap-1 rounded-full border border-[#E5E7EB] bg-white px-1.5 py-1">
               {rangeOptions.map((opt) => {
                 const isActive = opt.value === range;
-                const isDisabled = !canChangeRange && opt.value !== 'today';
+                const isDisabled = !canChangeRange && opt.value !== "today";
                 return (
                   <Pressable
                     key={opt.value}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: isActive, disabled: isDisabled }}
+                    accessibilityState={{
+                      selected: isActive,
+                      disabled: isDisabled,
+                    }}
                     onPress={() => {
                       if (isDisabled) return;
                       onChangeRange(opt.value);
                     }}
                     className={`items-center justify-center rounded-full px-4 py-1.5 ${
-                      isActive ? 'bg-[#1F2937]' : 'bg-transparent'
+                      isActive ? "bg-[#1F2937]" : "bg-transparent"
                     }`}
-                    style={({ pressed }) => [{ opacity: isDisabled ? 0.4 : pressed ? 0.9 : 1 }]}
+                    style={({ pressed }) => [
+                      { opacity: isDisabled ? 0.4 : pressed ? 0.9 : 1 },
+                    ]}
                   >
-                    <Text className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-[#6B7280]'}`}>
+                    <Text
+                      className={`text-sm font-semibold ${isActive ? "text-white" : "text-[#6B7280]"}`}
+                    >
                       {opt.label}
                     </Text>
                   </Pressable>
@@ -167,19 +186,21 @@ export const ScreenTimeAnalyticsTemplate = ({
           {bannerText ? (
             <View
               className={`mt-4 rounded-2xl border px-4 py-3 ${
-                bannerTone === 'warning'
-                  ? 'border-amber-200 bg-amber-50'
-                  : 'border-blue-200 bg-blue-50'
+                bannerTone === "warning"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-blue-200 bg-blue-50"
               }`}
             >
               <Text
                 className={`text-[12px] font-semibold uppercase tracking-[0.12em] ${
-                  bannerTone === 'warning' ? 'text-amber-700' : 'text-blue-700'
+                  bannerTone === "warning" ? "text-amber-700" : "text-blue-700"
                 }`}
               >
                 Notice
               </Text>
-              <Text className="mt-1 text-[14px] leading-[20px] text-text-secondary">{bannerText}</Text>
+              <Text className="mt-1 text-[14px] leading-[20px] text-text-secondary">
+                {bannerText}
+              </Text>
             </View>
           ) : null}
 
@@ -187,13 +208,19 @@ export const ScreenTimeAnalyticsTemplate = ({
             <Card className="border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
               <View className="flex-row items-start justify-between gap-4">
                 <View className="flex-1">
-                  <Text className="text-[18px] font-bold text-[#16A34A]">{scoreLabel}</Text>
-                  <Text className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-text-secondary">
-                    {range === 'today' ? "Today's total" : 'Total'}
+                  <Text className="text-[18px] font-bold text-[#16A34A]">
+                    {scoreLabel}
                   </Text>
-                  <Text className="mt-1 text-[34px] font-bold text-text-primary">{totalLabel}</Text>
+                  <Text className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-text-secondary">
+                    {range === "today" ? "Today's total" : "Total"}
+                  </Text>
+                  <Text className="mt-1 text-[34px] font-bold text-text-primary">
+                    {totalLabel}
+                  </Text>
                   {deltaLabel ? (
-                    <Text className="mt-1 text-[13px] font-semibold text-[#16A34A]">{deltaLabel}</Text>
+                    <Text className="mt-1 text-[13px] font-semibold text-[#16A34A]">
+                      {deltaLabel}
+                    </Text>
                   ) : null}
                 </View>
 
@@ -201,20 +228,30 @@ export const ScreenTimeAnalyticsTemplate = ({
                   <View className="relative">
                     <AnalyticsDonutChart
                       data={[
-                        { label: 'Score', value: score ?? 0, color: '#2F7BFF' },
-                        { label: 'Remaining', value: Math.max(0, 100 - (score ?? 0)), color: '#E5E7EB' },
+                        { label: "Score", value: score ?? 0, color: "#2F7BFF" },
+                        {
+                          label: "Remaining",
+                          value: Math.max(0, 100 - (score ?? 0)),
+                          color: "#E5E7EB",
+                        },
                       ]}
                       radius={36}
                       strokeWidth={18}
                       startAngle={-90}
                     />
                     <View className="absolute inset-0 items-center justify-center">
-                      <Text className="text-[20px] font-bold text-text-primary">{score ?? '—'}</Text>
-                      <Text className="text-[10px] font-bold uppercase tracking-[0.12em] text-text-secondary">Score</Text>
+                      <Text className="text-[20px] font-bold text-text-primary">
+                        {score ?? "—"}
+                      </Text>
+                      <Text className="text-[10px] font-bold uppercase tracking-[0.12em] text-text-secondary">
+                        Score
+                      </Text>
                     </View>
                   </View>
                   {scoreTrendLabel ? (
-                    <Text className="mt-1 text-[12px] font-semibold text-text-secondary">{scoreTrendLabel}</Text>
+                    <Text className="mt-1 text-[12px] font-semibold text-text-secondary">
+                      {scoreTrendLabel}
+                    </Text>
                   ) : null}
                 </View>
               </View>
@@ -228,13 +265,17 @@ export const ScreenTimeAnalyticsTemplate = ({
                   <View className="h-9 w-9 items-center justify-center rounded-xl bg-[#EEF0FF]">
                     <Icon icon={Smartphone} size={18} color="#2563EB" />
                   </View>
-                  <Text className="flex-1 text-[14px] leading-[20px] text-text-secondary">{statusLabel}</Text>
+                  <Text className="flex-1 text-[14px] leading-[20px] text-text-secondary">
+                    {statusLabel}
+                  </Text>
                 </View>
               ) : null}
 
               {isSyncing ? (
                 <View className="mt-3 self-start rounded-full bg-[#EEF0FF] px-3 py-1">
-                  <Text className="text-[12px] font-semibold text-brand-primary">Syncing…</Text>
+                  <Text className="text-[12px] font-semibold text-brand-primary">
+                    Syncing…
+                  </Text>
                 </View>
               ) : null}
 
@@ -245,7 +286,9 @@ export const ScreenTimeAnalyticsTemplate = ({
                   className="mt-3 flex-row items-center justify-center rounded-2xl bg-brand-primary px-4 py-3"
                   style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
                 >
-                  <Text className="text-[14px] font-semibold text-white">Enable Screen Time</Text>
+                  <Text className="text-[14px] font-semibold text-white">
+                    Enable Screen Time
+                  </Text>
                 </Pressable>
               ) : null}
             </Card>
@@ -256,13 +299,21 @@ export const ScreenTimeAnalyticsTemplate = ({
             <View className="mt-4 gap-3">
               <View className="flex-row items-center gap-2 px-1">
                 <Icon icon={Sparkles} size={16} color="#2563EB" />
-                <Text className="text-[14px] font-bold text-text-primary">AI Optimization Insight</Text>
+                <Text className="text-[14px] font-bold text-text-primary">
+                  AI Optimization Insight
+                </Text>
               </View>
-              <Text className="px-1 text-[14px] leading-[20px] text-text-secondary">{insightBody}</Text>
+              <Text className="px-1 text-[14px] leading-[20px] text-text-secondary">
+                {insightBody}
+              </Text>
               {suggestionBody ? (
                 <View className="rounded-2xl border border-[#86EFAC] bg-[#ECFDF5] p-4">
-                  <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#166534]">Suggestion</Text>
-                  <Text className="mt-2 text-[14px] leading-[20px] text-[#14532D]">{suggestionBody}</Text>
+                  <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#166534]">
+                    Suggestion
+                  </Text>
+                  <Text className="mt-2 text-[14px] leading-[20px] text-[#14532D]">
+                    {suggestionBody}
+                  </Text>
                 </View>
               ) : null}
             </View>
@@ -270,69 +321,97 @@ export const ScreenTimeAnalyticsTemplate = ({
 
           {showHourlyChart && (
             <View className="mt-5">
-              <Text className="px-1 text-[16px] font-bold text-text-primary">Hourly Activity</Text>
+              <Text className="px-1 text-[16px] font-bold text-text-primary">
+                Hourly Activity
+              </Text>
               <View className="mt-3 flex-row items-end justify-between px-1">
-                {(hourlyBuckets ?? Array.from({ length: 24 }, () => 0)).slice(0, 24).map((value, idx) => {
-                  const height = maxHourly <= 0 ? 4 : Math.max(4, Math.round((value / maxHourly) * 56));
-                  // Show labels every 3 hours: 12am, 3am, 6am, 9am, 12pm, 3pm, 6pm, 9pm
-                  const showLabel = idx % 3 === 0;
-                  const formatHourLabel = (hour: number): string => {
-                    if (hour === 0) return '12am';
-                    if (hour < 12) return `${hour}am`;
-                    if (hour === 12) return '12pm';
-                    return `${hour - 12}pm`;
-                  };
-                  const label = showLabel ? formatHourLabel(idx) : '';
+                {(hourlyBuckets ?? Array.from({ length: 24 }, () => 0))
+                  .slice(0, 24)
+                  .map((value, idx) => {
+                    const height =
+                      maxHourly <= 0
+                        ? 4
+                        : Math.max(4, Math.round((value / maxHourly) * 56));
+                    // Show labels every 3 hours: 12am, 3am, 6am, 9am, 12pm, 3pm, 6pm, 9pm
+                    const showLabel = idx % 3 === 0;
+                    const formatHourLabel = (hour: number): string => {
+                      if (hour === 0) return "12am";
+                      if (hour < 12) return `${hour}am`;
+                      if (hour === 12) return "12pm";
+                      return `${hour - 12}pm`;
+                    };
+                    const label = showLabel ? formatHourLabel(idx) : "";
 
-                  return (
-                    <View key={String(idx)} className="items-center" style={{ width: 10 }}>
+                    return (
                       <View
-                        className="w-full overflow-hidden rounded-md bg-[#E5E7EB]"
-                        style={{ height: 56 }}
+                        key={String(idx)}
+                        className="items-center"
+                        style={{ width: 10 }}
                       >
-                        <View className="w-full rounded-md bg-[#2F7BFF]" style={{ height, marginTop: 56 - height }} />
-                      </View>
-                      {showLabel ? (
-                        <Text
-                          numberOfLines={1}
-                          className="mt-2 text-[10px] font-semibold text-text-tertiary"
-                          style={{ width: 30, textAlign: 'center' }}
+                        <View
+                          className="w-full overflow-hidden rounded-md bg-[#E5E7EB]"
+                          style={{ height: 56 }}
                         >
-                          {label}
-                        </Text>
-                      ) : (
-                        <View className="mt-2" style={{ height: 12 }} />
-                      )}
-                    </View>
-                  );
-                })}
+                          <View
+                            className="w-full rounded-md bg-[#2F7BFF]"
+                            style={{ height, marginTop: 56 - height }}
+                          />
+                        </View>
+                        {showLabel ? (
+                          <Text
+                            numberOfLines={1}
+                            className="mt-2 text-[10px] font-semibold text-text-tertiary"
+                            style={{ width: 30, textAlign: "center" }}
+                          >
+                            {label}
+                          </Text>
+                        ) : (
+                          <View className="mt-2" style={{ height: 12 }} />
+                        )}
+                      </View>
+                    );
+                  })}
               </View>
             </View>
           )}
 
           {hourlyAppBreakdown && (
             <View className="mt-5">
-              <Text className="px-1 text-[16px] font-bold text-text-primary">Hourly App Breakdown</Text>
+              <Text className="px-1 text-[16px] font-bold text-text-primary">
+                Hourly App Breakdown
+              </Text>
               <View className="mt-3 gap-3">
                 {hourlyAppBreakdown.map((bucket) => (
-                  <View key={`hour-${bucket.hour}`} className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]">
+                  <View
+                    key={`hour-${bucket.hour}`}
+                    className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]"
+                  >
                     <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-text-secondary">
                       {bucket.hour === 0
-                        ? '12am'
+                        ? "12am"
                         : bucket.hour < 12
-                        ? `${bucket.hour}am`
-                        : bucket.hour === 12
-                        ? '12pm'
-                        : `${bucket.hour - 12}pm`}
+                          ? `${bucket.hour}am`
+                          : bucket.hour === 12
+                            ? "12pm"
+                            : `${bucket.hour - 12}pm`}
                     </Text>
                     {bucket.apps.length === 0 ? (
-                      <Text className="mt-2 text-[13px] text-text-tertiary">No app usage.</Text>
+                      <Text className="mt-2 text-[13px] text-text-tertiary">
+                        No app usage.
+                      </Text>
                     ) : (
                       <View className="mt-2 gap-2">
                         {bucket.apps.map((app) => (
-                          <View key={app.id} className="flex-row items-center justify-between">
-                            <Text className="text-[14px] font-semibold text-text-primary">{app.name}</Text>
-                            <Text className="text-[13px] font-semibold text-text-secondary">{app.durationLabel}</Text>
+                          <View
+                            key={app.id}
+                            className="flex-row items-center justify-between"
+                          >
+                            <Text className="text-[14px] font-semibold text-text-primary">
+                              {app.name}
+                            </Text>
+                            <Text className="text-[13px] font-semibold text-text-secondary">
+                              {app.durationLabel}
+                            </Text>
                           </View>
                         ))}
                       </View>
@@ -345,32 +424,63 @@ export const ScreenTimeAnalyticsTemplate = ({
 
           {showTopApps && (
             <View className="mt-5">
-              <Text className="px-1 text-[16px] font-bold text-text-primary">Top Apps</Text>
+              <Text className="px-1 text-[16px] font-bold text-text-primary">
+                Top Apps
+              </Text>
               <View className="mt-3 gap-3">
                 {topApps.map((app) => {
                   const percent = Math.min(1, app.durationSeconds / maxSeconds);
                   return (
-                    <View key={app.id} className="overflow-hidden rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]">
+                    <View
+                      key={app.id}
+                      className="overflow-hidden rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]"
+                    >
                       <View className="flex-row items-center justify-between gap-3">
                         <View className="flex-row items-center gap-3">
-                          <View className="h-10 w-10 items-center justify-center rounded-2xl" style={{ backgroundColor: `${app.categoryAccent}22` }}>
-                            <Text className="text-[16px] font-bold" style={{ color: app.categoryAccent }}>
+                          <View
+                            className="h-10 w-10 items-center justify-center rounded-2xl"
+                            style={{
+                              backgroundColor: `${app.categoryAccent}22`,
+                            }}
+                          >
+                            <Text
+                              className="text-[16px] font-bold"
+                              style={{ color: app.categoryAccent }}
+                            >
                               {app.name.slice(0, 1).toUpperCase()}
                             </Text>
                           </View>
                           <View className="gap-1">
-                            <Text className="text-[14px] font-bold text-text-primary">{app.name}</Text>
-                            <View className="self-start rounded-full px-2 py-0.5" style={{ backgroundColor: `${app.categoryAccent}22` }}>
-                              <Text className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: app.categoryAccent }}>
+                            <Text className="text-[14px] font-bold text-text-primary">
+                              {app.name}
+                            </Text>
+                            <View
+                              className="self-start rounded-full px-2 py-0.5"
+                              style={{
+                                backgroundColor: `${app.categoryAccent}22`,
+                              }}
+                            >
+                              <Text
+                                className="text-[11px] font-bold uppercase tracking-[0.08em]"
+                                style={{ color: app.categoryAccent }}
+                              >
                                 {app.categoryLabel}
                               </Text>
                             </View>
                           </View>
                         </View>
-                        <Text className="text-[13px] font-semibold text-text-primary">{app.durationLabel}</Text>
+                        <Text className="text-[13px] font-semibold text-text-primary">
+                          {app.durationLabel}
+                        </Text>
                       </View>
                       <View className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#E5E7EB]">
-                        <View className="h-2 rounded-full" style={{ width: `${percent * 100}%`, backgroundColor: app.categoryAccent }} />
+                        <View
+                          className="h-2 rounded-full"
+                          style={{
+                            width: `${percent * 100}%`,
+                            backgroundColor: app.categoryAccent,
+                          }}
+                        />
                       </View>
                     </View>
                   );
@@ -386,5 +496,3 @@ export const ScreenTimeAnalyticsTemplate = ({
     </LinearGradient>
   );
 };
-
-

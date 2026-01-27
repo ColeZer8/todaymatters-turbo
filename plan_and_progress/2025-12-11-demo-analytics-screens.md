@@ -35,6 +35,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 ## Progress
 
 ### 2025-12-11: Initial Demo Screens
+
 - Created `DemoWorkoutInterruption.tsx` - Social media interruption alert with stop icon, countdown timer, and upcoming workout event card
 - Created `DemoWorkoutSummary.tsx` - Apple-style workout analytics with nested activity rings, stat cards (calories, duration, heart rate), daily progress bars, and achievement card
 - Created `DemoTrafficAccident.tsx` - Traffic alert with SVG map showing accident, old route (red dashed), new route, ETA/distance cards, and navigation button
@@ -44,6 +45,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 - Registered all routes in `_layout.tsx` and added to `DEMO_TOUR` array in `DemoOverlay.tsx`
 
 ### 2025-12-11: Goals & Initiatives Functionality
+
 - Created `goals-store.ts` - Zustand store with persistence for goals and tasks
   - Interfaces: `Goal`, `GoalTask`
   - Functions: `addGoal`, `updateGoal`, `deleteGoal`, `addTask`, `updateTask`, `toggleTask`, `deleteTask`, `importFromOnboarding`
@@ -58,6 +60,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 - Auto-import from onboarding data on first load
 
 ### 2025-12-11: Edit Mode & Theming
+
 - Added `isEditing` state with Edit/Done toggle button to Goals and Initiatives pages
 - Conditionally render add/delete UI elements based on edit mode
 - Fixed all header colored text to blue (#2563EB):
@@ -70,6 +73,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 - Updated `DemoOverviewValues.tsx` icons and cards to blue theme
 
 ### 2025-12-11: Analytics Page Integration
+
 - Modified `AnalyticsTemplate.tsx` to include tab navigation
 - Created `TabSelector` component with Overview, Goals, Initiatives options
 - Added `activeTab` state to switch between views
@@ -77,6 +81,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 - Embedded mode renders content-only (no ScrollView/KeyboardAvoidingView wrappers)
 
 ### 2025-12-11: Tab Selector Redesign
+
 - Moved tab selector from fixed top position to scrollable content area
 - Redesigned as pill-style segmented control:
   - Gray background container with rounded-full shape
@@ -94,6 +99,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 ## Files Changed
 
 ### New Files Created
+
 - `apps/mobile/src/components/organisms/DemoWorkoutInterruption.tsx`
 - `apps/mobile/src/components/organisms/DemoWorkoutSummary.tsx`
 - `apps/mobile/src/components/organisms/DemoTrafficAccident.tsx`
@@ -110,6 +116,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 - `apps/mobile/src/stores/initiatives-store.ts`
 
 ### Modified Files
+
 - `apps/mobile/src/app/_layout.tsx` - Added 6 new Stack.Screen entries
 - `apps/mobile/src/components/organisms/DemoOverlay.tsx` - Updated DEMO_TOUR array
 - `apps/mobile/src/components/organisms/index.ts` - Exported new organisms
@@ -119,6 +126,7 @@ Add six new demo screens to the demo mode tour, make Goals and Initiatives fully
 ## Outcomes
 
 ### New Stores Architecture
+
 ```
 stores/
 ├── goals-store.ts      # Goal & GoalTask management with persistence
@@ -127,11 +135,13 @@ stores/
 ```
 
 ### Demo Tour Flow
+
 ```
 Home → Focus Alert → Workout → Meeting → Traffic → Departure → Prayer → Goals → Initiatives → Values
 ```
 
 ### Analytics Tab Structure
+
 ```
 Analytics Page
 ├── Overview (original analytics content)
@@ -140,6 +150,7 @@ Analytics Page
 ```
 
 ### Tab Selector Design
+
 - Pill-style segmented control within scrollable content
 - Subtle shadow on active tab
 - Blue (#2563EB) accent for active state
@@ -151,9 +162,3 @@ Analytics Page
 - Future: Connect workout summary to Apple HealthKit
 - Future: Add date picker for initiative milestone due dates
 - Consider adding swipe gestures to navigate between analytics tabs
-
-
-
-
-
-

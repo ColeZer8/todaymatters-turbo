@@ -1,4 +1,4 @@
-import { DemoOverviewValues } from '@/components/organisms';
+import { DemoOverviewValues } from "@/components/organisms";
 
 /**
  * Demo Overview Values Screen
@@ -9,9 +9,3 @@ import { DemoOverviewValues } from '@/components/organisms';
 export default function DemoOverviewValuesScreen() {
   return <DemoOverviewValues />;
 }
-
-
-
-
-
-

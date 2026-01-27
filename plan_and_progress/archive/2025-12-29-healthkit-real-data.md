@@ -45,5 +45,3 @@ Replace placeholder “health” UI with **real HealthKit data** on iOS by exten
 ## Follow-ups
 
 - Consider background delivery / observer queries once we decide which metrics drive product features.
-
-

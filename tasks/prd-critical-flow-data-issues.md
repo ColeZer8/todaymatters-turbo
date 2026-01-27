@@ -32,9 +32,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-001: Fix System UI / Safe Area Violations
+
 **Description:** As a user, I want the app UI to never overlap system icons (time, battery, signal) so I can see critical device information.
 
 **Acceptance Criteria:**
+
 - [ ] All screens use `SafeAreaView` from `react-native-safe-area-context` as root container
 - [ ] Headers never overlap iOS notch or Android status bar
 - [ ] Remove or correctly position any floating/debug icons (orange icon in header)
@@ -44,15 +46,18 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Typecheck passes
 
 **Affected Files:**
+
 - All template files in `/apps/mobile/src/components/templates/`
 - Screen files in `/apps/mobile/src/app/`
 
 ---
 
 #### US-002: Fix Date/Time/Timezone Handling (Both Platforms)
+
 **Description:** As a user, I want dates and times to display correctly relative to my timezone so events appear at the right time.
 
 **Acceptance Criteria:**
+
 - [ ] Events never appear in the future when they occurred in the past
 - [ ] All times display correctly vs device local time
 - [ ] AI summaries use correct event times (not incorrect inferred times)
@@ -62,9 +67,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-003: Fix Event Creation Time Lock (Android-Only)
+
 **Description:** As an Android user, I want to create events at any time, not just 9:30am.
 
 **Acceptance Criteria:**
+
 - [ ] Event creation allows any start time selection
 - [ ] Time picker changes persist and save correctly
 - [ ] No modal lock-in states when using Android native date/time pickers
@@ -76,9 +83,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-004: Location-Based Timeline Segmentation
+
 **Description:** As a user, I want my timeline to reflect location transitions (home → travel → office → coffee shop) so I don't see long "Unknown" blocks.
 
 **Acceptance Criteria:**
+
 - [ ] Detect meaningful location changes using hybrid approach:
   - Automatic coarse geofencing for common transitions
   - User-defined specific places (home, work, gym, etc.)
@@ -90,6 +99,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Typecheck passes
 
 **Technical Notes:**
+
 - Leverage existing `/apps/mobile/src/lib/supabase/services/location-samples.ts`
 - Enhance `/apps/mobile/src/lib/calendar/actual-display-events.ts` to use location transitions
 - Add geofence definitions to user preferences/onboarding store
@@ -97,9 +107,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-005: Make All Timeline Blocks Fully Editable
+
 **Description:** As a user, I want to edit any timeline block (including "Unknown") so I can correct what the app got wrong.
 
 **Acceptance Criteria:**
+
 - [ ] Tap any timeline block to open edit modal (inline preview + modal for full edit)
 - [ ] Swipe actions available for quick operations (delete, mark as Big 3)
 - [ ] Editable fields: title, description, time range (start/end), category, location
@@ -110,6 +122,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Verify in browser/simulator
 
 **Affected Files:**
+
 - `/apps/mobile/src/components/molecules/EventEditorModal.tsx`
 - `/apps/mobile/src/app/actual-adjust.tsx`
 - `/apps/mobile/src/components/templates/ActualAdjustTemplate.tsx`
@@ -117,9 +130,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-006: Add Split Action for Timeline Blocks
+
 **Description:** As a user, I want to split one timeline block into multiple activities so I can accurately record what happened during that time.
 
 **Acceptance Criteria:**
+
 - [ ] Split action available on ANY timeline block (including "Unknown")
 - [ ] Split action discoverable - visible in edit modal and/or swipe actions
 - [ ] Splitting opens interface to define split point(s)
@@ -130,15 +145,18 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Verify in browser/simulator
 
 **Technical Notes:**
+
 - Split screen exists but is not active when user taps "Unknown" event under actual calendar
 - Activate existing component in `/apps/mobile/src/app/actual-adjust.tsx`
 
 ---
 
 #### US-007: Merge Calendar Events into Timeline
+
 **Description:** As a user, I want my scheduled calendar events to appear in my daily timeline so I have a complete view of my day.
 
 **Acceptance Criteria:**
+
 - [ ] All calendar events for today appear in timeline
 - [ ] Calendar events shown as "anchors" - visually distinct from detected activities
 - [ ] Conflict resolution when auto-detected overlaps with calendar event:
@@ -149,6 +167,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Verify in browser/simulator
 
 **Affected Files:**
+
 - `/apps/mobile/src/lib/calendar/actual-display-events.ts` - `buildActualDisplayEvents()`
 - `/apps/mobile/src/lib/supabase/services/calendar-events.ts`
 
@@ -159,9 +178,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-008: Goals/Big 3 Attribution Interface
+
 **Description:** As a user, I want to clearly choose which Big 3 or goal an activity contributes to so I can track my progress accurately.
 
 **Acceptance Criteria:**
+
 - [ ] For each activity, show selectable list of user's actual Big 3 items
 - [ ] Single-select or multi-select supported for goal attribution
 - [ ] Mark contribution level (yes/no or percentage) per goal
@@ -174,9 +195,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-009: Visual State Change Feedback
+
 **Description:** As a user, I want to understand what changed when I interact with timeline blocks so I'm not confused by unexplained color changes.
 
 **Acceptance Criteria:**
+
 - [ ] Define clear visual states with distinct meanings:
   - **Default/Inferred:** System-detected, not yet reviewed
   - **Confirmed:** User has verified this is correct
@@ -191,9 +214,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-010: Sleep Data Refinement & Editing
+
 **Description:** As a user, I want to easily edit my sleep start/end times so my sleep tracking is accurate.
 
 **Acceptance Criteria:**
+
 - [ ] Sleep treated as a special editable timeline block
 - [ ] Easy access to edit sleep start time and wake time
 - [ ] Sleep interruption data aligns with actual wake times
@@ -205,9 +230,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-011: Event Title Auto-Promotion from User Input
+
 **Description:** As a user, I want my description of what happened to become the event title so events aren't stuck showing "Unknown".
 
 **Acceptance Criteria:**
+
 - [ ] When user enters note describing activity, AI extracts meaningful title
 - [ ] Title auto-populates from user input (not stuck as "Unknown")
 - [ ] User can override auto-generated title
@@ -216,15 +243,18 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Typecheck passes
 
 **Technical Notes:**
+
 - Leverage existing `requestReviewTimeSuggestion()` edge function
 - Ensure suggested title is applied to event, not just shown
 
 ---
 
 #### US-012: Normalize Create vs Edit Flow (Android-Only Focus)
+
 **Description:** As an Android user, I want create and edit screens to work consistently so I'm not confused by different behaviors.
 
 **Acceptance Criteria:**
+
 - [ ] Create screen fully functional on Android (currently broken)
 - [ ] Edit screen has proper safe area padding (Cancel/Confirm not blocked by status bar)
 - [ ] Buttons in same locations on both create and edit screens
@@ -234,6 +264,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Verify on Android emulator
 
 **Affected Files:**
+
 - `/apps/mobile/src/components/templates/AddEventTemplate.tsx`
 - `/apps/mobile/src/components/molecules/EventEditorModal.tsx`
 
@@ -244,9 +275,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-013: Fix Email Sync Freshness
+
 **Description:** As a user, I want to see my recent emails so the app reflects current communications.
 
 **Acceptance Criteria:**
+
 - [ ] Email sync retrieves emails from last 24 hours minimum
 - [ ] Proper time-based filtering (not showing very old emails)
 - [ ] Distinguish inbox vs archive emails
@@ -258,9 +291,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-014: Remove Arbitrary Goal Percentages
+
 **Description:** As a user, I want goal completion percentages to be meaningful, not arbitrary placeholders.
 
 **Acceptance Criteria:**
+
 - [ ] Remove placeholder percentage logic
 - [ ] Only show completion percentages when user explicitly sets them
 - [ ] Default to "Unassigned" or "Not evaluated" for unset goals
@@ -275,9 +310,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-015: Define Timeline Intelligence Hierarchy
+
 **Description:** As a developer, I want a clear data hierarchy model so the app answers "What was I doing, where was I, and why does it matter?" correctly.
 
 **Acceptance Criteria:**
+
 - [ ] Document and implement clear hierarchy:
   1. User edits (always highest priority - overrides everything)
   2. Scheduled calendar events (anchors)
@@ -291,6 +328,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - [ ] Typecheck passes
 
 **Technical Notes:**
+
 - Update `/apps/mobile/src/lib/calendar/actual-display-events.ts` to enforce hierarchy
 - Ensure `buildActualDisplayEvents()` respects priority order
 
@@ -301,9 +339,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-016: Setup Flow Stability
+
 **Description:** As a new user, I want the setup/onboarding flow to be stable and consistent so I can complete initial configuration.
 
 **Acceptance Criteria:**
+
 - [ ] Setup flow completes without crashes or hangs
 - [ ] Progress persists if user backgrounds app
 - [ ] Clear navigation between setup steps
@@ -313,9 +353,11 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ---
 
 #### US-017: Explainable App Behavior
+
 **Description:** As a user, I want to understand why the app made certain inferences so I trust the data.
 
 **Acceptance Criteria:**
+
 - [ ] When app auto-categorizes an activity, show brief reason ("Based on location: Home")
 - [ ] Confidence indicator for inferred data (high/medium/low)
 - [ ] "Why?" affordance to see reasoning for any inference
@@ -393,19 +435,22 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ## Design Considerations
 
 ### Interaction Model (Combination Approach)
+
 - **Inline editing:** Tap timeline block to see quick preview with key info
 - **Modal editing:** "Edit" button or second tap opens full edit modal
 - **Swipe actions:** Swipe left for quick actions (delete, Big 3 toggle)
 
 ### Visual States
-| State | Color | Meaning |
-|-------|-------|---------|
+
+| State            | Color             | Meaning                       |
+| ---------------- | ----------------- | ----------------------------- |
 | Default/Inferred | Light gray border | System-detected, not reviewed |
-| Confirmed | Green accent | User verified as correct |
-| Edited | Blue accent | User modified |
-| Scheduled | Purple accent | From calendar |
+| Confirmed        | Green accent      | User verified as correct      |
+| Edited           | Blue accent       | User modified                 |
+| Scheduled        | Purple accent     | From calendar                 |
 
 ### Timeline Segment Headers
+
 - Show location label when available: "Home", "Office", "Starbucks on Main St"
 - Show time range: "9:00 AM - 11:30 AM"
 - Show confidence indicator for inferred segments
@@ -415,6 +460,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ## Technical Considerations
 
 ### Existing Components to Leverage
+
 - `EventEditorModal` - extend for full editability
 - `ActualAdjustTemplate` - add split action activation
 - `LocationSearchModal` - user-defined geofences
@@ -422,6 +468,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - `requestReviewTimeSuggestion()` - title extraction from user notes
 
 ### Key Files to Modify
+
 - `/apps/mobile/src/lib/calendar/actual-display-events.ts` - timeline building logic
 - `/apps/mobile/src/lib/supabase/services/location-samples.ts` - geofencing
 - `/apps/mobile/src/components/templates/ActualAdjustTemplate.tsx` - edit UI
@@ -430,11 +477,13 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - `/apps/mobile/src/stores/events-store.ts` - state definitions
 
 ### Dependencies
+
 - `react-native-safe-area-context` - already installed
 - Location services - already implemented
 - Supabase edge functions - already deployed
 
 ### Performance Considerations
+
 - Location sampling already battery-optimized (background source only)
 - Geofence checks should be < 10ms per check
 - Timeline rebuild should complete in < 100ms
@@ -465,6 +514,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 ## Implementation Phases
 
 ### Phase 1: Critical Fixes (P0)
+
 - US-001: Safe area violations
 - US-002: Date/time handling
 - US-003: Event creation time lock (Android)
@@ -472,11 +522,13 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - US-007: Calendar events in timeline
 
 ### Phase 2: Location & Intelligence (P0 continued)
+
 - US-004: Location-based segmentation
 - US-006: Split action for timeline blocks
 - US-015: Timeline intelligence hierarchy
 
 ### Phase 3: UX Polish (P1)
+
 - US-008: Goals/Big 3 attribution
 - US-009: Visual state feedback
 - US-010: Sleep data editing
@@ -484,6 +536,7 @@ This PRD addresses critical flow and data issues affecting user trust and core a
 - US-012: Create vs Edit normalization (Android)
 
 ### Phase 4: Data Trust (P2 + P3)
+
 - US-013: Email sync freshness
 - US-014: Remove arbitrary percentages
 - US-016: Setup flow stability

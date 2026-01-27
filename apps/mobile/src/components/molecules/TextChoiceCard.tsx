@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from "react-native";
 
 interface TextChoiceCardProps {
   label: string;
@@ -6,13 +6,17 @@ interface TextChoiceCardProps {
   onPress: () => void;
 }
 
-export const TextChoiceCard = ({ label, selected = false, onPress }: TextChoiceCardProps) => {
+export const TextChoiceCard = ({
+  label,
+  selected = false,
+  onPress,
+}: TextChoiceCardProps) => {
   return (
-    <View 
+    <View
       className={`w-full rounded-xl border bg-white ${
-        selected 
-          ? 'border-blue-600 bg-blue-50 shadow-sm' 
-          : 'border-gray-200 shadow-sm'
+        selected
+          ? "border-blue-600 bg-blue-50 shadow-sm"
+          : "border-gray-200 shadow-sm"
       }`}
     >
       <Pressable
@@ -21,9 +25,9 @@ export const TextChoiceCard = ({ label, selected = false, onPress }: TextChoiceC
         accessibilityState={{ selected }}
         className="w-full px-6 py-3.5 active:opacity-80 justify-center"
       >
-        <Text 
+        <Text
           className={`text-lg ${
-            selected ? 'text-blue-600 font-bold' : 'text-gray-900 font-medium'
+            selected ? "text-blue-600 font-bold" : "text-gray-900 font-medium"
           }`}
         >
           {label}

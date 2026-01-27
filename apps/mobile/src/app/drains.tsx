@@ -1,155 +1,158 @@
-import { useEffect, useState, useMemo } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { TagSelectionTemplate, CategoryOption } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect, useState, useMemo } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { TagSelectionTemplate, CategoryOption } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const DRAIN_OPTIONS: CategoryOption[] = [
   {
-    category: 'Work & Productivity',
-    emoji: '💼',
+    category: "Work & Productivity",
+    emoji: "💼",
     options: [
-      'Long meetings',
-      'Context switching',
-      'Interruptions',
-      'Deadlines',
-      'Overwhelming workload',
-      'Micromanagement',
-      'Unclear expectations',
-      'Unnecessary emails',
-      'Back-to-back meetings',
-      'Commuting to work',
-      'Overtime',
-      'Work stress',
+      "Long meetings",
+      "Context switching",
+      "Interruptions",
+      "Deadlines",
+      "Overwhelming workload",
+      "Micromanagement",
+      "Unclear expectations",
+      "Unnecessary emails",
+      "Back-to-back meetings",
+      "Commuting to work",
+      "Overtime",
+      "Work stress",
     ],
   },
   {
-    category: 'Social & Communication',
-    emoji: '😓',
+    category: "Social & Communication",
+    emoji: "😓",
     options: [
-      'Small talk',
-      'Social obligations',
-      'Conflict',
-      'Drama',
-      'Gossip',
-      'Awkward conversations',
-      'Large crowds',
-      'Networking events',
-      'Forced socializing',
-      'Toxic relationships',
-      'Negative people',
-      'Social media pressure',
+      "Small talk",
+      "Social obligations",
+      "Conflict",
+      "Drama",
+      "Gossip",
+      "Awkward conversations",
+      "Large crowds",
+      "Networking events",
+      "Forced socializing",
+      "Toxic relationships",
+      "Negative people",
+      "Social media pressure",
     ],
   },
   {
-    category: 'Time & Scheduling',
-    emoji: '⏰',
+    category: "Time & Scheduling",
+    emoji: "⏰",
     options: [
-      'Traffic',
-      'Waiting',
-      'Being late',
-      'Rushing',
-      'Time pressure',
-      'Scheduling conflicts',
-      'No downtime',
-      'Overcommitment',
-      'Last-minute changes',
-      'Time zones',
-      'Running errands',
-      'Time wasted',
+      "Traffic",
+      "Waiting",
+      "Being late",
+      "Rushing",
+      "Time pressure",
+      "Scheduling conflicts",
+      "No downtime",
+      "Overcommitment",
+      "Last-minute changes",
+      "Time zones",
+      "Running errands",
+      "Time wasted",
     ],
   },
   {
-    category: 'Environment & Physical',
-    emoji: '🌡️',
+    category: "Environment & Physical",
+    emoji: "🌡️",
     options: [
-      'Cold weather',
-      'Hot weather',
-      'Loud noises',
-      'Bright lights',
-      'Clutter',
-      'Messy spaces',
-      'Uncomfortable temperatures',
-      'Poor air quality',
-      'Crowded spaces',
-      'Bad smells',
-      'Noise pollution',
-      'Uncomfortable seating',
+      "Cold weather",
+      "Hot weather",
+      "Loud noises",
+      "Bright lights",
+      "Clutter",
+      "Messy spaces",
+      "Uncomfortable temperatures",
+      "Poor air quality",
+      "Crowded spaces",
+      "Bad smells",
+      "Noise pollution",
+      "Uncomfortable seating",
     ],
   },
   {
-    category: 'Technology & Digital',
-    emoji: '💻',
+    category: "Technology & Digital",
+    emoji: "💻",
     options: [
-      'Technology issues',
-      'Slow internet',
-      'Device problems',
-      'Spam emails',
-      'Notifications',
-      'Social media overload',
-      'Screen time',
-      'Password resets',
-      'Software updates',
-      'Digital distractions',
-      'Tech support',
-      'Data loss',
+      "Technology issues",
+      "Slow internet",
+      "Device problems",
+      "Spam emails",
+      "Notifications",
+      "Social media overload",
+      "Screen time",
+      "Password resets",
+      "Software updates",
+      "Digital distractions",
+      "Tech support",
+      "Data loss",
     ],
   },
   {
-    category: 'Health & Wellbeing',
-    emoji: '😴',
+    category: "Health & Wellbeing",
+    emoji: "😴",
     options: [
-      'Lack of sleep',
-      'Early mornings',
-      'Late nights',
-      'Exhaustion',
-      'Stress',
-      'Anxiety',
-      'Physical discomfort',
-      'Hunger',
-      'Thirst',
-      'Illness',
-      'Chronic pain',
-      'Fatigue',
+      "Lack of sleep",
+      "Early mornings",
+      "Late nights",
+      "Exhaustion",
+      "Stress",
+      "Anxiety",
+      "Physical discomfort",
+      "Hunger",
+      "Thirst",
+      "Illness",
+      "Chronic pain",
+      "Fatigue",
     ],
   },
   {
-    category: 'Financial & Practical',
-    emoji: '💰',
+    category: "Financial & Practical",
+    emoji: "💰",
     options: [
-      'Financial stress',
-      'Bills',
-      'Unexpected expenses',
-      'Budgeting',
-      'Shopping',
-      'Errands',
-      'Paperwork',
-      'Bureaucracy',
-      'Waiting in lines',
-      'Administrative tasks',
-      'Taxes',
-      'Insurance',
+      "Financial stress",
+      "Bills",
+      "Unexpected expenses",
+      "Budgeting",
+      "Shopping",
+      "Errands",
+      "Paperwork",
+      "Bureaucracy",
+      "Waiting in lines",
+      "Administrative tasks",
+      "Taxes",
+      "Insurance",
     ],
   },
   {
-    category: 'Emotional & Mental',
-    emoji: '🧠',
+    category: "Emotional & Mental",
+    emoji: "🧠",
     options: [
-      'Negative thoughts',
-      'Self-doubt',
-      'Perfectionism',
-      'Comparison',
-      'Regret',
-      'Worry',
-      'Overthinking',
-      'Decision fatigue',
-      'Information overload',
-      'Mental exhaustion',
-      'Imposter syndrome',
-      'Procrastination',
+      "Negative thoughts",
+      "Self-doubt",
+      "Perfectionism",
+      "Comparison",
+      "Regret",
+      "Worry",
+      "Overthinking",
+      "Decision fatigue",
+      "Information overload",
+      "Mental exhaustion",
+      "Imposter syndrome",
+      "Procrastination",
     ],
   },
 ];
@@ -157,19 +160,27 @@ const DRAIN_OPTIONS: CategoryOption[] = [
 export default function DrainsScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.drainSelections);
   const customOptions = useOnboardingStore((state) => state.drainCustomOptions);
-  const toggleSelection = useOnboardingStore((state) => state.toggleDrainSelection);
-  const addCustomOption = useOnboardingStore((state) => state.addDrainCustomOption);
+  const toggleSelection = useOnboardingStore(
+    (state) => state.toggleDrainSelection,
+  );
+  const addCustomOption = useOnboardingStore(
+    (state) => state.addDrainCustomOption,
+  );
 
   // Supabase sync
-  const { saveDrainSelections, saveDrainCustomOptions } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveDrainSelections, saveDrainCustomOptions } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
-  const [searchValue, setSearchValue] = useState('');
+  const [searchValue, setSearchValue] = useState("");
 
   // Save to Supabase when selections change
   useEffect(() => {
@@ -194,7 +205,7 @@ export default function DrainsScreen() {
     if (customOptions.length > 0) {
       return [
         ...DRAIN_OPTIONS,
-        { category: 'Custom', emoji: '✨', options: customOptions },
+        { category: "Custom", emoji: "✨", options: customOptions },
       ];
     }
     return DRAIN_OPTIONS;
@@ -204,7 +215,7 @@ export default function DrainsScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -219,7 +230,7 @@ export default function DrainsScreen() {
     );
     if (!exists) {
       addCustomOption(value);
-      setSearchValue('');
+      setSearchValue("");
     }
   };
 
@@ -244,8 +255,8 @@ export default function DrainsScreen() {
       onSearchChange={setSearchValue}
       onToggleOption={toggleSelection}
       onAddOption={handleAddOption}
-      onContinue={() => router.replace('/your-why')}
-      onBack={() => router.replace('/joy')}
+      onContinue={() => router.replace("/your-why")}
+      onBack={() => router.replace("/joy")}
       tone="danger"
     />
   );

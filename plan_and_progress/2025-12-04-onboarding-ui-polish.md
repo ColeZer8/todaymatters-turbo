@@ -47,17 +47,21 @@ Address user feedback on the onboarding flow UI/UX issues reported by the boss. 
 ### Files Changed
 
 **Permissions Page:**
+
 - `apps/mobile/src/app/permissions.tsx` - Added state management for individual permissions
 - `apps/mobile/src/components/templates/PermissionsTemplate.tsx` - Complete rewrite with NativeWind, individual permission rows with dividers
 - `apps/mobile/src/components/templates/index.ts` - Export new types
 
 **Joy/Tag Selection:**
+
 - `apps/mobile/src/components/templates/TagSelectionTemplate.tsx` - Added "Your selections" section at top with removable pills
 
 **Keyboard Handling (affects all onboarding screens):**
+
 - `apps/mobile/src/components/organisms/SetupStepLayout.tsx` - Added KeyboardAvoidingView wrapper and `automaticallyAdjustKeyboardInsets`
 
 **Routine Builder:**
+
 - `apps/mobile/src/components/organisms/DraggableRoutineList.tsx` - Made duration a TextInput, added tap gesture handling, disabled card tap when expanded
 
 ### Key Implementation Details
@@ -71,11 +75,3 @@ Address user feedback on the onboarding flow UI/UX issues reported by the boss. 
 ## Follow-ups
 
 - None - all requested changes implemented
-
-
-
-
-
-
-
-

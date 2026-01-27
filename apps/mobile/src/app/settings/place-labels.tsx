@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'expo-router';
-import { useAuthStore } from '@/stores';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "expo-router";
+import { useAuthStore } from "@/stores";
 import {
   PlaceLabelsTemplate,
   type PlaceLabelItem,
-} from '@/components/templates';
+} from "@/components/templates";
 import {
   fetchAllUserPlaces,
   updateUserPlace,
@@ -12,7 +12,7 @@ import {
   fetchAutoTagCountsByPlaceLabel,
   fetchActivityCategories,
   type ActivityCategory,
-} from '@/lib/supabase/services';
+} from "@/lib/supabase/services";
 
 /**
  * Build hierarchical category display name (e.g., 'Family > Dog Walking')
@@ -20,7 +20,7 @@ import {
  */
 function buildCategoryDisplayName(
   categoryId: string | null,
-  categories: ActivityCategory[]
+  categories: ActivityCategory[],
 ): string | null {
   if (!categoryId) return null;
 
@@ -36,7 +36,7 @@ function buildCategoryDisplayName(
     current = current.parent_id ? map.get(current.parent_id) : undefined;
   }
 
-  return path.length > 0 ? path.join(' > ') : null;
+  return path.length > 0 ? path.join(" > ") : null;
 }
 
 export default function SettingsPlaceLabelsScreen() {
@@ -76,14 +76,14 @@ export default function SettingsPlaceLabelsScreen() {
           radius_m: p.radius_m,
           categoryDisplayName: buildCategoryDisplayName(
             p.category_id,
-            categories
+            categories,
           ),
           autoTagCount: autoTagCounts[p.label] ?? 0,
         }));
 
         setPlaces(items);
       } catch (error) {
-        console.error('[place-labels] Failed to load places:', error);
+        console.error("[place-labels] Failed to load places:", error);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -113,14 +113,14 @@ export default function SettingsPlaceLabelsScreen() {
                 category_id: updated.category_id,
                 categoryDisplayName: buildCategoryDisplayName(
                   updated.category_id,
-                  activityCategories
+                  activityCategories,
                 ),
               }
-            : p
-        )
+            : p,
+        ),
       );
     },
-    [activityCategories]
+    [activityCategories],
   );
 
   const handleDeletePlace = useCallback(
@@ -129,10 +129,10 @@ export default function SettingsPlaceLabelsScreen() {
         await deleteUserPlace(placeId);
         setPlaces((prev) => prev.filter((p) => p.id !== placeId));
       } catch (error) {
-        console.error('[place-labels] Failed to delete place:', error);
+        console.error("[place-labels] Failed to delete place:", error);
       }
     },
-    []
+    [],
   );
 
   return (

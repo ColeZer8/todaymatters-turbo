@@ -36,4 +36,3 @@ On the landing page iPhone/features section, make the iPhone mockup keep the **s
 ## Follow-ups
 
 - None.
-

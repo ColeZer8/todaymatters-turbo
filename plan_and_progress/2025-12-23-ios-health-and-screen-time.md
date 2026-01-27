@@ -8,10 +8,12 @@
 ## Objective
 
 Enable TodayMatters iOS builds to pull on-device signals:
+
 - Health metrics via HealthKit (e.g., steps / sleep / heart rate samples).
 - Digital wellbeing signals via Apple's Screen Time APIs (FamilyControls + DeviceActivity + ManagedSettings).
 
 All integration must be implemented safely:
+
 - No breaking changes to existing app flows.
 - Uses official Apple + Expo docs.
 - Respects our project structure (Turborepo workspace + Expo app boundaries).
@@ -59,4 +61,3 @@ All integration must be implemented safely:
 
 - Decide the exact “screen time info” UX/data shape we want (reports vs. monitoring + thresholds).
 - Add a formal Settings permission screen entry and connect to onboarding preferences once behavior is validated.
-

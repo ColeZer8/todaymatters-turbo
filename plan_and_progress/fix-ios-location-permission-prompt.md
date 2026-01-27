@@ -37,4 +37,3 @@ Ensure the iOS system Location permission prompt (When In Use / Always) appears 
 ## Follow-ups
 
 - Confirm whether current installed iOS dev client was built before `expo-location` and Info.plist keys were added; if so, rebuild is required.
-

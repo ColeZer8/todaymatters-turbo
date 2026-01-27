@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   Briefcase,
@@ -14,12 +14,15 @@ import {
   TrendingUp,
   Users,
   X,
-} from 'lucide-react-native';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { CoreValue, CoreCategory } from '@/stores/onboarding-store';
+} from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { CoreValue, CoreCategory } from "@/stores/onboarding-store";
 
 interface CoreCategoriesTemplateProps {
   step?: number;
@@ -36,78 +39,85 @@ interface CoreCategoriesTemplateProps {
 }
 
 const CATEGORY_COLORS = [
-  '#F33C83', '#F59E0B', '#1FA56E', '#4F8BFF', '#8B5CF6', '#F95C2E', '#10B981', '#EC4899',
+  "#F33C83",
+  "#F59E0B",
+  "#1FA56E",
+  "#4F8BFF",
+  "#8B5CF6",
+  "#F95C2E",
+  "#10B981",
+  "#EC4899",
 ];
 
 const VALUE_COLORS: Record<string, string> = {
-  faith: '#F33C83',
-  family: '#F59E0B',
-  health: '#F95C2E',
-  work: '#1FA56E',
-  'personal-growth': '#8B5CF6',
-  finances: '#10B981',
+  faith: "#F33C83",
+  family: "#F59E0B",
+  health: "#F95C2E",
+  work: "#1FA56E",
+  "personal-growth": "#8B5CF6",
+  finances: "#10B981",
 };
 
 const EXAMPLE_CATEGORIES: Record<string, string[]> = {
   faith: [
-    'Prayer / Meditation',
-    'Scripture / Study',
-    'Worship',
-    'Spiritual Growth',
-    'Moral Grounding',
-    'Gratitude',
-    'Service to Others',
-    'Calling / Purpose',
+    "Prayer / Meditation",
+    "Scripture / Study",
+    "Worship",
+    "Spiritual Growth",
+    "Moral Grounding",
+    "Gratitude",
+    "Service to Others",
+    "Calling / Purpose",
   ],
   family: [
-    'Marriage / Spouse',
-    'Parenting',
-    'Quality Time',
-    'Communication',
-    'Extended Family',
-    'Emotional Presence',
-    'Conflict Resolution',
-    'Love & Support',
+    "Marriage / Spouse",
+    "Parenting",
+    "Quality Time",
+    "Communication",
+    "Extended Family",
+    "Emotional Presence",
+    "Conflict Resolution",
+    "Love & Support",
   ],
   health: [
-    'Exercise / Movement',
-    'Nutrition',
-    'Sleep / Recovery',
-    'Mental Health',
-    'Stress Management',
-    'Emotional Resilience',
-    'Medical Care',
-    'Energy Management',
+    "Exercise / Movement",
+    "Nutrition",
+    "Sleep / Recovery",
+    "Mental Health",
+    "Stress Management",
+    "Emotional Resilience",
+    "Medical Care",
+    "Energy Management",
   ],
   work: [
-    'Career / Vocation',
-    'Leadership',
-    'Productivity',
-    'Focus / Deep Work',
-    'Excellence',
-    'Creativity',
-    'Stewardship of Skills',
-    'Impact & Contribution',
+    "Career / Vocation",
+    "Leadership",
+    "Productivity",
+    "Focus / Deep Work",
+    "Excellence",
+    "Creativity",
+    "Stewardship of Skills",
+    "Impact & Contribution",
   ],
-  'personal-growth': [
-    'Learning / Education',
-    'Character Development',
-    'Emotional Intelligence',
-    'Habits & Discipline',
-    'Self-Reflection',
-    'Coaching / Mentorship',
-    'Vision & Goals',
-    'Identity Formation',
+  "personal-growth": [
+    "Learning / Education",
+    "Character Development",
+    "Emotional Intelligence",
+    "Habits & Discipline",
+    "Self-Reflection",
+    "Coaching / Mentorship",
+    "Vision & Goals",
+    "Identity Formation",
   ],
   finances: [
-    'Budgeting',
-    'Saving',
-    'Investing',
-    'Generosity / Giving',
-    'Debt Management',
-    'Financial Planning',
-    'Margin & Simplicity',
-    'Long-Term Security',
+    "Budgeting",
+    "Saving",
+    "Investing",
+    "Generosity / Giving",
+    "Debt Management",
+    "Financial Planning",
+    "Margin & Simplicity",
+    "Long-Term Security",
   ],
 };
 
@@ -116,7 +126,7 @@ const ICON_MAP: Record<string, typeof Cross> = {
   users: Users,
   briefcase: Briefcase,
   moon: Moon,
-  'trending-up': TrendingUp,
+  "trending-up": TrendingUp,
   heart: Heart,
   home: Home,
   palette: Palette,
@@ -124,7 +134,7 @@ const ICON_MAP: Record<string, typeof Cross> = {
 };
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -145,15 +155,15 @@ export const CoreCategoriesTemplate = ({
   onBack,
 }: CoreCategoriesTemplateProps) => {
   const [expandedValues, setExpandedValues] = useState<Set<string>>(
-    new Set(coreValues.filter((v) => v.isSelected).map((v) => v.id))
+    new Set(coreValues.filter((v) => v.isSelected).map((v) => v.id)),
   );
   const [addingForValue, setAddingForValue] = useState<string | null>(null);
-  const [newCategoryText, setNewCategoryText] = useState('');
+  const [newCategoryText, setNewCategoryText] = useState("");
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
 
   const selectedValues = useMemo(
     () => coreValues.filter((v) => v.isSelected),
-    [coreValues]
+    [coreValues],
   );
 
   const categoriesByValue = useMemo(() => {
@@ -178,9 +188,10 @@ export const CoreCategoriesTemplate = ({
 
   const handleAddCategory = (valueId: string) => {
     if (newCategoryText.trim()) {
-      const color = CATEGORY_COLORS[selectedColorIndex % CATEGORY_COLORS.length];
+      const color =
+        CATEGORY_COLORS[selectedColorIndex % CATEGORY_COLORS.length];
       onAddCategory(valueId, newCategoryText.trim(), color);
-      setNewCategoryText('');
+      setNewCategoryText("");
       setAddingForValue(null);
       setSelectedColorIndex((prev) => prev + 1);
     }
@@ -195,7 +206,11 @@ export const CoreCategoriesTemplate = ({
       onBack={onBack}
       footer={
         <View className="gap-3">
-          <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
+          <GradientButton
+            label="Continue"
+            onPress={onContinue}
+            rightIcon={ArrowRight}
+          />
           {onSkip && (
             <Pressable
               accessibilityRole="button"
@@ -203,7 +218,9 @@ export const CoreCategoriesTemplate = ({
               className="items-center py-2"
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text className="text-sm font-semibold text-[#94A3B8]">Skip for now</Text>
+              <Text className="text-sm font-semibold text-[#94A3B8]">
+                Skip for now
+              </Text>
             </Pressable>
           )}
         </View>
@@ -216,9 +233,10 @@ export const CoreCategoriesTemplate = ({
           style={cardShadowStyle}
         >
           <Text className="text-sm leading-5 text-text-secondary">
-            Each activity gets a primary value and an optional sub-category. For example, under
-            "Work" you might have "Deep Work", "Meetings", and "Admin". If you add a hobby, pick
-            the value it serves (golf can be Health, Family, Work, or Personal Growth).
+            Each activity gets a primary value and an optional sub-category. For
+            example, under "Work" you might have "Deep Work", "Meetings", and
+            "Admin". If you add a hobby, pick the value it serves (golf can be
+            Health, Family, Work, or Personal Growth).
           </Text>
         </View>
 
@@ -228,13 +246,13 @@ export const CoreCategoriesTemplate = ({
           const valueCategories = categoriesByValue[value.id] || [];
           const IconComponent = ICON_MAP[value.icon] || Star;
           const accentColor =
-            valueCategories[0]?.color ?? VALUE_COLORS[value.id] ?? '#2563EB';
+            valueCategories[0]?.color ?? VALUE_COLORS[value.id] ?? "#2563EB";
           const rawSuggestions = suggestionsByValueId?.[value.id] ?? [];
           const existingLabels = new Set(
-            valueCategories.map((c) => c.label.trim().toLowerCase())
+            valueCategories.map((c) => c.label.trim().toLowerCase()),
           );
           const filteredSuggestions = rawSuggestions.filter(
-            (s) => !existingLabels.has(s.trim().toLowerCase())
+            (s) => !existingLabels.has(s.trim().toLowerCase()),
           );
 
           return (
@@ -262,7 +280,8 @@ export const CoreCategoriesTemplate = ({
                       {value.label}
                     </Text>
                     <Text className="text-xs text-[#94A3B8]">
-                      {valueCategories.length} {valueCategories.length === 1 ? 'category' : 'categories'}
+                      {valueCategories.length}{" "}
+                      {valueCategories.length === 1 ? "category" : "categories"}
                     </Text>
                   </View>
                 </View>
@@ -287,12 +306,13 @@ export const CoreCategoriesTemplate = ({
                           borderColor: `${category.color}40`,
                         }}
                       >
-                        <View className="h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: category.color }}>
+                        <View
+                          className="h-8 w-8 items-center justify-center rounded-xl"
+                          style={{ backgroundColor: category.color }}
+                        >
                           <IconComponent size={16} color="#fff" />
                         </View>
-                        <Text
-                          className="text-sm font-semibold text-text-primary"
-                        >
+                        <Text className="text-sm font-semibold text-text-primary">
                           {category.label}
                         </Text>
                         <Pressable
@@ -300,7 +320,9 @@ export const CoreCategoriesTemplate = ({
                           accessibilityLabel={`Remove ${category.label}`}
                           onPress={() => onRemoveCategory(category.id)}
                           className="ml-1 h-6 w-6 items-center justify-center rounded-full bg-[#E2E8F0]"
-                          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                          style={({ pressed }) => [
+                            { opacity: pressed ? 0.8 : 1 },
+                          ]}
                         >
                           <X size={12} color="#64748B" />
                         </Pressable>
@@ -315,26 +337,41 @@ export const CoreCategoriesTemplate = ({
                         Suggested
                       </Text>
                       {isLoadingSuggestions ? (
-                        <Text className="text-sm text-[#94A3B8]">Generating suggestions…</Text>
+                        <Text className="text-sm text-[#94A3B8]">
+                          Generating suggestions…
+                        </Text>
                       ) : (
                         <View className="flex-row flex-wrap gap-2">
-                          {filteredSuggestions.slice(0, 10).map((suggestion) => (
-                            <Pressable
-                              key={suggestion}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Add ${suggestion}`}
-                              onPress={() => onAddCategory(value.id, suggestion, accentColor)}
-                              className="flex-row items-center gap-2 rounded-2xl border border-[#E4E8F0] bg-white px-3 py-2.5"
-                              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                            >
-                              <View className="h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: accentColor }}>
-                                <Plus size={14} color="#fff" />
-                              </View>
-                              <Text className="text-sm font-semibold text-text-primary">
-                                {suggestion}
-                              </Text>
-                            </Pressable>
-                          ))}
+                          {filteredSuggestions
+                            .slice(0, 10)
+                            .map((suggestion) => (
+                              <Pressable
+                                key={suggestion}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Add ${suggestion}`}
+                                onPress={() =>
+                                  onAddCategory(
+                                    value.id,
+                                    suggestion,
+                                    accentColor,
+                                  )
+                                }
+                                className="flex-row items-center gap-2 rounded-2xl border border-[#E4E8F0] bg-white px-3 py-2.5"
+                                style={({ pressed }) => [
+                                  { opacity: pressed ? 0.85 : 1 },
+                                ]}
+                              >
+                                <View
+                                  className="h-8 w-8 items-center justify-center rounded-xl"
+                                  style={{ backgroundColor: accentColor }}
+                                >
+                                  <Plus size={14} color="#fff" />
+                                </View>
+                                <Text className="text-sm font-semibold text-text-primary">
+                                  {suggestion}
+                                </Text>
+                              </Pressable>
+                            ))}
                         </View>
                       )}
                     </View>
@@ -354,9 +391,13 @@ export const CoreCategoriesTemplate = ({
                                 key={example}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Add ${example}`}
-                                onPress={() => onAddCategory(value.id, example, accentColor)}
+                                onPress={() =>
+                                  onAddCategory(value.id, example, accentColor)
+                                }
                                 className="rounded-2xl border border-[#E4E8F0] bg-white px-3 py-2"
-                                style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                                style={({ pressed }) => [
+                                  { opacity: pressed ? 0.85 : 1 },
+                                ]}
                               >
                                 <Text className="text-xs font-semibold text-text-primary">
                                   {example}
@@ -374,7 +415,7 @@ export const CoreCategoriesTemplate = ({
                           placeholderTextColor="#94A3B8"
                           autoFocus
                           className="flex-1 rounded-xl bg-[#F8FAFC] px-4 py-2.5 text-sm text-text-primary"
-                          style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
+                          style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
                           onSubmitEditing={() => handleAddCategory(value.id)}
                         />
                         <Pressable
@@ -400,8 +441,8 @@ export const CoreCategoriesTemplate = ({
                               opacity: !newCategoryText.trim()
                                 ? 0.5
                                 : pressed
-                                ? 0.9
-                                : 1,
+                                  ? 0.9
+                                  : 1,
                             },
                           ]}
                         >
@@ -414,7 +455,7 @@ export const CoreCategoriesTemplate = ({
                         accessibilityRole="button"
                         onPress={() => {
                           setAddingForValue(null);
-                          setNewCategoryText('');
+                          setNewCategoryText("");
                         }}
                         className="items-center py-1"
                       >

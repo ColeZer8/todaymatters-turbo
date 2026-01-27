@@ -21,21 +21,26 @@ The Life Distribution section displays two side-by-side donut charts comparing t
 ## File Locations
 
 ### Main Template (where it's hidden)
+
 ```
 apps/mobile/src/components/templates/AnalyticsTemplate.tsx
 ```
+
 - Lines ~392-430 (commented out)
 - The section is wrapped in JSX comments: `{/* START: Life Distribution Section (Hidden) ... END: Life Distribution Section (Hidden) */}`
 
 ### Donut Chart Component
+
 ```
 apps/mobile/src/components/molecules/AnalyticsDonutChart.tsx
 ```
+
 - Reusable animated donut chart component
 - Supports smooth transitions when data changes
 - Used by both IDEAL and REALITY charts
 
 ### Data Structure
+
 The distribution data is defined in `ANALYTICS_SNAPSHOT` constant in `AnalyticsTemplate.tsx`:
 
 ```typescript
@@ -58,7 +63,7 @@ Each range (today, week, month, year) has its own distribution data.
 1. Open `apps/mobile/src/components/templates/AnalyticsTemplate.tsx`
 2. Find the section marked `{/* START: Life Distribution Section (Hidden)`
 3. Uncomment the entire JSX block by:
-   - Remove `{/* START: Life Distribution Section (Hidden)` 
+   - Remove `{/* START: Life Distribution Section (Hidden)`
    - Remove `END: Life Distribution Section (Hidden) */}`
    - Keep the descriptive comment at the top if desired
 4. The section should now render between the range toggle and the "Time Spent vs. Goal" section
@@ -77,14 +82,8 @@ Hidden per product decision to simplify the Analytics Overview screen. The featu
 
 ## Related Components
 
-| Component | Path | Status |
-|-----------|------|--------|
-| AnalyticsDonutChart | `src/components/molecules/AnalyticsDonutChart.tsx` | Active |
-| AnalyticsRangeToggle | `src/components/molecules/AnalyticsRangeToggle.tsx` | Active |
-| AnalyticsTemplate | `src/components/templates/AnalyticsTemplate.tsx` | Active (section hidden) |
-
-
-
-
-
-
+| Component            | Path                                                | Status                  |
+| -------------------- | --------------------------------------------------- | ----------------------- |
+| AnalyticsDonutChart  | `src/components/molecules/AnalyticsDonutChart.tsx`  | Active                  |
+| AnalyticsRangeToggle | `src/components/molecules/AnalyticsRangeToggle.tsx` | Active                  |
+| AnalyticsTemplate    | `src/components/templates/AnalyticsTemplate.tsx`    | Active (section hidden) |

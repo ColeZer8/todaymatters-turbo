@@ -1,8 +1,8 @@
-import { Pressable, Text, View } from 'react-native';
-import { LucideIcon, Trash2 } from 'lucide-react-native';
-import { Icon } from '../atoms';
+import { Pressable, Text, View } from "react-native";
+import { LucideIcon, Trash2 } from "lucide-react-native";
+import { Icon } from "../atoms";
 
-type AccentTone = 'blue' | 'purple';
+type AccentTone = "blue" | "purple";
 
 interface ProfileItemCardProps {
   label: string;
@@ -11,21 +11,24 @@ interface ProfileItemCardProps {
   onRemove?: () => void;
 }
 
-const accentStyles: Record<AccentTone, { icon: string; background: string; ring: string }> = {
+const accentStyles: Record<
+  AccentTone,
+  { icon: string; background: string; ring: string }
+> = {
   blue: {
-    icon: '#3B82F6',
-    background: '#E9F1FF',
-    ring: '#DDE7FF',
+    icon: "#3B82F6",
+    background: "#E9F1FF",
+    ring: "#DDE7FF",
   },
   purple: {
-    icon: '#A855F7',
-    background: '#F3E9FF',
-    ring: '#E8D8FF',
+    icon: "#A855F7",
+    background: "#F3E9FF",
+    ring: "#E8D8FF",
   },
 };
 
 const cardShadow = {
-  shadowColor: '#111827',
+  shadowColor: "#111827",
   shadowOpacity: 0.06,
   shadowRadius: 10,
   shadowOffset: { width: 0, height: 4 },
@@ -35,7 +38,7 @@ const cardShadow = {
 export const ProfileItemCard = ({
   label,
   icon,
-  accent = 'blue',
+  accent = "blue",
   onRemove,
 }: ProfileItemCardProps) => {
   const accentStyle = accentStyles[accent];
@@ -47,11 +50,16 @@ export const ProfileItemCard = ({
     >
       <View
         className="items-center justify-center h-12 w-12 mr-3 rounded-full border"
-        style={{ backgroundColor: accentStyle.background, borderColor: accentStyle.ring }}
+        style={{
+          backgroundColor: accentStyle.background,
+          borderColor: accentStyle.ring,
+        }}
       >
         <Icon icon={icon} size={22} color={accentStyle.icon} />
       </View>
-      <Text className="flex-1 text-[15px] font-semibold text-[#111827]">{label}</Text>
+      <Text className="flex-1 text-[15px] font-semibold text-[#111827]">
+        {label}
+      </Text>
 
       {onRemove && (
         <Pressable

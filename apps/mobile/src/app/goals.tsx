@@ -1,11 +1,14 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { GoalsTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useEventsSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { GoalsTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useEventsSync } from "@/lib/supabase/hooks";
 
 function dedupeTitles(values: string[]): string[] {
   const seen = new Set<string>();
@@ -24,7 +27,8 @@ function dedupeTitles(values: string[]): string[] {
 export default function GoalsScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -36,11 +40,17 @@ export default function GoalsScreen() {
   const removeGoal = useOnboardingStore((state) => state.removeGoal);
   const changeGoal = useOnboardingStore((state) => state.changeGoal);
   const addInitiative = useOnboardingStore((state) => state.addInitiative);
-  const removeInitiative = useOnboardingStore((state) => state.removeInitiative);
-  const changeInitiative = useOnboardingStore((state) => state.changeInitiative);
+  const removeInitiative = useOnboardingStore(
+    (state) => state.removeInitiative,
+  );
+  const changeInitiative = useOnboardingStore(
+    (state) => state.changeInitiative,
+  );
 
   // Supabase sync
-  const { bulkSaveGoals, bulkSaveInitiatives } = useEventsSync({ onError: (err) => console.error('Failed to save goals/initiatives:', err) });
+  const { bulkSaveGoals, bulkSaveInitiatives } = useEventsSync({
+    onError: (err) => console.error("Failed to save goals/initiatives:", err),
+  });
 
   // Defensive: if stale persisted data contains duplicates, normalize it once for a clean UX.
   useEffect(() => {
@@ -70,13 +80,20 @@ export default function GoalsScreen() {
       }, 2000); // Longer debounce for bulk operations
       return () => clearTimeout(timeoutId);
     }
-  }, [goals, initiatives, hasHydrated, isAuthenticated, bulkSaveGoals, bulkSaveInitiatives]);
+  }, [
+    goals,
+    initiatives,
+    hasHydrated,
+    isAuthenticated,
+    bulkSaveGoals,
+    bulkSaveInitiatives,
+  ]);
 
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -101,8 +118,8 @@ export default function GoalsScreen() {
       onAddInitiative={addInitiative}
       onRemoveInitiative={removeInitiative}
       onChangeInitiative={changeInitiative}
-      onContinue={() => router.replace('/goal-whys')}
-      onBack={() => router.replace('/values-scores')}
+      onContinue={() => router.replace("/goal-whys")}
+      onBack={() => router.replace("/values-scores")}
     />
   );
 }

@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { useAuthStore } from '@/stores';
-import { getIconByKey, useRoutineBuilderStore, type IconKey } from '@/stores/routine-builder-store';
-import { fetchRoutine, saveRoutine } from '../services/routines';
+import { useCallback, useEffect, useRef } from "react";
+import { useAuthStore } from "@/stores";
+import {
+  getIconByKey,
+  useRoutineBuilderStore,
+  type IconKey,
+} from "@/stores/routine-builder-store";
+import { fetchRoutine, saveRoutine } from "../services/routines";
 
 interface UseRoutineSyncOptions {
   autoLoad?: boolean;
@@ -27,16 +31,22 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
   const autoLoadedUserIdRef = useRef<string | null>(null);
 
   const toIconKey = useCallback((value: string | null): IconKey => {
-    if (value === 'droplet' || value === 'book' || value === 'utensils' || value === 'moon' || value === 'sun') {
+    if (
+      value === "droplet" ||
+      value === "book" ||
+      value === "utensils" ||
+      value === "moon" ||
+      value === "sun"
+    ) {
       return value;
     }
-    return 'droplet';
+    return "droplet";
   }, []);
 
   const loadRoutine = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     try {
-      const snapshot = await fetchRoutine(user.id, 'morning');
+      const snapshot = await fetchRoutine(user.id, "morning");
       if (!snapshot) return;
 
       if (snapshot.wakeTime) {
@@ -56,11 +66,12 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
               iconKey,
               icon: getIconByKey(iconKey),
             };
-          })
+          }),
         );
       }
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load routine');
+      const err =
+        error instanceof Error ? error : new Error("Failed to load routine");
       onErrorRef.current?.(err);
     }
   }, [isAuthenticated, user?.id, setItems, setWakeTime, toIconKey]);
@@ -78,10 +89,11 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
             iconKey: it.iconKey ?? null,
           })),
         },
-        'morning'
+        "morning",
       );
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to save routine');
+      const err =
+        error instanceof Error ? error : new Error("Failed to save routine");
       onErrorRef.current?.(err);
     }
   }, [isAuthenticated, user?.id, wakeTime, items]);
@@ -102,8 +114,3 @@ export function useRoutineSync(options: UseRoutineSyncOptions = {}) {
 
   return { loadRoutine, saveRoutine: saveRoutineSnapshot };
 }
-
-
-
-
-

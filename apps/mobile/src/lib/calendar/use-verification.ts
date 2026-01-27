@@ -1,6 +1,14 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
-import { useAuthStore, type ScheduledEvent, type EventCategory, type VerificationStrictness } from '@/stores';
-import { fetchAllEvidenceForDay, type EvidenceBundle } from '@/lib/supabase/services/evidence-data';
+import { useCallback, useState, useEffect, useRef } from "react";
+import {
+  useAuthStore,
+  type ScheduledEvent,
+  type EventCategory,
+  type VerificationStrictness,
+} from "@/stores";
+import {
+  fetchAllEvidenceForDay,
+  type EvidenceBundle,
+} from "@/lib/supabase/services/evidence-data";
 import {
   verifyPlannedEvents,
   generateActualBlocks,
@@ -8,8 +16,8 @@ import {
   type ActualBlock,
   type VerificationStatus,
   getVerificationThresholds,
-} from './verification-engine';
-import type { AppCategoryOverrides } from './app-classification';
+} from "./verification-engine";
+import type { AppCategoryOverrides } from "./app-classification";
 
 // Re-export types for convenience
 export type { VerificationResult, VerificationStatus, ActualBlock };
@@ -72,9 +80,14 @@ export interface DaySummary {
 export function useVerification(
   plannedEvents: ScheduledEvent[],
   ymd: string,
-  options: UseVerificationOptions = {}
+  options: UseVerificationOptions = {},
 ): UseVerificationReturn {
-  const { autoFetch = true, onError, appCategoryOverrides, verificationStrictness } = options;
+  const {
+    autoFetch = true,
+    onError,
+    appCategoryOverrides,
+    verificationStrictness,
+  } = options;
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -105,12 +118,21 @@ export function useVerification(
    * Build a fingerprint for re-verification inputs to skip redundant computation.
    */
   const buildVerificationFingerprint = useCallback(
-    (events: ScheduledEvent[], overrides: AppCategoryOverrides | undefined, strictness: VerificationStrictness | undefined, date: string): string => {
-      const eventPart = events.map((e) => `${e.id}:${e.startMinutes}:${e.duration}`).join(',');
-      const overrideKeys = overrides ? Object.keys(overrides).sort().join(',') : '';
-      return `${date}|${strictness ?? ''}|${overrideKeys}|${eventPart}`;
+    (
+      events: ScheduledEvent[],
+      overrides: AppCategoryOverrides | undefined,
+      strictness: VerificationStrictness | undefined,
+      date: string,
+    ): string => {
+      const eventPart = events
+        .map((e) => `${e.id}:${e.startMinutes}:${e.duration}`)
+        .join(",");
+      const overrideKeys = overrides
+        ? Object.keys(overrides).sort().join(",")
+        : "";
+      return `${date}|${strictness ?? ""}|${overrideKeys}|${eventPart}`;
     },
-    []
+    [],
   );
 
   /**
@@ -137,24 +159,40 @@ export function useVerification(
       const currentStrictness = verificationStrictnessRef.current;
 
       const thresholds = getVerificationThresholds(currentStrictness);
-      const results = verifyPlannedEvents(currentPlanned, bundle, ymd, currentOverrides, thresholds);
+      const results = verifyPlannedEvents(
+        currentPlanned,
+        bundle,
+        ymd,
+        currentOverrides,
+        thresholds,
+      );
       setVerificationResults(results);
 
       // Generate actual blocks
-      const blocks = generateActualBlocks(bundle, ymd, currentPlanned, currentOverrides);
+      const blocks = generateActualBlocks(
+        bundle,
+        ymd,
+        currentPlanned,
+        currentOverrides,
+      );
       setActualBlocks(blocks);
 
       lastFetched.current = { ymd, userId };
       // Mark re-verification as up-to-date so the effect below skips
-      lastVerificationInputs.current = buildVerificationFingerprint(currentPlanned, currentOverrides, currentStrictness, ymd);
+      lastVerificationInputs.current = buildVerificationFingerprint(
+        currentPlanned,
+        currentOverrides,
+        currentStrictness,
+        ymd,
+      );
     } catch (err) {
       const typedError =
-        err instanceof Error ? err : new Error('Failed to fetch evidence');
+        err instanceof Error ? err : new Error("Failed to fetch evidence");
       setError(typedError);
       onErrorRef.current?.(typedError);
 
       if (__DEV__) {
-        console.error('[Verification] Failed:', err);
+        console.error("[Verification] Failed:", err);
       }
     } finally {
       setIsLoading(false);
@@ -182,17 +220,40 @@ export function useVerification(
     if (!evidence) return;
 
     // Skip if inputs haven't changed since last verification (prevents double-run after refresh)
-    const fingerprint = buildVerificationFingerprint(plannedEvents, appCategoryOverrides, verificationStrictness, ymd);
+    const fingerprint = buildVerificationFingerprint(
+      plannedEvents,
+      appCategoryOverrides,
+      verificationStrictness,
+      ymd,
+    );
     if (fingerprint === lastVerificationInputs.current) return;
     lastVerificationInputs.current = fingerprint;
 
     const thresholds = getVerificationThresholds(verificationStrictness);
-    const results = verifyPlannedEvents(plannedEvents, evidence, ymd, appCategoryOverrides, thresholds);
+    const results = verifyPlannedEvents(
+      plannedEvents,
+      evidence,
+      ymd,
+      appCategoryOverrides,
+      thresholds,
+    );
     setVerificationResults(results);
 
-    const blocks = generateActualBlocks(evidence, ymd, plannedEvents, appCategoryOverrides);
+    const blocks = generateActualBlocks(
+      evidence,
+      ymd,
+      plannedEvents,
+      appCategoryOverrides,
+    );
     setActualBlocks(blocks);
-  }, [appCategoryOverrides, buildVerificationFingerprint, evidence, plannedEvents, verificationStrictness, ymd]);
+  }, [
+    appCategoryOverrides,
+    buildVerificationFingerprint,
+    evidence,
+    plannedEvents,
+    verificationStrictness,
+    ymd,
+  ]);
 
   /**
    * Get verification result for a specific event.
@@ -201,7 +262,7 @@ export function useVerification(
     (eventId: string): VerificationResult | null => {
       return verificationResults.get(eventId) ?? null;
     },
-    [verificationResults]
+    [verificationResults],
   );
 
   /**
@@ -215,7 +276,7 @@ export function useVerification(
       startMinutes: block.startMinutes,
       duration: block.endMinutes - block.startMinutes,
       description: block.description,
-    })
+    }),
   );
 
   /**
@@ -231,45 +292,44 @@ export function useVerification(
 
     for (const result of verificationResults.values()) {
       switch (result.status) {
-        case 'verified':
+        case "verified":
           verified++;
           break;
-        case 'mostly_verified':
+        case "mostly_verified":
           verified++;
           break;
-        case 'partial':
+        case "partial":
           partial++;
           break;
-        case 'partially_verified':
+        case "partially_verified":
           partial++;
           break;
-        case 'unverified':
+        case "unverified":
           unverified++;
           break;
-        case 'contradicted':
+        case "contradicted":
           contradicted++;
           break;
-        case 'distracted':
+        case "distracted":
           distracted++;
           break;
-        case 'early':
-        case 'late':
-        case 'shortened':
-        case 'extended':
+        case "early":
+        case "late":
+        case "shortened":
+        case "extended":
           partial++;
           break;
       }
 
       if (result.evidence.screenTime) {
-        totalDistractionMinutes += result.evidence.screenTime.distractionMinutes;
+        totalDistractionMinutes +=
+          result.evidence.screenTime.distractionMinutes;
       }
     }
 
     const total = plannedEvents.length;
     const adherenceScore =
-      total > 0
-        ? Math.round(((verified + partial * 0.5) / total) * 100)
-        : 100;
+      total > 0 ? Math.round(((verified + partial * 0.5) / total) * 100) : 100;
 
     return {
       totalPlanned: total,
@@ -302,20 +362,20 @@ export function useVerification(
 
 function categoryToColor(category: EventCategory): string {
   const colors: Record<EventCategory, string> = {
-    sleep: '#6366f1',
-    routine: '#8b5cf6',
-    work: '#3b82f6',
-    meeting: '#0ea5e9',
-    meal: '#f59e0b',
-    health: '#22c55e',
-    family: '#ec4899',
-    social: '#f43f5e',
-    travel: '#64748b',
-    finance: '#14b8a6',
-    comm: '#a855f7',
-    digital: '#6b7280',
-    unknown: '#9ca3af',
-    free: '#d1d5db',
+    sleep: "#6366f1",
+    routine: "#8b5cf6",
+    work: "#3b82f6",
+    meeting: "#0ea5e9",
+    meal: "#f59e0b",
+    health: "#22c55e",
+    family: "#ec4899",
+    social: "#f43f5e",
+    travel: "#64748b",
+    finance: "#14b8a6",
+    comm: "#a855f7",
+    digital: "#6b7280",
+    unknown: "#9ca3af",
+    free: "#d1d5db",
   };
-  return colors[category] ?? '#9ca3af';
+  return colors[category] ?? "#9ca3af";
 }

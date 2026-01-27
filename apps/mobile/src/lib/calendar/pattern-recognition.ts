@@ -1,5 +1,9 @@
-import type { ActualPatternSourceEvent } from '@/lib/supabase/services/calendar-events';
-import type { CalendarEventMeta, EventCategory, ScheduledEvent } from '@/stores';
+import type { ActualPatternSourceEvent } from "@/lib/supabase/services/calendar-events";
+import type {
+  CalendarEventMeta,
+  EventCategory,
+  ScheduledEvent,
+} from "@/stores";
 
 const SLOT_MINUTES = 30;
 const MIN_CONFIDENCE = 0.6;
@@ -71,13 +75,16 @@ function getDayOfWeek(ymd: string): number {
   return new Date(year, month, day).getDay();
 }
 
-export function buildPatternIndex(entries: ActualPatternSourceEvent[]): PatternIndex {
+export function buildPatternIndex(
+  entries: ActualPatternSourceEvent[],
+): PatternIndex {
   const accumulators = new Map<string, PatternAccumulator>();
 
   for (const entry of entries) {
     const { ymd, event } = entry;
     const dayOfWeek = getDayOfWeek(ymd);
-    const startBucket = Math.floor(event.startMinutes / SLOT_MINUTES) * SLOT_MINUTES;
+    const startBucket =
+      Math.floor(event.startMinutes / SLOT_MINUTES) * SLOT_MINUTES;
     const key = keyFor(dayOfWeek, startBucket);
 
     const accumulator = accumulators.get(key) ?? {
@@ -85,41 +92,43 @@ export function buildPatternIndex(entries: ActualPatternSourceEvent[]): PatternI
       counts: new Map<string, number>(),
       durationSum: 0,
     };
-    const title = event.title?.trim() || 'Actual';
+    const title = event.title?.trim() || "Actual";
     const eventKey = entryKey(event.category, title);
     const weight = event.meta?.learnedFrom ? LEARNED_EVENT_WEIGHT : 1;
     accumulator.totalCount += weight;
     accumulator.durationSum += event.duration * weight;
-    accumulator.counts.set(eventKey, (accumulator.counts.get(eventKey) ?? 0) + weight);
+    accumulator.counts.set(
+      eventKey,
+      (accumulator.counts.get(eventKey) ?? 0) + weight,
+    );
     accumulators.set(key, accumulator);
   }
 
   const slots = new Map<string, PatternSlot>();
   for (const [key, accumulator] of accumulators.entries()) {
     if (accumulator.totalCount === 0) continue;
-    const sorted = Array.from(accumulator.counts.entries()).sort((a, b) => b[1] - a[1]);
+    const sorted = Array.from(accumulator.counts.entries()).sort(
+      (a, b) => b[1] - a[1],
+    );
     const [winnerKey, winnerCount] = sorted[0] ?? [];
     if (!winnerKey) continue;
-    const [category, title] = winnerKey.split(':');
+    const [category, title] = winnerKey.split(":");
     const confidence = winnerCount / accumulator.totalCount;
-    const [dayOfWeekString, slotStartString] = key.split(':');
+    const [dayOfWeekString, slotStartString] = key.split(":");
     const dayOfWeek = Number(dayOfWeekString);
     const slotStartMinutes = Number(slotStartString);
     const avgDurationMinutes = accumulator.durationSum / accumulator.totalCount;
 
-    slots.set(
-      key,
-      {
-        dayOfWeek,
-        slotStartMinutes,
-        slotEndMinutes: slotStartMinutes + SLOT_MINUTES,
-        category: category as EventCategory,
-        title,
-        confidence,
-        sampleCount: Math.round(accumulator.totalCount),
-        avgDurationMinutes,
-      },
-    );
+    slots.set(key, {
+      dayOfWeek,
+      slotStartMinutes,
+      slotEndMinutes: slotStartMinutes + SLOT_MINUTES,
+      category: category as EventCategory,
+      title,
+      confidence,
+      sampleCount: Math.round(accumulator.totalCount),
+      avgDurationMinutes,
+    });
   }
 
   return { slots };
@@ -133,7 +142,9 @@ export function buildPatternIndexFromSlots(slots: PatternSlot[]): PatternIndex {
   return { slots: map };
 }
 
-export function serializePatternIndex(index: PatternIndex | null): PatternSlot[] {
+export function serializePatternIndex(
+  index: PatternIndex | null,
+): PatternSlot[] {
   if (!index) return [];
   return Array.from(index.slots.values());
 }
@@ -176,9 +187,15 @@ export function buildPatternSummary(
   endMinutes: number,
   currentCategory: EventCategory,
 ): PatternSummaryResult | null {
-  const suggestion = getPatternSuggestionForRange(index, ymd, startMinutes, endMinutes);
+  const suggestion = getPatternSuggestionForRange(
+    index,
+    ymd,
+    startMinutes,
+    endMinutes,
+  );
   if (!suggestion) return null;
-  const deviation = suggestion.category !== currentCategory && suggestion.confidence >= 0.6;
+  const deviation =
+    suggestion.category !== currentCategory && suggestion.confidence >= 0.6;
   return {
     confidence: suggestion.confidence,
     sampleCount: suggestion.sampleCount,
@@ -196,7 +213,7 @@ export function applyPatternSuggestions(
   if (!index) return events;
 
   return events.map((event) => {
-    if (event.category !== 'unknown') return event;
+    if (event.category !== "unknown") return event;
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
     const suggestion = findBestPatternForRange(index, ymd, start, end);
@@ -204,8 +221,8 @@ export function applyPatternSuggestions(
 
     const meta: CalendarEventMeta = {
       category: suggestion.category,
-      source: 'derived',
-      kind: 'pattern_gap',
+      source: "derived",
+      kind: "pattern_gap",
       confidence: suggestion.confidence,
     };
 
@@ -218,7 +235,12 @@ export function applyPatternSuggestions(
   });
 }
 
-function overlapMinutes(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
+function overlapMinutes(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+): number {
   const start = Math.max(aStart, bStart);
   const end = Math.min(aEnd, bEnd);
   return Math.max(0, end - start);
@@ -230,7 +252,7 @@ function findActualCategoryForSlot(
   endMinutes: number,
 ): EventCategory {
   let bestOverlap = 0;
-  let bestCategory: EventCategory = 'unknown';
+  let bestCategory: EventCategory = "unknown";
 
   for (const event of events) {
     const overlap = overlapMinutes(
@@ -266,8 +288,12 @@ export function buildDailyPatternAnomalies(options: {
     if (!slot || slot.confidence < minConfidence) continue;
     slotCount += 1;
     const slotEnd = slotStart + SLOT_MINUTES;
-    const actualCategory = findActualCategoryForSlot(actualEvents, slotStart, slotEnd);
-    if (actualCategory !== slot.category && actualCategory !== 'unknown') {
+    const actualCategory = findActualCategoryForSlot(
+      actualEvents,
+      slotStart,
+      slotEnd,
+    );
+    if (actualCategory !== slot.category && actualCategory !== "unknown") {
       anomalies.push({
         startMinutes: slotStart,
         endMinutes: slotEnd,
@@ -298,7 +324,10 @@ export function buildPatternPredictions(options: {
   const dayOfWeek = getDayOfWeek(ymd);
 
   return Array.from(index.slots.values())
-    .filter((slot) => slot.dayOfWeek === dayOfWeek && slot.confidence >= minConfidence)
+    .filter(
+      (slot) =>
+        slot.dayOfWeek === dayOfWeek && slot.confidence >= minConfidence,
+    )
     .sort((a, b) => a.slotStartMinutes - b.slotStartMinutes)
     .map((slot) => ({
       startMinutes: slot.slotStartMinutes,

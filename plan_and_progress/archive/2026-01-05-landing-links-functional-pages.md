@@ -37,5 +37,3 @@ Make the landing page’s bottom/footer (and other placeholder) links functional
 ## Follow-ups
 
 - If we later add real App Store / Play Store URLs, update `/download` to point to them.
-
-

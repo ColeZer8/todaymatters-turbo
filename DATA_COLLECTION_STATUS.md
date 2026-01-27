@@ -5,16 +5,19 @@
 Based on the SQL query results, here's what's happening:
 
 ### ✅ **Location Data in Events** (Working)
+
 - **47,870 events** have location data
 - **2,523 events** have location in the `location` column
 - **2,031 events** have location in the `meta` column
 - This suggests location data IS being collected, but it's coming from **calendar events** (Google Calendar sync), not from raw location samples
 
 ### ❌ **Raw Location Samples** (Not Working)
+
 - **0 location samples** in `tm.location_samples`
 - This means the **iOS background location task is NOT collecting raw location data**
 
 ### ❌ **Screen Time Data** (Not Working)
+
 - **0 screen time records** in any screen time tables
 - This means **Screen Time sync is NOT working**
 
@@ -28,7 +31,6 @@ The app has code to collect location samples via a background task (`useLocation
 
 1. **Background Location Permission**: User must grant "Always" location permission
    - Check: iOS Settings > Privacy & Security > Location Services > TodayMatters > Allow Location Access: **Always**
-   
 2. **Background Task Started**: The app must successfully start the background location task
    - The code checks permissions before starting (see `startIosBackgroundLocationAsync`)
    - If permissions aren't granted, the task won't start
@@ -102,6 +104,7 @@ The app has code to sync Screen Time (`useInsightsSync` hook), but it requires:
 ## Diagnostic Queries
 
 Run the `diagnose-data-collection.sql` query to get detailed status on:
+
 - When sync last ran
 - Any sync errors
 - Specific action items
@@ -111,11 +114,13 @@ Run the `diagnose-data-collection.sql` query to get detailed status on:
 ## Expected Behavior Once Fixed
 
 ### Location Samples:
+
 - Should see location samples appearing in `tm.location_samples` within minutes of granting permission
 - Samples should appear even when app is backgrounded
 - Flush happens every 2 minutes when app is foregrounded
 
 ### Screen Time:
+
 - Should see records in `tm.screen_time_daily` after first sync
 - Should see app sessions in `tm.screen_time_app_sessions`
 - Sync happens every 5 minutes when app is active

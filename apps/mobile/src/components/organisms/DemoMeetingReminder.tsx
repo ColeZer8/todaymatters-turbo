@@ -1,16 +1,20 @@
-import { View, Text, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Video, MessageSquare, ChevronRight } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Video, MessageSquare, ChevronRight } from "lucide-react-native";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoMeetingReminder - Meeting notification/reminder screen for demo mode
- * 
+ *
  * Shows the interruption flow when a meeting is about to start.
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoMeetingReminder = ({ userName = 'Paul' }: { userName?: string }) => {
+export const DemoMeetingReminder = ({
+  userName = "Paul",
+}: {
+  userName?: string;
+}) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -107,9 +111,3 @@ export const DemoMeetingReminder = ({ userName = 'Paul' }: { userName?: string }
     </View>
   );
 };
-
-
-
-
-
-

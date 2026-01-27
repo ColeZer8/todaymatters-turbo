@@ -5,16 +5,16 @@
  * Handles connection management, permissions, client tools, and contextual updates.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type * as ElevenLabsReactNative from '@elevenlabs/react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type * as ElevenLabsReactNative from "@elevenlabs/react-native";
+import { useRouter } from "expo-router";
 
-import { ELEVENLABS_CONFIG } from '../lib/elevenlabs/config';
+import { ELEVENLABS_CONFIG } from "../lib/elevenlabs/config";
 import {
   requestMicrophonePermission,
   checkMicrophonePermission,
   showPermissionDeniedAlert,
-} from '../lib/elevenlabs/permissions';
+} from "../lib/elevenlabs/permissions";
 import type {
   VoiceCoachCallbacks,
   VoiceCoachDynamicVariables,
@@ -23,17 +23,23 @@ import type {
   ConversationStatus,
   VoiceCoachState,
   ConversationMessage,
-} from '../lib/elevenlabs/types';
+} from "../lib/elevenlabs/types";
 
 // Use `require` so we always resolve the same module instance as the dynamically-loaded
 // `ElevenLabsProvider` in `src/app/_layout.tsx` (prevents context mismatch in monorepos).
-const { useConversation } = require('@elevenlabs/react-native') as typeof ElevenLabsReactNative;
+const { useConversation } =
+  require("@elevenlabs/react-native") as typeof ElevenLabsReactNative;
 
 interface UseVoiceCoachOptions extends VoiceCoachCallbacks {
   /** Custom server URL (optional) */
   serverUrl?: string;
   /** Client tools that the agent can invoke */
-  clientTools?: Record<string, (parameters: unknown) => Promise<string | number | undefined> | string | number | undefined>;
+  clientTools?: Record<
+    string,
+    (
+      parameters: unknown,
+    ) => Promise<string | number | undefined> | string | number | undefined
+  >;
 }
 
 interface UseVoiceCoachReturn extends VoiceCoachState {
@@ -64,23 +70,25 @@ interface UseVoiceCoachReturn extends VoiceCoachState {
  */
 function getTimeOfDay(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
 }
 
 /**
  * Get formatted current time
  */
 function getCurrentTime(): string {
-  return new Date().toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
+  return new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
     hour12: true,
   });
 }
 
-async function fetchPublicConversationTokenDiagnostics(agentId: string): Promise<{
+async function fetchPublicConversationTokenDiagnostics(
+  agentId: string,
+): Promise<{
   ok: boolean;
   status: number;
   bodyText: string;
@@ -92,8 +100,8 @@ async function fetchPublicConversationTokenDiagnostics(agentId: string): Promise
   const url = `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}&source=react_native_sdk`;
 
   const response = await fetch(url, {
-    method: 'GET',
-    headers: { accept: 'application/json' },
+    method: "GET",
+    headers: { accept: "application/json" },
   });
   const bodyText = await response.text();
   return { ok: response.ok, status: response.status, bodyText };
@@ -110,14 +118,19 @@ async function fetchPublicConversationToken(agentId: string): Promise<{
 
   try {
     const parsed = JSON.parse(diag.bodyText) as { token?: unknown };
-    const token = typeof parsed.token === 'string' && parsed.token.length > 0 ? parsed.token : null;
+    const token =
+      typeof parsed.token === "string" && parsed.token.length > 0
+        ? parsed.token
+        : null;
     return { token, ...diag };
   } catch {
     return { token: null, ...diag };
   }
 }
 
-export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoachReturn {
+export function useVoiceCoach(
+  options: UseVoiceCoachOptions = {},
+): UseVoiceCoachReturn {
   const {
     onConnect,
     onDisconnect,
@@ -158,31 +171,34 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
 
   // Build client tools including defaults
   const builtClientTools = useMemo(() => {
-    const defaultTools: Record<string, (params: unknown) => string | Promise<string>> = {
+    const defaultTools: Record<
+      string,
+      (params: unknown) => string | Promise<string>
+    > = {
       // NOTE: Navigation-related tools are intentionally disabled for now.
       // We want the agent to be "invisible" and not move the user around the app.
       // We'll re-enable this later once we add explicit UI for agent actions.
-      navigate_to_screen: () => 'Navigation is currently disabled.',
-      open_feature: () => 'Navigation is currently disabled.',
+      navigate_to_screen: () => "Navigation is currently disabled.",
+      open_feature: () => "Navigation is currently disabled.",
 
       // Placeholder for task completion
       mark_task_complete: async (params) => {
         const { task_id } = params as { task_id: string };
-        console.log('[VoiceCoach] Mark task complete:', task_id);
+        console.log("[VoiceCoach] Mark task complete:", task_id);
         return `Task ${task_id} marked as complete`;
       },
 
       // Placeholder for showing routine item details
       show_routine_item: (params) => {
         const { item_id } = params as { item_id: string };
-        console.log('[VoiceCoach] Show routine item:', item_id);
+        console.log("[VoiceCoach] Show routine item:", item_id);
         return `Requested routine item ${item_id} (UI navigation currently disabled).`;
       },
 
       // Play celebration
       play_celebration: () => {
-        console.log('[VoiceCoach] Playing celebration');
-        return 'Celebration played';
+        console.log("[VoiceCoach] Playing celebration");
+        return "Celebration played";
       },
     };
 
@@ -197,27 +213,30 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
     onStatusChange: (event: { status: string }) => {
       if (__DEV__) {
         // eslint-disable-next-line no-console
-        console.log('[VoiceCoach] Status:', event.status);
+        console.log("[VoiceCoach] Status:", event.status);
       }
     },
     onConnect: () => {
-      if (__DEV__) console.log('[VoiceCoach] Connected');
+      if (__DEV__) console.log("[VoiceCoach] Connected");
       setErrorMessage(null);
       startInFlightRef.current = false;
       onConnectRef.current?.();
     },
     onDisconnect: () => {
-      if (__DEV__) console.log('[VoiceCoach] Disconnected');
+      if (__DEV__) console.log("[VoiceCoach] Disconnected");
       setConversationId(null);
       startInFlightRef.current = false;
       endInFlightRef.current = false;
       onDisconnectRef.current?.();
     },
     onMessage: (message) => {
-      const msgText = typeof message === 'string' ? message : (message as { message?: string })?.message ?? '';
+      const msgText =
+        typeof message === "string"
+          ? message
+          : ((message as { message?: string })?.message ?? "");
       const msgSource = (message as { source?: string })?.source;
       const conversationMessage: ConversationMessage = {
-        role: msgSource === 'ai' ? 'agent' : 'user',
+        role: msgSource === "ai" ? "agent" : "user",
         message: msgText,
         timestamp: Date.now(),
       };
@@ -225,14 +244,18 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       onMessageRef.current?.(conversationMessage);
     },
     onError: (error: unknown) => {
-      if (__DEV__) console.error('[VoiceCoach] Error:', error);
-      const errorMsg = typeof error === 'object' && error !== null && 'message' in error 
-        ? (error as { message: string }).message 
-        : String(error ?? 'Unknown error');
-      setErrorMessage(errorMsg || 'An error occurred');
+      if (__DEV__) console.error("[VoiceCoach] Error:", error);
+      const errorMsg =
+        typeof error === "object" && error !== null && "message" in error
+          ? (error as { message: string }).message
+          : String(error ?? "Unknown error");
+      setErrorMessage(errorMsg || "An error occurred");
       startInFlightRef.current = false;
       endInFlightRef.current = false;
-      const errorObj = error instanceof Error ? error : new Error(String(error ?? 'Unknown error'));
+      const errorObj =
+        error instanceof Error
+          ? error
+          : new Error(String(error ?? "Unknown error"));
       onErrorRef.current?.(errorObj);
     },
   });
@@ -258,7 +281,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       if (startInFlightRef.current) return;
       // Only start from fully disconnected/error states
       // NOTE: SDK status does not include 'error'. We represent errors via `errorMessage`.
-      if (currentStatus !== 'disconnected') return;
+      if (currentStatus !== "disconnected") return;
       startInFlightRef.current = true;
 
       try {
@@ -273,7 +296,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
             if (!result.canAskAgain) {
               await showPermissionDeniedAlert();
             }
-            throw new Error('Microphone permission denied');
+            throw new Error("Microphone permission denied");
           }
         }
 
@@ -289,7 +312,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
 
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.log('[VoiceCoach] Starting session...', {
+          console.log("[VoiceCoach] Starting session...", {
             status: conversation.status,
             agentId: !!agentId,
             isPrivateAgent: ELEVENLABS_CONFIG.isPrivateAgent,
@@ -301,7 +324,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
         // However, if that internal exchange becomes flaky, we can fetch the public token
         // ourselves (still unauthenticated for public agents) and pass it explicitly.
         if (!agentId) {
-          throw new Error('Agent ID not configured');
+          throw new Error("Agent ID not configured");
         }
 
         // Try to fetch the public conversation token first and pass it explicitly.
@@ -309,11 +332,11 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
         const tokenResult = await fetchPublicConversationToken(agentId);
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.log('[VoiceCoach] Public token fetch', {
+          console.log("[VoiceCoach] Public token fetch", {
             ok: tokenResult.ok,
             status: tokenResult.status,
             hasToken: !!tokenResult.token,
-            body: tokenResult.ok ? '(ok)' : tokenResult.bodyText,
+            body: tokenResult.ok ? "(ok)" : tokenResult.bodyText,
           });
         }
 
@@ -341,21 +364,22 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       } catch (error) {
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.error('[VoiceCoach] Failed to start conversation:', error);
+          console.error("[VoiceCoach] Failed to start conversation:", error);
         }
         const msg =
-          error instanceof Error ? error.message : 'Failed to start conversation';
-        const help =
-          !ELEVENLABS_CONFIG.isPrivateAgent
-            ? ' (Option A requires a PUBLIC ElevenLabs agent. If the agent is private, token exchange will fail and the session will disconnect.)'
-            : '';
+          error instanceof Error
+            ? error.message
+            : "Failed to start conversation";
+        const help = !ELEVENLABS_CONFIG.isPrivateAgent
+          ? " (Option A requires a PUBLIC ElevenLabs agent. If the agent is private, token exchange will fail and the session will disconnect.)"
+          : "";
         setErrorMessage(`${msg}${help}`);
         throw error;
       } finally {
         startInFlightRef.current = false;
       }
     },
-    [conversation]
+    [conversation],
   );
 
   /**
@@ -366,21 +390,22 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
     const currentStatus = conversation.status;
     // Allow ending even if already in-flight (force stop)
     // Only skip if we're truly disconnected
-    if (currentStatus === 'disconnected' && !startInFlightRef.current) return;
+    if (currentStatus === "disconnected" && !startInFlightRef.current) return;
 
     try {
       endInFlightRef.current = true;
-      await conversation.endSession('user');
+      await conversation.endSession("user");
     } catch (error) {
       // LiveKit can throw if end is called during teardown; treat as non-fatal.
-      const message = error instanceof Error ? error.message : String(error ?? '');
+      const message =
+        error instanceof Error ? error.message : String(error ?? "");
       const isBenignShutdown =
-        message.includes('PC manager is closed') ||
-        message.includes('UnexpectedConnectionState') ||
-        message.includes('already disconnected');
+        message.includes("PC manager is closed") ||
+        message.includes("UnexpectedConnectionState") ||
+        message.includes("already disconnected");
 
       if (!isBenignShutdown && __DEV__) {
-        console.warn('[VoiceCoach] endSession error (non-fatal):', message);
+        console.warn("[VoiceCoach] endSession error (non-fatal):", message);
       }
     } finally {
       // Reset in-flight flags
@@ -395,13 +420,13 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
    */
   const sendMessage = useCallback(
     async (message: string) => {
-      if (conversation.status !== 'connected') {
-        console.warn('[VoiceCoach] Cannot send message - not connected');
+      if (conversation.status !== "connected") {
+        console.warn("[VoiceCoach] Cannot send message - not connected");
         return;
       }
       await conversation.sendUserMessage(message);
     },
-    [conversation]
+    [conversation],
   );
 
   /**
@@ -409,13 +434,15 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
    */
   const sendContextualUpdate = useCallback(
     (update: string) => {
-      if (conversation.status !== 'connected') {
-        console.warn('[VoiceCoach] Cannot send contextual update - not connected');
+      if (conversation.status !== "connected") {
+        console.warn(
+          "[VoiceCoach] Cannot send contextual update - not connected",
+        );
         return;
       }
       conversation.sendContextualUpdate(update);
     },
-    [conversation]
+    [conversation],
   );
 
   /**
@@ -424,12 +451,12 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
   const sendFeedback = useCallback(
     (liked: boolean) => {
       if (!conversation.canSendFeedback) {
-        console.warn('[VoiceCoach] Cannot send feedback at this time');
+        console.warn("[VoiceCoach] Cannot send feedback at this time");
         return;
       }
       conversation.sendFeedback(liked);
     },
-    [conversation]
+    [conversation],
   );
 
   /**
@@ -449,7 +476,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       setIsMicMuted(muted);
       conversation.setMicMuted(muted);
     },
-    [conversation]
+    [conversation],
   );
 
   /**
@@ -471,7 +498,7 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
   return useMemo(
     () => ({
       // State - use SDK's status directly for consistency
-      status: (errorMessage ? 'error' : conversation.status),
+      status: errorMessage ? "error" : conversation.status,
       isSpeaking: conversation.isSpeaking,
       canSendFeedback: conversation.canSendFeedback,
       conversationId,
@@ -507,7 +534,6 @@ export function useVoiceCoach(options: UseVoiceCoachOptions = {}): UseVoiceCoach
       setMuted,
       checkPermission,
       requestPermission,
-    ]
+    ],
   );
 }
-

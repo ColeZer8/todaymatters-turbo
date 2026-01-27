@@ -33,4 +33,3 @@ Bring back the ranking screen (`values-scores`) and place it right after the “
 
 - `core-categories` → `values-scores` → `goals` is now the setup flow.
 - `values-scores` Back goes to `core-categories`; Goals Back goes to `values-scores`.
-

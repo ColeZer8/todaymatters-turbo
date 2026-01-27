@@ -12,6 +12,7 @@ Most onboarding data is properly synced to Supabase. Two fields exist in the sto
 ## ✅ What IS Being Saved to Supabase
 
 ### tm.profiles Table (Direct Columns)
+
 - ✅ `full_name` → `fullName`
 - ✅ `ideal_work_day` → `wakeTime` (converted to "HH:MM")
 - ✅ `ideal_sabbath` → `sleepTime` (converted to "HH:MM")
@@ -28,6 +29,7 @@ Most onboarding data is properly synced to Supabase. Two fields exist in the sto
 - ✅ `church_website` → `churchWebsite`
 
 ### tm.profiles.meta (JSONB)
+
 - ✅ `permissions` → `permissions`
 - ✅ `joy_selections` → `joySelections`
 - ✅ `joy_custom_options` → `joyCustomOptions`
@@ -41,6 +43,7 @@ Most onboarding data is properly synced to Supabase. Two fields exist in the sto
 - ✅ `ai_setup_responses` → `aiSetupResponses` (NEW - properly configured)
 
 ### tm.events Table
+
 - ✅ Goals → `goals` array (type='goal')
 - ✅ Initiatives → `initiatives` array (type='goal', meta.category='initiative')
 
@@ -49,14 +52,16 @@ Most onboarding data is properly synced to Supabase. Two fields exist in the sto
 ## ❌ What is NOT Being Saved
 
 ### 1. subCategories
+
 - **Store Field**: `subCategories: SubCategory[]`
 - **Current State**: Exists in onboarding store, has UI screen (`sub-categories.tsx`), but **no sync logic** in `use-onboarding-sync.ts`
 - **Impact**: Data is lost on app restart
-- **Recommendation**: 
+- **Recommendation**:
   - Option A: Add to `tm.profiles.meta.sub_categories` (JSONB)
   - Option B: Create dedicated `tm.sub_categories` table if relationships matter
 
 ### 2. vipContacts
+
 - **Store Field**: `vipContacts: VIPContact[]`
 - **Current State**: Exists in onboarding store, has UI screen (`vip-contacts.tsx`), but **no sync logic** in `use-onboarding-sync.ts`
 - **Impact**: Data is lost on app restart
@@ -69,13 +74,15 @@ Most onboarding data is properly synced to Supabase. Two fields exist in the sto
 ## 🔍 Database Schema Status
 
 ### Existing Columns (from migrations)
+
 All required columns exist in `tm.profiles`:
+
 - ✅ `role` (text)
 - ✅ `mission` (text)
 - ✅ `ideal_work_day` (time)
 - ✅ `ideal_sabbath` (time)
 - ✅ `full_name` (text)
-- ✅ `birthday` (date) - *exists but not used in onboarding*
+- ✅ `birthday` (date) - _exists but not used in onboarding_
 - ✅ `timezone` (text)
 - ✅ `has_watched_explainer_video` (boolean)
 - ✅ `has_completed_onboarding` (boolean)
@@ -89,6 +96,7 @@ All required columns exist in `tm.profiles`:
 - ✅ `meta` (jsonb) - for preferences
 
 ### No Migration Needed For
+
 - ✅ `ai_setup_responses` - Already configured to use `meta.ai_setup_responses` (JSONB), no schema change needed
 
 ---
@@ -102,12 +110,14 @@ All required columns exist in `tm.profiles`:
 ### Optional Migrations (if you want to persist missing fields)
 
 #### Option 1: Add to meta JSONB (Simplest)
+
 ```sql
 -- No migration needed - just add to meta JSONB in code
 -- Already supported by existing meta column
 ```
 
 #### Option 2: Dedicated Tables (If relationships/queries needed)
+
 ```sql
 -- For sub_categories (if you need to query by categoryId)
 create table if not exists tm.sub_categories (

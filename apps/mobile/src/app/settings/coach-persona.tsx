@@ -1,25 +1,25 @@
-import { useRouter } from 'expo-router';
-import { BriefcaseBusiness, ShieldCheck, Sparkles } from 'lucide-react-native';
-import { CoachPersonaTemplate } from '@/components/templates';
-import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useRouter } from "expo-router";
+import { BriefcaseBusiness, ShieldCheck, Sparkles } from "lucide-react-native";
+import { CoachPersonaTemplate } from "@/components/templates";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 
 const COACH_PERSONA_OPTIONS = [
   {
-    id: 'strategist',
-    title: 'The Strategist',
-    description: 'Logical, data-driven, and efficient.',
+    id: "strategist",
+    title: "The Strategist",
+    description: "Logical, data-driven, and efficient.",
     icon: BriefcaseBusiness,
   },
   {
-    id: 'cheerleader',
-    title: 'The Cheerleader',
-    description: 'Warm, encouraging, and positive.',
+    id: "cheerleader",
+    title: "The Cheerleader",
+    description: "Warm, encouraging, and positive.",
     icon: Sparkles,
   },
   {
-    id: 'sergeant',
-    title: 'The Sergeant',
-    description: 'Direct, no-nonsense accountability.',
+    id: "sergeant",
+    title: "The Sergeant",
+    description: "Direct, no-nonsense accountability.",
     icon: ShieldCheck,
   },
 ] as const;
@@ -40,9 +40,3 @@ export default function SettingsCoachPersonaScreen() {
     />
   );
 }
-
-
-
-
-
-

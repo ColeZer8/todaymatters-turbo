@@ -39,5 +39,3 @@ Turn the existing “Pending actions → Communications” experience into a rea
 ## Follow-ups
 
 - Wire Slack/SMS/Outlook ingestion into the same comms page once those data sources are available.
-
-

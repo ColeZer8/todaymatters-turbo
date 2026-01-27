@@ -24,5 +24,3 @@ Android uses the same `tm.location_samples` table and the same upload dedupe str
 
 - Client batches samples locally first, then upserts to Supabase with `onConflict: user_id,dedupe_key`.
 - Server-side view `tm.location_hourly` provides an hour-by-hour centroid + radius for schedule comparison.
-
-

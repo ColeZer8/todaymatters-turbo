@@ -1,7 +1,7 @@
-import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
-import { ScreenTimeAnalyticsTemplate } from '@/components/templates';
+import { Stack, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform, Text, View } from "react-native";
+import { ScreenTimeAnalyticsTemplate } from "@/components/templates";
 import {
   getCachedScreenTimeSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
@@ -13,7 +13,7 @@ import {
   type ScreenTimeAuthorizationStatus,
   type ScreenTimeRangeKey,
   type ScreenTimeSummary,
-} from '@/lib/ios-insights';
+} from "@/lib/ios-insights";
 import {
   getAndroidInsightsSupportStatus,
   getUsageAccessAuthorizationStatusSafeAsync,
@@ -22,10 +22,13 @@ import {
   type UsageAccessAuthorizationStatus,
   type UsageRangeKey,
   type UsageSummary,
-} from '@/lib/android-insights';
-import { syncAndroidUsageSummary, syncIosScreenTimeSummary } from '@/lib/supabase/services';
-import { useAuthStore } from '@/stores';
-import { getReadableAppName } from '@/lib/app-names';
+} from "@/lib/android-insights";
+import {
+  syncAndroidUsageSummary,
+  syncIosScreenTimeSummary,
+} from "@/lib/supabase/services";
+import { useAuthStore } from "@/stores";
+import { getReadableAppName } from "@/lib/app-names";
 
 const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
@@ -35,7 +38,7 @@ const formatDuration = (seconds: number): string => {
 };
 
 export default function DevScreenTimeScreen() {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     return <AndroidScreenTimeDashboard />;
   }
   return <IosScreenTimeDashboard />;
@@ -45,65 +48,80 @@ function IosScreenTimeDashboard() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
-  const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
+  const [status, setStatus] =
+    useState<ScreenTimeAuthorizationStatus>("unsupported");
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [supabaseWarning, setSupabaseWarning] = useState<string | null>(null);
-  const [range, setRange] = useState<ScreenTimeRangeKey>('today');
+  const [range, setRange] = useState<ScreenTimeRangeKey>("today");
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
-  const canUseNative = supportStatus === 'available' && status !== 'unsupported';
-  const { supportsRange } = useMemo(() => getScreenTimeReportSupportStatus(), []);
-  const nativeMethods = useMemo(() => getScreenTimeNativeMethodAvailabilityStatus(), []);
-  const showAuthorizationCta = canUseNative && (status === 'notDetermined' || status === 'denied');
+  const canUseNative =
+    supportStatus === "available" && status !== "unsupported";
+  const { supportsRange } = useMemo(
+    () => getScreenTimeReportSupportStatus(),
+    [],
+  );
+  const nativeMethods = useMemo(
+    () => getScreenTimeNativeMethodAvailabilityStatus(),
+    [],
+  );
+  const showAuthorizationCta =
+    canUseNative && (status === "notDetermined" || status === "denied");
 
   const statusLabel = useMemo(() => {
-    if (Platform.OS !== 'ios') return 'iOS only.';
-    if (supportStatus === 'expoGo') {
-      return 'You are running in Expo Go. Screen Time requires a custom iOS dev client.';
+    if (Platform.OS !== "ios") return "iOS only.";
+    if (supportStatus === "expoGo") {
+      return "You are running in Expo Go. Screen Time requires a custom iOS dev client.";
     }
-    if (supportStatus === 'missingNativeModule') {
-      return 'IosInsights native module is missing. Rebuild the iOS dev client.';
+    if (supportStatus === "missingNativeModule") {
+      return "IosInsights native module is missing. Rebuild the iOS dev client.";
     }
     if (errorMessage) {
       return `Error: ${errorMessage}\n\nNative methods:\n- presentScreenTimeReport: ${
-        nativeMethods.hasPresentScreenTimeReport ? 'yes' : 'no'
+        nativeMethods.hasPresentScreenTimeReport ? "yes" : "no"
       }\n- presentTodayScreenTimeReport: ${
-        nativeMethods.hasPresentTodayScreenTimeReport ? 'yes' : 'no'
-      }\n- getCachedScreenTimeSummaryJson: ${nativeMethods.hasGetCachedScreenTimeSummaryJson ? 'yes' : 'no'}`;
+        nativeMethods.hasPresentTodayScreenTimeReport ? "yes" : "no"
+      }\n- getCachedScreenTimeSummaryJson: ${nativeMethods.hasGetCachedScreenTimeSummaryJson ? "yes" : "no"}`;
     }
-    if (status === 'unsupported') return 'Screen Time is not available.';
-    if (status === 'denied') return 'Screen Time access is off. Enable it once to see today’s totals here.';
-    if (status === 'notDetermined') return 'Enable Screen Time once to see today’s totals here.';
-    if (!summary) return 'No cached Screen Time yet. Tap the sliders icon to refresh.';
-    return 'Screen Time ready.';
+    if (status === "unsupported") return "Screen Time is not available.";
+    if (status === "denied")
+      return "Screen Time access is off. Enable it once to see today’s totals here.";
+    if (status === "notDetermined")
+      return "Enable Screen Time once to see today’s totals here.";
+    if (!summary)
+      return "No cached Screen Time yet. Tap the sliders icon to refresh.";
+    return "Screen Time ready.";
   }, [errorMessage, nativeMethods, status, summary, supportStatus]);
 
   const totalLabel = useMemo(() => {
-    if (!summary) return '—';
+    if (!summary) return "—";
     return formatDuration(summary.totalSeconds);
   }, [summary]);
 
   const score = useMemo(() => {
     if (!summary) return null;
     const minutes = Math.round(summary.totalSeconds / 60);
-    const pickups = summary.topApps.reduce((acc, app) => acc + (app.pickups ?? 0), 0);
+    const pickups = summary.topApps.reduce(
+      (acc, app) => acc + (app.pickups ?? 0),
+      0,
+    );
     const minutesPenalty = Math.min(70, Math.round(minutes / 6));
     const pickupsPenalty = Math.min(30, Math.round(pickups / 8));
     return Math.max(0, Math.min(100, 100 - minutesPenalty - pickupsPenalty));
   }, [summary]);
 
   const scoreLabel = useMemo(() => {
-    if (score === null) return '—';
-    if (score >= 80) return 'Balanced';
-    if (score >= 60) return 'Steady';
-    return 'Overloaded';
+    if (score === null) return "—";
+    if (score >= 80) return "Balanced";
+    if (score >= 60) return "Steady";
+    return "Overloaded";
   }, [score]);
 
   const scoreTrendLabel = useMemo(() => {
     if (score === null) return null;
-    return score >= 80 ? 'Improving' : score >= 60 ? 'Stable' : 'Needs focus';
+    return score >= 80 ? "Improving" : score >= 60 ? "Stable" : "Needs focus";
   }, [score]);
 
   const topApps = useMemo(() => {
@@ -113,42 +131,46 @@ function IosScreenTimeDashboard() {
       name: app.displayName,
       durationLabel: formatDuration(app.durationSeconds),
       durationSeconds: app.durationSeconds,
-      categoryLabel: 'App',
-      categoryAccent: '#2F7BFF',
+      categoryLabel: "App",
+      categoryAccent: "#2F7BFF",
     }));
   }, [summary]);
 
-  const refreshStatusAndCache = useCallback(async (): Promise<ScreenTimeSummary | null> => {
-    setErrorMessage(null);
-    try {
-      const [nextStatus, nextSummary] = await Promise.all([
-        getScreenTimeAuthorizationStatusSafeAsync(),
-        getCachedScreenTimeSummarySafeAsync(range),
-      ]);
-      setStatus(nextStatus);
-      setSummary(nextSummary);
-      if (nextSummary && userId) {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-        try {
-          await syncIosScreenTimeSummary(userId, nextSummary, timezone);
-        } catch (error) {
-          if (__DEV__) {
-            console.warn('📊 iOS Screen Time sync skipped:', error);
+  const refreshStatusAndCache =
+    useCallback(async (): Promise<ScreenTimeSummary | null> => {
+      setErrorMessage(null);
+      try {
+        const [nextStatus, nextSummary] = await Promise.all([
+          getScreenTimeAuthorizationStatusSafeAsync(),
+          getCachedScreenTimeSummarySafeAsync(range),
+        ]);
+        setStatus(nextStatus);
+        setSummary(nextSummary);
+        if (nextSummary && userId) {
+          const timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+          try {
+            await syncIosScreenTimeSummary(userId, nextSummary, timezone);
+          } catch (error) {
+            if (__DEV__) {
+              console.warn("📊 iOS Screen Time sync skipped:", error);
+            }
+            setSupabaseWarning(
+              "Supabase tables are missing — showing local Screen Time data only.",
+            );
           }
-          setSupabaseWarning('Supabase tables are missing — showing local Screen Time data only.');
         }
+        return nextSummary;
+      } catch (e) {
+        setStatus("unknown");
+        setSummary(null);
+        setErrorMessage(e instanceof Error ? e.message : String(e));
+        return null;
       }
-      return nextSummary;
-    } catch (e) {
-      setStatus('unknown');
-      setSummary(null);
-      setErrorMessage(e instanceof Error ? e.message : String(e));
-      return null;
-    }
-  }, [range, userId]);
+    }, [range, userId]);
 
   useEffect(() => {
-    if (Platform.OS === 'ios') void refreshStatusAndCache();
+    if (Platform.OS === "ios") void refreshStatusAndCache();
   }, [refreshStatusAndCache]);
 
   const onRequestAuthorization = useCallback(async () => {
@@ -156,17 +178,17 @@ function IosScreenTimeDashboard() {
     try {
       const nextStatus = await requestScreenTimeAuthorizationSafeAsync();
       setStatus(nextStatus);
-      if (nextStatus === 'approved') {
+      if (nextStatus === "approved") {
         await refreshStatusAndCache();
       }
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e));
-      setStatus('unknown');
+      setStatus("unknown");
     }
   }, [refreshStatusAndCache]);
 
   const onRefresh = useCallback(async () => {
-    if (!(supportStatus === 'available' && status === 'approved')) return;
+    if (!(supportStatus === "available" && status === "approved")) return;
     setIsSyncing(true);
     setErrorMessage(null);
     try {
@@ -182,7 +204,7 @@ function IosScreenTimeDashboard() {
       }
       if (!nextSummary) {
         setErrorMessage(
-          'Screen Time synced, but no data was returned. The report extension might not be writing to the app group yet.',
+          "Screen Time synced, but no data was returned. The report extension might not be writing to the app group yet.",
         );
       }
     } catch (e) {
@@ -225,35 +247,38 @@ function AndroidScreenTimeDashboard() {
   const router = useRouter();
   const userId = useAuthStore((s) => s.user?.id ?? null);
 
-  const [status, setStatus] = useState<UsageAccessAuthorizationStatus>('unsupported');
+  const [status, setStatus] =
+    useState<UsageAccessAuthorizationStatus>("unsupported");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [supabaseWarning, setSupabaseWarning] = useState<string | null>(null);
-  const [range, setRange] = useState<UsageRangeKey>('today');
+  const [range, setRange] = useState<UsageRangeKey>("today");
 
   const supportStatus = useMemo(() => getAndroidInsightsSupportStatus(), []);
-  const canUseNative = supportStatus === 'available';
-  const showAuthorizationCta = canUseNative && status !== 'authorized';
+  const canUseNative = supportStatus === "available";
+  const showAuthorizationCta = canUseNative && status !== "authorized";
 
   const statusLabel = useMemo(() => {
-    if (Platform.OS !== 'android') return 'Android only.';
-    if (supportStatus === 'expoGo') {
-      return 'You are running in Expo Go. Android usage requires a custom dev client.';
+    if (Platform.OS !== "android") return "Android only.";
+    if (supportStatus === "expoGo") {
+      return "You are running in Expo Go. Android usage requires a custom dev client.";
     }
-    if (supportStatus === 'missingNativeModule') {
-      return 'AndroidInsights native module is missing. Rebuild the Android dev client.';
+    if (supportStatus === "missingNativeModule") {
+      return "AndroidInsights native module is missing. Rebuild the Android dev client.";
     }
     if (errorMessage) return `Error: ${errorMessage}`;
-    if (status === 'unsupported') return 'Usage access is not available.';
-    if (status === 'denied') return 'Usage access is off. Enable it to see totals here.';
-    if (status === 'notDetermined') return 'Enable usage access to see totals here.';
-    if (!summary) return 'No usage data yet. Tap the sliders icon to refresh.';
-    return 'Usage data ready.';
+    if (status === "unsupported") return "Usage access is not available.";
+    if (status === "denied")
+      return "Usage access is off. Enable it to see totals here.";
+    if (status === "notDetermined")
+      return "Enable usage access to see totals here.";
+    if (!summary) return "No usage data yet. Tap the sliders icon to refresh.";
+    return "Usage data ready.";
   }, [errorMessage, status, summary, supportStatus]);
 
   const totalLabel = useMemo(() => {
-    if (!summary) return '—';
+    if (!summary) return "—";
     return formatDuration(summary.totalSeconds);
   }, [summary]);
 
@@ -265,15 +290,15 @@ function AndroidScreenTimeDashboard() {
   }, [summary]);
 
   const scoreLabel = useMemo(() => {
-    if (score === null) return '—';
-    if (score >= 80) return 'Balanced';
-    if (score >= 60) return 'Steady';
-    return 'Overloaded';
+    if (score === null) return "—";
+    if (score >= 80) return "Balanced";
+    if (score >= 60) return "Steady";
+    return "Overloaded";
   }, [score]);
 
   const scoreTrendLabel = useMemo(() => {
     if (score === null) return null;
-    return score >= 80 ? 'Improving' : score >= 60 ? 'Stable' : 'Needs focus';
+    return score >= 80 ? "Improving" : score >= 60 ? "Stable" : "Needs focus";
   }, [score]);
 
   const topApps = useMemo(() => {
@@ -283,8 +308,8 @@ function AndroidScreenTimeDashboard() {
       name: app.displayName,
       durationLabel: formatDuration(app.durationSeconds),
       durationSeconds: app.durationSeconds,
-      categoryLabel: 'App',
-      categoryAccent: '#2F7BFF',
+      categoryLabel: "App",
+      categoryAccent: "#2F7BFF",
     }));
   }, [summary]);
 
@@ -293,8 +318,13 @@ function AndroidScreenTimeDashboard() {
       return Array.from({ length: 24 }, (_, hour) => ({ hour, apps: [] }));
     }
 
-    const nameLookup = new Map(summary.topApps.map((app) => [app.packageName, app.displayName]));
-    const hourToApps = Array.from({ length: 24 }, () => new Map<string, number>());
+    const nameLookup = new Map(
+      summary.topApps.map((app) => [app.packageName, app.displayName]),
+    );
+    const hourToApps = Array.from(
+      { length: 24 },
+      () => new Map<string, number>(),
+    );
 
     for (const [packageName, hourMap] of Object.entries(summary.hourlyByApp)) {
       for (const [hourKey, seconds] of Object.entries(hourMap)) {
@@ -311,7 +341,10 @@ function AndroidScreenTimeDashboard() {
         .map(([packageName, seconds]) => ({
           id: packageName,
           name:
-            getReadableAppName({ appId: packageName, displayName: nameLookup.get(packageName) ?? null }) ?? packageName,
+            getReadableAppName({
+              appId: packageName,
+              displayName: nameLookup.get(packageName) ?? null,
+            }) ?? packageName,
           durationSeconds: seconds,
           durationLabel: formatDuration(seconds),
         }))
@@ -322,7 +355,9 @@ function AndroidScreenTimeDashboard() {
 
   const timeRangeItems = useMemo(() => {
     if (!summary?.sessions || summary.sessions.length === 0) return [];
-    const nameLookup = new Map(summary.topApps.map((app) => [app.packageName, app.displayName]));
+    const nameLookup = new Map(
+      summary.topApps.map((app) => [app.packageName, app.displayName]),
+    );
     return summary.sessions
       .map((session) => ({
         id: `${session.packageName}-${session.startIso}-${session.endIso}`,
@@ -335,11 +370,17 @@ function AndroidScreenTimeDashboard() {
         endIso: session.endIso,
         durationSeconds: session.durationSeconds,
       }))
-      .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
+      .sort(
+        (a, b) =>
+          new Date(a.startIso).getTime() - new Date(b.startIso).getTime(),
+      );
   }, [summary]);
 
   const timeRangeByHour = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, sessions: [] as typeof timeRangeItems }));
+    const hours = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      sessions: [] as typeof timeRangeItems,
+    }));
     for (const session of timeRangeItems) {
       const startDate = new Date(session.startIso);
       if (Number.isNaN(startDate.getTime())) continue;
@@ -353,45 +394,51 @@ function AndroidScreenTimeDashboard() {
 
   const hourlyStatus = useMemo(() => {
     if (!summary) return null;
-    const hasHourlyApps = hourlyAppBreakdown.some((bucket) => bucket.apps.length > 0);
+    const hasHourlyApps = hourlyAppBreakdown.some(
+      (bucket) => bucket.apps.length > 0,
+    );
     if (hasHourlyApps) return null;
     if (summary.totalSeconds > 0) {
-      return 'Hourly breakdown is unavailable on this emulator. Usage events can be limited; try a physical device or reopen the app after enabling Usage Access.';
+      return "Hourly breakdown is unavailable on this emulator. Usage events can be limited; try a physical device or reopen the app after enabling Usage Access.";
     }
-    return 'No hourly usage yet. Use the device and refresh to populate the timeline.';
+    return "No hourly usage yet. Use the device and refresh to populate the timeline.";
   }, [hourlyAppBreakdown, summary]);
 
-  const refreshStatusAndCache = useCallback(async (): Promise<UsageSummary | null> => {
-    setErrorMessage(null);
-    try {
-      const [nextStatus, nextSummary] = await Promise.all([
-        getUsageAccessAuthorizationStatusSafeAsync(),
-        getUsageSummarySafeAsync(range),
-      ]);
-      setStatus(nextStatus);
-      setSummary(nextSummary);
-      if (nextSummary && userId) {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-        try {
-          await syncAndroidUsageSummary(userId, nextSummary, timezone);
-        } catch (error) {
-          if (__DEV__) {
-            console.warn('📊 Android usage sync skipped:', error);
+  const refreshStatusAndCache =
+    useCallback(async (): Promise<UsageSummary | null> => {
+      setErrorMessage(null);
+      try {
+        const [nextStatus, nextSummary] = await Promise.all([
+          getUsageAccessAuthorizationStatusSafeAsync(),
+          getUsageSummarySafeAsync(range),
+        ]);
+        setStatus(nextStatus);
+        setSummary(nextSummary);
+        if (nextSummary && userId) {
+          const timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+          try {
+            await syncAndroidUsageSummary(userId, nextSummary, timezone);
+          } catch (error) {
+            if (__DEV__) {
+              console.warn("📊 Android usage sync skipped:", error);
+            }
+            setSupabaseWarning(
+              "Supabase tables are missing — showing local usage data only.",
+            );
           }
-          setSupabaseWarning('Supabase tables are missing — showing local usage data only.');
         }
+        return nextSummary;
+      } catch (e) {
+        setStatus("unknown");
+        setSummary(null);
+        setErrorMessage(e instanceof Error ? e.message : String(e));
+        return null;
       }
-      return nextSummary;
-    } catch (e) {
-      setStatus('unknown');
-      setSummary(null);
-      setErrorMessage(e instanceof Error ? e.message : String(e));
-      return null;
-    }
-  }, [range, userId]);
+    }, [range, userId]);
 
   useEffect(() => {
-    if (Platform.OS === 'android') void refreshStatusAndCache();
+    if (Platform.OS === "android") void refreshStatusAndCache();
   }, [refreshStatusAndCache]);
 
   const onRequestAuthorization = useCallback(async () => {
@@ -402,12 +449,12 @@ function AndroidScreenTimeDashboard() {
       await refreshStatusAndCache();
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e));
-      setStatus('unknown');
+      setStatus("unknown");
     }
   }, [refreshStatusAndCache]);
 
   const onRefresh = useCallback(async () => {
-    if (!(supportStatus === 'available' && status === 'authorized')) return;
+    if (!(supportStatus === "available" && status === "authorized")) return;
     setIsSyncing(true);
     setErrorMessage(null);
     try {
@@ -445,11 +492,13 @@ function AndroidScreenTimeDashboard() {
         showAuthorizationCta={showAuthorizationCta}
         isSyncing={isSyncing}
         bannerText={hourlyStatus ?? supabaseWarning}
-        bannerTone={hourlyStatus ? 'info' : 'warning'}
+        bannerTone={hourlyStatus ? "info" : "warning"}
         extraContent={
           timeRangeByHour.length > 0 ? (
             <View className="mt-5">
-              <Text className="px-1 text-[16px] font-bold text-text-primary">App Time Ranges</Text>
+              <Text className="px-1 text-[16px] font-bold text-text-primary">
+                App Time Ranges
+              </Text>
               <View className="mt-3 gap-3">
                 {timeRangeByHour.map((bucket) => (
                   <View
@@ -458,23 +507,34 @@ function AndroidScreenTimeDashboard() {
                   >
                     <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-text-secondary">
                       {bucket.hour === 0
-                        ? '12am'
+                        ? "12am"
                         : bucket.hour < 12
-                        ? `${bucket.hour}am`
-                        : bucket.hour === 12
-                        ? '12pm'
-                        : `${bucket.hour - 12}pm`}
+                          ? `${bucket.hour}am`
+                          : bucket.hour === 12
+                            ? "12pm"
+                            : `${bucket.hour - 12}pm`}
                     </Text>
                     {bucket.sessions.length === 0 ? (
-                      <Text className="mt-2 text-[13px] text-text-tertiary">No app usage.</Text>
+                      <Text className="mt-2 text-[13px] text-text-tertiary">
+                        No app usage.
+                      </Text>
                     ) : (
                       <View className="mt-2 gap-2">
                         {bucket.sessions.map((session) => (
-                          <View key={session.id} className="flex-row items-center justify-between gap-3">
+                          <View
+                            key={session.id}
+                            className="flex-row items-center justify-between gap-3"
+                          >
                             <View className="flex-1">
-                              <Text className="text-[14px] font-semibold text-text-primary">{session.name}</Text>
+                              <Text className="text-[14px] font-semibold text-text-primary">
+                                {session.name}
+                              </Text>
                               <Text className="text-[12px] text-text-secondary">
-                                {new Date(session.startIso).toLocaleTimeString()} - {new Date(session.endIso).toLocaleTimeString()}
+                                {new Date(
+                                  session.startIso,
+                                ).toLocaleTimeString()}{" "}
+                                -{" "}
+                                {new Date(session.endIso).toLocaleTimeString()}
                               </Text>
                             </View>
                             <Text className="text-[13px] font-semibold text-text-secondary">

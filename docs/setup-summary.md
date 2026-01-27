@@ -3,11 +3,13 @@
 ## Completed Tasks
 
 ### ✅ 1. Supabase Integration Documentation
+
 - Created comprehensive Supabase integration guide at `/docs/supabase-integration.md`
 - Includes setup instructions, authentication flows, database queries, and best practices
 - Documents OAuth, magic links, deep linking, and real-time subscriptions
 
 ### ✅ 2. Supabase Client Setup
+
 - **Location**: `apps/mobile/src/lib/supabase/`
 - **Files Created**:
   - `client.ts` - Supabase client initialization with AsyncStorage
@@ -16,15 +18,18 @@
   - `index.ts` - Barrel exports
 
 ### ✅ 3. Android Configuration
+
 - Updated `app.json` with Android package configuration
 - Added adaptive icon configuration
 - Changed scheme from `acme` to `todaymatters` for consistency
 
 ### ✅ 4. Expo Router Configuration
+
 - Fixed incomplete `origin` configuration in expo-router plugin
 - Set to `false` for proper deep linking support
 
 ### ✅ 5. State Management (Zustand)
+
 - **Location**: `apps/mobile/src/stores/`
 - **Files Created**:
   - `auth-store.ts` - Authentication state management with persistence
@@ -36,19 +41,23 @@
   - Automatic initialization
 
 ### ✅ 6. React Hooks
+
 - **Location**: `apps/mobile/src/hooks/`
 - **Files Created**:
   - `use-auth.ts` - Authentication hook with automatic initialization
   - `index.ts` - Barrel exports
 
 ### ✅ 7. Native Modules Documentation
+
 - Created guide at `/docs/native-modules.md`
 - Explains when to use Expo APIs vs custom native modules
 - Documents Expo managed workflow approach
 - Includes examples for creating custom modules if needed
 
 ### ✅ 8. Project Structure
+
 Created proper directory structure:
+
 ```
 apps/mobile/src/
 ├── lib/
@@ -60,6 +69,7 @@ apps/mobile/src/
 ```
 
 ### ✅ 9. Build Configuration
+
 - Added `babel-plugin-module-resolver` for path alias support (`@/`)
 - Configured Babel to resolve `@/` to `./src/`
 - TypeScript path aliases already configured in `tsconfig.json`
@@ -67,12 +77,14 @@ apps/mobile/src/
 - Followed [React Native Reanimated docs](https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/installation/) to keep `react-native-reanimated/plugin` last in `babel.config.js`; pnpm also needs a top-level `react-native-worklets` dependency so that plugin can resolve its internal worklet transformer
 
 ### ✅ 10. Root Layout Integration
+
 - Updated `apps/mobile/src/app/_layout.tsx` to:
   - Initialize authentication on app start
   - Handle deep linking for OAuth callbacks
   - Properly cleanup event listeners
 
 ### ✅ 11. Documentation
+
 - Created comprehensive README at `apps/mobile/README.md`
 - Includes setup instructions, project structure, usage examples
 - Added troubleshooting section
@@ -80,6 +92,7 @@ apps/mobile/src/
 ## Installed Packages
 
 ### Dependencies
+
 - `@supabase/supabase-js` - Supabase JavaScript client
 - `@react-native-async-storage/async-storage` - Storage for auth persistence
 - `react-native-url-polyfill` - URL polyfill for React Native
@@ -92,6 +105,7 @@ apps/mobile/src/
 - `react-native-css-interop` - NativeWind's JSX runtime bridge required for CSS/tailwind classes on Expo + React 19
 
 ### Dev Dependencies
+
 - `babel-plugin-module-resolver` - Path alias resolution for Metro
 
 ## Environment Variables Required
@@ -116,6 +130,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
      - Your web URL if applicable
 
 3. **Generate TypeScript Types** (Optional):
+
    ```bash
    npx supabase gen types typescript --project-id your-project-ref > apps/mobile/src/lib/supabase/types.ts
    ```
@@ -133,12 +148,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ## Architecture Decisions
 
 ### Why Supabase Client (Not Prisma)
+
 - Supabase provides direct REST API and real-time subscriptions
 - Type-safe queries via generated TypeScript types
 - Simpler stack with fewer dependencies
 - Built-in auth, storage, and real-time capabilities
 
 ### Why Zustand (Not Redux/Context)
+
 - Minimal boilerplate
 - Excellent TypeScript support
 - Built-in persistence middleware
@@ -146,6 +163,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 - Small bundle size
 
 ### Why Expo Managed Workflow
+
 - No native directories to maintain
 - Easier updates and maintenance
 - Native code generated when needed
@@ -203,6 +221,7 @@ docs/
 To verify everything works:
 
 1. **Start dev server**:
+
    ```bash
    pnpm dev -- --filter=mobile
    ```

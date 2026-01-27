@@ -1,68 +1,80 @@
-import { Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { requireOptionalNativeModule } from 'expo-modules-core';
-import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
+import { Platform } from "react-native";
+import Constants, { ExecutionEnvironment } from "expo-constants";
+import { requireOptionalNativeModule } from "expo-modules-core";
+import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
 import {
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
   removePendingAndroidLocationSamplesByKeyAsync,
-} from './queue';
-import type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
+} from "./queue";
+import type {
+  AndroidLocationSupportStatus,
+  AndroidLocationSample,
+} from "./types";
 
 /** Mirror of MAX_PENDING_SAMPLES_PER_USER in queue.ts — used for diagnostics peek. */
 const MAX_PENDING_SAMPLES_PER_USER = 10_000;
-import { sanitizeLocationSamplesForUpload, upsertLocationSamples } from '@/lib/supabase/services/location-samples';
-import { supabase } from '@/lib/supabase/client';
-import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
+import {
+  sanitizeLocationSamplesForUpload,
+  upsertLocationSamples,
+} from "@/lib/supabase/services/location-samples";
+import { supabase } from "@/lib/supabase/client";
+import { enqueueAndroidLocationSamplesForUserAsync } from "./queue";
 
-export type { AndroidLocationSupportStatus, AndroidLocationSample } from './types';
-export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-export { clearPendingAndroidLocationSamplesAsync } from './queue';
+export type {
+  AndroidLocationSupportStatus,
+  AndroidLocationSample,
+} from "./types";
+export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+export { clearPendingAndroidLocationSamplesAsync } from "./queue";
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
-  if (Platform.OS !== 'android') return 'notAndroid';
-  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return 'expoGo';
-  return 'available';
+  if (Platform.OS !== "android") return "notAndroid";
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient)
+    return "expoGo";
+  return "available";
 }
 
-async function loadExpoLocationAsync(): Promise<typeof import('expo-location') | null> {
-  if (!requireOptionalNativeModule('ExpoLocation')) return null;
+async function loadExpoLocationAsync(): Promise<
+  typeof import("expo-location") | null
+> {
+  if (!requireOptionalNativeModule("ExpoLocation")) return null;
   try {
-    return await import('expo-location');
+    return await import("expo-location");
   } catch {
     return null;
   }
 }
 
 async function getBackgroundPermissionsSafeAsync(
-  Location: typeof import('expo-location')
-): Promise<import('expo-location').PermissionResponse> {
+  Location: typeof import("expo-location"),
+): Promise<import("expo-location").PermissionResponse> {
   try {
     return await Location.getBackgroundPermissionsAsync();
   } catch (error) {
     if (__DEV__) {
-      console.warn('📍 Android background permission check failed:', error);
+      console.warn("📍 Android background permission check failed:", error);
     }
     return {
-      status: 'denied',
+      status: "denied",
       granted: false,
       canAskAgain: false,
-      expires: 'never',
+      expires: "never",
     };
   }
 }
 
 export async function requestAndroidLocationPermissionsAsync(): Promise<{
-  foreground: 'granted' | 'denied' | 'undetermined';
-  background: 'granted' | 'denied' | 'undetermined';
+  foreground: "granted" | "denied" | "undetermined";
+  background: "granted" | "denied" | "undetermined";
   canAskAgainForeground: boolean;
   canAskAgainBackground: boolean;
   hasNativeModule: boolean;
 }> {
-  if (Platform.OS !== 'android') {
+  if (Platform.OS !== "android") {
     return {
-      foreground: 'denied',
-      background: 'denied',
+      foreground: "denied",
+      background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
       hasNativeModule: false,
@@ -71,8 +83,8 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   const Location = await loadExpoLocationAsync();
   if (!Location) {
     return {
-      foreground: 'denied',
-      background: 'denied',
+      foreground: "denied",
+      background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
       hasNativeModule: false,
@@ -83,23 +95,23 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   const bgBefore = await getBackgroundPermissionsSafeAsync(Location);
 
   let foreground = fgBefore;
-  if (foreground.status !== 'granted') {
+  if (foreground.status !== "granted") {
     foreground = await Location.requestForegroundPermissionsAsync();
   }
 
   let background = bgBefore;
-  if (foreground.status === 'granted' && background.status !== 'granted') {
+  if (foreground.status === "granted" && background.status !== "granted") {
     try {
       background = await Location.requestBackgroundPermissionsAsync();
     } catch (error) {
       if (__DEV__) {
-        console.warn('📍 Android background permission request failed:', error);
+        console.warn("📍 Android background permission request failed:", error);
       }
       background = {
-        status: 'denied',
+        status: "denied",
         granted: false,
         canAskAgain: false,
-        expires: 'never',
+        expires: "never",
       };
     }
   }
@@ -107,71 +119,96 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   return {
     foreground: foreground.status,
     background: background.status,
-    canAskAgainForeground: typeof foreground.canAskAgain === 'boolean' ? foreground.canAskAgain : true,
-    canAskAgainBackground: typeof background.canAskAgain === 'boolean' ? background.canAskAgain : true,
+    canAskAgainForeground:
+      typeof foreground.canAskAgain === "boolean"
+        ? foreground.canAskAgain
+        : true,
+    canAskAgainBackground:
+      typeof background.canAskAgain === "boolean"
+        ? background.canAskAgain
+        : true,
     hasNativeModule: true,
   };
 }
 
 export type StartAndroidLocationResult =
-  | { ok: true; reason: 'started' | 'already_running' }
-  | { ok: false; reason: 'not_available' | 'no_module' | 'services_disabled' | 'fg_denied' | 'bg_denied' | 'start_failed'; detail?: string };
+  | { ok: true; reason: "started" | "already_running" }
+  | {
+      ok: false;
+      reason:
+        | "not_available"
+        | "no_module"
+        | "services_disabled"
+        | "fg_denied"
+        | "bg_denied"
+        | "start_failed";
+      detail?: string;
+    };
 
 export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroidLocationResult> {
   const support = getAndroidLocationSupportStatus();
-  if (support !== 'available') {
+  if (support !== "available") {
     console.log(`📍 [start] Skipped: support=${support}`);
-    return { ok: false, reason: 'not_available' };
+    return { ok: false, reason: "not_available" };
   }
 
   const Location = await loadExpoLocationAsync();
   if (!Location) {
-    console.log('📍 [start] Skipped: expo-location module not available');
-    return { ok: false, reason: 'no_module' };
+    console.log("📍 [start] Skipped: expo-location module not available");
+    return { ok: false, reason: "no_module" };
   }
 
   const servicesEnabled = await Location.hasServicesEnabledAsync();
   if (!servicesEnabled) {
-    console.log('📍 [start] Skipped: location services disabled');
-    return { ok: false, reason: 'services_disabled' };
+    console.log("📍 [start] Skipped: location services disabled");
+    return { ok: false, reason: "services_disabled" };
   }
 
   // IMPORTANT: Do not auto-request permissions here; onboarding should drive prompts.
   const fg = await Location.getForegroundPermissionsAsync();
   const bg = await getBackgroundPermissionsSafeAsync(Location);
-  if (fg.status !== 'granted') {
+  if (fg.status !== "granted") {
     console.log(`📍 [start] Skipped: foreground permission=${fg.status}`);
-    return { ok: false, reason: 'fg_denied' };
+    return { ok: false, reason: "fg_denied" };
   }
-  if (bg.status !== 'granted') {
+  if (bg.status !== "granted") {
     console.log(`📍 [start] Skipped: background permission=${bg.status}`);
-    return { ok: false, reason: 'bg_denied' };
+    return { ok: false, reason: "bg_denied" };
   }
 
-  const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
   if (alreadyStarted) {
-    return { ok: true, reason: 'already_running' };
+    return { ok: true, reason: "already_running" };
   }
 
   try {
-    await Location.startLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 40,
-      // Android-specific: control update cadence.
-      timeInterval: 2 * 60 * 1000,
-      // Foreground service is required for background reliability.
-      foregroundService: {
-        notificationTitle: 'TodayMatters is tracking your day',
-        notificationBody: 'Used to build an hour-by-hour view of your day for schedule comparison.',
-        notificationColor: '#2563EB',
+    await Location.startLocationUpdatesAsync(
+      ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+      {
+        accuracy: Location.Accuracy.Balanced,
+        distanceInterval: 40,
+        // Android-specific: control update cadence.
+        timeInterval: 2 * 60 * 1000,
+        // Foreground service is required for background reliability.
+        foregroundService: {
+          notificationTitle: "TodayMatters is tracking your day",
+          notificationBody:
+            "Used to build an hour-by-hour view of your day for schedule comparison.",
+          notificationColor: "#2563EB",
+        },
       },
-    });
-    console.log('📍 [start] Background location task started successfully');
-    return { ok: true, reason: 'started' };
+    );
+    console.log("📍 [start] Background location task started successfully");
+    return { ok: true, reason: "started" };
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
-    console.error('📍 [start] Failed to start background location task:', detail);
-    return { ok: false, reason: 'start_failed', detail };
+    console.error(
+      "📍 [start] Failed to start background location task:",
+      detail,
+    );
+    return { ok: false, reason: "start_failed", detail };
   }
 }
 
@@ -180,24 +217,30 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
  * Returns false on non-Android or if the check fails.
  */
 export async function isAndroidBackgroundLocationRunningAsync(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
+  if (Platform.OS !== "android") return false;
   const Location = await loadExpoLocationAsync();
   if (!Location) return false;
   try {
-    return await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+    return await Location.hasStartedLocationUpdatesAsync(
+      ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+    );
   } catch {
     return false;
   }
 }
 
 export async function stopAndroidBackgroundLocationAsync(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== "android") return;
   const Location = await loadExpoLocationAsync();
   if (!Location) return;
 
-  const started = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  const started = await Location.hasStartedLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
   if (!started) return;
-  await Location.stopLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
+  await Location.stopLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
 }
 
 /**
@@ -206,20 +249,27 @@ export async function stopAndroidBackgroundLocationAsync(): Promise<void> {
  */
 export async function captureAndroidLocationSampleNowAsync(
   userId: string,
-  options: { flushToSupabase?: boolean } = {}
+  options: { flushToSupabase?: boolean } = {},
 ): Promise<
-  | { ok: true; enqueued: number; pendingAfterEnqueue: number; uploaded?: number; remainingAfterFlush?: number }
+  | {
+      ok: true;
+      enqueued: number;
+      pendingAfterEnqueue: number;
+      uploaded?: number;
+      remainingAfterFlush?: number;
+    }
   | { ok: false; reason: string; detail?: string }
 > {
-  if (Platform.OS !== 'android') return { ok: false, reason: 'not_android' };
+  if (Platform.OS !== "android") return { ok: false, reason: "not_android" };
   const Location = await loadExpoLocationAsync();
-  if (!Location) return { ok: false, reason: 'no_module' };
+  if (!Location) return { ok: false, reason: "no_module" };
 
   try {
     // First try a last-known fix (fast, no GPS warmup). If unavailable, fall back to a live fix with a generous timeout.
-    const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 10 * 60 * 1000, requiredAccuracy: 500 }).catch(
-      () => null
-    );
+    const lastKnown = await Location.getLastKnownPositionAsync({
+      maxAge: 10 * 60 * 1000,
+      requiredAccuracy: 500,
+    }).catch(() => null);
     const pos =
       lastKnown ??
       (await Location.getCurrentPositionAsync({
@@ -228,26 +278,31 @@ export async function captureAndroidLocationSampleNowAsync(
         distanceInterval: 0,
         mayShowUserSettingsDialog: true,
       }));
-    const sample: Omit<AndroidLocationSample, 'dedupe_key'> = {
+    const sample: Omit<AndroidLocationSample, "dedupe_key"> = {
       recorded_at: new Date(pos.timestamp).toISOString(),
       latitude: pos.coords.latitude,
       longitude: pos.coords.longitude,
-      accuracy_m: typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : null,
-      altitude_m: typeof pos.coords.altitude === 'number' ? pos.coords.altitude : null,
-      speed_mps: typeof pos.coords.speed === 'number' ? pos.coords.speed : null,
-      heading_deg: typeof pos.coords.heading === 'number' ? pos.coords.heading : null,
+      accuracy_m:
+        typeof pos.coords.accuracy === "number" ? pos.coords.accuracy : null,
+      altitude_m:
+        typeof pos.coords.altitude === "number" ? pos.coords.altitude : null,
+      speed_mps: typeof pos.coords.speed === "number" ? pos.coords.speed : null,
+      heading_deg:
+        typeof pos.coords.heading === "number" ? pos.coords.heading : null,
       is_mocked: (pos as unknown as { mocked?: boolean }).mocked ?? null,
       // Supabase constraint currently allows only 'background'.
-      source: 'background',
+      source: "background",
       raw: null,
     };
 
-    const { enqueued, pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, [sample]);
+    const { enqueued, pendingCount } =
+      await enqueueAndroidLocationSamplesForUserAsync(userId, [sample]);
     if (!options.flushToSupabase) {
       return { ok: true, enqueued, pendingAfterEnqueue: pendingCount };
     }
 
-    const flushed = await flushPendingAndroidLocationSamplesToSupabaseAsync(userId);
+    const flushed =
+      await flushPendingAndroidLocationSamplesToSupabaseAsync(userId);
     return {
       ok: true,
       enqueued,
@@ -258,29 +313,45 @@ export async function captureAndroidLocationSampleNowAsync(
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     // Extra diagnostics: provider status can explain "location unavailable" even when permissions are granted.
-    const providerStatus = await Location.getProviderStatusAsync().catch(() => null);
-    const providerDetail = providerStatus ? `providerStatus=${JSON.stringify(providerStatus)}` : 'providerStatus=unknown';
-    return { ok: false, reason: 'capture_failed', detail: `${detail}\n\n${providerDetail}` };
+    const providerStatus = await Location.getProviderStatusAsync().catch(
+      () => null,
+    );
+    const providerDetail = providerStatus
+      ? `providerStatus=${JSON.stringify(providerStatus)}`
+      : "providerStatus=unknown";
+    return {
+      ok: false,
+      reason: "capture_failed",
+      detail: `${detail}\n\n${providerDetail}`,
+    };
   }
 }
 
-export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: string): Promise<{
+export async function flushPendingAndroidLocationSamplesToSupabaseAsync(
+  userId: string,
+): Promise<{
   uploaded: number;
   remaining: number;
 }> {
-  if (Platform.OS !== 'android') return { uploaded: 0, remaining: 0 };
+  if (Platform.OS !== "android") return { uploaded: 0, remaining: 0 };
 
   const BATCH_SIZE = 250;
   let uploaded = 0;
 
   while (true) {
-    const batch = await peekPendingAndroidLocationSamplesAsync(userId, BATCH_SIZE);
+    const batch = await peekPendingAndroidLocationSamplesAsync(
+      userId,
+      BATCH_SIZE,
+    );
     if (batch.length === 0) break;
 
-    const { validSamples, droppedKeys } = sanitizeLocationSamplesForUpload(batch);
+    const { validSamples, droppedKeys } =
+      sanitizeLocationSamplesForUpload(batch);
     if (droppedKeys.length > 0) {
       if (__DEV__) {
-        console.warn(`📍 Dropped ${droppedKeys.length} Android location samples with invalid fields.`);
+        console.warn(
+          `📍 Dropped ${droppedKeys.length} Android location samples with invalid fields.`,
+        );
       }
       await removePendingAndroidLocationSamplesByKeyAsync(userId, droppedKeys);
     }
@@ -292,13 +363,18 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(userId: 
     await upsertLocationSamples(userId, validSamples);
     await removePendingAndroidLocationSamplesByKeyAsync(
       userId,
-      validSamples.map((s) => s.dedupe_key)
+      validSamples.map((s) => s.dedupe_key),
     );
 
     uploaded += validSamples.length;
   }
 
-  const remaining = (await peekPendingAndroidLocationSamplesAsync(userId, Number.MAX_SAFE_INTEGER)).length;
+  const remaining = (
+    await peekPendingAndroidLocationSamplesAsync(
+      userId,
+      Number.MAX_SAFE_INTEGER,
+    )
+  ).length;
   return { uploaded, remaining };
 }
 
@@ -324,8 +400,8 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     support: getAndroidLocationSupportStatus(),
     locationModule: false,
     servicesEnabled: false,
-    foregroundPermission: 'unknown',
-    backgroundPermission: 'unknown',
+    foregroundPermission: "unknown",
+    backgroundPermission: "unknown",
     taskStarted: false,
     pendingSamples: 0,
     lastSampleTimestamp: null as string | null,
@@ -335,51 +411,66 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   };
 
   if (__DEV__) {
-    console.log('📍 [diag] Starting Android location diagnostics...');
+    console.log("📍 [diag] Starting Android location diagnostics...");
     console.log(`📍 [diag] Support status: ${diagnostics.support}`);
   }
 
-  if (diagnostics.support !== 'available') {
-    errors.push(`Support status: ${diagnostics.support} (expected: 'available')`);
+  if (diagnostics.support !== "available") {
+    errors.push(
+      `Support status: ${diagnostics.support} (expected: 'available')`,
+    );
     return diagnostics;
   }
 
   const Location = await loadExpoLocationAsync();
   if (!Location) {
-    errors.push('Location module not loaded - native module missing or not available');
-    if (__DEV__) console.log('📍 [diag] Location module: FAILED to load');
+    errors.push(
+      "Location module not loaded - native module missing or not available",
+    );
+    if (__DEV__) console.log("📍 [diag] Location module: FAILED to load");
     return diagnostics;
   }
   diagnostics.locationModule = true;
-  if (__DEV__) console.log('📍 [diag] Location module: loaded');
+  if (__DEV__) console.log("📍 [diag] Location module: loaded");
 
   diagnostics.servicesEnabled = await Location.hasServicesEnabledAsync();
-  if (__DEV__) console.log(`📍 [diag] Services enabled: ${diagnostics.servicesEnabled}`);
+  if (__DEV__)
+    console.log(`📍 [diag] Services enabled: ${diagnostics.servicesEnabled}`);
   if (!diagnostics.servicesEnabled) {
-    errors.push('Location services disabled on device - enable in Settings > Location');
+    errors.push(
+      "Location services disabled on device - enable in Settings > Location",
+    );
   }
 
   const fg = await Location.getForegroundPermissionsAsync();
   diagnostics.foregroundPermission = fg.status;
   if (__DEV__) console.log(`📍 [diag] Foreground permission: ${fg.status}`);
-  if (fg.status !== 'granted') {
+  if (fg.status !== "granted") {
     errors.push(`Foreground permission: ${fg.status} (required: 'granted')`);
   }
 
   const bg = await getBackgroundPermissionsSafeAsync(Location);
   diagnostics.backgroundPermission = bg.status;
   if (__DEV__) console.log(`📍 [diag] Background permission: ${bg.status}`);
-  if (bg.status !== 'granted') {
-    errors.push(`Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`);
+  if (bg.status !== "granted") {
+    errors.push(
+      `Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`,
+    );
   }
 
-  diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(ANDROID_BACKGROUND_LOCATION_TASK_NAME);
-  if (__DEV__) console.log(`📍 [diag] Task started: ${diagnostics.taskStarted}`);
+  diagnostics.taskStarted = await Location.hasStartedLocationUpdatesAsync(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+  );
+  if (__DEV__)
+    console.log(`📍 [diag] Task started: ${diagnostics.taskStarted}`);
 
   // Note: taskStarted=false with no errors is EXPECTED — it means we CAN start.
   // Only warn if task is not started but there are stale pending samples.
   if (!diagnostics.taskStarted && errors.length === 0) {
-    if (__DEV__) console.log('📍 [diag] All prerequisites passed, task not yet started — canStart will be true');
+    if (__DEV__)
+      console.log(
+        "📍 [diag] All prerequisites passed, task not yet started — canStart will be true",
+      );
   }
 
   // Check pending samples and gather sample statistics
@@ -387,50 +478,70 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     const sessionResult = await supabase.auth.getSession();
     const userId = sessionResult.data.session?.user?.id;
     if (userId) {
-      const pending = await peekPendingAndroidLocationSamplesAsync(userId, MAX_PENDING_SAMPLES_PER_USER);
+      const pending = await peekPendingAndroidLocationSamplesAsync(
+        userId,
+        MAX_PENDING_SAMPLES_PER_USER,
+      );
       diagnostics.pendingSamples = pending.length;
 
       if (pending.length > 0) {
         // Find the most recent sample timestamp
         const sorted = [...pending].sort(
-          (a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()
+          (a, b) =>
+            new Date(b.recorded_at).getTime() -
+            new Date(a.recorded_at).getTime(),
         );
         diagnostics.lastSampleTimestamp = sorted[0].recorded_at;
 
         // Count samples within last 24 hours
         const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
         diagnostics.sampleCount24h = pending.filter(
-          (s) => new Date(s.recorded_at).getTime() >= cutoff24h
+          (s) => new Date(s.recorded_at).getTime() >= cutoff24h,
         ).length;
 
         if (__DEV__) {
           console.log(`📍 [diag] Pending samples: ${pending.length}`);
-          console.log(`📍 [diag] Last sample at: ${diagnostics.lastSampleTimestamp}`);
-          console.log(`📍 [diag] Samples in last 24h: ${diagnostics.sampleCount24h}`);
+          console.log(
+            `📍 [diag] Last sample at: ${diagnostics.lastSampleTimestamp}`,
+          );
+          console.log(
+            `📍 [diag] Samples in last 24h: ${diagnostics.sampleCount24h}`,
+          );
         }
       } else {
-        if (__DEV__) console.log('📍 [diag] Pending samples: 0 (no location data collected)');
+        if (__DEV__)
+          console.log(
+            "📍 [diag] Pending samples: 0 (no location data collected)",
+          );
       }
 
       if (pending.length > 0 && !diagnostics.taskStarted) {
-        errors.push(`Found ${pending.length} pending samples but task not started - samples may be stale`);
+        errors.push(
+          `Found ${pending.length} pending samples but task not started - samples may be stale`,
+        );
       }
     } else {
-      if (__DEV__) console.log('📍 [diag] No authenticated user — cannot check pending samples');
+      if (__DEV__)
+        console.log(
+          "📍 [diag] No authenticated user — cannot check pending samples",
+        );
     }
   } catch (error) {
-    errors.push(`Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(
+      `Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   // canStart = all prerequisites met AND task not already running
   diagnostics.canStart = errors.length === 0 && !diagnostics.taskStarted;
   if (__DEV__) {
-    console.log(`📍 [diag] canStart: ${diagnostics.canStart} (errors=${errors.length}, taskStarted=${diagnostics.taskStarted})`);
+    console.log(
+      `📍 [diag] canStart: ${diagnostics.canStart} (errors=${errors.length}, taskStarted=${diagnostics.taskStarted})`,
+    );
     if (errors.length > 0) {
-      console.log(`📍 [diag] Blocking errors: ${errors.join('; ')}`);
+      console.log(`📍 [diag] Blocking errors: ${errors.join("; ")}`);
     }
   }
 
   return diagnostics;
 }
-

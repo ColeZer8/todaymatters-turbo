@@ -39,5 +39,3 @@ Restore the Expo (mobile) app runtime by fixing Metro module resolution in the T
 ## Follow-ups
 
 - Investigate why `apps/landing/package.json` is empty (0 bytes) and restore it to a valid Next.js manifest; this can destabilize workspace installs.
-
-

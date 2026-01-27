@@ -39,5 +39,3 @@ Add an onboarding screen that lets users choose which Google services (Calendar,
 ## Follow-ups
 
 - Decide how to determine “already connected services” from backend/supabase, if needed for disabling selections.
-
-

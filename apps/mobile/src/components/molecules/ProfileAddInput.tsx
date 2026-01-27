@@ -1,6 +1,6 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from "react-native";
 
-type AccentTone = 'blue' | 'purple';
+type AccentTone = "blue" | "purple";
 
 interface ProfileAddInputProps {
   placeholder: string;
@@ -11,8 +11,8 @@ interface ProfileAddInputProps {
 }
 
 const accentStyles: Record<AccentTone, { button: string }> = {
-  blue: { button: '#2563EB' },
-  purple: { button: '#A855F7' },
+  blue: { button: "#2563EB" },
+  purple: { button: "#A855F7" },
 };
 
 export const ProfileAddInput = ({
@@ -20,7 +20,7 @@ export const ProfileAddInput = ({
   value,
   onChangeText,
   onAdd,
-  accent = 'blue',
+  accent = "blue",
 }: ProfileAddInputProps) => {
   const accentStyle = accentStyles[accent];
   const isDisabled = !value.trim() || !onAdd;
@@ -48,7 +48,7 @@ export const ProfileAddInput = ({
         className="items-center justify-center h-12 px-4 rounded-2xl"
         style={({ pressed }) => [
           {
-            backgroundColor: isDisabled ? '#B7C8EB' : accentStyle.button,
+            backgroundColor: isDisabled ? "#B7C8EB" : accentStyle.button,
             opacity: pressed ? 0.85 : 1,
           },
         ]}

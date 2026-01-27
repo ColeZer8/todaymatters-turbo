@@ -21,6 +21,7 @@ Login → Access Token (1h) → Auto Refresh → New Access Token
 **Location:** `apps/mobile/src/lib/supabase/client.ts`
 
 The Supabase client is configured with:
+
 - `autoRefreshToken: true` - Enables automatic token refresh before expiry
 - `persistSession: true` - Persists session to AsyncStorage
 - `detectSessionInUrl: false` - Disabled for React Native (not needed)
@@ -30,6 +31,7 @@ The Supabase client is configured with:
 **Location:** `apps/mobile/src/stores/auth-store.ts`
 
 The auth store listens to all auth state changes:
+
 - `INITIAL_SESSION` - App started with existing session
 - `SIGNED_IN` - User signed in
 - `SIGNED_OUT` - User signed out (triggers navigation to login)
@@ -41,6 +43,7 @@ The auth store listens to all auth state changes:
 **Location:** `apps/mobile/src/lib/supabase/session.ts`
 
 Provides `refreshSession()` function for manual token refresh with proper error handling:
+
 - Handles `refresh_token_not_found` errors
 - Handles `invalid_refresh_token` errors
 - Handles `refresh_token_already_used` errors
@@ -51,6 +54,7 @@ Provides `refreshSession()` function for manual token refresh with proper error 
 **Location:** `apps/mobile/src/lib/supabase/session.ts`
 
 Provides `getValidSession()` utility function:
+
 - Checks if session exists
 - Checks if token is about to expire (within 5 minutes)
 - Automatically refreshes if needed
@@ -61,6 +65,7 @@ Provides `getValidSession()` utility function:
 **Location:** `apps/mobile/src/app/_layout.tsx`
 
 AppState listener refreshes session when app returns from background:
+
 - Listens for `active` state changes
 - Refreshes session when app comes to foreground
 - Ensures tokens are valid after app was in background
@@ -70,6 +75,7 @@ AppState listener refreshes session when app returns from background:
 **Location:** `apps/mobile/src/stores/auth-store.ts`
 
 When `SIGNED_OUT` event is detected:
+
 - Clears session from store
 - Navigation is handled automatically by Expo Router based on `isAuthenticated` state
 
@@ -78,15 +84,15 @@ When `SIGNED_OUT` event is detected:
 ### Using Manual Refresh
 
 ```typescript
-import { refreshSession } from '@/lib/supabase/session';
+import { refreshSession } from "@/lib/supabase/session";
 
 try {
   const session = await refreshSession();
   if (session) {
-    console.log('Session refreshed successfully');
+    console.log("Session refreshed successfully");
   }
 } catch (error) {
-  console.error('Failed to refresh session:', error);
+  console.error("Failed to refresh session:", error);
   // User will be signed out automatically
 }
 ```
@@ -94,21 +100,21 @@ try {
 ### Using Pre-emptive Session Validation
 
 ```typescript
-import { getValidSession } from '@/lib/supabase/session';
+import { getValidSession } from "@/lib/supabase/session";
 
 async function fetchUserData() {
   const session = await getValidSession();
   if (!session) {
-    throw new Error('Not authenticated');
+    throw new Error("Not authenticated");
   }
-  
+
   // Make API call with valid token
   const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_id', session.user.id)
+    .from("profiles")
+    .select("*")
+    .eq("user_id", session.user.id)
     .single();
-    
+
   return data;
 }
 ```
@@ -160,4 +166,3 @@ All refresh failures automatically trigger sign out and navigation to login scre
 
 - [Supabase Auth - Sessions](https://supabase.com/docs/reference/javascript/auth-onauthstatechange)
 - [Supabase Auth - Token Refresh](https://supabase.com/docs/guides/auth/auth-helpers/nextjs#refreshing-sessions)
-

@@ -9,11 +9,13 @@ This document describes the enhancements made to the auth store (`apps/mobile/sr
 ### 1. Enhanced Auth State Change Handler
 
 **Before:**
+
 - Generic handling of all auth events
 - Basic logging in dev mode
 - No specific handling for `TOKEN_REFRESHED`
 
 **After:**
+
 - Explicit handling for each auth event type
 - Detailed logging for `TOKEN_REFRESHED` events
 - Better error handling for refresh failures
@@ -21,6 +23,7 @@ This document describes the enhancements made to the auth store (`apps/mobile/sr
 ### 2. Explicit Event Handling
 
 Added specific handling for:
+
 - `INITIAL_SESSION` - Logs restored session info
 - `SIGNED_IN` - Logs sign-in event
 - `SIGNED_OUT` - Clears session and logs sign-out
@@ -30,6 +33,7 @@ Added specific handling for:
 ### 3. Improved Logging
 
 Enhanced dev logging includes:
+
 - Event type
 - Session presence
 - User ID
@@ -39,6 +43,7 @@ Enhanced dev logging includes:
 ### 4. Error Handling
 
 Better error handling for:
+
 - Refresh token failures
 - Session restoration failures
 - Auth state change errors
@@ -50,7 +55,7 @@ Better error handling for:
 ```typescript
 supabase.auth.onAuthStateChange((event, nextSession) => {
   if (__DEV__) {
-    console.log('🔍 Supabase onAuthStateChange:', {
+    console.log("🔍 Supabase onAuthStateChange:", {
       event,
       hasSession: !!nextSession,
       userId: nextSession?.user?.id ?? null,
@@ -59,41 +64,41 @@ supabase.auth.onAuthStateChange((event, nextSession) => {
   }
 
   switch (event) {
-    case 'SIGNED_OUT':
+    case "SIGNED_OUT":
       get().setSession(null);
       if (__DEV__) {
-        console.log('👋 User signed out');
+        console.log("👋 User signed out");
       }
       break;
-      
-    case 'TOKEN_REFRESHED':
+
+    case "TOKEN_REFRESHED":
       get().setSession(nextSession);
       if (__DEV__) {
-        console.log('🔄 Token refreshed, new expiry:', nextSession?.expires_at);
+        console.log("🔄 Token refreshed, new expiry:", nextSession?.expires_at);
       }
       break;
-      
-    case 'SIGNED_IN':
+
+    case "SIGNED_IN":
       get().setSession(nextSession);
       if (__DEV__) {
-        console.log('✅ User signed in:', nextSession?.user?.email);
+        console.log("✅ User signed in:", nextSession?.user?.email);
       }
       break;
-      
-    case 'INITIAL_SESSION':
+
+    case "INITIAL_SESSION":
       get().setSession(nextSession);
       if (__DEV__) {
-        console.log('🚀 Restored session for:', nextSession?.user?.email);
+        console.log("🚀 Restored session for:", nextSession?.user?.email);
       }
       break;
-      
-    case 'USER_UPDATED':
+
+    case "USER_UPDATED":
       get().setSession(nextSession);
       if (__DEV__) {
-        console.log('👤 User updated:', nextSession?.user?.email);
+        console.log("👤 User updated:", nextSession?.user?.email);
       }
       break;
-      
+
     default:
       // Handle other events generically
       get().setSession(nextSession);
@@ -129,4 +134,3 @@ supabase.auth.onAuthStateChange((event, nextSession) => {
 - `apps/mobile/src/lib/supabase/client.ts` - Supabase client configuration
 - `apps/mobile/src/lib/supabase/session.ts` - Session utility functions
 - `apps/mobile/src/app/_layout.tsx` - App initialization
-

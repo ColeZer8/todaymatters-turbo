@@ -8,6 +8,7 @@
 ## Objective
 
 Improve onboarding step 5 (“Time Categories”) and step 6 (“Sub-Categories”) so users can:
+
 - See consistent “icon/clip-art” chip UI (matching Core Values)
 - Remove categories/sub-categories they don’t want
 - Add categories/sub-categories via AI-generated suggestions (tap to add), with manual add still available
@@ -44,4 +45,3 @@ Improve onboarding step 5 (“Time Categories”) and step 6 (“Sub-Categories�
 ## Follow-ups
 
 - Consider polishing suggestion prompts and adding telemetry on suggestion acceptance rate.
-

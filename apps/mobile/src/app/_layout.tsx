@@ -2,7 +2,12 @@ import "react-native-gesture-handler";
 import "../global.css";
 import { Stack } from "expo-router";
 import { useEffect, useRef } from "react";
-import { AppState, AppStateStatus, KeyboardAvoidingView, Platform } from "react-native";
+import {
+  AppState,
+  AppStateStatus,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { handleAuthCallback, refreshSession } from "@/lib/supabase";
@@ -10,10 +15,18 @@ import { handleGoogleServicesOAuthCallback } from "@/lib/google-services-oauth";
 import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
-import { useInsightsSync, useLocationSamplesSync, useOnboardingSync } from "@/lib/supabase/hooks";
+import {
+  useInsightsSync,
+  useLocationSamplesSync,
+  useOnboardingSync,
+} from "@/lib/supabase/hooks";
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
-import { checkAndApplyUpdate, isUpdateEnabled, getUpdateInfo } from "@/lib/updates";
+import {
+  checkAndApplyUpdate,
+  isUpdateEnabled,
+  getUpdateInfo,
+} from "@/lib/updates";
 import { installGlobalErrorHandlers, logger } from "@/lib/logger";
 
 // Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
@@ -24,10 +37,17 @@ export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const userId = useAuthStore((state) => state.user?.id ?? null);
-  const { loadOnboardingData } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { loadOnboardingData } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
   const didLoadOnboardingForUserRef = useRef<string | null>(null);
-  const setGoogleOAuthProcessing = useGoogleServicesOAuthStore((state) => state.setProcessing);
-  const setGoogleOAuthResult = useGoogleServicesOAuthStore((state) => state.setResult);
+  const setGoogleOAuthProcessing = useGoogleServicesOAuthStore(
+    (state) => state.setProcessing,
+  );
+  const setGoogleOAuthResult = useGoogleServicesOAuthStore(
+    (state) => state.setResult,
+  );
   const isAndroid = Platform.OS === "android";
 
   // iOS-only: start background location collection when authenticated, and periodically flush queued samples.
@@ -59,7 +79,9 @@ export default function Layout() {
 
     // Verify auth and data after initialization (for debugging)
     setTimeout(() => {
-      verifyAuthAndData().catch((error) => logger.error("verifyAuthAndData failed", error));
+      verifyAuthAndData().catch((error) =>
+        logger.error("verifyAuthAndData failed", error),
+      );
     }, 2000); // Wait 2 seconds for auth to initialize
 
     return () => {
@@ -78,54 +100,62 @@ export default function Layout() {
         await loadOnboardingData();
       } catch (error) {
         if (__DEV__) {
-          console.log("⚠️ Failed to load onboarding data from Supabase:", error);
+          console.log(
+            "⚠️ Failed to load onboarding data from Supabase:",
+            error,
+          );
         }
       }
     })();
-    return () => {
-    };
+    return () => {};
   }, [isAuthenticated, userId, loadOnboardingData]);
 
   // Refresh session and check for updates when app returns from background
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active') {
-        // Avoid refreshing auth while an in-app OAuth flow is in progress (Android custom tabs / iOS auth sessions).
-        // Some devices will background/foreground during OAuth, and an aggressive refresh can sign the user out unexpectedly.
-        const isGoogleOAuthProcessing = useGoogleServicesOAuthStore.getState().isProcessing;
-        if (isGoogleOAuthProcessing) {
-          if (__DEV__) {
-            console.log('⏭️ Skipping session refresh (Google OAuth in progress)');
+    const subscription = AppState.addEventListener(
+      "change",
+      async (nextAppState: AppStateStatus) => {
+        if (nextAppState === "active") {
+          // Avoid refreshing auth while an in-app OAuth flow is in progress (Android custom tabs / iOS auth sessions).
+          // Some devices will background/foreground during OAuth, and an aggressive refresh can sign the user out unexpectedly.
+          const isGoogleOAuthProcessing =
+            useGoogleServicesOAuthStore.getState().isProcessing;
+          if (isGoogleOAuthProcessing) {
+            if (__DEV__) {
+              console.log(
+                "⏭️ Skipping session refresh (Google OAuth in progress)",
+              );
+            }
+            return;
           }
-          return;
-        }
 
-        // App came to foreground - refresh session if needed
-        const session = useAuthStore.getState().session;
-        if (session) {
-          try {
-            logger.debug("App returned to foreground, refreshing session...");
-            await refreshSession();
-          } catch (error) {
-            logger.warn("Failed to refresh session on foreground", error);
-            // Error handling is done in refreshSession - user will be signed out if needed
+          // App came to foreground - refresh session if needed
+          const session = useAuthStore.getState().session;
+          if (session) {
+            try {
+              logger.debug("App returned to foreground, refreshing session...");
+              await refreshSession();
+            } catch (error) {
+              logger.warn("Failed to refresh session on foreground", error);
+              // Error handling is done in refreshSession - user will be signed out if needed
+            }
           }
-        }
 
-        // Check for EAS updates (only in production builds)
-        if (isUpdateEnabled()) {
-          try {
-            logger.debug("Checking for EAS updates...");
-            const updateInfo = getUpdateInfo();
-            if (updateInfo) logger.debug("Update info", updateInfo);
-            // Note: Automatic checking is handled by expo-updates with checkAutomatically: 'ON_LOAD'
-            // This is just for manual checking if needed
-          } catch (error) {
-            logger.warn("Failed to check for updates", error);
+          // Check for EAS updates (only in production builds)
+          if (isUpdateEnabled()) {
+            try {
+              logger.debug("Checking for EAS updates...");
+              const updateInfo = getUpdateInfo();
+              if (updateInfo) logger.debug("Update info", updateInfo);
+              // Note: Automatic checking is handled by expo-updates with checkAutomatically: 'ON_LOAD'
+              // This is just for manual checking if needed
+            } catch (error) {
+              logger.warn("Failed to check for updates", error);
+            }
           }
         }
-      }
-    });
+      },
+    );
 
     return () => {
       subscription.remove();
@@ -133,14 +163,17 @@ export default function Layout() {
   }, []);
 
   const stackContent = (
-    <Stack screenOptions={{ animation: 'none' }}>
+    <Stack screenOptions={{ animation: "none" }}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
       <Stack.Screen name="confirm-email" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="reset-password" options={{ headerShown: false }} />
       <Stack.Screen name="permissions" options={{ headerShown: false }} />
-      <Stack.Screen name="connect-google-services" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="connect-google-services"
+        options={{ headerShown: false }}
+      />
       <Stack.Screen name="core-values" options={{ headerShown: false }} />
       <Stack.Screen name="core-categories" options={{ headerShown: false }} />
       <Stack.Screen name="sub-categories" options={{ headerShown: false }} />
@@ -165,22 +198,52 @@ export default function Layout() {
       <Stack.Screen name="explainer-video" options={{ headerShown: false }} />
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="calendar" options={{ headerShown: false }} />
-      <Stack.Screen name="comprehensive-calendar" options={{ headerShown: false }} />
-      <Stack.Screen name="actual-adjust" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen
+        name="comprehensive-calendar"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="actual-adjust"
+        options={{ presentation: "modal", headerShown: false }}
+      />
       <Stack.Screen name="analytics" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
-      <Stack.Screen name="communication" options={{ presentation: 'modal', headerShown: false }} />
-      <Stack.Screen name="add-event" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen
+        name="communication"
+        options={{ presentation: "modal", headerShown: false }}
+      />
+      <Stack.Screen
+        name="add-event"
+        options={{ presentation: "modal", headerShown: false }}
+      />
       <Stack.Screen name="demo-meeting" options={{ headerShown: false }} />
       <Stack.Screen name="demo-traffic" options={{ headerShown: false }} />
       <Stack.Screen name="demo-prayer" options={{ headerShown: false }} />
       <Stack.Screen name="demo-screen-time" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-workout-interruption" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-workout-summary" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-traffic-accident" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-overview-goals" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-overview-initiatives" options={{ headerShown: false }} />
-      <Stack.Screen name="demo-overview-values" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="demo-workout-interruption"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="demo-workout-summary"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="demo-traffic-accident"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="demo-overview-goals"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="demo-overview-initiatives"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="demo-overview-values"
+        options={{ headerShown: false }}
+      />
       <Stack.Screen name="demo-prayer-rate" options={{ headerShown: false }} />
       <Stack.Screen name="demo-meeting-rate" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
@@ -190,7 +253,11 @@ export default function Layout() {
   const appContent = (
     <SafeAreaProvider>
       {isAndroid ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior="height" keyboardVerticalOffset={0}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior="height"
+          keyboardVerticalOffset={0}
+        >
           {stackContent}
         </KeyboardAvoidingView>
       ) : (

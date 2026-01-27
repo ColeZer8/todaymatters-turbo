@@ -1,8 +1,11 @@
-import { ArrowRight } from 'lucide-react-native';
-import { Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { ArrowRight } from "lucide-react-native";
+import { Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface NameTemplateProps {
   step?: number;
@@ -15,7 +18,7 @@ interface NameTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -52,7 +55,9 @@ export const NameTemplate = ({
           className="rounded-2xl border border-[#E4E8F0] bg-white px-4 py-4"
           style={cardShadowStyle}
         >
-          <Text className="text-base font-semibold text-text-primary">What should we call you?</Text>
+          <Text className="text-base font-semibold text-text-primary">
+            What should we call you?
+          </Text>
           <Text className="mt-1 text-sm leading-5 text-text-secondary">
             You can change this anytime in Profile.
           </Text>
@@ -72,5 +77,3 @@ export const NameTemplate = ({
     </SetupStepLayout>
   );
 };
-
-

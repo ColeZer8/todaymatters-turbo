@@ -6,12 +6,14 @@
 ## Platform Differences
 
 ### iOS
+
 - Uses inline spinner picker (`display="spinner"`)
 - Picker is embedded within our custom modal
 - User scrolls to select time, then taps "Confirm"
 - `themeVariant="light"` for consistent styling
 
 ### Android
+
 - Shows as a **native modal dialog** (not inline)
 - When `visible=true`, the native picker dialog opens automatically
 - Dialog has built-in "Confirm" and "Cancel" buttons
@@ -21,6 +23,7 @@
 ## Configuration
 
 ### app.json Plugin (Android Styling)
+
 The Android time picker is styled via the Expo config plugin in `app.json`:
 
 ```json
@@ -71,22 +74,24 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 
 ## Key Props
 
-| Prop | iOS | Android | Description |
-|------|-----|---------|-------------|
-| `mode` | ✅ | ✅ | `"time"` or `"date"` |
-| `display` | ✅ | ✅ | `"spinner"`, `"default"`, `"clock"` |
-| `minuteInterval` | ✅ | ✅ | 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30 |
-| `themeVariant` | ✅ | ❌ | `"light"` or `"dark"` |
-| `positiveButton` | ❌ | ✅ | `{ label: string, textColor: string }` |
-| `negativeButton` | ❌ | ✅ | `{ label: string, textColor: string }` |
+| Prop             | iOS | Android | Description                            |
+| ---------------- | --- | ------- | -------------------------------------- |
+| `mode`           | ✅  | ✅      | `"time"` or `"date"`                   |
+| `display`        | ✅  | ✅      | `"spinner"`, `"default"`, `"clock"`    |
+| `minuteInterval` | ✅  | ✅      | 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30   |
+| `themeVariant`   | ✅  | ❌      | `"light"` or `"dark"`                  |
+| `positiveButton` | ❌  | ✅      | `{ label: string, textColor: string }` |
+| `negativeButton` | ❌  | ✅      | `{ label: string, textColor: string }` |
 
 ## Native Module Linking
 
 Both iOS and Android use auto-linking:
+
 - **iOS**: `pod install` links `RNDateTimePicker`
 - **Android**: Gradle auto-linking via `autolinkLibrariesWithApp()`
 
 After adding the package, rebuild native apps:
+
 ```bash
 # iOS
 cd ios && pod install && cd ..

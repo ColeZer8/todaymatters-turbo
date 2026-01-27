@@ -37,4 +37,3 @@ Eliminate the React Native warning: "VirtualizedLists should never be nested ins
 ## Follow-ups
 
 - Archived.
-

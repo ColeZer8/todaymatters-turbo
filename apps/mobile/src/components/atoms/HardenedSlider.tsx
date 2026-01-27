@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LayoutChangeEvent, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 interface HardenedSliderProps {
   value: number;
@@ -38,7 +38,7 @@ export function HardenedSlider({
   onChange,
   disabled = false,
   fillColor,
-  trackColor = '#F1F5F9',
+  trackColor = "#F1F5F9",
   trackHeight = 12,
   thumbSize = 28,
   hitSlopPx = 14,
@@ -67,7 +67,7 @@ export function HardenedSlider({
       lastEmittedRef.current = next;
       onChange(next);
     },
-    [disabled, innerTrackWidth, hitSlopPx, max, min, onChange, step]
+    [disabled, innerTrackWidth, hitSlopPx, max, min, onChange, step],
   );
 
   const onTrackLayout = useCallback((e: LayoutChangeEvent) => {
@@ -106,7 +106,7 @@ export function HardenedSlider({
         accessibilityLabel={accessibilityLabel}
         style={{
           height: Math.max(44, trackHeight + hitSlopPx * 2),
-          justifyContent: 'center',
+          justifyContent: "center",
           paddingHorizontal: hitSlopPx,
           opacity: disabled ? 0.6 : 1,
         }}
@@ -117,12 +117,12 @@ export function HardenedSlider({
             height: trackHeight,
             borderRadius: 999,
             backgroundColor: trackColor,
-            overflow: 'hidden',
+            overflow: "hidden",
           }}
         >
           <View
             style={{
-              height: '100%',
+              height: "100%",
               width: filledPx,
               backgroundColor: fillColor,
               borderRadius: 999,
@@ -134,15 +134,15 @@ export function HardenedSlider({
           <View
             pointerEvents="none"
             style={{
-              position: 'absolute',
+              position: "absolute",
               left: hitSlopPx + filledPx - thumbSize / 2,
               width: thumbSize,
               height: thumbSize,
               borderRadius: thumbSize / 2,
-              backgroundColor: '#FFFFFF',
+              backgroundColor: "#FFFFFF",
               borderWidth: 2,
               borderColor: fillColor,
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.15,
               shadowRadius: 4,
@@ -154,4 +154,3 @@ export function HardenedSlider({
     </GestureDetector>
   );
 }
-

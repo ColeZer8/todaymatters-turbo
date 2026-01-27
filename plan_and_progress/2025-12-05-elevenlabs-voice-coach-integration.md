@@ -8,10 +8,11 @@
 ---
 
 > ⚠️ **TEMPORARILY DISABLED**
-> 
+>
 > Voice coach feature is temporarily disabled pending further development. All code structure has been preserved - search for `TODO: Re-enable ElevenLabs` to find all disabled sections.
 >
 > **To re-enable:**
+>
 > 1. `apps/mobile/src/app/_layout.tsx` - Uncomment `ElevenLabsProvider` loading
 > 2. `apps/mobile/src/components/templates/HomeTemplate.tsx` - Uncomment `VoiceCoachButton`
 > 3. `apps/mobile/src/components/organisms/index.ts` - Uncomment exports
@@ -86,25 +87,25 @@ Integrate ElevenLabs Conversational AI voice agent into the TodayMatters mobile 
 
 ### Mobile App
 
-| File | Purpose |
-|------|---------|
-| `apps/mobile/src/app/_layout.tsx` | Root layout with `ElevenLabsProvider` |
-| `apps/mobile/src/hooks/use-voice-coach.ts` | Main hook for voice conversation management |
-| `apps/mobile/src/components/organisms/VoiceCoachButton.tsx` | Floating action button to start voice |
-| `apps/mobile/src/components/organisms/VoiceCoachModal.tsx` | Full-screen voice conversation UI |
-| `apps/mobile/src/lib/elevenlabs/config.ts` | ElevenLabs configuration (agent ID, etc.) |
-| `apps/mobile/src/lib/elevenlabs/types.ts` | TypeScript types for voice coach |
-| `apps/mobile/src/lib/elevenlabs/permissions.ts` | Microphone permission helpers |
-| `apps/mobile/app.json` | Native permissions (iOS/Android) |
+| File                                                        | Purpose                                     |
+| ----------------------------------------------------------- | ------------------------------------------- |
+| `apps/mobile/src/app/_layout.tsx`                           | Root layout with `ElevenLabsProvider`       |
+| `apps/mobile/src/hooks/use-voice-coach.ts`                  | Main hook for voice conversation management |
+| `apps/mobile/src/components/organisms/VoiceCoachButton.tsx` | Floating action button to start voice       |
+| `apps/mobile/src/components/organisms/VoiceCoachModal.tsx`  | Full-screen voice conversation UI           |
+| `apps/mobile/src/lib/elevenlabs/config.ts`                  | ElevenLabs configuration (agent ID, etc.)   |
+| `apps/mobile/src/lib/elevenlabs/types.ts`                   | TypeScript types for voice coach            |
+| `apps/mobile/src/lib/elevenlabs/permissions.ts`             | Microphone permission helpers               |
+| `apps/mobile/app.json`                                      | Native permissions (iOS/Android)            |
 
 ### Supabase
 
-| File | Purpose |
-|------|---------|
-| `supabase/functions/conversation-token/index.ts` | Generate ElevenLabs session tokens |
-| `supabase/functions/elevenlabs-webhook/index.ts` | Handle post-call webhooks |
-| `supabase/functions/agent-tools/index.ts` | Server-side tool execution |
-| `supabase/migrations/20241204_create_coach_conversations.sql` | Database tables |
+| File                                                          | Purpose                            |
+| ------------------------------------------------------------- | ---------------------------------- |
+| `supabase/functions/conversation-token/index.ts`              | Generate ElevenLabs session tokens |
+| `supabase/functions/elevenlabs-webhook/index.ts`              | Handle post-call webhooks          |
+| `supabase/functions/agent-tools/index.ts`                     | Server-side tool execution         |
+| `supabase/migrations/20241204_create_coach_conversations.sql` | Database tables                    |
 
 ---
 
@@ -155,13 +156,13 @@ If running in Expo Go, the app will crash on import of ElevenLabs modules. To te
 
 The voice agent can trigger these actions on the mobile app:
 
-| Tool | Description |
-|------|-------------|
-| `navigate_to_screen` | Navigate to a specific app screen |
-| `open_feature` | Open a specific feature (calendar, analytics, etc.) |
-| `mark_task_complete` | Mark a routine item as complete |
-| `show_routine_item` | Display details of a routine item |
-| `play_celebration` | Trigger a celebration animation |
+| Tool                 | Description                                         |
+| -------------------- | --------------------------------------------------- |
+| `navigate_to_screen` | Navigate to a specific app screen                   |
+| `open_feature`       | Open a specific feature (calendar, analytics, etc.) |
+| `mark_task_complete` | Mark a routine item as complete                     |
+| `show_routine_item`  | Display details of a routine item                   |
+| `play_celebration`   | Trigger a celebration animation                     |
 
 ---
 
@@ -169,13 +170,13 @@ The voice agent can trigger these actions on the mobile app:
 
 Context passed to the AI agent at conversation start:
 
-| Variable | Description |
-|----------|-------------|
-| `user_name` | User's display name |
-| `user_id` | Supabase user ID |
-| `current_time` | Current time (HH:MM format) |
-| `time_of_day` | "morning", "afternoon", or "evening" |
-| `current_screen` | Which screen the user is on |
+| Variable         | Description                          |
+| ---------------- | ------------------------------------ |
+| `user_name`      | User's display name                  |
+| `user_id`        | Supabase user ID                     |
+| `current_time`   | Current time (HH:MM format)          |
+| `time_of_day`    | "morning", "afternoon", or "evening" |
+| `current_screen` | Which screen the user is on          |
 
 ---
 
@@ -189,9 +190,7 @@ The `ElevenLabsProvider` is not wrapping your component. Ensure `_layout.tsx` ha
 import { ElevenLabsProvider } from "@elevenlabs/react-native";
 
 // In the return:
-<ElevenLabsProvider>
-  {appContent}
-</ElevenLabsProvider>
+<ElevenLabsProvider>{appContent}</ElevenLabsProvider>;
 ```
 
 ### "@livekit/react-native doesn't seem to be linked"
@@ -241,4 +240,3 @@ Ensure `app.json` has the correct permissions:
 - [ElevenLabs Conversational AI Docs](https://elevenlabs.io/docs/conversational-ai)
 - [LiveKit React Native](https://docs.livekit.io/client-sdk-react-native/)
 - [Expo Development Builds](https://docs.expo.dev/develop/development-builds/introduction/)
-

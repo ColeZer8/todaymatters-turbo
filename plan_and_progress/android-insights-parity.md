@@ -63,5 +63,3 @@ Keep **iOS behavior unchanged** while we add Android support.
 
 - Add Health Connect “toolbox” testing flow (inject sample data) and document it.
 - Decide how to normalize “screen time” semantics across iOS Screen Time vs Android usage stats.
-
-

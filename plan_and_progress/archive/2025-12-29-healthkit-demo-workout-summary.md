@@ -42,5 +42,3 @@ Replace hardcoded demo metrics in the “Great workout” screen (`/demo-workout
 ## Outcomes
 
 - Demo Workout Summary screen now triggers HealthKit authorization and renders real HealthKit values when available.
-
-

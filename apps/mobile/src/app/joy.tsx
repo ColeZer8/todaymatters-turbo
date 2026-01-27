@@ -1,189 +1,192 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { TagSelectionTemplate, CategoryOption } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { TagSelectionTemplate, CategoryOption } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const JOY_OPTIONS: CategoryOption[] = [
   {
-    category: 'Creative & Arts',
-    emoji: '🎨',
+    category: "Creative & Arts",
+    emoji: "🎨",
     options: [
-      'Reading',
-      'Writing',
-      'Art',
-      'Drawing',
-      'Painting',
-      'Photography',
-      'Music',
-      'Singing',
-      'Dance',
-      'Theater',
-      'Poetry',
-      'Crafting',
-      'Design',
-      'Pottery',
-      'Sculpting',
+      "Reading",
+      "Writing",
+      "Art",
+      "Drawing",
+      "Painting",
+      "Photography",
+      "Music",
+      "Singing",
+      "Dance",
+      "Theater",
+      "Poetry",
+      "Crafting",
+      "Design",
+      "Pottery",
+      "Sculpting",
     ],
   },
   {
-    category: 'Physical & Sports',
-    emoji: '💪',
+    category: "Physical & Sports",
+    emoji: "💪",
     options: [
-      'Exercise',
-      'Running',
-      'Yoga',
-      'Swimming',
-      'Cycling',
-      'Weightlifting',
-      'Team Sports',
-      'Martial Arts',
-      'Rock Climbing',
-      'Tennis',
-      'Basketball',
-      'Soccer',
-      'Golf',
-      'Surfing',
-      'Skiing',
+      "Exercise",
+      "Running",
+      "Yoga",
+      "Swimming",
+      "Cycling",
+      "Weightlifting",
+      "Team Sports",
+      "Martial Arts",
+      "Rock Climbing",
+      "Tennis",
+      "Basketball",
+      "Soccer",
+      "Golf",
+      "Surfing",
+      "Skiing",
     ],
   },
   {
-    category: 'Nature & Outdoors',
-    emoji: '🌲',
+    category: "Nature & Outdoors",
+    emoji: "🌲",
     options: [
-      'Outdoors',
-      'Hiking',
-      'Camping',
-      'Gardening',
-      'Bird Watching',
-      'Stargazing',
-      'Beach',
-      'Mountains',
-      'Fishing',
-      'Nature Walks',
-      'Forest Bathing',
-      'Kayaking',
-      'Sailing',
+      "Outdoors",
+      "Hiking",
+      "Camping",
+      "Gardening",
+      "Bird Watching",
+      "Stargazing",
+      "Beach",
+      "Mountains",
+      "Fishing",
+      "Nature Walks",
+      "Forest Bathing",
+      "Kayaking",
+      "Sailing",
     ],
   },
   {
-    category: 'Social & Relationships',
-    emoji: '👥',
+    category: "Social & Relationships",
+    emoji: "👥",
     options: [
-      'Friends & Family',
-      'Socializing',
-      'Volunteering',
-      'Community Events',
-      'Networking',
-      'Dating',
-      'Pets',
-      'Children',
-      'Game Nights',
-      'Book Clubs',
-      'Support Groups',
+      "Friends & Family",
+      "Socializing",
+      "Volunteering",
+      "Community Events",
+      "Networking",
+      "Dating",
+      "Pets",
+      "Children",
+      "Game Nights",
+      "Book Clubs",
+      "Support Groups",
     ],
   },
   {
-    category: 'Learning & Growth',
-    emoji: '📚',
+    category: "Learning & Growth",
+    emoji: "📚",
     options: [
-      'Learning',
-      'Podcasts',
-      'Courses',
-      'Languages',
-      'Research',
-      'Philosophy',
-      'History',
-      'Science',
-      'Online Learning',
-      'Workshops',
-      'Conferences',
+      "Learning",
+      "Podcasts",
+      "Courses",
+      "Languages",
+      "Research",
+      "Philosophy",
+      "History",
+      "Science",
+      "Online Learning",
+      "Workshops",
+      "Conferences",
     ],
   },
   {
-    category: 'Entertainment & Media',
-    emoji: '🎬',
+    category: "Entertainment & Media",
+    emoji: "🎬",
     options: [
-      'Gaming',
-      'Movies',
-      'TV Shows',
-      'Streaming',
-      'Books',
-      'Comics',
-      'Anime',
-      'Concerts',
-      'Festivals',
-      'Live Music',
-      'Stand-up Comedy',
+      "Gaming",
+      "Movies",
+      "TV Shows",
+      "Streaming",
+      "Books",
+      "Comics",
+      "Anime",
+      "Concerts",
+      "Festivals",
+      "Live Music",
+      "Stand-up Comedy",
     ],
   },
   {
-    category: 'Food & Cooking',
-    emoji: '🍳',
+    category: "Food & Cooking",
+    emoji: "🍳",
     options: [
-      'Cooking',
-      'Baking',
-      'Trying New Restaurants',
-      'Food Tours',
-      'Wine Tasting',
-      'Coffee',
-      'Tea',
-      'Cocktails',
-      'Meal Prep',
-      'Food Photography',
+      "Cooking",
+      "Baking",
+      "Trying New Restaurants",
+      "Food Tours",
+      "Wine Tasting",
+      "Coffee",
+      "Tea",
+      "Cocktails",
+      "Meal Prep",
+      "Food Photography",
     ],
   },
   {
-    category: 'Travel & Adventure',
-    emoji: '✈️',
+    category: "Travel & Adventure",
+    emoji: "✈️",
     options: [
-      'Travel',
-      'Exploring',
-      'Road Trips',
-      'International Travel',
-      'Local Adventures',
-      'Sightseeing',
-      'Backpacking',
-      'City Breaks',
-      'Cultural Immersion',
-      'Adventure Sports',
+      "Travel",
+      "Exploring",
+      "Road Trips",
+      "International Travel",
+      "Local Adventures",
+      "Sightseeing",
+      "Backpacking",
+      "City Breaks",
+      "Cultural Immersion",
+      "Adventure Sports",
     ],
   },
   {
-    category: 'Tech & Digital',
-    emoji: '💻',
+    category: "Tech & Digital",
+    emoji: "💻",
     options: [
-      'Tech',
-      'Coding',
-      'Building Apps',
-      'Video Games',
-      'VR',
-      'Streaming',
-      'Social Media',
-      'Photography',
-      'Video Editing',
-      '3D Printing',
-      'Robotics',
+      "Tech",
+      "Coding",
+      "Building Apps",
+      "Video Games",
+      "VR",
+      "Streaming",
+      "Social Media",
+      "Photography",
+      "Video Editing",
+      "3D Printing",
+      "Robotics",
     ],
   },
   {
-    category: 'Relaxation & Wellness',
-    emoji: '🧘',
+    category: "Relaxation & Wellness",
+    emoji: "🧘",
     options: [
-      'Meditation',
-      'Spa',
-      'Massage',
-      'Self-Care',
-      'Hot Baths',
-      'Sleep',
-      'Rest',
-      'Mindfulness',
-      'Breathing Exercises',
-      'Aromatherapy',
-      'Sauna',
+      "Meditation",
+      "Spa",
+      "Massage",
+      "Self-Care",
+      "Hot Baths",
+      "Sleep",
+      "Rest",
+      "Mindfulness",
+      "Breathing Exercises",
+      "Aromatherapy",
+      "Sauna",
     ],
   },
 ];
@@ -191,19 +194,27 @@ const JOY_OPTIONS: CategoryOption[] = [
 export default function JoyScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const selected = useOnboardingStore((state) => state.joySelections);
   const customOptions = useOnboardingStore((state) => state.joyCustomOptions);
-  const toggleSelection = useOnboardingStore((state) => state.toggleJoySelection);
-  const addCustomOption = useOnboardingStore((state) => state.addJoyCustomOption);
+  const toggleSelection = useOnboardingStore(
+    (state) => state.toggleJoySelection,
+  );
+  const addCustomOption = useOnboardingStore(
+    (state) => state.addJoyCustomOption,
+  );
 
   // Supabase sync
-  const { saveJoySelections, saveJoyCustomOptions } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveJoySelections, saveJoyCustomOptions } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
-  const [searchValue, setSearchValue] = useState('');
+  const [searchValue, setSearchValue] = useState("");
 
   // Save to Supabase when selections change
   useEffect(() => {
@@ -228,7 +239,7 @@ export default function JoyScreen() {
     if (customOptions.length > 0) {
       return [
         ...JOY_OPTIONS,
-        { category: 'Custom', emoji: '✨', options: customOptions },
+        { category: "Custom", emoji: "✨", options: customOptions },
       ];
     }
     return JOY_OPTIONS;
@@ -238,7 +249,7 @@ export default function JoyScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -253,7 +264,7 @@ export default function JoyScreen() {
     );
     if (!exists) {
       addCustomOption(value);
-      setSearchValue('');
+      setSearchValue("");
     }
   };
 
@@ -278,8 +289,8 @@ export default function JoyScreen() {
       onSearchChange={setSearchValue}
       onToggleOption={toggleSelection}
       onAddOption={handleAddOption}
-      onContinue={() => router.replace('/drains')}
-      onBack={() => router.replace('/daily-rhythm')}
+      onContinue={() => router.replace("/drains")}
+      onBack={() => router.replace("/daily-rhythm")}
       tone="primary"
     />
   );

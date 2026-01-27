@@ -64,17 +64,22 @@ Allow users to edit routine item duration times using their keyboard in addition
 1. **Gesture Conflict Resolution**: Disabled the Pan gesture when `expanded` is true, allowing TextInput to receive touches normally
 
 2. **Auto-Save**: `handleChangeText` saves immediately on every valid input:
+
    ```typescript
-   const handleChangeText = useCallback((text: string) => {
-     setLocalMinutes(text);
-     const parsed = parseInt(text, 10);
-     if (!isNaN(parsed) && parsed >= 1) {
-       onChangeMinutes(item.id, parsed);
-     }
-   }, [item.id, onChangeMinutes]);
+   const handleChangeText = useCallback(
+     (text: string) => {
+       setLocalMinutes(text);
+       const parsed = parseInt(text, 10);
+       if (!isNaN(parsed) && parsed >= 1) {
+         onChangeMinutes(item.id, parsed);
+       }
+     },
+     [item.id, onChangeMinutes],
+   );
    ```
 
 3. **Smooth Panel Switching**: When switching panels, close current first, wait 50ms, then open new:
+
    ```typescript
    if (prev !== null) {
      setTimeout(() => setExpandedId(id), 50);
@@ -87,11 +92,3 @@ Allow users to edit routine item duration times using their keyboard in addition
 ## Follow-ups
 
 - None identified
-
-
-
-
-
-
-
-

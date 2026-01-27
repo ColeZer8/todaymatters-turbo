@@ -28,7 +28,7 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 - [x] Persistent overlay with controls (time presets, navigation, exit)
 - [x] Time simulation affects Greeting and Calendar components
 - [x] Wake Up screen matches design reference
-- [x] Meeting Reminder screen matches design reference  
+- [x] Meeting Reminder screen matches design reference
 - [x] Traffic Alert screen matches design reference (including slashed-zero timer font)
 - [x] Guided tour navigation between demo pages
 - [x] Controls hidden until user taps corner button
@@ -49,6 +49,7 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 ## Files Changed
 
 ### New Files
+
 - `apps/mobile/src/stores/demo-store.ts` - Zustand store for demo state
 - `apps/mobile/src/components/organisms/DemoOverlay.tsx` - Persistent demo controls overlay
 - `apps/mobile/src/components/organisms/DemoMorningRoutine.tsx` - Wake Up screen
@@ -60,6 +61,7 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 - `apps/mobile/src/app/demo-prayer.tsx` - Route for prayer demo page
 
 ### Modified Files
+
 - `apps/mobile/src/app/_layout.tsx` - Added `DemoOverlay` to app root, new routes
 - `apps/mobile/src/app/profile.tsx` - Added "Demo Mode" menu item (dev-only)
 - `apps/mobile/src/components/molecules/Greeting.tsx` - Integrated demo time simulation
@@ -72,6 +74,7 @@ Create an interactive demo mode that allows stakeholders to showcase the app's t
 ## Technical Details
 
 ### Demo Store (`useDemoStore`)
+
 ```typescript
 interface DemoState {
   isActive: boolean;
@@ -83,22 +86,25 @@ interface DemoState {
 ```
 
 ### Time Presets
-| Preset | Hour | Greeting |
-|--------|------|----------|
-| Wake Up | 6:00 | devotional view |
-| Morning | 8:30 | Good morning |
-| Midday | 12:00 | Good afternoon |
-| Afternoon | 15:00 | Good afternoon |
-| Evening | 18:30 | Good evening |
-| Night | 21:00 | Good night |
+
+| Preset    | Hour  | Greeting        |
+| --------- | ----- | --------------- |
+| Wake Up   | 6:00  | devotional view |
+| Morning   | 8:30  | Good morning    |
+| Midday    | 12:00 | Good afternoon  |
+| Afternoon | 15:00 | Good afternoon  |
+| Evening   | 18:30 | Good evening    |
+| Night     | 21:00 | Good night      |
 
 ### Demo Tour Pages
+
 1. Home (with time-responsive greeting)
 2. Meeting Reminder (`/demo-meeting`)
 3. Traffic Alert (`/demo-traffic`)
 4. Prayer Action (`/demo-prayer`)
 
 ### Traffic Alert Map
+
 - SVG-based map with curved route paths
 - Color-coded route: Blue → Red (accident) → Blue
 - Yellow toll route alternative
@@ -106,11 +112,13 @@ interface DemoState {
 - "32 min / Tolls" badge
 
 ### Timer Font
+
 - Uses `Menlo-Bold` (iOS) / `monospace` (Android) for slashed zeros
 
 ### Time-Aware Hooks
+
 - `useCurrentMinutes()` - Returns simulated minutes from midnight in demo mode, real time otherwise
-- `useCurrentHour()` - Returns simulated hour in demo mode, real hour otherwise  
+- `useCurrentHour()` - Returns simulated hour in demo mode, real hour otherwise
 - `useGreeting()` - Returns appropriate greeting for simulated or real time
 
 ## Verification
@@ -130,9 +138,3 @@ interface DemoState {
 - [ ] Add more demo screens as new features are built (notifications, voice coach, etc.)
 - [ ] Consider adding "scenario" presets (e.g., "Morning Routine Demo", "Commute Demo")
 - [ ] Add ability to customize demo user name (currently hardcoded as "Paul")
-
-
-
-
-
-

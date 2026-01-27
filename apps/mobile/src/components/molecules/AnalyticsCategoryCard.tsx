@@ -1,7 +1,7 @@
-import { Pressable, Text, View } from 'react-native';
-import { ArrowUpRight } from 'lucide-react-native';
-import { Card, Icon } from '@/components/atoms';
-import { AnalyticsBarChart } from './AnalyticsBarChart';
+import { Pressable, Text, View } from "react-native";
+import { ArrowUpRight } from "lucide-react-native";
+import { Card, Icon } from "@/components/atoms";
+import { AnalyticsBarChart } from "./AnalyticsBarChart";
 
 interface AnalyticsCategoryCardProps {
   title: string;
@@ -37,7 +37,9 @@ export const AnalyticsCategoryCard = ({
     >
       <Card
         className={`gap-3 border ${
-          isActive ? 'border-brand-primary shadow-md shadow-[#1d4ed81a]' : 'border-[#E5E7EB]'
+          isActive
+            ? "border-brand-primary shadow-md shadow-[#1d4ed81a]"
+            : "border-[#E5E7EB]"
         }`}
       >
         <View className="flex-row items-center justify-between gap-3">
@@ -46,7 +48,10 @@ export const AnalyticsCategoryCard = ({
               className="items-center justify-center h-12 w-12 rounded-2xl"
               style={{ backgroundColor: accentBackground }}
             >
-              <Text className="text-lg font-extrabold" style={{ color: accentColor }}>
+              <Text
+                className="text-lg font-extrabold"
+                style={{ color: accentColor }}
+              >
                 {score}
               </Text>
             </View>
@@ -54,7 +59,9 @@ export const AnalyticsCategoryCard = ({
               <Text className="text-xs font-semibold uppercase tracking-[0.14em] text-text-tertiary">
                 {title}
               </Text>
-              <Text className="text-lg font-extrabold text-text-primary">{status}</Text>
+              <Text className="text-lg font-extrabold text-text-primary">
+                {status}
+              </Text>
             </View>
           </View>
           <Icon icon={ArrowUpRight} size={20} color={accentColor} />
@@ -62,11 +69,21 @@ export const AnalyticsCategoryCard = ({
 
         <Text className="text-sm leading-6 text-text-secondary">{insight}</Text>
 
-        <AnalyticsBarChart data={bars} labels={barLabels} color={accentColor} height={90} />
+        <AnalyticsBarChart
+          data={bars}
+          labels={barLabels}
+          color={accentColor}
+          height={90}
+        />
 
         <View className="flex-row items-center gap-2">
-          <View className="h-2 w-2 rounded-full" style={{ backgroundColor: accentColor }} />
-          <Text className="text-xs font-semibold text-text-tertiary">Tap to open deeper view</Text>
+          <View
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: accentColor }}
+          />
+          <Text className="text-xs font-semibold text-text-tertiary">
+            Tap to open deeper view
+          </Text>
         </View>
       </Card>
     </Pressable>

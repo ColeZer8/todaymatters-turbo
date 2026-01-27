@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, usePathname } from 'expo-router';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { useCallback, useState } from "react";
+import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter, usePathname } from "expo-router";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,9 +13,9 @@ import {
   Sunrise,
   Sunset,
   X,
-} from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
-import { useDemoStore, TIME_PRESETS, type TimeOfDay } from '@/stores';
+} from "lucide-react-native";
+import { Icon } from "@/components/atoms";
+import { useDemoStore, TIME_PRESETS, type TimeOfDay } from "@/stores";
 
 // Time preset icons mapping
 const TIME_ICONS: Record<TimeOfDay, typeof Sun> = {
@@ -28,34 +28,34 @@ const TIME_ICONS: Record<TimeOfDay, typeof Sun> = {
 };
 
 const TIME_COLORS: Record<TimeOfDay, string> = {
-  devotional: '#EC4899',
-  morning: '#F59E0B',
-  midday: '#3B82F6',
-  afternoon: '#F97316',
-  evening: '#8B5CF6',
-  night: '#6366F1',
+  devotional: "#EC4899",
+  morning: "#F59E0B",
+  midday: "#3B82F6",
+  afternoon: "#F97316",
+  evening: "#8B5CF6",
+  night: "#6366F1",
 };
 
 // Demo tour - screens to navigate through
 const DEMO_TOUR = [
-  { path: '/home', label: 'Home' },
-  { path: '/demo-screen-time', label: 'Screen Time' },
-  { path: '/demo-workout-interruption', label: 'Focus Alert' },
-  { path: '/demo-workout-summary', label: 'Workout' },
-  { path: '/demo-meeting', label: 'Meeting' },
-  { path: '/demo-meeting-rate', label: 'Meeting Rate' },
-  { path: '/demo-traffic-accident', label: 'Traffic' },
-  { path: '/demo-traffic', label: 'Departure' },
-  { path: '/demo-prayer', label: 'Prayer' },
-  { path: '/demo-prayer-rate', label: 'Prayer Rate' },
-  { path: '/demo-overview-goals', label: 'Goals' },
-  { path: '/demo-overview-initiatives', label: 'Initiatives' },
-  { path: '/demo-overview-values', label: 'Values' },
+  { path: "/home", label: "Home" },
+  { path: "/demo-screen-time", label: "Screen Time" },
+  { path: "/demo-workout-interruption", label: "Focus Alert" },
+  { path: "/demo-workout-summary", label: "Workout" },
+  { path: "/demo-meeting", label: "Meeting" },
+  { path: "/demo-meeting-rate", label: "Meeting Rate" },
+  { path: "/demo-traffic-accident", label: "Traffic" },
+  { path: "/demo-traffic", label: "Departure" },
+  { path: "/demo-prayer", label: "Prayer" },
+  { path: "/demo-prayer-rate", label: "Prayer Rate" },
+  { path: "/demo-overview-goals", label: "Goals" },
+  { path: "/demo-overview-initiatives", label: "Initiatives" },
+  { path: "/demo-overview-values", label: "Values" },
 ];
 
 /**
  * DemoOverlay - Floating overlay for demo mode
- * 
+ *
  * Renders on top of the app when demo mode is active.
  * Provides:
  * - Subtle corner button to open controls
@@ -77,7 +77,9 @@ export const DemoOverlay = () => {
   const getFormattedTime = useDemoStore((state) => state.getFormattedTime);
 
   // Find current position in tour
-  const currentTourIndex = DEMO_TOUR.findIndex((item) => pathname === item.path);
+  const currentTourIndex = DEMO_TOUR.findIndex(
+    (item) => pathname === item.path,
+  );
   const isOnTour = currentTourIndex !== -1;
 
   // ALL useCallback hooks must be called unconditionally
@@ -93,7 +95,7 @@ export const DemoOverlay = () => {
     (time: TimeOfDay) => {
       setTimeOfDay(time);
     },
-    [setTimeOfDay]
+    [setTimeOfDay],
   );
 
   const handleExitDemo = useCallback(() => {
@@ -130,14 +132,13 @@ export const DemoOverlay = () => {
           style={{
             top: insets.top + 8,
             right: 12,
-            backgroundColor: 'rgba(0,0,0,0.4)',
+            backgroundColor: "rgba(0,0,0,0.4)",
             zIndex: 1000,
           }}
         >
           <Icon icon={Settings2} size={20} color="rgba(255,255,255,0.9)" />
         </Pressable>
       )}
-
 
       {/* Control Overlay */}
       {showControls && (
@@ -222,8 +223,8 @@ export const DemoOverlay = () => {
                           height: 6,
                           backgroundColor:
                             index === currentTourIndex
-                              ? '#FFFFFF'
-                              : 'rgba(255,255,255,0.4)',
+                              ? "#FFFFFF"
+                              : "rgba(255,255,255,0.4)",
                         }}
                       />
                     ))}
@@ -237,7 +238,12 @@ export const DemoOverlay = () => {
                     disabled={currentTourIndex === DEMO_TOUR.length - 1}
                     className="h-12 w-12 items-center justify-center rounded-full bg-white/20"
                     style={({ pressed }) => ({
-                      opacity: currentTourIndex === DEMO_TOUR.length - 1 ? 0.3 : pressed ? 0.7 : 1,
+                      opacity:
+                        currentTourIndex === DEMO_TOUR.length - 1
+                          ? 0.3
+                          : pressed
+                            ? 0.7
+                            : 1,
                     })}
                   >
                     <Icon icon={ChevronRight} size={24} color="#FFFFFF" />
@@ -259,15 +265,18 @@ export const DemoOverlay = () => {
                     style={({ pressed }) => ({
                       backgroundColor:
                         index === currentTourIndex
-                          ? 'rgba(59, 130, 246, 0.8)'
-                          : 'rgba(255,255,255,0.15)',
+                          ? "rgba(59, 130, 246, 0.8)"
+                          : "rgba(255,255,255,0.15)",
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >
                     <Text
                       className="text-[14px] font-semibold"
                       style={{
-                        color: index === currentTourIndex ? '#FFFFFF' : 'rgba(255,255,255,0.8)',
+                        color:
+                          index === currentTourIndex
+                            ? "#FFFFFF"
+                            : "rgba(255,255,255,0.8)",
                       }}
                     >
                       {item.label}
@@ -280,12 +289,12 @@ export const DemoOverlay = () => {
               <Pressable
                 onPress={(e) => {
                   e.stopPropagation();
-                  router.push('/setup-questions' as any);
+                  router.push("/setup-questions" as any);
                   hideControls();
                 }}
                 className="mt-6 px-6 py-3 rounded-full border border-white/30"
                 style={({ pressed }) => ({
-                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  backgroundColor: "rgba(255,255,255,0.1)",
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
@@ -296,7 +305,10 @@ export const DemoOverlay = () => {
             </View>
 
             {/* Bottom - Time Controls */}
-            <View className="px-5" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View
+              className="px-5"
+              style={{ paddingBottom: insets.bottom + 20 }}
+            >
               <Text className="text-white/50 text-[11px] font-bold uppercase tracking-wider text-center mb-3">
                 Simulate Time of Day
               </Text>
@@ -317,22 +329,22 @@ export const DemoOverlay = () => {
                       className="items-center px-3 py-2 rounded-xl"
                       style={({ pressed }) => ({
                         backgroundColor: isSelected
-                          ? 'rgba(255,255,255,0.25)'
-                          : 'rgba(255,255,255,0.1)',
+                          ? "rgba(255,255,255,0.25)"
+                          : "rgba(255,255,255,0.1)",
                         opacity: pressed ? 0.7 : 1,
                         borderWidth: isSelected ? 2 : 0,
-                        borderColor: isSelected ? presetColor : 'transparent',
+                        borderColor: isSelected ? presetColor : "transparent",
                       })}
                     >
                       <Icon
                         icon={PresetIcon}
                         size={20}
-                        color={isSelected ? presetColor : '#FFFFFF'}
+                        color={isSelected ? presetColor : "#FFFFFF"}
                       />
                       <Text
                         className="text-[10px] font-semibold mt-1"
                         style={{
-                          color: isSelected ? presetColor : '#FFFFFF',
+                          color: isSelected ? presetColor : "#FFFFFF",
                         }}
                       >
                         {preset.label}

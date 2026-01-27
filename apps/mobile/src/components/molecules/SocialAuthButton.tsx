@@ -1,14 +1,14 @@
-import { Pressable, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Pressable, Text, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 interface SocialAuthButtonProps {
   label: string;
-  variant: 'apple' | 'google';
+  variant: "apple" | "google";
   onPress: () => void;
   disabled?: boolean;
 }
 
-const AppleLogo = ({ color = '#FFFFFF' }: { color?: string }) => (
+const AppleLogo = ({ color = "#FFFFFF" }: { color?: string }) => (
   <Svg width={18} height={22} viewBox="0 0 18 22" fill="none">
     <Path
       d="M14.73 11.66c-.02-2.13 1.74-3.15 1.82-3.2-1-1.46-2.57-1.66-3.12-1.68-1.32-.13-2.56.78-3.22.78-.66 0-1.7-.76-2.8-.74-1.43.02-2.75.84-3.48 2.13-1.49 2.58-.38 6.38 1.06 8.47.72 1.04 1.56 2.2 2.66 2.16 1.07-.04 1.47-.7 2.76-.7 1.29 0 1.64.7 2.77.68 1.15-.02 1.88-1.05 2.58-2.1.83-1.22 1.17-2.41 1.19-2.47-.02-.01-2.29-.88-2.32-3.33Z"
@@ -42,8 +42,13 @@ const GoogleLogo = () => (
   </Svg>
 );
 
-export const SocialAuthButton = ({ label, variant, onPress, disabled = false }: SocialAuthButtonProps) => {
-  const isApple = variant === 'apple';
+export const SocialAuthButton = ({
+  label,
+  variant,
+  onPress,
+  disabled = false,
+}: SocialAuthButtonProps) => {
+  const isApple = variant === "apple";
 
   return (
     <Pressable
@@ -56,16 +61,16 @@ export const SocialAuthButton = ({ label, variant, onPress, disabled = false }: 
       <View
         className={
           isApple
-            ? 'flex-row items-center justify-center px-4 py-4 rounded-2xl bg-black shadow-sm shadow-slate-300'
-            : 'flex-row items-center justify-center px-4 py-4 rounded-2xl border border-slate-200 bg-white'
+            ? "flex-row items-center justify-center px-4 py-4 rounded-2xl bg-black shadow-sm shadow-slate-300"
+            : "flex-row items-center justify-center px-4 py-4 rounded-2xl border border-slate-200 bg-white"
         }
       >
         {isApple ? <AppleLogo /> : <GoogleLogo />}
         <Text
           className={
             isApple
-              ? 'ml-3 text-base font-semibold text-white'
-              : 'ml-3 text-base font-semibold text-text-primary'
+              ? "ml-3 text-base font-semibold text-white"
+              : "ml-3 text-base font-semibold text-text-primary"
           }
         >
           {label}

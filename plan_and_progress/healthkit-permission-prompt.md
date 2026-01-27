@@ -39,5 +39,3 @@ Ensure iOS HealthKit authorization prompts appear (no crash) and the app can rea
 ## Follow-ups
 
 - Rebuild iOS dev client (`pnpm --filter mobile ios`) and confirm the Health prompt appears on device/simulator.
-
-

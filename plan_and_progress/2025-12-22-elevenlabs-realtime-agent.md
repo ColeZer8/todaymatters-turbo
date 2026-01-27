@@ -45,5 +45,3 @@ Enable ElevenLabs Conversational AI **realtime agent** in the mobile app (Expo d
   - Move runtime config out of local `.env` and into EAS build env/secrets.
   - Keep mobile `.env` limited to **public values only** (e.g. `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`).
   - Never ship Supabase `SERVICE_ROLE_KEY` or ElevenLabs `API_KEY` in the mobile app (server-only).
-
-

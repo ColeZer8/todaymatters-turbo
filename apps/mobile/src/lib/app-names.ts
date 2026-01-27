@@ -4,21 +4,21 @@ function looksLikeBundleOrPackageId(value: string): boolean {
 }
 
 const GENERIC_ID_SEGMENTS = new Set([
-  'android',
-  'ios',
-  'iphone',
-  'ipad',
-  'mobile',
-  'app',
-  'apps',
-  'prod',
-  'production',
-  'debug',
-  'release',
-  'free',
-  'paid',
-  'beta',
-  'alpha',
+  "android",
+  "ios",
+  "iphone",
+  "ipad",
+  "mobile",
+  "app",
+  "apps",
+  "prod",
+  "production",
+  "debug",
+  "release",
+  "free",
+  "paid",
+  "beta",
+  "alpha",
 ]);
 
 /**
@@ -29,7 +29,7 @@ export function getReadableAppName(options: {
   appId?: string | null;
   displayName?: string | null;
 }): string | null {
-  const rawDisplayName = options.displayName?.trim() ?? '';
+  const rawDisplayName = options.displayName?.trim() ?? "";
   if (rawDisplayName && !looksLikeBundleOrPackageId(rawDisplayName)) {
     return rawDisplayName;
   }
@@ -38,17 +38,23 @@ export function getReadableAppName(options: {
   if (!rawId) return null;
   if (!looksLikeBundleOrPackageId(rawId)) return rawId;
 
-  const parts = rawId.split('.').filter(Boolean);
+  const parts = rawId.split(".").filter(Boolean);
   if (parts.length === 0) return rawId;
 
   // Pick the last non-generic segment (e.g. com.snapchat.android -> snapchat).
   let candidate: string | null = null;
   for (let i = parts.length - 1; i >= 0; i--) {
-    const segment = parts[i] ?? '';
+    const segment = parts[i] ?? "";
     const normalized = segment.trim().toLowerCase();
     if (!normalized) continue;
     if (GENERIC_ID_SEGMENTS.has(normalized)) continue;
-    if (normalized === 'com' || normalized === 'org' || normalized === 'net' || normalized === 'io') continue;
+    if (
+      normalized === "com" ||
+      normalized === "org" ||
+      normalized === "net" ||
+      normalized === "io"
+    )
+      continue;
     candidate = segment;
     break;
   }
@@ -56,6 +62,5 @@ export function getReadableAppName(options: {
   const resolved = (candidate ?? parts[parts.length - 1] ?? rawId).trim();
   if (!resolved) return rawId;
 
-  return resolved.replace(/[_-]+/g, ' ');
+  return resolved.replace(/[_-]+/g, " ");
 }
-

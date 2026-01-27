@@ -1,5 +1,5 @@
-import { Text, View } from 'react-native';
-import { Sparkles } from 'lucide-react-native';
+import { Text, View } from "react-native";
+import { Sparkles } from "lucide-react-native";
 
 interface ProfileSummaryCardProps {
   name: string;
@@ -9,7 +9,7 @@ interface ProfileSummaryCardProps {
 }
 
 const avatarShadow = {
-  shadowColor: '#111827',
+  shadowColor: "#111827",
   shadowOpacity: 0.08,
   shadowRadius: 10,
   shadowOffset: { width: 0, height: 4 },
@@ -33,13 +33,17 @@ export const ProfileSummaryCard = ({
         <Text className="text-white text-lg font-semibold">{safeInitials}</Text>
       </View>
 
-      <Text className="mt-3 text-[#0F172A] text-[19px] font-semibold">{name}</Text>
+      <Text className="mt-3 text-[#0F172A] text-[19px] font-semibold">
+        {name}
+      </Text>
       <Text className="mt-1 text-[#6B7280] text-sm font-medium">{role}</Text>
 
       <View className="flex-row items-center justify-center mt-2">
         <View className="flex-row items-center justify-center px-3 py-1.5 rounded-full border border-[#DDE7FF] bg-[#EEF2FF]">
           <Sparkles size={14} color="#3056D3" />
-          <Text className="ml-1 text-[#3056D3] text-xs font-semibold">{badgeLabel}</Text>
+          <Text className="ml-1 text-[#3056D3] text-xs font-semibold">
+            {badgeLabel}
+          </Text>
         </View>
       </View>
     </View>

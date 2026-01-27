@@ -1,30 +1,30 @@
-import React from 'react';
-import renderer, { act } from 'react-test-renderer';
-import { ComprehensiveCalendarTemplate } from './ComprehensiveCalendarTemplate';
+import React from "react";
+import renderer, { act } from "react-test-renderer";
+import { ComprehensiveCalendarTemplate } from "./ComprehensiveCalendarTemplate";
 
 // Mock dependencies
-jest.mock('expo-router', () => ({
+jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
-  usePathname: () => '/comprehensive-calendar',
+  usePathname: () => "/comprehensive-calendar",
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
+jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock('../molecules/DateNavigator', () => ({
-  DateNavigator: () => 'DateNavigator',
+jest.mock("../molecules/DateNavigator", () => ({
+  DateNavigator: () => "DateNavigator",
 }));
 
-jest.mock('../atoms/FloatingActionButton', () => ({
-  FloatingActionButton: () => 'FloatingActionButton',
+jest.mock("../atoms/FloatingActionButton", () => ({
+  FloatingActionButton: () => "FloatingActionButton",
 }));
 
-jest.mock('../organisms/BottomToolbar', () => ({
-  BottomToolbar: () => 'BottomToolbar',
+jest.mock("../organisms/BottomToolbar", () => ({
+  BottomToolbar: () => "BottomToolbar",
 }));
 
-describe.skip('ComprehensiveCalendarTemplate', () => {
+describe.skip("ComprehensiveCalendarTemplate", () => {
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -33,7 +33,7 @@ describe.skip('ComprehensiveCalendarTemplate', () => {
     jest.useRealTimers();
   });
 
-  it('renders without crashing', () => {
+  it("renders without crashing", () => {
     let tree: renderer.ReactTestRenderer;
 
     act(() => {
@@ -49,7 +49,7 @@ describe.skip('ComprehensiveCalendarTemplate', () => {
           onDeletePlannedEvent={() => {}}
           onUpdateActualEvent={() => {}}
           onDeleteActualEvent={() => {}}
-        />
+        />,
       );
     });
 

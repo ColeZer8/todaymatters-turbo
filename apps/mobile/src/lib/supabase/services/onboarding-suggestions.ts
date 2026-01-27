@@ -1,5 +1,5 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
 
 export interface OnboardingSuggestionValueInput {
   id: string;
@@ -23,14 +23,14 @@ interface OnboardingSuggestionsResponse {
 }
 
 function coerceSuggestions(value: unknown): Record<string, string[]> {
-  if (!value || typeof value !== 'object') return {};
+  if (!value || typeof value !== "object") return {};
   const obj = value as Record<string, unknown>;
   const out: Record<string, string[]> = {};
 
   for (const [key, rawList] of Object.entries(obj)) {
     if (!key.trim() || !Array.isArray(rawList)) continue;
     const cleaned = rawList
-      .map((v) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : ''))
+      .map((v) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ") : ""))
       .filter((v) => v.length > 0);
     if (cleaned.length > 0) out[key] = cleaned;
   }
@@ -43,17 +43,20 @@ export async function generateOnboardingCategorySuggestionsLlm(params: {
   categories: OnboardingSuggestionCategoryInput[];
 }): Promise<Record<string, string[]>> {
   try {
-    const { data, error } = await supabase.functions.invoke('onboarding-suggestions', {
-      body: {
-        kind: 'categories',
-        values: params.values,
-        categories: params.categories,
+    const { data, error } = await supabase.functions.invoke(
+      "onboarding-suggestions",
+      {
+        body: {
+          kind: "categories",
+          values: params.values,
+          categories: params.categories,
+        },
       },
-    });
+    );
 
     if (error) throw handleSupabaseError(error);
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid response from onboarding-suggestions function');
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid response from onboarding-suggestions function");
     }
 
     const d = data as Partial<OnboardingSuggestionsResponse>;
@@ -68,17 +71,20 @@ export async function generateOnboardingSubCategorySuggestionsLlm(params: {
   subCategories: OnboardingSuggestionSubCategoryInput[];
 }): Promise<Record<string, string[]>> {
   try {
-    const { data, error } = await supabase.functions.invoke('onboarding-suggestions', {
-      body: {
-        kind: 'subcategories',
-        categories: params.categories,
-        subCategories: params.subCategories,
+    const { data, error } = await supabase.functions.invoke(
+      "onboarding-suggestions",
+      {
+        body: {
+          kind: "subcategories",
+          categories: params.categories,
+          subCategories: params.subCategories,
+        },
       },
-    });
+    );
 
     if (error) throw handleSupabaseError(error);
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid response from onboarding-suggestions function');
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid response from onboarding-suggestions function");
     }
 
     const d = data as Partial<OnboardingSuggestionsResponse>;
@@ -87,4 +93,3 @@ export async function generateOnboardingSubCategorySuggestionsLlm(params: {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
-

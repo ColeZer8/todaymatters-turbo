@@ -33,4 +33,3 @@ Add the “Does This Look Right?” screen as the final step of the onboarding/s
 
 - `my-church` now routes to `ai-summary` instead of `home`.
 - `ai-summary` “Looks Good!” sets `hasCompletedOnboarding=true` and routes to `home`.
-

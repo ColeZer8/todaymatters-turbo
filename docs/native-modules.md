@@ -9,6 +9,7 @@ This document outlines when and how to use native modules in the TodayMatters Ex
 ### ✅ Use Expo APIs (Recommended)
 
 Most functionality is available through Expo packages:
+
 - **Authentication**: `expo-auth-session`, `expo-web-browser`
 - **Deep Linking**: `expo-linking`
 - **Storage**: `@react-native-async-storage/async-storage`, `expo-secure-store`
@@ -37,6 +38,7 @@ Most functionality is available through Expo packages:
 ### When to Switch to Bare Workflow
 
 Only if you need:
+
 - Direct access to native code for debugging
 - Custom native modules not available as Expo modules
 - Complex native integrations
@@ -55,6 +57,7 @@ cd my-native-module
 ```
 
 This creates a module with:
+
 - TypeScript definitions
 - iOS (Swift) implementation
 - Android (Kotlin) implementation
@@ -88,6 +91,7 @@ For configuring existing native modules:
 ### Deep Linking (No Custom Native Code Needed)
 
 Supabase OAuth uses Expo's deep linking:
+
 - Configured in `app.json` with `scheme: "todaymatters"`
 - Handled by `expo-linking` and `expo-auth-session`
 - See `src/lib/supabase/auth.ts` for implementation
@@ -95,12 +99,14 @@ Supabase OAuth uses Expo's deep linking:
 ### Background Tasks (If Needed)
 
 For background sync or token refresh:
+
 - Use `expo-task-manager` and `expo-background-fetch`
 - No custom native code required
 
 ### Push Notifications (If Needed)
 
 For Supabase real-time notifications:
+
 - Use `expo-notifications`
 - Configure in Supabase dashboard
 - No custom native code required
@@ -143,12 +149,12 @@ For packages requiring native configuration:
 
 ```typescript
 // app.config.js
-import { withAndroidManifest } from '@expo/config-plugins';
+import { withAndroidManifest } from "@expo/config-plugins";
 
 export default {
   plugins: [
     [
-      'expo-build-properties',
+      "expo-build-properties",
       {
         android: {
           // Native Android config
@@ -184,7 +190,7 @@ import ExpoModulesCore
 public class MyNativeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("MyNativeModule")
-    
+
     Function("doSomething") { (param: String) -> String in
       return "Native result: \(param)"
     }
@@ -201,7 +207,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class MyNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("MyNativeModule")
-    
+
     Function("doSomething") { param: String ->
       "Native result: $param"
     }
@@ -237,4 +243,3 @@ class MyNativeModule : Module() {
 - [Creating Expo Modules](https://docs.expo.dev/modules/create-module/)
 - [Config Plugins](https://docs.expo.dev/config-plugins/introduction/)
 - [EAS Build](https://docs.expo.dev/build/introduction/)
-

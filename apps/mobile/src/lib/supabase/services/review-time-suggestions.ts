@@ -1,6 +1,6 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { ReviewCategoryId } from '@/stores/review-time-store';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { ReviewCategoryId } from "@/stores/review-time-store";
 
 export interface ReviewTimeSuggestionInput {
   date: string;
@@ -27,28 +27,37 @@ export interface ReviewTimeSuggestionResponse {
 }
 
 export async function requestReviewTimeSuggestion(
-  payload: ReviewTimeSuggestionInput
+  payload: ReviewTimeSuggestionInput,
 ): Promise<ReviewTimeSuggestionResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('review-time-suggest', {
-      body: payload,
-    });
+    const { data, error } = await supabase.functions.invoke(
+      "review-time-suggest",
+      {
+        body: payload,
+      },
+    );
 
     if (error) {
       const contextualMessage = extractFunctionErrorMessage(error);
       throw new Error(contextualMessage ?? handleSupabaseError(error).message);
     }
 
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid response from review-time-suggest function');
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid response from review-time-suggest function");
     }
 
     const d = data as Partial<ReviewTimeSuggestionResponse>;
-    const title = typeof d.title === 'string' ? d.title.trim() : '';
-    const description = typeof d.description === 'string' ? d.description.trim() : '';
+    const title = typeof d.title === "string" ? d.title.trim() : "";
+    const description =
+      typeof d.description === "string" ? d.description.trim() : "";
 
-    if (!d.category || typeof d.confidence !== 'number' || !title || !description) {
-      throw new Error('Incomplete response from review-time-suggest function');
+    if (
+      !d.category ||
+      typeof d.confidence !== "number" ||
+      !title ||
+      !description
+    ) {
+      throw new Error("Incomplete response from review-time-suggest function");
     }
 
     return {
@@ -69,7 +78,7 @@ function extractFunctionErrorMessage(error: unknown): string | null {
   if (!body) return null;
   try {
     const parsed = JSON.parse(body) as { error?: string; hint?: string };
-    const message = parsed.error ?? err?.message ?? 'Edge function error';
+    const message = parsed.error ?? err?.message ?? "Edge function error";
     if (parsed.hint) {
       return `${message}\n${parsed.hint}`;
     }

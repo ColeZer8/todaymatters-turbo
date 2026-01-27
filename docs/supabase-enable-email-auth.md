@@ -3,6 +3,7 @@
 ## Problem
 
 Users get this error when trying to authenticate:
+
 ```json
 {
   "code": 400,
@@ -20,11 +21,13 @@ This error can occur for different reasons:
 ## Diagnosis
 
 **If email sign-in works but sign-up fails:**
+
 - Email provider IS enabled ✅
 - Check if client clicked OAuth button (Apple/Google) instead of email/password
 - Verify redirect URL configuration for sign-up emails
 
 **If both sign-in and sign-up fail:**
+
 - Email provider is likely disabled ❌
 
 ## Solution
@@ -55,6 +58,7 @@ Click **Save** at the bottom of the page.
 ### 4. Verify Configuration
 
 After enabling, users should be able to:
+
 - Sign up with email/password
 - Sign in with email/password
 
@@ -63,6 +67,7 @@ After enabling, users should be able to:
 ### Email Templates
 
 If you want to customize confirmation emails:
+
 1. Go to **Authentication** → **Email Templates**
 2. Customize the templates as needed
 3. Make sure redirect URLs match your app's deep link scheme: `todaymatters://auth/confirm`
@@ -70,6 +75,7 @@ If you want to customize confirmation emails:
 ### Redirect URLs
 
 Ensure your redirect URLs are configured:
+
 1. Go to **Authentication** → **URL Configuration**
 2. Add these redirect URLs:
    ```
@@ -111,6 +117,7 @@ The `supabase/config.toml` file only affects **local development** when running 
 For email authentication to work properly, your Supabase team needs to configure:
 
 1. **Redirect URLs** (Authentication → URL Configuration):
+
    ```
    todaymatters://auth/confirm
    todaymatters://auth/callback
@@ -123,6 +130,7 @@ For email authentication to work properly, your Supabase team needs to configure
    Or your web URL if you have one.
 
 These settings are managed in the Supabase Dashboard and are required for:
+
 - Email confirmation links (sign-up)
 - Password reset links
 - Email change confirmation links

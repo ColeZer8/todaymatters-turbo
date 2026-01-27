@@ -149,7 +149,11 @@ const testimonials = [
 const StarRating = () => (
   <div className="flex gap-0.5">
     {[1, 2, 3, 4, 5].map((i) => (
-      <svg key={i} className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
+      <svg
+        key={i}
+        className="w-4 h-4 text-yellow-400 fill-current"
+        viewBox="0 0 20 20"
+      >
         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
       </svg>
     ))}
@@ -175,7 +179,8 @@ export const Testimonials = () => {
           transition={{ duration: 0.6 }}
           className="text-4xl md:text-5xl font-bold text-[#0a0a0a] tracking-tight mb-4"
         >
-          Crafted with Care.<br />
+          Crafted with Care.
+          <br />
           <span className="text-brand-primary">Loved Everywhere.</span>
         </motion.h2>
         <motion.p
@@ -184,7 +189,8 @@ export const Testimonials = () => {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="text-lg text-[#52525b] max-w-2xl"
         >
-          Don't take our word for it. See why Today Matters is trusted by people who want to live more intentionally.
+          Don't take our word for it. See why Today Matters is trusted by people
+          who want to live more intentionally.
         </motion.p>
       </div>
 
@@ -193,48 +199,58 @@ export const Testimonials = () => {
         {/* Gradient masks */}
         <div className="absolute left-0 top-0 bottom-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
-        
-            {/* First row - scrolling left */}
-            <div className="flex animate-marquee mb-6">
-              {doubledTestimonials.map((t, i) => (
-                <div
-                  key={`row1-${i}`}
-                  className="flex-shrink-0 w-[400px] mx-3 bg-[#fafafa] rounded-3xl p-6 border border-gray-100"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <StarRating />
-                      <h4 className="font-bold text-[#0a0a0a] mt-2">{t.title}</h4>
-                      <p className="text-xs text-[#71717a]">{t.author}, {t.date}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-[#52525b] leading-relaxed">
-                    "{t.text}"
-                  </p>
-                </div>
-              ))}
-            </div>
 
-            {/* Second row - scrolling right (reversed direction) */}
-            <div className="flex animate-marquee" style={{ animationDirection: "reverse" }}>
-              {doubledTestimonials.slice().reverse().map((t, i) => (
-                <div
-                  key={`row2-${i}`}
-                  className="flex-shrink-0 w-[400px] mx-3 bg-[#fafafa] rounded-3xl p-6 border border-gray-100"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <StarRating />
-                      <h4 className="font-bold text-[#0a0a0a] mt-2">{t.title}</h4>
-                      <p className="text-xs text-[#71717a]">{t.author}, {t.date}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-[#52525b] leading-relaxed">
-                    "{t.text}"
+        {/* First row - scrolling left */}
+        <div className="flex animate-marquee mb-6">
+          {doubledTestimonials.map((t, i) => (
+            <div
+              key={`row1-${i}`}
+              className="flex-shrink-0 w-[400px] mx-3 bg-[#fafafa] rounded-3xl p-6 border border-gray-100"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <StarRating />
+                  <h4 className="font-bold text-[#0a0a0a] mt-2">{t.title}</h4>
+                  <p className="text-xs text-[#71717a]">
+                    {t.author}, {t.date}
                   </p>
                 </div>
-              ))}
+              </div>
+              <p className="text-sm text-[#52525b] leading-relaxed">
+                "{t.text}"
+              </p>
             </div>
+          ))}
+        </div>
+
+        {/* Second row - scrolling right (reversed direction) */}
+        <div
+          className="flex animate-marquee"
+          style={{ animationDirection: "reverse" }}
+        >
+          {doubledTestimonials
+            .slice()
+            .reverse()
+            .map((t, i) => (
+              <div
+                key={`row2-${i}`}
+                className="flex-shrink-0 w-[400px] mx-3 bg-[#fafafa] rounded-3xl p-6 border border-gray-100"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <StarRating />
+                    <h4 className="font-bold text-[#0a0a0a] mt-2">{t.title}</h4>
+                    <p className="text-xs text-[#71717a]">
+                      {t.author}, {t.date}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-[#52525b] leading-relaxed">
+                  "{t.text}"
+                </p>
+              </div>
+            ))}
+        </div>
       </div>
     </section>
   );

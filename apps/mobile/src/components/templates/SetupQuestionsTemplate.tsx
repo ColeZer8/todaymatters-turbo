@@ -1,14 +1,17 @@
-import { ArrowRight } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { TextChoiceCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
+import { ArrowRight } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { TextChoiceCard } from "@/components/molecules";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
 
 interface SetupQuestionsTemplateProps {
   step?: number;
   totalSteps?: number;
-  mode: 'full' | 'fast';
+  mode: "full" | "fast";
   title: string;
   subtitle: string;
   questionLabel: string;
@@ -49,7 +52,7 @@ export const SetupQuestionsTemplate = ({
       onBack={onBack}
       footer={
         <GradientButton
-          label={mode === 'fast' ? 'Continue' : 'Next'}
+          label={mode === "fast" ? "Continue" : "Next"}
           onPress={onContinue}
           rightIcon={ArrowRight}
           disabled={isContinueDisabled}
@@ -57,8 +60,12 @@ export const SetupQuestionsTemplate = ({
       }
     >
       <View className="mt-2">
-        <Text className="text-sm font-semibold text-text-secondary">{questionLabel}</Text>
-        <Text className="mt-3 text-lg font-semibold text-text-primary">{question}</Text>
+        <Text className="text-sm font-semibold text-text-secondary">
+          {questionLabel}
+        </Text>
+        <Text className="mt-3 text-lg font-semibold text-text-primary">
+          {question}
+        </Text>
       </View>
 
       <View className="mt-5 gap-3">
@@ -80,7 +87,9 @@ export const SetupQuestionsTemplate = ({
         onPress={onSwitchMode}
         className="self-start mt-6"
       >
-        <Text className="text-sm font-semibold text-brand-primary">{switchLabel}</Text>
+        <Text className="text-sm font-semibold text-brand-primary">
+          {switchLabel}
+        </Text>
       </Pressable>
     </SetupStepLayout>
   );

@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { AiSetupResponses } from '@/lib/ai-setup';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { AiSetupResponses } from "@/lib/ai-setup";
 
 // Step 2: Permissions
 export interface PermissionsData extends Record<string, boolean> {
@@ -54,7 +54,13 @@ export interface ValueScore {
 }
 
 // Step 13: VIP Contacts
-export type VIPRelationship = 'spouse' | 'child' | 'parent' | 'friend' | 'colleague' | 'other';
+export type VIPRelationship =
+  | "spouse"
+  | "child"
+  | "parent"
+  | "friend"
+  | "colleague"
+  | "other";
 
 export interface VIPContact {
   id: string;
@@ -189,7 +195,7 @@ interface OnboardingState {
 
   // Actions - VIP Contacts
   setVIPContacts: (contacts: VIPContact[]) => void;
-  addVIPContact: (contact: Omit<VIPContact, 'id'>) => void;
+  addVIPContact: (contact: Omit<VIPContact, "id">) => void;
   removeVIPContact: (id: string) => void;
 
   // Actions - My Church
@@ -202,7 +208,10 @@ interface OnboardingState {
 
   // Actions - AI Setup Questions
   setAiSetupResponses: (responses: AiSetupResponses) => void;
-  setAiSetupResponse: (key: keyof AiSetupResponses, value: string | null) => void;
+  setAiSetupResponse: (
+    key: keyof AiSetupResponses,
+    value: string | null,
+  ) => void;
 
   // Actions - Daily Rhythm
   setWakeTime: (time: Date) => void;
@@ -258,7 +267,9 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   appUsage: true,
 };
 
-const normalizePermissions = (source?: Partial<PermissionsData> | null): PermissionsData => ({
+const normalizePermissions = (
+  source?: Partial<PermissionsData> | null,
+): PermissionsData => ({
   calendar: source?.calendar ?? DEFAULT_PERMISSIONS.calendar,
   notifications: source?.notifications ?? DEFAULT_PERMISSIONS.notifications,
   email: source?.email ?? DEFAULT_PERMISSIONS.email,
@@ -271,59 +282,341 @@ const normalizePermissions = (source?: Partial<PermissionsData> | null): Permiss
 // Predefined Core Values (curated starter list)
 const DEFAULT_CORE_VALUES: CoreValue[] = [
   // Defaults selected (6-value taxonomy)
-  { id: 'faith', label: 'Faith', icon: 'cross', isSelected: true, isCustom: false },
-  { id: 'family', label: 'Family', icon: 'users', isSelected: true, isCustom: false },
-  { id: 'health', label: 'Health', icon: 'heart', isSelected: true, isCustom: false },
-  { id: 'work', label: 'Work', icon: 'briefcase', isSelected: true, isCustom: false },
-  { id: 'personal-growth', label: 'Personal Growth', icon: 'trending-up', isSelected: true, isCustom: false },
-  { id: 'finances', label: 'Finances', icon: 'briefcase', isSelected: true, isCustom: false },
+  {
+    id: "faith",
+    label: "Faith",
+    icon: "cross",
+    isSelected: true,
+    isCustom: false,
+  },
+  {
+    id: "family",
+    label: "Family",
+    icon: "users",
+    isSelected: true,
+    isCustom: false,
+  },
+  {
+    id: "health",
+    label: "Health",
+    icon: "heart",
+    isSelected: true,
+    isCustom: false,
+  },
+  {
+    id: "work",
+    label: "Work",
+    icon: "briefcase",
+    isSelected: true,
+    isCustom: false,
+  },
+  {
+    id: "personal-growth",
+    label: "Personal Growth",
+    icon: "trending-up",
+    isSelected: true,
+    isCustom: false,
+  },
+  {
+    id: "finances",
+    label: "Finances",
+    icon: "briefcase",
+    isSelected: true,
+    isCustom: false,
+  },
 
   // Common additions
-  { id: 'rest', label: 'Rest', icon: 'moon', isSelected: false, isCustom: false },
-  { id: 'fitness', label: 'Fitness', icon: 'heart', isSelected: false, isCustom: false },
-  { id: 'friendship', label: 'Friendship', icon: 'users', isSelected: false, isCustom: false },
-  { id: 'marriage', label: 'Marriage', icon: 'users', isSelected: false, isCustom: false },
-  { id: 'parenting', label: 'Parenting', icon: 'users', isSelected: false, isCustom: false },
-  { id: 'community', label: 'Community', icon: 'home', isSelected: false, isCustom: false },
-  { id: 'service', label: 'Service', icon: 'home', isSelected: false, isCustom: false },
-  { id: 'generosity', label: 'Generosity', icon: 'heart', isSelected: false, isCustom: false },
-  { id: 'gratitude', label: 'Gratitude', icon: 'heart', isSelected: false, isCustom: false },
-  { id: 'learning', label: 'Learning', icon: 'trending-up', isSelected: false, isCustom: false },
-  { id: 'discipline', label: 'Discipline', icon: 'trending-up', isSelected: false, isCustom: false },
-  { id: 'leadership', label: 'Leadership', icon: 'star', isSelected: false, isCustom: false },
-  { id: 'integrity', label: 'Integrity', icon: 'star', isSelected: false, isCustom: false },
-  { id: 'humility', label: 'Humility', icon: 'star', isSelected: false, isCustom: false },
-  { id: 'simplicity', label: 'Simplicity', icon: 'moon', isSelected: false, isCustom: false },
-  { id: 'adventure', label: 'Adventure', icon: 'star', isSelected: false, isCustom: false },
-  { id: 'creativity', label: 'Creativity', icon: 'palette', isSelected: false, isCustom: false },
-  { id: 'spirituality', label: 'Spirituality', icon: 'cross', isSelected: false, isCustom: false },
-  { id: 'prayer', label: 'Prayer', icon: 'cross', isSelected: false, isCustom: false },
-  { id: 'purpose', label: 'Purpose', icon: 'star', isSelected: false, isCustom: false },
-  { id: 'stewardship', label: 'Stewardship', icon: 'briefcase', isSelected: false, isCustom: false },
-  { id: 'home', label: 'Home', icon: 'home', isSelected: false, isCustom: false },
-  { id: 'nature', label: 'Nature', icon: 'home', isSelected: false, isCustom: false },
+  {
+    id: "rest",
+    label: "Rest",
+    icon: "moon",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "fitness",
+    label: "Fitness",
+    icon: "heart",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "friendship",
+    label: "Friendship",
+    icon: "users",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "marriage",
+    label: "Marriage",
+    icon: "users",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "parenting",
+    label: "Parenting",
+    icon: "users",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "community",
+    label: "Community",
+    icon: "home",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "service",
+    label: "Service",
+    icon: "home",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "generosity",
+    label: "Generosity",
+    icon: "heart",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "gratitude",
+    label: "Gratitude",
+    icon: "heart",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "learning",
+    label: "Learning",
+    icon: "trending-up",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "discipline",
+    label: "Discipline",
+    icon: "trending-up",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "leadership",
+    label: "Leadership",
+    icon: "star",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "integrity",
+    label: "Integrity",
+    icon: "star",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "humility",
+    label: "Humility",
+    icon: "star",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "simplicity",
+    label: "Simplicity",
+    icon: "moon",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "adventure",
+    label: "Adventure",
+    icon: "star",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "creativity",
+    label: "Creativity",
+    icon: "palette",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "spirituality",
+    label: "Spirituality",
+    icon: "cross",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "prayer",
+    label: "Prayer",
+    icon: "cross",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "purpose",
+    label: "Purpose",
+    icon: "star",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "stewardship",
+    label: "Stewardship",
+    icon: "briefcase",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "home",
+    label: "Home",
+    icon: "home",
+    isSelected: false,
+    isCustom: false,
+  },
+  {
+    id: "nature",
+    label: "Nature",
+    icon: "home",
+    isSelected: false,
+    isCustom: false,
+  },
 ];
 
 // Predefined Core Categories mapped to values
 const DEFAULT_CORE_CATEGORIES: CoreCategory[] = [
-  { id: 'prayer', valueId: 'faith', label: 'Prayer', color: '#F33C83', isCustom: false },
-  { id: 'scripture-study', valueId: 'faith', label: 'Scripture / Study', color: '#F33C83', isCustom: false },
-  { id: 'worship', valueId: 'faith', label: 'Worship', color: '#F33C83', isCustom: false },
-  { id: 'marriage', valueId: 'family', label: 'Marriage / Spouse', color: '#F59E0B', isCustom: false },
-  { id: 'parenting', valueId: 'family', label: 'Parenting', color: '#F59E0B', isCustom: false },
-  { id: 'quality-time', valueId: 'family', label: 'Quality Time', color: '#F59E0B', isCustom: false },
-  { id: 'exercise', valueId: 'health', label: 'Exercise', color: '#F95C2E', isCustom: false },
-  { id: 'nutrition', valueId: 'health', label: 'Nutrition', color: '#F95C2E', isCustom: false },
-  { id: 'sleep-recovery', valueId: 'health', label: 'Sleep / Recovery', color: '#F95C2E', isCustom: false },
-  { id: 'deep-work', valueId: 'work', label: 'Deep Work', color: '#1FA56E', isCustom: false },
-  { id: 'meetings', valueId: 'work', label: 'Meetings', color: '#1FA56E', isCustom: false },
-  { id: 'admin', valueId: 'work', label: 'Admin', color: '#1FA56E', isCustom: false },
-  { id: 'learning', valueId: 'personal-growth', label: 'Learning / Education', color: '#8B5CF6', isCustom: false },
-  { id: 'habits-discipline', valueId: 'personal-growth', label: 'Habits & Discipline', color: '#8B5CF6', isCustom: false },
-  { id: 'self-reflection', valueId: 'personal-growth', label: 'Self-Reflection', color: '#8B5CF6', isCustom: false },
-  { id: 'budgeting', valueId: 'finances', label: 'Budgeting', color: '#10B981', isCustom: false },
-  { id: 'saving', valueId: 'finances', label: 'Saving', color: '#10B981', isCustom: false },
-  { id: 'investing', valueId: 'finances', label: 'Investing', color: '#10B981', isCustom: false },
+  {
+    id: "prayer",
+    valueId: "faith",
+    label: "Prayer",
+    color: "#F33C83",
+    isCustom: false,
+  },
+  {
+    id: "scripture-study",
+    valueId: "faith",
+    label: "Scripture / Study",
+    color: "#F33C83",
+    isCustom: false,
+  },
+  {
+    id: "worship",
+    valueId: "faith",
+    label: "Worship",
+    color: "#F33C83",
+    isCustom: false,
+  },
+  {
+    id: "marriage",
+    valueId: "family",
+    label: "Marriage / Spouse",
+    color: "#F59E0B",
+    isCustom: false,
+  },
+  {
+    id: "parenting",
+    valueId: "family",
+    label: "Parenting",
+    color: "#F59E0B",
+    isCustom: false,
+  },
+  {
+    id: "quality-time",
+    valueId: "family",
+    label: "Quality Time",
+    color: "#F59E0B",
+    isCustom: false,
+  },
+  {
+    id: "exercise",
+    valueId: "health",
+    label: "Exercise",
+    color: "#F95C2E",
+    isCustom: false,
+  },
+  {
+    id: "nutrition",
+    valueId: "health",
+    label: "Nutrition",
+    color: "#F95C2E",
+    isCustom: false,
+  },
+  {
+    id: "sleep-recovery",
+    valueId: "health",
+    label: "Sleep / Recovery",
+    color: "#F95C2E",
+    isCustom: false,
+  },
+  {
+    id: "deep-work",
+    valueId: "work",
+    label: "Deep Work",
+    color: "#1FA56E",
+    isCustom: false,
+  },
+  {
+    id: "meetings",
+    valueId: "work",
+    label: "Meetings",
+    color: "#1FA56E",
+    isCustom: false,
+  },
+  {
+    id: "admin",
+    valueId: "work",
+    label: "Admin",
+    color: "#1FA56E",
+    isCustom: false,
+  },
+  {
+    id: "learning",
+    valueId: "personal-growth",
+    label: "Learning / Education",
+    color: "#8B5CF6",
+    isCustom: false,
+  },
+  {
+    id: "habits-discipline",
+    valueId: "personal-growth",
+    label: "Habits & Discipline",
+    color: "#8B5CF6",
+    isCustom: false,
+  },
+  {
+    id: "self-reflection",
+    valueId: "personal-growth",
+    label: "Self-Reflection",
+    color: "#8B5CF6",
+    isCustom: false,
+  },
+  {
+    id: "budgeting",
+    valueId: "finances",
+    label: "Budgeting",
+    color: "#10B981",
+    isCustom: false,
+  },
+  {
+    id: "saving",
+    valueId: "finances",
+    label: "Saving",
+    color: "#10B981",
+    isCustom: false,
+  },
+  {
+    id: "investing",
+    valueId: "finances",
+    label: "Investing",
+    color: "#10B981",
+    isCustom: false,
+  },
 ];
 
 // Helper to generate unique ID
@@ -356,11 +649,11 @@ export const useOnboardingStore = create<OnboardingState>()(
       initiatives: [],
       goalWhys: [],
       valuesScores: [],
-      fullName: '',
+      fullName: "",
       vipContacts: [],
-      churchName: '',
-      churchAddress: '',
-      churchWebsite: '',
+      churchName: "",
+      churchAddress: "",
+      churchWebsite: "",
       role: null,
       aiSetupResponses: {},
       wakeTime: createTimeString(6, 30),
@@ -369,10 +662,10 @@ export const useOnboardingStore = create<OnboardingState>()(
       joyCustomOptions: [],
       drainSelections: [],
       drainCustomOptions: [],
-      purpose: 'balance',
-      focusStyle: 'flow',
-      coachPersona: 'strategist',
-      morningMindset: 'slow',
+      purpose: "balance",
+      focusStyle: "flow",
+      coachPersona: "strategist",
+      morningMindset: "slow",
       homeAddress: null,
       workAddress: null,
       big3Enabled: false,
@@ -380,7 +673,8 @@ export const useOnboardingStore = create<OnboardingState>()(
       _hasHydrated: false,
 
       // Actions - Explainer Video
-      setHasWatchedExplainerVideo: (value) => set({ hasWatchedExplainerVideo: value }),
+      setHasWatchedExplainerVideo: (value) =>
+        set({ hasWatchedExplainerVideo: value }),
 
       // Actions - Permissions
       setPermissions: (permissions) => set({ permissions }),
@@ -406,7 +700,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       toggleCoreValue: (id) =>
         set((state) => ({
           coreValues: state.coreValues.map((v) =>
-            v.id === id ? { ...v, isSelected: !v.isSelected } : v
+            v.id === id ? { ...v, isSelected: !v.isSelected } : v,
           ),
         })),
       addCoreValue: (label) =>
@@ -416,7 +710,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             {
               id: generateId(),
               label,
-              icon: 'star',
+              icon: "star",
               isSelected: true,
               isCustom: true,
             },
@@ -436,13 +730,19 @@ export const useOnboardingStore = create<OnboardingState>()(
           const exists = state.coreCategories.some(
             (c) =>
               c.valueId === valueId &&
-              c.label.trim().toLowerCase() === normalized.toLowerCase()
+              c.label.trim().toLowerCase() === normalized.toLowerCase(),
           );
           if (exists) return state;
           return {
             coreCategories: [
               ...state.coreCategories,
-              { id: generateId(), valueId, label: normalized, color, isCustom: true },
+              {
+                id: generateId(),
+                valueId,
+                label: normalized,
+                color,
+                isCustom: true,
+              },
             ],
           };
         }),
@@ -461,7 +761,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           const exists = state.subCategories.some(
             (s) =>
               s.categoryId === categoryId &&
-              s.label.trim().toLowerCase() === normalized.toLowerCase()
+              s.label.trim().toLowerCase() === normalized.toLowerCase(),
           );
           if (exists) return state;
           return {
@@ -478,7 +778,7 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       // Actions - Goals
       setGoals: (goals) => set({ goals }),
-      addGoal: () => set((state) => ({ goals: [...state.goals, ''] })),
+      addGoal: () => set((state) => ({ goals: [...state.goals, ""] })),
       removeGoal: (index) =>
         set((state) => ({ goals: state.goals.filter((_, i) => i !== index) })),
       changeGoal: (index, value) =>
@@ -487,7 +787,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         })),
       setInitiatives: (initiatives) => set({ initiatives }),
       addInitiative: () =>
-        set((state) => ({ initiatives: [...state.initiatives, ''] })),
+        set((state) => ({ initiatives: [...state.initiatives, ""] })),
       removeInitiative: (index) =>
         set((state) => ({
           initiatives: state.initiatives.filter((_, i) => i !== index),
@@ -495,7 +795,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       changeInitiative: (index, value) =>
         set((state) => ({
           initiatives: state.initiatives.map((i, idx) =>
-            idx === index ? value : i
+            idx === index ? value : i,
           ),
         })),
 
@@ -503,11 +803,13 @@ export const useOnboardingStore = create<OnboardingState>()(
       setGoalWhys: (whys) => set({ goalWhys: whys }),
       updateGoalWhy: (goalIndex, why) =>
         set((state) => {
-          const existing = state.goalWhys.find((w) => w.goalIndex === goalIndex);
+          const existing = state.goalWhys.find(
+            (w) => w.goalIndex === goalIndex,
+          );
           if (existing) {
             return {
               goalWhys: state.goalWhys.map((w) =>
-                w.goalIndex === goalIndex ? { ...w, why } : w
+                w.goalIndex === goalIndex ? { ...w, why } : w,
               ),
             };
           }
@@ -518,11 +820,13 @@ export const useOnboardingStore = create<OnboardingState>()(
       setValuesScores: (scores) => set({ valuesScores: scores }),
       updateValueScore: (valueId, score) =>
         set((state) => {
-          const existing = state.valuesScores.find((s) => s.valueId === valueId);
+          const existing = state.valuesScores.find(
+            (s) => s.valueId === valueId,
+          );
           if (existing) {
             return {
               valuesScores: state.valuesScores.map((s) =>
-                s.valueId === valueId ? { ...s, score } : s
+                s.valueId === valueId ? { ...s, score } : s,
               ),
             };
           }
@@ -610,14 +914,17 @@ export const useOnboardingStore = create<OnboardingState>()(
       setBig3Enabled: (value) => set({ big3Enabled: value }),
 
       // Actions - Completion
-      setHasCompletedOnboarding: (value) => set({ hasCompletedOnboarding: value }),
+      setHasCompletedOnboarding: (value) =>
+        set({ hasCompletedOnboarding: value }),
     }),
     {
-      name: 'onboarding-storage',
+      name: "onboarding-storage",
       storage: createJSONStorage(() => AsyncStorage),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<OnboardingState> | undefined;
-        console.log('🔀 Onboarding - Loading saved data');
+        const persisted = persistedState as
+          | Partial<OnboardingState>
+          | undefined;
+        console.log("🔀 Onboarding - Loading saved data");
         const merged = {
           ...currentState,
           ...persisted,
@@ -631,10 +938,10 @@ export const useOnboardingStore = create<OnboardingState>()(
         };
       },
       onRehydrateStorage: () => () => {
-        console.log('✅ Onboarding - Hydration complete');
+        console.log("✅ Onboarding - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );
 
 // Helper to get Date from stored ISO string
@@ -642,8 +949,3 @@ export const getWakeTimeAsDate = (state: OnboardingState) =>
   new Date(state.wakeTime);
 export const getSleepTimeAsDate = (state: OnboardingState) =>
   new Date(state.sleepTime);
-
-
-
-
-

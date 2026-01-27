@@ -40,5 +40,3 @@ In TodayMatters we request and read a **core set** that covers most wellbeing us
 ## Simulator notes
 
 The simulator often has **no Health data** unless you add it in the Health app manually. On a real device, values should populate once the user has Health data recorded.
-
-

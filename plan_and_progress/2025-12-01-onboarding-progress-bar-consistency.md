@@ -43,14 +43,17 @@ Unify the progress bar styling and page numbering across all onboarding pages. T
 ### Files Modified
 
 **Constants:**
+
 - `apps/mobile/src/constants/onboarding.ts` - Added `permissions: 1`, shifted all steps, total = 12
 
 **Templates:**
+
 - `apps/mobile/src/components/templates/PermissionsTemplate.tsx` - Added onBack prop, unified header/progress styling
 - `apps/mobile/src/components/templates/SetupQuestionsTemplate.tsx` - Added onBack prop, unified header/progress styling
 - `apps/mobile/src/components/templates/DailyRhythmTemplate.tsx` - Removed marginTop from progressTrack
 
 **Pages (all with explicit back navigation):**
+
 - `apps/mobile/src/app/permissions.tsx` → back to `/signup`
 - `apps/mobile/src/app/setup-questions.tsx` → back to `/permissions`
 - `apps/mobile/src/app/daily-rhythm.tsx` → back to `/setup-questions`
@@ -67,6 +70,7 @@ Unify the progress bar styling and page numbering across all onboarding pages. T
 ### Unified Progress Bar Style
 
 All templates now use:
+
 - Header: `Step X` (blue) `of Y` (gray) with optional back button
 - Progress track: 6px height, #E4E8F0 background, #2563EB fill
 - No extra margins between header and progress bar
@@ -74,12 +78,3 @@ All templates now use:
 ## Follow-ups
 
 - None identified
-
-
-
-
-
-
-
-
-

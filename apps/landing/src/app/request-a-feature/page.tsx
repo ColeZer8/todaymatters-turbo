@@ -10,7 +10,8 @@ export default function RequestAFeaturePage() {
     >
       <div className="rounded-3xl border border-gray-100 bg-[#fafafa] p-6">
         <p className="text-sm text-[#52525b] leading-relaxed">
-          We’re keeping this simple: send us what you want, why it matters, and what “done” looks like.
+          We’re keeping this simple: send us what you want, why it matters, and
+          what “done” looks like.
         </p>
         <Link
           href="/contact"
@@ -22,5 +23,3 @@ export default function RequestAFeaturePage() {
     </PageLayout>
   );
 }
-
-

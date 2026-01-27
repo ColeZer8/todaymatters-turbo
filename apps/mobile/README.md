@@ -23,27 +23,32 @@ A cross-platform mobile productivity app built with Expo, React Native, Supabase
 ### Installation
 
 1. **Install dependencies**:
+
    ```bash
    pnpm install
    ```
 
 2. **Set up environment variables**:
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Then edit `.env` and add your Supabase credentials:
+
    ```env
    EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
    ```
 
 3. **Start the development server**:
+
    ```bash
    pnpm dev -- --filter=mobile
    ```
 
    Or run directly:
+
    ```bash
    pnpm --filter mobile start
    ```
@@ -78,6 +83,7 @@ apps/mobile/
 ### Authentication
 
 The app uses Supabase Auth with support for:
+
 - Email/Password authentication
 - Magic Link (OTP) authentication
 - OAuth providers (Google, Apple, GitHub, etc.)
@@ -85,12 +91,13 @@ The app uses Supabase Auth with support for:
 - Deep linking for OAuth callbacks
 
 **Usage**:
+
 ```tsx
-import { useAuth } from '@/hooks';
+import { useAuth } from "@/hooks";
 
 function MyComponent() {
   const { user, isAuthenticated, signIn, signOut } = useAuth();
-  
+
   // Use auth state and actions
 }
 ```
@@ -98,11 +105,13 @@ function MyComponent() {
 ### State Management
 
 Zustand stores are located in `src/stores/`:
+
 - `auth-store.ts`: Authentication state and actions
 
 **Usage**:
+
 ```tsx
-import { useAuthStore } from '@/stores';
+import { useAuthStore } from "@/stores";
 
 const user = useAuthStore((state) => state.user);
 const signIn = useAuthStore((state) => state.signIn);
@@ -113,13 +122,13 @@ const signIn = useAuthStore((state) => state.signIn);
 Use the Supabase client for database operations:
 
 ```tsx
-import { supabase } from '@/lib/supabase';
+import { supabase } from "@/lib/supabase";
 
 // Fetch data
 const { data, error } = await supabase
-  .from('tasks')
-  .select('*')
-  .eq('user_id', userId);
+  .from("tasks")
+  .select("*")
+  .eq("user_id", userId);
 ```
 
 ## Development
@@ -156,17 +165,20 @@ pnpm --filter mobile deploy
 ```
 
 This runs:
+
 1. `expo export -p web` - Export web build
 2. `eas-cli deploy` - Deploy to app stores
 
 ### Environment Variables
 
 For production builds, set environment variables in EAS:
+
 ```bash
 eas build:configure
 ```
 
 Or use EAS Secrets:
+
 ```bash
 eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value your-url
 ```
@@ -176,6 +188,7 @@ eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value your-u
 ### Metro Bundler Issues
 
 Clear cache and restart:
+
 ```bash
 pnpm --filter mobile start --clear
 ```
@@ -183,6 +196,7 @@ pnpm --filter mobile start --clear
 ### Type Errors
 
 Ensure TypeScript can resolve path aliases. The `@/` alias is configured in:
+
 - `tsconfig.json` (for TypeScript)
 - `babel.config.js` (for Metro bundler)
 

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
-import { useAuthStore, useOnboardingStore } from '@/stores';
+import { useMemo } from "react";
+import { deriveFullNameFromEmail, getFirstName } from "@/lib/user-name";
+import { useAuthStore, useOnboardingStore } from "@/stores";
 
 /**
  * Matches the Home screen greeting logic:
@@ -13,8 +13,10 @@ export function useUserFirstName(): string {
 
   return useMemo(() => {
     const derivedFromEmail = deriveFullNameFromEmail(user?.email);
-    return (getFirstName(fullName) ?? getFirstName(derivedFromEmail) ?? 'there').trim();
+    return (
+      getFirstName(fullName) ??
+      getFirstName(derivedFromEmail) ??
+      "there"
+    ).trim();
   }, [fullName, user?.email]);
 }
-
-

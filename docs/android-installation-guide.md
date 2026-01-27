@@ -5,6 +5,7 @@ This guide walks you through building and installing the Today Matters app on an
 ## Prerequisites
 
 1. **EAS CLI installed and authenticated:**
+
    ```bash
    npm install -g eas-cli
    eas login
@@ -15,6 +16,26 @@ This guide walks you through building and installing the Today Matters app on an
 ## ⚠️ Pre-Flight Checklist (CRITICAL)
 
 **Before building, you MUST configure environment variables as EAS secrets.** The app needs these to connect to Supabase and other services.
+
+### Version Code (Play Store Requirement)
+
+**Every Google Play upload requires a new Android `versionCode`.** If you try to upload the same version code twice, Google Play will reject the AAB.
+
+- **Source of truth:** `apps/mobile/android/app/build.gradle`
+- **Why:** When the native `android/` directory exists, EAS Build **ignores** `app.config.js` for `versionCode`.
+
+**Before each Play Store upload:**
+
+1. Open `apps/mobile/android/app/build.gradle`
+2. Increment `versionCode` by 1 (e.g., `2` → `3`)
+3. Keep `versionName` in sync if you want visible app version changes
+
+```gradle
+defaultConfig {
+    versionCode 3
+    versionName "1.0.0"
+}
+```
 
 ### Required Environment Variables
 
@@ -86,6 +107,7 @@ This creates an APK file that can be directly installed on the Android device.
 The `preview` profile defaults to `APP_ENV=development`. If you want to use production Supabase/API endpoints, you have two options:
 
 **Option A: Set APP_ENV as EAS secret (recommended)**
+
 ```bash
 eas secret:create --scope project --name APP_ENV --value "production"
 ```
@@ -108,14 +130,17 @@ Or for a production build:
 eas build --platform android --profile production
 ```
 
-**Note:** 
+**Note:**
+
 - The `preview` profile creates an APK suitable for internal testing
-- The `production` profile creates an AAB (Android App Bundle) for Google Play Store by default, but you can configure it to build APK in `eas.json` if needed
+- The `production` profile creates an **AAB (Android App Bundle)** for Google Play Store by default
+- APK vs AAB is controlled in `apps/mobile/eas.json` (`production.android.buildType = "app-bundle"`)
 - Both profiles create standalone builds that work without a dev server
 
 ### Step 2: Download the APK
 
 Once the build completes:
+
 1. EAS will provide a download URL
 2. Download the APK file to your computer
 3. Share it with your client via:
@@ -175,6 +200,7 @@ Or share the build URL directly from the EAS dashboard.
 ### Step 3: Client Installation
 
 Your client will:
+
 1. Receive a link (via email or message)
 2. Open the link on their Android device
 3. Follow the on-screen instructions to install
@@ -184,6 +210,7 @@ Your client will:
 **Don't want to wait 120 minutes for each update?** See [`docs/fast-iteration-testing.md`](./fast-iteration-testing.md) for strategies to update the app in seconds instead of hours.
 
 Quick summary:
+
 - **Development build + dev server**: Build once (~20-30 min), then get instant updates via tunnel
 - **EAS Update**: Build once (120 min), then push updates in ~30 seconds
 - **Local network**: If client is nearby, use WiFi for fastest connection
@@ -217,6 +244,7 @@ npx expo start --tunnel
 ### Step 3: Install on Device
 
 The development build includes the Expo dev client:
+
 1. Install the APK as described in Option 1
 2. The app will automatically connect to your dev server via the tunnel
 3. Any code changes you make will hot-reload in the client's app
@@ -226,12 +254,14 @@ The development build includes the Expo dev client:
 ## Troubleshooting
 
 ### Build Fails
+
 - Ensure you're logged into EAS: `eas login`
 - Check that your EAS project is properly configured
 - **Verify all required environment variables are set as EAS secrets** (see Pre-Flight Checklist above)
 - Check build logs: `eas build:view [BUILD_ID]`
 
 ### App Crashes or Can't Connect to Services
+
 - **Most common issue:** Missing or incorrect environment variables
   - Verify secrets are set: `eas secret:list`
   - Check that Supabase URL and keys are correct
@@ -239,6 +269,7 @@ The development build includes the Expo dev client:
 - The app will fail silently if Supabase connection fails - check device logs if possible
 
 ### Client Can't Install APK
+
 - **"App not installed" error:** The device may not allow unknown sources. Re-check security settings.
 - **"Parse error" or "Corrupted file":** Re-download the APK file
 - **"App not compatible":** Check that the device meets minimum Android version (API 26+ based on your config)
@@ -248,11 +279,13 @@ The development build includes the Expo dev client:
 **Error message:** `INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package com.todaymatters.mobile signatures do not match`
 
 **What it means:**
+
 - There's already an app installed with the same package name (`com.todaymatters.mobile`)
 - But it was signed with a different key than the one you're trying to install
 - Android won't allow installing over an app with a different signature (security feature)
 
 **Common causes:**
+
 - Previously installed a development build, now trying to install a preview/production build (or vice versa)
 - Installed a build signed with EAS credentials, now trying to install one signed differently
 - Installed via `expo run:android` (local build), now trying to install EAS build
@@ -260,6 +293,7 @@ The development build includes the Expo dev client:
 **How to fix:**
 
 **On Android Simulator/Emulator:**
+
 ```bash
 # Uninstall the existing app first
 adb uninstall com.todaymatters.mobile
@@ -269,22 +303,26 @@ adb install path/to/your.apk
 ```
 
 Or manually:
+
 1. Open the app drawer on the simulator
 2. Long-press the app icon
 3. Drag to "Uninstall" or tap the uninstall option
 4. Then install the new APK
 
 **On Physical Device:**
+
 1. Go to **Settings** → **Apps** → Find "Today Matters" (or "mobile")
 2. Tap on it → **Uninstall**
 3. Then install the new APK
 
 **Will this affect your client's device?**
+
 - ✅ **No, if the device doesn't have the app installed yet** - First install will work fine
 - ⚠️ **Yes, if they already have a different version** - They'll need to uninstall first, then install the new one
 - 💡 **Tip:** Tell your client to uninstall any previous test versions before installing the new build
 
 ### App Crashes After Installation
+
 - Check device logs: `adb logcat` (if you have Android SDK installed)
 - Verify the app has necessary permissions
 - Ensure the device meets minimum requirements (Android 8.0+ / API 26+)

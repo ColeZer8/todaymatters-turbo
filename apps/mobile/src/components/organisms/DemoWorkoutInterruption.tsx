@@ -1,17 +1,28 @@
-import { View, Text, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ban, Clock, Dumbbell, ChevronRight, MapPin, Navigation } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  Ban,
+  Clock,
+  Dumbbell,
+  ChevronRight,
+  MapPin,
+  Navigation,
+} from "lucide-react-native";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoWorkoutInterruption - Social media interruption alert for demo mode
- * 
+ *
  * Shows a "no time for social media" alert when user should be preparing
  * for their workout. Displays a stop icon, countdown timer, and upcoming event preview.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: string }) => {
+export const DemoWorkoutInterruption = ({
+  userName = "Paul",
+}: {
+  userName?: string;
+}) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -33,7 +44,8 @@ export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: stri
         {/* Message - tightened spacing */}
         <View className="mb-3">
           <Text className="text-[17.5px] leading-[29px] font-bold text-[#4A5568]">
-            There's no time for Instagram right now — you're supposed to be leaving for your workout.
+            There's no time for Instagram right now — you're supposed to be
+            leaving for your workout.
           </Text>
         </View>
 
@@ -43,11 +55,11 @@ export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: stri
         {/* Alert Card - compact */}
         <View className="items-center mb-4">
           {/* Stop Icon - smaller */}
-          <View 
+          <View
             className="h-16 w-16 items-center justify-center rounded-full bg-[#FEE2E2] mb-3"
             style={{
               borderWidth: 3,
-              borderColor: '#EF4444',
+              borderColor: "#EF4444",
             }}
           >
             <Icon icon={Ban} size={32} color="#EF4444" />
@@ -85,7 +97,7 @@ export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: stri
         {/* Upcoming Event Card - compact */}
         <Pressable
           className="flex-row items-center justify-between bg-white rounded-xl px-3 py-3 border border-[#E5E7EB]"
-          style={({ pressed }) => ({ 
+          style={({ pressed }) => ({
             opacity: pressed ? 0.7 : 1,
           })}
         >
@@ -113,26 +125,41 @@ export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: stri
             <View className="h-20 bg-[#E8F4EA] relative">
               {/* Map grid lines for visual effect */}
               <View className="absolute inset-0 opacity-30">
-                <View className="absolute top-0 left-0 right-0 h-[1px] bg-[#94D3A2]" style={{ top: '33%' }} />
-                <View className="absolute top-0 left-0 right-0 h-[1px] bg-[#94D3A2]" style={{ top: '66%' }} />
-                <View className="absolute top-0 bottom-0 w-[1px] bg-[#94D3A2]" style={{ left: '33%' }} />
-                <View className="absolute top-0 bottom-0 w-[1px] bg-[#94D3A2]" style={{ left: '66%' }} />
+                <View
+                  className="absolute top-0 left-0 right-0 h-[1px] bg-[#94D3A2]"
+                  style={{ top: "33%" }}
+                />
+                <View
+                  className="absolute top-0 left-0 right-0 h-[1px] bg-[#94D3A2]"
+                  style={{ top: "66%" }}
+                />
+                <View
+                  className="absolute top-0 bottom-0 w-[1px] bg-[#94D3A2]"
+                  style={{ left: "33%" }}
+                />
+                <View
+                  className="absolute top-0 bottom-0 w-[1px] bg-[#94D3A2]"
+                  style={{ left: "66%" }}
+                />
               </View>
-              
+
               {/* Route line */}
               <View className="absolute top-[60%] left-[15%] right-[20%] h-[3px] bg-[#2563EB] rounded-full" />
-              
+
               {/* Start point (current location) */}
-              <View className="absolute" style={{ top: '55%', left: '12%' }}>
+              <View className="absolute" style={{ top: "55%", left: "12%" }}>
                 <View className="h-3 w-3 rounded-full bg-[#2563EB] border-2 border-white" />
               </View>
-              
+
               {/* Destination marker */}
-              <View className="absolute items-center" style={{ top: '35%', right: '15%' }}>
+              <View
+                className="absolute items-center"
+                style={{ top: "35%", right: "15%" }}
+              >
                 <Icon icon={MapPin} size={22} color="#EF4444" fill="#EF4444" />
               </View>
             </View>
-            
+
             {/* Travel Info Bar - compact */}
             <View className="bg-white px-3 py-2 flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
@@ -152,9 +179,7 @@ export const DemoWorkoutInterruption = ({ userName = 'Paul' }: { userName?: stri
                 <Text className="text-[16px] font-bold text-[#16A34A]">
                   8 min
                 </Text>
-                <Text className="text-[10px] text-[#6B7280]">
-                  2.4 mi
-                </Text>
+                <Text className="text-[10px] text-[#6B7280]">2.4 mi</Text>
               </View>
             </View>
           </View>

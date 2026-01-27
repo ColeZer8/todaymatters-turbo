@@ -5,5 +5,4 @@
  * For general app data, use AsyncStorage (already used by Supabase).
  */
 
-export * from '@react-native-async-storage/async-storage';
-
+export * from "@react-native-async-storage/async-storage";

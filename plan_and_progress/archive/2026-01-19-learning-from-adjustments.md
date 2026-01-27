@@ -8,7 +8,8 @@
 ## Objective
 
 Teach the app to learn from user recategorizations in two ways:
-1) app-level classification overrides, and 2) stronger pattern influence for corrected events.
+
+1. app-level classification overrides, and 2) stronger pattern influence for corrected events.
 
 ## Plan
 

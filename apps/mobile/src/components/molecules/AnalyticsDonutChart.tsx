@@ -1,6 +1,6 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
+import { useMemo, useRef, useEffect, useState } from "react";
+import { Text, View } from "react-native";
+import Svg, { Circle, G } from "react-native-svg";
 
 interface DonutSlice {
   label: string;
@@ -17,7 +17,14 @@ interface AnalyticsDonutChartProps {
 }
 
 // Known analytics labels for stable ordering when animating
-const ANALYTICS_LABELS = ['Free time', 'Faith', 'Family', 'Work', 'Health', 'Other'];
+const ANALYTICS_LABELS = [
+  "Free time",
+  "Faith",
+  "Family",
+  "Work",
+  "Health",
+  "Other",
+];
 
 const ANIMATION_DURATION = 500;
 const ANIMATION_FPS = 60;
@@ -44,8 +51,12 @@ export const AnalyticsDonutChart = ({
 
   // For analytics mode: animate between states
   // For generic mode: just render slices directly (no animation needed for IdealDay)
-  const [animatedSlices, setAnimatedSlices] = useState<Array<{ label: string; percentage: number; color: string }>>([]);
-  const prevSlicesRef = useRef<Array<{ label: string; percentage: number; color: string }>>([]);
+  const [animatedSlices, setAnimatedSlices] = useState<
+    Array<{ label: string; percentage: number; color: string }>
+  >([]);
+  const prevSlicesRef = useRef<
+    Array<{ label: string; percentage: number; color: string }>
+  >([]);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
 
   // Calculate target slices
@@ -59,7 +70,9 @@ export const AnalyticsDonutChart = ({
           percentage: slice ? slice.value / total : 0,
           color: slice?.color || getDefaultColor(lbl),
         };
-      }).filter((s) => s.percentage > 0 || data.some((d) => d.label === s.label));
+      }).filter(
+        (s) => s.percentage > 0 || data.some((d) => d.label === s.label),
+      );
     } else {
       // For generic: use data order directly
       return data.map((slice) => ({
@@ -83,12 +96,16 @@ export const AnalyticsDonutChart = ({
       clearInterval(animationRef.current);
     }
 
-    const startSlices = prevSlicesRef.current.length > 0 ? prevSlicesRef.current : targetSlices;
+    const startSlices =
+      prevSlicesRef.current.length > 0 ? prevSlicesRef.current : targetSlices;
     const startTime = Date.now();
     const frameInterval = 1000 / ANIMATION_FPS;
 
     // Build a map of all labels we need to animate
-    const allLabels = new Set([...startSlices.map((s) => s.label), ...targetSlices.map((s) => s.label)]);
+    const allLabels = new Set([
+      ...startSlices.map((s) => s.label),
+      ...targetSlices.map((s) => s.label),
+    ]);
 
     animationRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -179,7 +196,7 @@ export const AnalyticsDonutChart = ({
             <Text
               allowFontScaling={false}
               className="uppercase text-[#9CA3AF]"
-              style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1 }}
+              style={{ fontSize: 11, fontWeight: "700", letterSpacing: 1 }}
             >
               {label}
             </Text>
@@ -193,12 +210,12 @@ export const AnalyticsDonutChart = ({
 // Default colors for analytics labels
 function getDefaultColor(label: string): string {
   const colors: Record<string, string> = {
-    'Free time': '#14B8A6',
-    'Faith': '#F79A3B',
-    'Family': '#5F63F5',
-    'Work': '#2F7BFF',
-    'Health': '#1F9C66',
-    'Other': '#9CA3AF',
+    "Free time": "#14B8A6",
+    Faith: "#F79A3B",
+    Family: "#5F63F5",
+    Work: "#2F7BFF",
+    Health: "#1F9C66",
+    Other: "#9CA3AF",
   };
-  return colors[label] || '#9CA3AF';
+  return colors[label] || "#9CA3AF";
 }

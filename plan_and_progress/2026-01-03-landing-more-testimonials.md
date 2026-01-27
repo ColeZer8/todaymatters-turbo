@@ -34,4 +34,3 @@ Reduce visible repetition in the “Crafted with Care” testimonials marquee by
 ## Follow-ups
 
 - None.
-

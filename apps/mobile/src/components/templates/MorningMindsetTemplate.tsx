@@ -1,10 +1,13 @@
-import { ArrowRight } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { IconListCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { ArrowRight } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+import { View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { IconListCard } from "@/components/molecules";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface MorningMindsetOption {
   id: string;
@@ -39,7 +42,13 @@ export const MorningMindsetTemplate = ({
       title="Morning Mindset"
       subtitle="How do you want your morning to feel?"
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="mt-5 gap-3">
         {options.map((option) => (

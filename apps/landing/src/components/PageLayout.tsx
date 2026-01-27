@@ -10,7 +10,11 @@ interface PageLayoutProps {
   children: ReactNode;
 }
 
-export const PageLayout = ({ title, description, children }: PageLayoutProps) => {
+export const PageLayout = ({
+  title,
+  description,
+  children,
+}: PageLayoutProps) => {
   return (
     <main className="bg-white">
       <Navbar />
@@ -40,5 +44,3 @@ export const PageLayout = ({ title, description, children }: PageLayoutProps) =>
     </main>
   );
 };
-
-

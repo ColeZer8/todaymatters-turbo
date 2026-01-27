@@ -1,20 +1,20 @@
-import { Platform } from 'react-native';
-import { requireOptionalNativeModule } from 'expo-modules-core';
-import { supabase } from '@/lib/supabase/client';
-import type { Json } from '@/lib/supabase/database.types';
-import { enqueueLocationSamplesForUserAsync } from './queue';
-import { IOS_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-import type { IosLocationSample } from './types';
+import { Platform } from "react-native";
+import { requireOptionalNativeModule } from "expo-modules-core";
+import { supabase } from "@/lib/supabase/client";
+import type { Json } from "@/lib/supabase/database.types";
+import { enqueueLocationSamplesForUserAsync } from "./queue";
+import { IOS_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+import type { IosLocationSample } from "./types";
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
 
 function isBoolean(value: unknown): value is boolean {
-  return typeof value === 'boolean';
+  return typeof value === "boolean";
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function normalizeNonNegative(value: unknown): number | null {
@@ -53,7 +53,9 @@ type RawLocationObject = {
   mocked?: boolean;
 };
 
-function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_key'> | null {
+function toSample(
+  location: RawLocationObject,
+): Omit<IosLocationSample, "dedupe_key"> | null {
   if (!isFiniteNumber(location.timestamp)) return null;
   if (!isFiniteNumber(location.coords.latitude)) return null;
   if (!isFiniteNumber(location.coords.longitude)) return null;
@@ -69,7 +71,9 @@ function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_
   const coords = location.coords;
 
   // `mocked` is optional on some platforms/builds; keep it nullable.
-  const is_mocked = isBoolean((location as { mocked?: unknown }).mocked) ? (location.mocked ?? null) : null;
+  const is_mocked = isBoolean((location as { mocked?: unknown }).mocked)
+    ? (location.mocked ?? null)
+    : null;
 
   return {
     recorded_at,
@@ -80,7 +84,7 @@ function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_
     speed_mps: normalizeNonNegative(coords.speed),
     heading_deg: normalizeHeadingDeg(coords.heading),
     is_mocked,
-    source: 'background',
+    source: "background",
     raw: normalizeRaw({
       // Only store what’s useful for debugging/analytics; avoid very large payloads.
       timestamp: location.timestamp,
@@ -90,44 +94,59 @@ function toSample(location: RawLocationObject): Omit<IosLocationSample, 'dedupe_
 }
 
 // IMPORTANT: Task definitions must live at module scope (per Expo docs).
-if (Platform.OS === 'ios' && requireOptionalNativeModule('ExpoTaskManager')) {
+if (Platform.OS === "ios" && requireOptionalNativeModule("ExpoTaskManager")) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
-  TaskManager.defineTask(IOS_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
-    try {
-      if (error) {
-        if (__DEV__) {
-          const now = Date.now();
-          if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
-            lastTaskErrorLogAtMs = now;
-            console.warn('📍 iOS background location task warning:', error);
+  const TaskManager =
+    require("expo-task-manager") as typeof import("expo-task-manager");
+  TaskManager.defineTask(
+    IOS_BACKGROUND_LOCATION_TASK_NAME,
+    async ({ data, error }) => {
+      try {
+        if (error) {
+          if (__DEV__) {
+            const now = Date.now();
+            if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
+              lastTaskErrorLogAtMs = now;
+              console.warn("📍 iOS background location task warning:", error);
+            }
           }
+          return;
         }
-        return;
+
+        const locations =
+          (
+            data as unknown as
+              | { locations?: RawLocationObject[] }
+              | null
+              | undefined
+          )?.locations ?? [];
+        if (locations.length === 0) return;
+
+        // Associate samples to the authenticated user.
+        // Background tasks may run without a session (e.g., after sign-out) — in that case we drop samples.
+        const sessionResult = await supabase.auth.getSession();
+        const userId = sessionResult.data.session?.user?.id ?? null;
+        if (!userId) return;
+
+        const samples = locations
+          .map(toSample)
+          .filter((s): s is Omit<IosLocationSample, "dedupe_key"> => s != null);
+        if (samples.length === 0) return;
+        const { pendingCount } = await enqueueLocationSamplesForUserAsync(
+          userId,
+          samples,
+        );
+
+        if (__DEV__) {
+          console.log(
+            `📍 queued ${samples.length} iOS location samples (pending=${pendingCount})`,
+          );
+        }
+      } catch (e) {
+        if (__DEV__) {
+          console.error("📍 iOS background location task failed:", e);
+        }
       }
-
-      const locations = (data as unknown as { locations?: RawLocationObject[] } | null | undefined)?.locations ?? [];
-      if (locations.length === 0) return;
-
-      // Associate samples to the authenticated user.
-      // Background tasks may run without a session (e.g., after sign-out) — in that case we drop samples.
-      const sessionResult = await supabase.auth.getSession();
-      const userId = sessionResult.data.session?.user?.id ?? null;
-      if (!userId) return;
-
-      const samples = locations.map(toSample).filter((s): s is Omit<IosLocationSample, 'dedupe_key'> => s != null);
-      if (samples.length === 0) return;
-      const { pendingCount } = await enqueueLocationSamplesForUserAsync(userId, samples);
-
-      if (__DEV__) {
-        console.log(`📍 queued ${samples.length} iOS location samples (pending=${pendingCount})`);
-      }
-    } catch (e) {
-      if (__DEV__) {
-        console.error('📍 iOS background location task failed:', e);
-      }
-    }
-  });
+    },
+  );
 }
-
-

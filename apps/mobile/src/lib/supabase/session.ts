@@ -1,20 +1,20 @@
 /**
  * Session Management Utilities
- * 
+ *
  * Provides functions for manual token refresh and session validation.
  * Use these utilities when you need to ensure a valid session before API calls.
  */
 
-import { supabase } from './client';
-import type { Session } from '@supabase/supabase-js';
+import { supabase } from "./client";
+import type { Session } from "@supabase/supabase-js";
 
 /**
  * Error constants for refresh failures
  */
 export const REFRESH_ERRORS = {
-  'refresh_token_not_found': 'Re-login required',
-  'invalid_refresh_token': 'Re-login required',
-  'refresh_token_already_used': 'Session expired',
+  refresh_token_not_found: "Re-login required",
+  invalid_refresh_token: "Re-login required",
+  refresh_token_already_used: "Session expired",
 } as const;
 
 /**
@@ -23,7 +23,10 @@ export const REFRESH_ERRORS = {
  * @param thresholdMinutes - Minutes before expiry to consider "soon" (default: 5)
  * @returns true if token expires within threshold
  */
-export function isTokenExpiringSoon(session: Session, thresholdMinutes: number = 5): boolean {
+export function isTokenExpiringSoon(
+  session: Session,
+  thresholdMinutes: number = 5,
+): boolean {
   const expiresAt = session.expires_at;
   if (!expiresAt) {
     return false;
@@ -54,7 +57,7 @@ async function handleRefreshError(error: Error): Promise<void> {
 
   // Unknown error - log and don't sign out (might be network issue)
   if (__DEV__) {
-    console.error('🔄 Unknown refresh error:', message, error);
+    console.error("🔄 Unknown refresh error:", message, error);
   }
 }
 
@@ -72,12 +75,17 @@ export async function refreshSession(): Promise<Session | null> {
     }
 
     if (__DEV__) {
-      console.log('🔄 Session refreshed successfully, new expiry:', data.session?.expires_at);
+      console.log(
+        "🔄 Session refreshed successfully, new expiry:",
+        data.session?.expires_at,
+      );
     }
 
     return data.session;
   } catch (error) {
-    await handleRefreshError(error instanceof Error ? error : new Error(String(error)));
+    await handleRefreshError(
+      error instanceof Error ? error : new Error(String(error)),
+    );
     return null;
   }
 }
@@ -88,11 +96,14 @@ export async function refreshSession(): Promise<Session | null> {
  * @returns A valid session, or null if no session exists
  */
 export async function getValidSession(): Promise<Session | null> {
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
 
   if (error || !session) {
     if (__DEV__) {
-      console.log('🔍 No valid session found');
+      console.log("🔍 No valid session found");
     }
     return null;
   }
@@ -100,7 +111,7 @@ export async function getValidSession(): Promise<Session | null> {
   // Check if token is about to expire (within 5 minutes)
   if (isTokenExpiringSoon(session, 5)) {
     if (__DEV__) {
-      console.log('🔄 Token expiring soon, refreshing...');
+      console.log("🔄 Token expiring soon, refreshing...");
     }
     const refreshedSession = await refreshSession();
     return refreshedSession || session; // Return original session if refresh failed
@@ -108,4 +119,3 @@ export async function getValidSession(): Promise<Session | null> {
 
   return session;
 }
-

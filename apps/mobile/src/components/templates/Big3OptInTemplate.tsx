@@ -1,7 +1,7 @@
-import { Text, View, Pressable } from 'react-native';
-import { SetupStepLayout } from '@/components/organisms';
-import { GradientButton } from '@/components/atoms';
-import { ListChecks, Sparkles, Target } from 'lucide-react-native';
+import { Text, View, Pressable } from "react-native";
+import { SetupStepLayout } from "@/components/organisms";
+import { GradientButton } from "@/components/atoms";
+import { ListChecks, Sparkles, Target } from "lucide-react-native";
 
 interface Big3OptInTemplateProps {
   step?: number;
@@ -28,10 +28,7 @@ export const Big3OptInTemplate = ({
       footer={
         <View className="gap-3">
           <GradientButton label="Yes, enable Big 3" onPress={onEnable} />
-          <Pressable
-            onPress={onSkip}
-            className="items-center py-3"
-          >
+          <Pressable onPress={onSkip} className="items-center py-3">
             <Text className="text-base text-gray-500">No thanks, skip</Text>
           </Pressable>
         </View>
@@ -59,9 +56,12 @@ export const Big3OptInTemplate = ({
               <ListChecks size={20} color="#16A34A" />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-medium text-gray-900">Stay focused</Text>
+              <Text className="text-base font-medium text-gray-900">
+                Stay focused
+              </Text>
               <Text className="text-sm leading-5 text-gray-500">
-                Know exactly what to work on instead of reacting to whatever comes up.
+                Know exactly what to work on instead of reacting to whatever
+                comes up.
               </Text>
             </View>
           </View>
@@ -71,9 +71,12 @@ export const Big3OptInTemplate = ({
               <Sparkles size={20} color="#7C3AED" />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-medium text-gray-900">See your progress</Text>
+              <Text className="text-base font-medium text-gray-900">
+                See your progress
+              </Text>
               <Text className="text-sm leading-5 text-gray-500">
-                Track time spent on each priority and celebrate when all 3 are done.
+                Track time spent on each priority and celebrate when all 3 are
+                done.
               </Text>
             </View>
           </View>

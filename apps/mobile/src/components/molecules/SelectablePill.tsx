@@ -1,6 +1,6 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from "react-native";
 
-type PillTone = 'primary' | 'danger';
+type PillTone = "primary" | "danger";
 
 interface SelectablePillProps {
   label: string;
@@ -9,13 +9,12 @@ interface SelectablePillProps {
   tone?: PillTone;
 }
 
-export const SelectablePill = ({ 
-  label, 
-  selected = false, 
-  onPress, 
-  tone = 'primary' 
+export const SelectablePill = ({
+  label,
+  selected = false,
+  onPress,
+  tone = "primary",
 }: SelectablePillProps) => {
-  
   // Base classes
   const baseContainer = "rounded-full border px-6 py-3 self-start shadow-sm";
   const baseText = "text-base font-medium";
@@ -30,9 +29,11 @@ export const SelectablePill = ({
   const selectedText = "text-white font-bold";
 
   // Determine active classes
-  const isPrimary = tone === 'primary';
-  const activeContainer = isPrimary ? selectedPrimaryContainer : selectedDangerContainer;
-  
+  const isPrimary = tone === "primary";
+  const activeContainer = isPrimary
+    ? selectedPrimaryContainer
+    : selectedDangerContainer;
+
   return (
     <Pressable
       onPress={onPress}
@@ -42,10 +43,8 @@ export const SelectablePill = ({
         selected ? activeContainer : unselectedContainer
       } active:opacity-80`}
     >
-      <Text 
-        className={`${baseText} ${
-          selected ? selectedText : unselectedText
-        }`}
+      <Text
+        className={`${baseText} ${selected ? selectedText : unselectedText}`}
       >
         {label}
       </Text>

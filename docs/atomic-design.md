@@ -4,25 +4,25 @@ We organize all UI work using Brad Frost’s [Atomic Design](https://bradfrost.c
 
 ## Layer Overview
 
-| Layer | Definition | Typical Examples | Source of Truth |
-| --- | --- | --- | --- |
-| **Atoms** | Single-purpose, styling-focused primitives with zero domain logic or state. | `Button`, `Text`, `Icon`, `Spacer` | `apps/mobile/src/components/atoms/*` |
-| **Molecules** | Small clusters of atoms that work together to express a simple idea. | `SearchBar`, `LabeledInput`, `AvatarWithText` | `apps/mobile/src/components/molecules/*` |
-| **Organisms** | Feature-level sections composed of molecules/atoms plus lightweight hooks. | `Header`, `TaskList`, `Hero`, `SettingsCard` | `apps/mobile/src/components/organisms/*` |
-| **Templates** | Layout scaffolding that arranges organisms, leaving slot props for real data. | `DashboardLayout`, `OnboardingShell`, `AuthFlow` | `apps/mobile/src/components/templates/*` |
-| **Pages (Expo Router screens)** | Routed experiences that own behavior: data fetching, global state, business logic, navigation, and URL params. | `src/app/index.tsx`, `src/app/(auth)/login.tsx` | `apps/mobile/src/app/**/*` |
+| Layer                           | Definition                                                                                                     | Typical Examples                                 | Source of Truth                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| **Atoms**                       | Single-purpose, styling-focused primitives with zero domain logic or state.                                    | `Button`, `Text`, `Icon`, `Spacer`               | `apps/mobile/src/components/atoms/*`     |
+| **Molecules**                   | Small clusters of atoms that work together to express a simple idea.                                           | `SearchBar`, `LabeledInput`, `AvatarWithText`    | `apps/mobile/src/components/molecules/*` |
+| **Organisms**                   | Feature-level sections composed of molecules/atoms plus lightweight hooks.                                     | `Header`, `TaskList`, `Hero`, `SettingsCard`     | `apps/mobile/src/components/organisms/*` |
+| **Templates**                   | Layout scaffolding that arranges organisms, leaving slot props for real data.                                  | `DashboardLayout`, `OnboardingShell`, `AuthFlow` | `apps/mobile/src/components/templates/*` |
+| **Pages (Expo Router screens)** | Routed experiences that own behavior: data fetching, global state, business logic, navigation, and URL params. | `src/app/index.tsx`, `src/app/(auth)/login.tsx`  | `apps/mobile/src/app/**/*`               |
 
 Pages may import templates/organisms/molecules/atoms, but lower layers can never import upward. Templates can rely on organisms/molecules/atoms but never pages. Do **not** create alternate page directories (e.g., `src/pages` or `components/pages`); Expo Router’s `apps/mobile/src/app/**` tree is the authoritative place for screens even though they are part of the atomic hierarchy.
 
 ## Data & Side-Effect Boundaries
 
-| Layer | Allowed Data Behaviors |
-| --- | --- |
-| **Atoms** | Receive props only; no hooks besides styling helpers; never touch context, storage, or network. |
-| **Molecules** | Still purely presentational; can hold local UI state (`useState`) that doesn’t talk to services. |
-| **Organisms** | Accept data via props; may use hooks for UI-only behavior (e.g., `useSafeAreaInsets`) but never fetch, mutate global stores, or depend on navigation. |
-| **Templates** | Compose organisms and may wire global selectors or navigation helpers, but cannot fetch, mutate, or own business logic. |
-| **Pages** | The only layer allowed to fetch data, make API calls, use global state, talk to services, dictate navigation, read URL params, and own screen-level events. Use colocated hooks/services as needed but keep side effects here. |
+| Layer         | Allowed Data Behaviors                                                                                                                                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Atoms**     | Receive props only; no hooks besides styling helpers; never touch context, storage, or network.                                                                                                                                |
+| **Molecules** | Still purely presentational; can hold local UI state (`useState`) that doesn’t talk to services.                                                                                                                               |
+| **Organisms** | Accept data via props; may use hooks for UI-only behavior (e.g., `useSafeAreaInsets`) but never fetch, mutate global stores, or depend on navigation.                                                                          |
+| **Templates** | Compose organisms and may wire global selectors or navigation helpers, but cannot fetch, mutate, or own business logic.                                                                                                        |
+| **Pages**     | The only layer allowed to fetch data, make API calls, use global state, talk to services, dictate navigation, read URL params, and own screen-level events. Use colocated hooks/services as needed but keep side effects here. |
 
 If a component needs data access that violates its layer, promote it instead of adding “just this once” fetch logic.
 
@@ -44,6 +44,7 @@ If a component needs data access that violates its layer, promote it instead of 
 
    ```md
    ### Atomic Layer
+
    - Layer: <Atom | Molecule | Organism | Template | Page>
    - Reason: <Why this abstraction fits the chosen layer>
    ```

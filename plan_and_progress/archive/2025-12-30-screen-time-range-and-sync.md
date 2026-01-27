@@ -43,5 +43,3 @@ Make the Screen Time page feel like a first-class Today Matters screen:
 ## Notes
 
 - iOS changes touch the native module + report extension; if you’re running an older dev client you may need to rebuild the iOS app (`pnpm --filter mobile ios`) for the new range APIs to take effect.
-
-

@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, Text, TextInput, View, type ViewStyle } from 'react-native';
-import { GripVertical, Minus, Plus } from 'lucide-react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type ViewStyle,
+} from "react-native";
+import { GripVertical, Minus, Plus } from "lucide-react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
-} from 'react-native-reanimated';
-import { RoutineItemCard } from '@/components/molecules';
-import type { RoutineItem } from '@/components/templates/RoutineBuilderTemplate';
+} from "react-native-reanimated";
+import { RoutineItemCard } from "@/components/molecules";
+import type { RoutineItem } from "@/components/templates/RoutineBuilderTemplate";
 
 // Hook for press-and-hold repeat functionality
 const useRepeatPress = (
@@ -85,13 +92,16 @@ const TimeEditPanel = ({
     setLocalMinutes(String(item.minutes));
   }, [item.minutes]);
 
-  const handleChangeText = useCallback((text: string) => {
-    setLocalMinutes(text);
-    const parsed = parseInt(text, 10);
-    if (!isNaN(parsed) && parsed >= 1) {
-      onChangeMinutes(item.id, parsed);
-    }
-  }, [item.id, onChangeMinutes]);
+  const handleChangeText = useCallback(
+    (text: string) => {
+      setLocalMinutes(text);
+      const parsed = parseInt(text, 10);
+      if (!isNaN(parsed) && parsed >= 1) {
+        onChangeMinutes(item.id, parsed);
+      }
+    },
+    [item.id, onChangeMinutes],
+  );
 
   const decrementMinutes = useCallback(() => {
     const newValue = Math.max(1, minutesRef.current - 1);
@@ -112,7 +122,7 @@ const TimeEditPanel = ({
       className="rounded-b-2xl border border-t-0 border-[#E4E8F0] bg-white px-4 pb-4 pt-3"
       style={{
         marginTop: -1,
-        shadowColor: '#0f172a',
+        shadowColor: "#0f172a",
         shadowOpacity: 0.05,
         shadowRadius: 12,
         shadowOffset: { width: 0, height: 3 },
@@ -124,18 +134,27 @@ const TimeEditPanel = ({
         <Text className="text-sm font-semibold text-text-secondary">End</Text>
       </View>
       <View className="flex-row justify-between">
-        <Text className="text-xl font-bold text-text-primary">{times.start}</Text>
+        <Text className="text-xl font-bold text-text-primary">
+          {times.start}
+        </Text>
         <Text className="text-xl font-bold text-text-primary">{times.end}</Text>
       </View>
 
       <View className="mt-3 gap-3">
-        <Text className="text-base font-semibold text-text-primary">Time allotted</Text>
+        <Text className="text-base font-semibold text-text-primary">
+          Time allotted
+        </Text>
         <View className="flex-row items-center justify-center gap-4">
           <Pressable
             onPressIn={decrementPress.onPressIn}
             onPressOut={decrementPress.onPressOut}
             className="h-11 w-11 items-center justify-center rounded-full bg-[#EEF5FF]"
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+            style={({ pressed }) => [
+              {
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              },
+            ]}
           >
             <Minus size={20} color="#2563EB" />
           </Pressable>
@@ -155,7 +174,12 @@ const TimeEditPanel = ({
             onPressIn={incrementPress.onPressIn}
             onPressOut={incrementPress.onPressOut}
             className="h-11 w-11 items-center justify-center rounded-full bg-[#EEF5FF]"
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
+            style={({ pressed }) => [
+              {
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              },
+            ]}
           >
             <Plus size={20} color="#2563EB" />
           </Pressable>
@@ -210,7 +234,7 @@ const RoutineItemWithDrag = ({
 }: RoutineItemWithDragProps) => {
   const isDragged = draggedIndex === index;
   const isDraggingAny = draggedIndex !== null;
-  
+
   // Animated values
   const dragTranslateY = useSharedValue(0);
   const displaceY = useSharedValue(0);
@@ -245,7 +269,14 @@ const RoutineItemWithDrag = ({
       // Target same as dragged - no displacement
       displaceY.value = withSpring(0, SPRING_CONFIG);
     }
-  }, [isDragged, draggedIndex, targetIndex, index, draggedItemHeight, displaceY]);
+  }, [
+    isDragged,
+    draggedIndex,
+    targetIndex,
+    index,
+    draggedItemHeight,
+    displaceY,
+  ]);
 
   // Reset displacement when drag ends - use instant reset to avoid glitchy animation
   useEffect(() => {
@@ -262,7 +293,7 @@ const RoutineItemWithDrag = ({
     .enabled(!expanded)
     .minPointers(1)
     .maxPointers(1)
-    .activeOffsetY(Platform.OS === 'android' ? 10 : 0)
+    .activeOffsetY(Platform.OS === "android" ? 10 : 0)
     .onStart(() => {
       scale.value = withTiming(1.03, { duration: 100 });
       runOnJS(onDragStart)(index, itemHeight.value);
@@ -288,7 +319,7 @@ const RoutineItemWithDrag = ({
 
     return {
       // RN's Transform type is extremely strict; this is a safe runtime shape.
-      transform: transform as unknown as ViewStyle['transform'],
+      transform: transform as unknown as ViewStyle["transform"],
       zIndex: isDragged ? 100 : 0,
       shadowOpacity: isDragged ? 0.15 : 0.05,
       elevation: isDragged ? 12 : 3,
@@ -296,7 +327,7 @@ const RoutineItemWithDrag = ({
   });
 
   const androidDragHandle =
-    Platform.OS === 'android' ? (
+    Platform.OS === "android" ? (
       <GestureDetector gesture={gesture}>
         <View
           accessibilityRole="button"
@@ -317,11 +348,11 @@ const RoutineItemWithDrag = ({
         onMeasure(index, height);
       }}
     >
-      {Platform.OS === 'android' ? (
+      {Platform.OS === "android" ? (
         <Animated.View
           style={[
             {
-              shadowColor: '#0f172a',
+              shadowColor: "#0f172a",
               shadowRadius: 12,
               shadowOffset: { width: 0, height: 3 },
               elevation: isDragged ? 12 : 3,
@@ -354,7 +385,7 @@ const RoutineItemWithDrag = ({
           <Animated.View
             style={[
               {
-                shadowColor: '#0f172a',
+                shadowColor: "#0f172a",
                 shadowRadius: 12,
                 shadowOffset: { width: 0, height: 3 },
               },
@@ -415,7 +446,11 @@ export const DraggableRoutineList = ({
     if (itemHeights.current.length !== items.length) {
       const newHeights = new Array(items.length).fill(88);
       // Preserve existing measurements
-      for (let i = 0; i < Math.min(itemHeights.current.length, items.length); i++) {
+      for (
+        let i = 0;
+        i < Math.min(itemHeights.current.length, items.length);
+        i++
+      ) {
         newHeights[i] = itemHeights.current[i];
       }
       itemHeights.current = newHeights;
@@ -428,84 +463,98 @@ export const DraggableRoutineList = ({
     }
   }, []);
 
-  const handleDragStart = useCallback((index: number, height: number) => {
-    itemHeights.current[index] = height;
-    setDragState({
-      draggedIndex: index,
-      targetIndex: index,
-      draggedItemHeight: height,
-    });
-    onDragStart?.();
-  }, [onDragStart]);
+  const handleDragStart = useCallback(
+    (index: number, height: number) => {
+      itemHeights.current[index] = height;
+      setDragState({
+        draggedIndex: index,
+        targetIndex: index,
+        draggedItemHeight: height,
+      });
+      onDragStart?.();
+    },
+    [onDragStart],
+  );
 
-  const handleDragMove = useCallback((translationY: number) => {
-    setDragState((prev) => {
-      if (prev.draggedIndex === null) return prev;
+  const handleDragMove = useCallback(
+    (translationY: number) => {
+      setDragState((prev) => {
+        if (prev.draggedIndex === null) return prev;
 
-      const heights = itemHeights.current;
-      
-      // Calculate the Y position of each slot boundary
-      // A "slot" is the space where an item can be dropped
-      const draggedOriginalTop = heights
-        .slice(0, prev.draggedIndex)
-        .reduce((sum, h) => sum + h + ITEM_SPACING, 0);
-      
-      // Current center Y of the dragged item
-      const draggedCenter = draggedOriginalTop + translationY + prev.draggedItemHeight / 2;
+        const heights = itemHeights.current;
 
-      // Find which slot the dragged item's center is over
-      let accumulatedY = 0;
-      let newTargetIndex = 0;
-      
-      for (let i = 0; i < items.length; i++) {
-        const slotCenter = accumulatedY + heights[i] / 2;
-        
-        if (draggedCenter > slotCenter) {
-          newTargetIndex = i;
-          // If we're past the center of this item, target should be after it
-          if (i !== prev.draggedIndex) {
+        // Calculate the Y position of each slot boundary
+        // A "slot" is the space where an item can be dropped
+        const draggedOriginalTop = heights
+          .slice(0, prev.draggedIndex)
+          .reduce((sum, h) => sum + h + ITEM_SPACING, 0);
+
+        // Current center Y of the dragged item
+        const draggedCenter =
+          draggedOriginalTop + translationY + prev.draggedItemHeight / 2;
+
+        // Find which slot the dragged item's center is over
+        let accumulatedY = 0;
+        let newTargetIndex = 0;
+
+        for (let i = 0; i < items.length; i++) {
+          const slotCenter = accumulatedY + heights[i] / 2;
+
+          if (draggedCenter > slotCenter) {
+            newTargetIndex = i;
+            // If we're past the center of this item, target should be after it
+            if (i !== prev.draggedIndex) {
+              newTargetIndex = i;
+            }
+          }
+
+          accumulatedY += heights[i] + ITEM_SPACING;
+        }
+
+        // Clamp to valid range
+        newTargetIndex = Math.max(
+          0,
+          Math.min(newTargetIndex, items.length - 1),
+        );
+
+        // More intuitive: if dragging down past an item's center, take its place
+        // if dragging up past an item's center, take its place
+        accumulatedY = 0;
+        for (let i = 0; i < items.length; i++) {
+          const itemTop = accumulatedY;
+          const itemBottom = accumulatedY + heights[i];
+          const itemCenter = itemTop + heights[i] / 2;
+
+          if (i < prev.draggedIndex && draggedCenter < itemCenter) {
+            // Dragging up: if our center is above this item's center, target this slot
+            newTargetIndex = i;
+            break;
+          } else if (i > prev.draggedIndex && draggedCenter > itemCenter) {
+            // Dragging down: if our center is below this item's center, target this slot
             newTargetIndex = i;
           }
+
+          accumulatedY += heights[i] + ITEM_SPACING;
         }
-        
-        accumulatedY += heights[i] + ITEM_SPACING;
-      }
 
-      // Clamp to valid range
-      newTargetIndex = Math.max(0, Math.min(newTargetIndex, items.length - 1));
-
-      // More intuitive: if dragging down past an item's center, take its place
-      // if dragging up past an item's center, take its place
-      accumulatedY = 0;
-      for (let i = 0; i < items.length; i++) {
-        const itemTop = accumulatedY;
-        const itemBottom = accumulatedY + heights[i];
-        const itemCenter = itemTop + heights[i] / 2;
-        
-        if (i < prev.draggedIndex && draggedCenter < itemCenter) {
-          // Dragging up: if our center is above this item's center, target this slot
-          newTargetIndex = i;
-          break;
-        } else if (i > prev.draggedIndex && draggedCenter > itemCenter) {
-          // Dragging down: if our center is below this item's center, target this slot
-          newTargetIndex = i;
+        if (newTargetIndex !== prev.targetIndex) {
+          return { ...prev, targetIndex: newTargetIndex };
         }
-        
-        accumulatedY += heights[i] + ITEM_SPACING;
-      }
-
-      if (newTargetIndex !== prev.targetIndex) {
-        return { ...prev, targetIndex: newTargetIndex };
-      }
-      return prev;
-    });
-  }, [items.length]);
+        return prev;
+      });
+    },
+    [items.length],
+  );
 
   const handleDragEnd = useCallback(() => {
     const { draggedIndex, targetIndex } = dragState;
-    
+
     // First, reorder the items if needed (this updates parent state)
-    if (draggedIndex !== null && targetIndex !== null && draggedIndex !== targetIndex) {
+    if (
+      draggedIndex !== null &&
+      targetIndex !== null &&
+      draggedIndex !== targetIndex
+    ) {
       const newItems = [...itemsRef.current];
       const [removed] = newItems.splice(draggedIndex, 1);
       newItems.splice(targetIndex, 0, removed);

@@ -1,22 +1,38 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState, useCallback } from 'react';
-import { ActualSplitTemplate } from '@/components/templates';
-import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
-import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
-import { useEventsStore, type CalendarEventMeta, type EventCategory, type ScheduledEvent } from '@/stores';
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState, useCallback } from "react";
+import { ActualSplitTemplate } from "@/components/templates";
+import { useCalendarEventsSync } from "@/lib/supabase/hooks/use-calendar-events-sync";
+import {
+  DERIVED_ACTUAL_PREFIX,
+  DERIVED_EVIDENCE_PREFIX,
+} from "@/lib/calendar/actual-display-events";
+import {
+  useEventsStore,
+  type CalendarEventMeta,
+  type EventCategory,
+  type ScheduledEvent,
+} from "@/stores";
 
 const formatMinutesToTime = (totalMinutes: number): string => {
   const minutes = Math.max(0, totalMinutes);
   const hours24 = Math.floor(minutes / 60) % 24;
   const mins = minutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${mins.toString().padStart(2, "0")} ${period}`;
 };
 
 const ymdMinutesToDate = (ymd: string, minutes: number): Date => {
-  const [year, month, day] = ymd.split('-').map(Number);
-  return new Date(year, (month ?? 1) - 1, day ?? 1, Math.floor(minutes / 60), minutes % 60, 0, 0);
+  const [year, month, day] = ymd.split("-").map(Number);
+  return new Date(
+    year,
+    (month ?? 1) - 1,
+    day ?? 1,
+    Math.floor(minutes / 60),
+    minutes % 60,
+    0,
+    0,
+  );
 };
 
 export default function ActualSplitScreen() {
@@ -40,7 +56,9 @@ export default function ActualSplitScreen() {
   const [isSaving, setIsSaving] = useState(false);
 
   const event = useMemo<ScheduledEvent>(() => {
-    const existing = params.id ? actualEvents.find((item) => item.id === params.id) : undefined;
+    const existing = params.id
+      ? actualEvents.find((item) => item.id === params.id)
+      : undefined;
     if (existing) return existing;
     const startMinutes = params.startMinutes ? Number(params.startMinutes) : 0;
     const duration = params.duration ? Number(params.duration) : 0;
@@ -54,19 +72,28 @@ export default function ActualSplitScreen() {
     }
     return {
       id: params.id ?? `temp_${startMinutes}_${duration}`,
-      title: params.title ?? 'Actual',
-      description: params.description ?? '',
+      title: params.title ?? "Actual",
+      description: params.description ?? "",
       startMinutes,
       duration,
-      category: (params.category as EventCategory) ?? 'unknown',
+      category: (params.category as EventCategory) ?? "unknown",
       location: params.location ?? undefined,
       meta,
     };
   }, [actualEvents, params]);
 
-  const normalizedStartMinutes = useMemo(() => Math.max(0, Math.round(event.startMinutes)), [event.startMinutes]);
-  const normalizedDuration = useMemo(() => Math.max(1, Math.round(event.duration)), [event.duration]);
-  const startTime = useMemo(() => formatMinutesToTime(normalizedStartMinutes), [normalizedStartMinutes]);
+  const normalizedStartMinutes = useMemo(
+    () => Math.max(0, Math.round(event.startMinutes)),
+    [event.startMinutes],
+  );
+  const normalizedDuration = useMemo(
+    () => Math.max(1, Math.round(event.duration)),
+    [event.duration],
+  );
+  const startTime = useMemo(
+    () => formatMinutesToTime(normalizedStartMinutes),
+    [normalizedStartMinutes],
+  );
   const endTime = useMemo(
     () => formatMinutesToTime(normalizedStartMinutes + normalizedDuration),
     [normalizedDuration, normalizedStartMinutes],
@@ -88,13 +115,14 @@ export default function ActualSplitScreen() {
           ...event.meta,
           category: event.category,
           isBig3: event.isBig3 ?? false,
-          source: 'user',
+          source: "user",
           actual: true,
-          tags: Array.isArray(event.meta?.tags) ? event.meta?.tags : ['actual'],
+          tags: Array.isArray(event.meta?.tags) ? event.meta?.tags : ["actual"],
         };
 
         const isDerived =
-          event.id.startsWith(DERIVED_ACTUAL_PREFIX) || event.id.startsWith(DERIVED_EVIDENCE_PREFIX);
+          event.id.startsWith(DERIVED_ACTUAL_PREFIX) ||
+          event.id.startsWith(DERIVED_EVIDENCE_PREFIX);
 
         const createdFirst = await createActual({
           title: event.title,
@@ -122,7 +150,7 @@ export default function ActualSplitScreen() {
           const toRemove = actualEvents.filter((candidate) => {
             if (candidate.id === params.id) return true;
             const sourceId = candidate.meta?.source_id;
-            return typeof sourceId === 'string' && sourceId === params.id;
+            return typeof sourceId === "string" && sourceId === params.id;
           });
           for (const candidate of toRemove) {
             await deleteActual(candidate.id);
@@ -130,10 +158,10 @@ export default function ActualSplitScreen() {
           }
         }
 
-        router.replace('/comprehensive-calendar');
+        router.replace("/comprehensive-calendar");
       } catch (error) {
         if (__DEV__) {
-          console.warn('[ActualSplit] Split failed:', error);
+          console.warn("[ActualSplit] Split failed:", error);
         }
         setIsSaving(false);
       }

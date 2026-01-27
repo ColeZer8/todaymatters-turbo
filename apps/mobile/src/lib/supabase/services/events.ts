@@ -1,6 +1,6 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Json } from '../database.types';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Json } from "../database.types";
 
 function normalizeTitleKey(title: string): string {
   return title.trim().toLowerCase();
@@ -37,7 +37,7 @@ export interface EventData {
  * Goal-specific metadata structure
  */
 export interface GoalMeta extends Record<string, Json> {
-  category: 'goal' | 'initiative';
+  category: "goal" | "initiative";
   color?: string | null;
   progress?: number | null; // 0-1
   tasks?: Array<{
@@ -61,9 +61,9 @@ export interface GoalMeta extends Record<string, Json> {
 }
 
 function isGoalMeta(value: Json | null | undefined): value is GoalMeta {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const category = (value as Record<string, Json>).category;
-  return category === 'goal' || category === 'initiative';
+  return category === "goal" || category === "initiative";
 }
 
 /**
@@ -71,17 +71,17 @@ function isGoalMeta(value: Json | null | undefined): value is GoalMeta {
  */
 export async function fetchGoals(userId: string): Promise<EventData[]> {
   try {
-    console.log('📥 Fetching goals for user:', userId);
+    console.log("📥 Fetching goals for user:", userId);
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('type', 'goal')
-      .order('created_at', { ascending: false });
+      .schema("tm")
+      .from("events")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", "goal")
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('❌ Error fetching goals:', error);
+      console.error("❌ Error fetching goals:", error);
       throw handleSupabaseError(error);
     }
 
@@ -89,13 +89,13 @@ export async function fetchGoals(userId: string): Promise<EventData[]> {
     const goals = (data || []).filter((event) => {
       const meta = event.meta as Json | null;
       if (!isGoalMeta(meta)) return true; // legacy rows with meta null/unknown count as goals
-      return meta.category === 'goal';
+      return meta.category === "goal";
     });
 
-    console.log('✅ Fetched goals:', goals.length);
+    console.log("✅ Fetched goals:", goals.length);
     return goals as EventData[];
   } catch (error) {
-    console.error('❌ Failed to fetch goals:', error);
+    console.error("❌ Failed to fetch goals:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -105,30 +105,30 @@ export async function fetchGoals(userId: string): Promise<EventData[]> {
  */
 export async function fetchInitiatives(userId: string): Promise<EventData[]> {
   try {
-    console.log('📥 Fetching initiatives for user:', userId);
+    console.log("📥 Fetching initiatives for user:", userId);
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('type', 'goal')
-      .order('created_at', { ascending: false });
+      .schema("tm")
+      .from("events")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", "goal")
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('❌ Error fetching initiatives:', error);
+      console.error("❌ Error fetching initiatives:", error);
       throw handleSupabaseError(error);
     }
 
     // Filter to only initiatives by checking meta.category
     const initiatives = (data || []).filter((event) => {
       const meta = event.meta as Json | null;
-      return isGoalMeta(meta) && meta.category === 'initiative';
+      return isGoalMeta(meta) && meta.category === "initiative";
     });
 
-    console.log('✅ Fetched initiatives:', initiatives.length);
+    console.log("✅ Fetched initiatives:", initiatives.length);
     return initiatives as EventData[];
   } catch (error) {
-    console.error('❌ Failed to fetch initiatives:', error);
+    console.error("❌ Failed to fetch initiatives:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -139,22 +139,22 @@ export async function fetchInitiatives(userId: string): Promise<EventData[]> {
 export async function createGoal(
   userId: string,
   title: string,
-  meta?: Partial<GoalMeta>
+  meta?: Partial<GoalMeta>,
 ): Promise<EventData> {
   try {
-    console.log('➕ Creating goal:', title, 'for user:', userId);
-    
+    console.log("➕ Creating goal:", title, "for user:", userId);
+
     const goalMeta: GoalMeta = {
-      category: 'goal',
+      category: "goal",
       ...meta,
     };
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .insert({
         user_id: userId,
-        type: 'goal',
+        type: "goal",
         title: title.trim(),
         meta: goalMeta,
       })
@@ -162,14 +162,14 @@ export async function createGoal(
       .single();
 
     if (error) {
-      console.error('❌ Error creating goal:', error);
+      console.error("❌ Error creating goal:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Goal created successfully:', data.id);
+    console.log("✅ Goal created successfully:", data.id);
     return data as EventData;
   } catch (error) {
-    console.error('❌ Failed to create goal:', error);
+    console.error("❌ Failed to create goal:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -181,23 +181,23 @@ export async function createInitiative(
   userId: string,
   title: string,
   description?: string,
-  meta?: Partial<GoalMeta>
+  meta?: Partial<GoalMeta>,
 ): Promise<EventData> {
   try {
-    console.log('➕ Creating initiative:', title, 'for user:', userId);
-    
+    console.log("➕ Creating initiative:", title, "for user:", userId);
+
     const initiativeMeta: GoalMeta = {
-      category: 'initiative',
-      description: description?.trim() || '',
+      category: "initiative",
+      description: description?.trim() || "",
       ...meta,
     };
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .insert({
         user_id: userId,
-        type: 'goal',
+        type: "goal",
         title: title.trim(),
         meta: initiativeMeta,
       })
@@ -205,14 +205,14 @@ export async function createInitiative(
       .single();
 
     if (error) {
-      console.error('❌ Error creating initiative:', error);
+      console.error("❌ Error creating initiative:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Initiative created successfully:', data.id);
+    console.log("✅ Initiative created successfully:", data.id);
     return data as EventData;
   } catch (error) {
-    console.error('❌ Failed to create initiative:', error);
+    console.error("❌ Failed to create initiative:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -222,28 +222,33 @@ export async function createInitiative(
  */
 export async function updateEvent(
   eventId: string,
-  updates: Partial<Pick<EventData, 'title' | 'meta'>>
+  updates: Partial<Pick<EventData, "title" | "meta">>,
 ): Promise<EventData> {
   try {
-    console.log('💾 Updating event:', eventId, 'Updates:', Object.keys(updates));
-    
+    console.log(
+      "💾 Updating event:",
+      eventId,
+      "Updates:",
+      Object.keys(updates),
+    );
+
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .update(updates)
-      .eq('id', eventId)
+      .eq("id", eventId)
       .select()
       .single();
 
     if (error) {
-      console.error('❌ Error updating event:', error);
+      console.error("❌ Error updating event:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Event updated successfully');
+    console.log("✅ Event updated successfully");
     return data as EventData;
   } catch (error) {
-    console.error('❌ Failed to update event:', error);
+    console.error("❌ Failed to update event:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -253,22 +258,22 @@ export async function updateEvent(
  */
 export async function deleteEvent(eventId: string): Promise<void> {
   try {
-    console.log('🗑️ Deleting event:', eventId);
-    
+    console.log("🗑️ Deleting event:", eventId);
+
     const { error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .delete()
-      .eq('id', eventId);
+      .eq("id", eventId);
 
     if (error) {
-      console.error('❌ Error deleting event:', error);
+      console.error("❌ Error deleting event:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Event deleted successfully');
+    console.log("✅ Event deleted successfully");
   } catch (error) {
-    console.error('❌ Failed to delete event:', error);
+    console.error("❌ Failed to delete event:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -278,63 +283,68 @@ export async function deleteEvent(eventId: string): Promise<void> {
  */
 export async function bulkCreateGoals(
   userId: string,
-  goalTitles: string[]
+  goalTitles: string[],
 ): Promise<EventData[]> {
   try {
     const uniqueTitles = dedupeTitles(goalTitles);
-    console.log('📦 Bulk saving goals (replace):', uniqueTitles.length, 'for user:', userId);
+    console.log(
+      "📦 Bulk saving goals (replace):",
+      uniqueTitles.length,
+      "for user:",
+      userId,
+    );
 
     // Replace strategy: fetch existing goals then delete by id.
     // This avoids reliance on JSON-path filters inside DELETE, which can be inconsistent across PostgREST/Supabase versions.
     const existingGoals = await fetchGoals(userId);
     const existingGoalIds = existingGoals
       .map((g) => g.id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
 
     if (existingGoalIds.length > 0) {
       const { error: deleteError } = await supabase
-        .schema('tm')
-        .from('events')
+        .schema("tm")
+        .from("events")
         .delete()
-        .eq('user_id', userId)
-        .in('id', existingGoalIds);
+        .eq("user_id", userId)
+        .in("id", existingGoalIds);
 
       if (deleteError) {
-        console.error('❌ Error clearing existing goals:', deleteError);
+        console.error("❌ Error clearing existing goals:", deleteError);
         throw handleSupabaseError(deleteError);
       }
     }
 
     const goalsToInsert = uniqueTitles.map((title) => ({
-        user_id: userId,
-        type: 'goal' as const,
-        title,
-        meta: {
-          category: 'goal' as const,
-          createdAt: new Date().toISOString(),
-        } as GoalMeta,
-      }));
+      user_id: userId,
+      type: "goal" as const,
+      title,
+      meta: {
+        category: "goal" as const,
+        createdAt: new Date().toISOString(),
+      } as GoalMeta,
+    }));
 
     if (goalsToInsert.length === 0) {
-      console.log('⚠️ No valid goals to create');
+      console.log("⚠️ No valid goals to create");
       return [];
     }
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .insert(goalsToInsert)
       .select();
 
     if (error) {
-      console.error('❌ Error bulk creating goals:', error);
+      console.error("❌ Error bulk creating goals:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Bulk created goals:', data?.length || 0);
+    console.log("✅ Bulk created goals:", data?.length || 0);
     return (data || []) as EventData[];
   } catch (error) {
-    console.error('❌ Failed to bulk create goals:', error);
+    console.error("❌ Failed to bulk create goals:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -344,68 +354,68 @@ export async function bulkCreateGoals(
  */
 export async function bulkCreateInitiatives(
   userId: string,
-  initiativeTitles: string[]
+  initiativeTitles: string[],
 ): Promise<EventData[]> {
   try {
     const uniqueTitles = dedupeTitles(initiativeTitles);
-    console.log('📦 Bulk saving initiatives (replace):', uniqueTitles.length, 'for user:', userId);
+    console.log(
+      "📦 Bulk saving initiatives (replace):",
+      uniqueTitles.length,
+      "for user:",
+      userId,
+    );
 
     // Replace strategy: fetch existing initiatives then delete by id.
     const existingInitiatives = await fetchInitiatives(userId);
     const existingInitiativeIds = existingInitiatives
       .map((i) => i.id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
 
     if (existingInitiativeIds.length > 0) {
       const { error: deleteError } = await supabase
-        .schema('tm')
-        .from('events')
+        .schema("tm")
+        .from("events")
         .delete()
-        .eq('user_id', userId)
-        .in('id', existingInitiativeIds);
+        .eq("user_id", userId)
+        .in("id", existingInitiativeIds);
 
       if (deleteError) {
-        console.error('❌ Error clearing existing initiatives:', deleteError);
+        console.error("❌ Error clearing existing initiatives:", deleteError);
         throw handleSupabaseError(deleteError);
       }
     }
 
     const initiativesToInsert = uniqueTitles.map((title) => ({
-        user_id: userId,
-        type: 'goal' as const,
-        title,
-        meta: {
-          category: 'initiative' as const,
-          description: '',
-          createdAt: new Date().toISOString(),
-        } as GoalMeta,
-      }));
+      user_id: userId,
+      type: "goal" as const,
+      title,
+      meta: {
+        category: "initiative" as const,
+        description: "",
+        createdAt: new Date().toISOString(),
+      } as GoalMeta,
+    }));
 
     if (initiativesToInsert.length === 0) {
-      console.log('⚠️ No valid initiatives to create');
+      console.log("⚠️ No valid initiatives to create");
       return [];
     }
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .insert(initiativesToInsert)
       .select();
 
     if (error) {
-      console.error('❌ Error bulk creating initiatives:', error);
+      console.error("❌ Error bulk creating initiatives:", error);
       throw handleSupabaseError(error);
     }
 
-    console.log('✅ Bulk created initiatives:', data?.length || 0);
+    console.log("✅ Bulk created initiatives:", data?.length || 0);
     return (data || []) as EventData[];
   } catch (error) {
-    console.error('❌ Failed to bulk create initiatives:', error);
+    console.error("❌ Failed to bulk create initiatives:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
-
-
-
-
-

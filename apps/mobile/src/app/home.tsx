@@ -1,24 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
-import { useRouter } from 'expo-router';
-import Constants from 'expo-constants';
-import { HomeTemplate } from '@/components/templates';
-import type { ConversationStatus, StartConversationOptions } from '@/lib/elevenlabs/types';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { AppState } from "react-native";
+import { useRouter } from "expo-router";
+import Constants from "expo-constants";
+import { HomeTemplate } from "@/components/templates";
+import type {
+  ConversationStatus,
+  StartConversationOptions,
+} from "@/lib/elevenlabs/types";
 import {
   buildHomeBriefContext,
   generateHomeBriefDraft,
   getNextScheduleBoundary,
   getNextTimeOfDayBoundary,
   type HomeBriefDraft,
-} from '@/lib/home-brief';
+} from "@/lib/home-brief";
 import {
   fetchGmailEmailEvents,
   fetchProfile,
   generateHomeBriefLlm,
   fetchBig3ForDate,
   upsertBig3ForDate,
-} from '@/lib/supabase/services';
-import type { DailyBig3 } from '@/lib/supabase/services';
+} from "@/lib/supabase/services";
+import type { DailyBig3 } from "@/lib/supabase/services";
 import {
   useAuthStore,
   useCurrentMinutes,
@@ -30,19 +40,20 @@ import {
   useOnboardingStore,
   useReviewTimeStore,
   type ScheduledEvent,
-} from '@/stores';
-import { useUserPreferencesStore } from '@/stores/user-preferences-store';
-import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
+} from "@/stores";
+import { useUserPreferencesStore } from "@/stores/user-preferences-store";
+import { deriveFullNameFromEmail, getFirstName } from "@/lib/user-name";
 
 // Voice features require native modules and do not run in Expo Go.
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo = Constants.appOwnership === "expo";
 
 // Dynamically load ElevenLabsProvider only when native modules are available.
 // String concatenation avoids Metro static analysis in Expo Go builds.
-let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null = null;
+let ElevenLabsProvider: React.ComponentType<{ children: ReactNode }> | null =
+  null;
 if (!isExpoGo) {
   try {
-    const pkg = '@elevenlabs' + '/react-native';
+    const pkg = "@elevenlabs" + "/react-native";
     ElevenLabsProvider = require(pkg).ElevenLabsProvider;
   } catch {
     ElevenLabsProvider = null;
@@ -51,10 +62,12 @@ if (!isExpoGo) {
 
 // Dynamically load `useVoiceCoach` only when native modules are available.
 // String concatenation avoids Metro static analysis in Expo Go builds.
-let useVoiceCoach: typeof import('@/hooks/use-voice-coach').useVoiceCoach | null = null;
+let useVoiceCoach:
+  | typeof import("@/hooks/use-voice-coach").useVoiceCoach
+  | null = null;
 if (!isExpoGo) {
   try {
-    const hookPath = '@/hooks' + '/use-voice-coach';
+    const hookPath = "@/hooks" + "/use-voice-coach";
     useVoiceCoach = require(hookPath).useVoiceCoach;
   } catch {
     useVoiceCoach = null;
@@ -88,7 +101,8 @@ function HomeScreenInner() {
 
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const enableLlmInDev = process.env.EXPO_PUBLIC_ENABLE_HOME_BRIEF_LLM === 'true';
+  const enableLlmInDev =
+    process.env.EXPO_PUBLIC_ENABLE_HOME_BRIEF_LLM === "true";
 
   const cachedBrief = useHomeBriefStore((s) => s.brief);
   const setBrief = useHomeBriefStore((s) => s.setBrief);
@@ -100,20 +114,25 @@ function HomeScreenInner() {
   const actualEventsByDate = useEventsStore((s) => s.actualEventsByDate);
 
   const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
-  const [pendingCommunicationsCount, setPendingCommunicationsCount] = useState(0);
-  const [pendingCommunicationsDescription, setPendingCommunicationsDescription] = useState(
-    'No new Gmail to review.'
-  );
+  const [pendingCommunicationsCount, setPendingCommunicationsCount] =
+    useState(0);
+  const [
+    pendingCommunicationsDescription,
+    setPendingCommunicationsDescription,
+  ] = useState("No new Gmail to review.");
   const [big3Data, setBig3Data] = useState<DailyBig3 | null>(null);
 
-  const timersRef = useRef<{ debounce?: ReturnType<typeof setTimeout>; boundary?: ReturnType<typeof setTimeout> }>({});
+  const timersRef = useRef<{
+    debounce?: ReturnType<typeof setTimeout>;
+    boundary?: ReturnType<typeof setTimeout>;
+  }>({});
   const llmRequestIdRef = useRef(0);
 
   // Stable callback to avoid re-creating voice hook options every render
   const onVoiceError = useCallback((error: Error) => {
     if (__DEV__) {
       // eslint-disable-next-line no-console
-      console.error('[Home] Voice coach error:', error.message);
+      console.error("[Home] Voice coach error:", error.message);
     }
   }, []);
 
@@ -128,10 +147,14 @@ function HomeScreenInner() {
   }, [getSimulatedDate, isDemoActive, nowMinutesFromMidnight]);
 
   const todayYmd = useMemo(() => dateToYmdLocal(nowDate), [nowDate]);
-  const todayPlannedEvents = useMemo(() => plannedEventsByDate[todayYmd] ?? [], [plannedEventsByDate, todayYmd]);
+  const todayPlannedEvents = useMemo(
+    () => plannedEventsByDate[todayYmd] ?? [],
+    [plannedEventsByDate, todayYmd],
+  );
   const scheduleEvents = useMemo(
-    () => collapseSleepScheduleEvents(todayPlannedEvents, nowMinutesFromMidnight),
-    [nowMinutesFromMidnight, todayPlannedEvents]
+    () =>
+      collapseSleepScheduleEvents(todayPlannedEvents, nowMinutesFromMidnight),
+    [nowMinutesFromMidnight, todayPlannedEvents],
   );
 
   useEffect(() => {
@@ -198,31 +221,35 @@ function HomeScreenInner() {
         const count = rows.length;
         const subjects = rows
           .map((row) => row.title?.trim())
-          .filter((t): t is string => typeof t === 'string' && t.length > 0)
+          .filter((t): t is string => typeof t === "string" && t.length > 0)
           .slice(0, 2);
 
         setPendingCommunicationsCount(count);
 
         if (count === 0) {
-          setPendingCommunicationsDescription('No new Gmail to review.');
+          setPendingCommunicationsDescription("No new Gmail to review.");
           return;
         }
 
         if (subjects.length === 0) {
-          setPendingCommunicationsDescription(`${count} email${count === 1 ? '' : 's'} need attention.`);
+          setPendingCommunicationsDescription(
+            `${count} email${count === 1 ? "" : "s"} need attention.`,
+          );
           return;
         }
 
         if (subjects.length === 1) {
-          setPendingCommunicationsDescription(`“${subjects[0]}” needs attention.`);
+          setPendingCommunicationsDescription(
+            `“${subjects[0]}” needs attention.`,
+          );
           return;
         }
 
         const remaining = Math.max(0, count - 2);
         setPendingCommunicationsDescription(
           remaining > 0
-            ? `“${subjects[0]}”, “${subjects[1]}”, and ${remaining} other${remaining === 1 ? '' : 's'} need attention.`
-            : `“${subjects[0]}” and “${subjects[1]}” need attention.`
+            ? `“${subjects[0]}”, “${subjects[1]}”, and ${remaining} other${remaining === 1 ? "" : "s"} need attention.`
+            : `“${subjects[0]}” and “${subjects[1]}” need attention.`,
         );
       } catch {
         // Non-blocking: keep default copy.
@@ -267,7 +294,7 @@ function HomeScreenInner() {
       };
       // Update local state immediately
       setBig3Data({
-        id: 'pending',
+        id: "pending",
         user_id: user.id,
         date: todayYmd,
         priority_1: p1,
@@ -280,15 +307,17 @@ function HomeScreenInner() {
         updated_at: new Date().toISOString(),
       });
       // Persist asynchronously (fire-and-forget)
-      void upsertBig3ForDate(input).then((saved) => setBig3Data(saved)).catch(() => {});
+      void upsertBig3ForDate(input)
+        .then((saved) => setBig3Data(saved))
+        .catch(() => {});
     },
-    [todayYmd, user?.id]
+    [todayYmd, user?.id],
   );
 
   // Compute Big 3 prop for the template
   const todayActualEvents = useMemo(
     () => actualEventsByDate[todayYmd] ?? [],
-    [actualEventsByDate, todayYmd]
+    [actualEventsByDate, todayYmd],
   );
 
   const big3Prop = useMemo(() => {
@@ -319,8 +348,11 @@ function HomeScreenInner() {
       const nowIso = nowDate.toISOString();
       setLastEvaluatedAt(nowIso);
 
-      const cachedExpiresAtMs = cachedBrief ? Date.parse(cachedBrief.expiresAt) : 0;
-      const isCacheValid = !!cachedBrief && cachedExpiresAtMs > nowDate.getTime();
+      const cachedExpiresAtMs = cachedBrief
+        ? Date.parse(cachedBrief.expiresAt)
+        : 0;
+      const isCacheValid =
+        !!cachedBrief && cachedExpiresAtMs > nowDate.getTime();
 
       // Only change copy if the “moment” changes or the cache has expired.
       if (isCacheValid && cachedBrief.momentKey === draft.momentKey) {
@@ -328,12 +360,12 @@ function HomeScreenInner() {
         return;
       }
 
-      setBrief({ ...draft, source: 'rules' });
+      setBrief({ ...draft, source: "rules" });
       maybePolishWithLlm(ctx, draft);
       scheduleNextBoundary();
 
       // eslint-disable-next-line no-console
-      console.log('🧠 Home brief updated (rules):', trigger, draft.reason);
+      console.log("🧠 Home brief updated (rules):", trigger, draft.reason);
     };
 
     function maybePolishWithLlm(ctx: unknown, draft: HomeBriefDraft) {
@@ -342,10 +374,10 @@ function HomeScreenInner() {
 
       // Only call the LLM for higher-value moments.
       const llmWorthy =
-        draft.reason === 'morningWake' ||
-        draft.reason === 'eventStarting' ||
-        draft.reason === 'nextEventSoon' ||
-        draft.reason === 'dayWrap';
+        draft.reason === "morningWake" ||
+        draft.reason === "eventStarting" ||
+        draft.reason === "nextEventSoon" ||
+        draft.reason === "dayWrap";
       if (!llmWorthy) return;
 
       const nowMs = nowDate.getTime();
@@ -357,13 +389,16 @@ function HomeScreenInner() {
 
       (async () => {
         try {
-          const res = await generateHomeBriefLlm(ctx as Record<string, unknown>, {
-            line1: draft.line1,
-            line2: draft.line2,
-            line3: draft.line3,
-            reason: draft.reason,
-            momentKey: draft.momentKey,
-          });
+          const res = await generateHomeBriefLlm(
+            ctx as Record<string, unknown>,
+            {
+              line1: draft.line1,
+              line2: draft.line2,
+              line3: draft.line3,
+              reason: draft.reason,
+              momentKey: draft.momentKey,
+            },
+          );
 
           // Ignore if a newer request superseded this.
           if (requestId !== llmRequestIdRef.current) return;
@@ -376,7 +411,7 @@ function HomeScreenInner() {
             reason: draft.reason,
             momentKey: draft.momentKey,
             contextHash: draft.contextHash,
-            source: 'llm',
+            source: "llm",
           });
           setLastLlmAt(new Date().toISOString());
         } catch {
@@ -391,21 +426,29 @@ function HomeScreenInner() {
       if (timersRef.current.boundary) clearTimeout(timersRef.current.boundary);
 
       const timeBoundary = getNextTimeOfDayBoundary(nowDate);
-      const scheduleBoundary = getNextScheduleBoundary(nowDate, nowMinutesFromMidnight, scheduleEvents);
+      const scheduleBoundary = getNextScheduleBoundary(
+        nowDate,
+        nowMinutesFromMidnight,
+        scheduleEvents,
+      );
 
-      const candidates = [timeBoundary, scheduleBoundary].filter(Boolean) as Array<{
+      const candidates = [timeBoundary, scheduleBoundary].filter(
+        Boolean,
+      ) as Array<{
         at: Date;
         reason: string;
       }>;
 
       if (candidates.length === 0) return;
-      const next = candidates.sort((a, b) => a.at.getTime() - b.at.getTime())[0];
+      const next = candidates.sort(
+        (a, b) => a.at.getTime() - b.at.getTime(),
+      )[0];
 
       const ms = Math.max(250, next.at.getTime() - nowDate.getTime() + 250);
       timersRef.current.boundary = setTimeout(() => {
         // Re-evaluate when a meaningful boundary occurs.
         // (We don't pass `next.reason` directly because state may have changed since scheduling.)
-        evaluateBrief('boundaryTimer');
+        evaluateBrief("boundaryTimer");
       }, ms);
     }
   }, [
@@ -435,7 +478,7 @@ function HomeScreenInner() {
   useEffect(() => {
     if (timersRef.current.debounce) clearTimeout(timersRef.current.debounce);
     timersRef.current.debounce = setTimeout(() => {
-      evaluateBrief('dependencyChange');
+      evaluateBrief("dependencyChange");
     }, 250);
 
     return () => {
@@ -445,28 +488,28 @@ function HomeScreenInner() {
 
   // Evaluate when app becomes active (resume).
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        evaluateBrief('appActive');
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        evaluateBrief("appActive");
       }
     });
     return () => sub.remove();
   }, [evaluateBrief]);
 
   const displayBrief = cachedBrief ?? {
-    line1: 'This is your day.',
-    line2: 'What matters most right now?',
+    line1: "This is your day.",
+    line2: "What matters most right now?",
     line3: undefined,
-    reason: 'default',
-    momentKey: 'default',
+    reason: "default",
+    momentKey: "default",
     expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-    contextHash: 'default',
-    source: 'rules' as const,
+    contextHash: "default",
+    source: "rules" as const,
   };
 
   const derivedFromEmail = deriveFullNameFromEmail(user?.email);
   const firstName =
-    getFirstName(fullName) ?? getFirstName(derivedFromEmail) ?? 'there';
+    getFirstName(fullName) ?? getFirstName(derivedFromEmail) ?? "there";
   const name = firstName.trim();
   const date = formatHomeDate(nowDate);
 
@@ -489,7 +532,7 @@ function HomeScreenInner() {
       try {
         // Treat anything that's not fully disconnected as "stop"
         // (covers connected/connecting/disconnecting so we never get stuck)
-        if (v.status !== 'disconnected' && v.status !== 'error') {
+        if (v.status !== "disconnected" && v.status !== "error") {
           await v.endConversation();
           return;
         }
@@ -497,13 +540,13 @@ function HomeScreenInner() {
         await v.startConversation({
           dynamicVariables: {
             user_name: nameRef.current,
-            current_screen: 'home',
+            current_screen: "home",
           },
         });
       } catch (error: unknown) {
         if (__DEV__) {
           // eslint-disable-next-line no-console
-          console.error('[Home] Voice toggle failed:', error);
+          console.error("[Home] Voice toggle failed:", error);
         }
       }
     };
@@ -512,14 +555,14 @@ function HomeScreenInner() {
   }, []); // Empty deps = stable reference
 
   const handleViewAllSchedule = useCallback(() => {
-    router.replace('/comprehensive-calendar');
+    router.replace("/comprehensive-calendar");
   }, [router]);
 
   // Safety: if the user leaves Home, end the session so the mic isn't running "invisibly".
   useEffect(() => {
     return () => {
       const v = voiceApiRef.current;
-      if (v && (v.status === 'connected' || v.status === 'connecting')) {
+      if (v && (v.status === "connected" || v.status === "connecting")) {
         void v.endConversation().catch(() => undefined);
       }
     };
@@ -530,7 +573,11 @@ function HomeScreenInner() {
       {isVoiceAvailable ? (
         // Put the voice hook in its own tiny component so status changes
         // don't force a full Home rerender (eliminates the "white flash").
-        <VoiceCoachController useVoiceCoachHook={useVoiceCoach!} onError={onVoiceError} onVoiceChange={setVoiceApi} />
+        <VoiceCoachController
+          useVoiceCoachHook={useVoiceCoach!}
+          onError={onVoiceError}
+          onVoiceChange={setVoiceApi}
+        />
       ) : null}
       <HomeTemplate
         dailyBrief={{
@@ -587,35 +634,47 @@ export default function HomeScreen() {
 }
 
 function formatHomeDate(d: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
   }).format(d);
 }
 
 function dateToYmdLocal(date: Date): string {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
-function collapseSleepScheduleEvents(events: ScheduledEvent[], nowMinutes: number): ScheduledEvent[] {
+function collapseSleepScheduleEvents(
+  events: ScheduledEvent[],
+  nowMinutes: number,
+): ScheduledEvent[] {
   const isSleepSchedule = (event: ScheduledEvent) =>
-    event.title === 'Sleep' && event.description === 'Sleep schedule' && event.category === 'sleep';
+    event.title === "Sleep" &&
+    event.description === "Sleep schedule" &&
+    event.category === "sleep";
 
   const sleepEvents = events.filter(isSleepSchedule);
   if (sleepEvents.length <= 1) return events;
 
   const active = sleepEvents.find(
-    (event) => event.startMinutes <= nowMinutes && event.startMinutes + event.duration > nowMinutes
+    (event) =>
+      event.startMinutes <= nowMinutes &&
+      event.startMinutes + event.duration > nowMinutes,
   );
   const upcoming = sleepEvents
     .filter((event) => event.startMinutes > nowMinutes)
     .sort((a, b) => a.startMinutes - b.startMinutes)[0];
-  const chosen = active ?? upcoming ?? [...sleepEvents].sort((a, b) => a.startMinutes - b.startMinutes)[0];
+  const chosen =
+    active ??
+    upcoming ??
+    [...sleepEvents].sort((a, b) => a.startMinutes - b.startMinutes)[0];
   if (!chosen) return events;
 
-  return events.filter((event) => !isSleepSchedule(event) || event.id === chosen.id);
+  return events.filter(
+    (event) => !isSleepSchedule(event) || event.id === chosen.id,
+  );
 }

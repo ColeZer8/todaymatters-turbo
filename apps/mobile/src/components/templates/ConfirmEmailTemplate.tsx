@@ -1,8 +1,8 @@
-import { GradientButton, LogoBadge } from '@/components/atoms';
-import { AuthInput } from '@/components/molecules';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
-import { Mail } from 'lucide-react-native';
+import { GradientButton, LogoBadge } from "@/components/atoms";
+import { AuthInput } from "@/components/molecules";
+import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
+import { Mail } from "lucide-react-native";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,8 +11,8 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface ConfirmEmailTemplateProps {
   email: string;
@@ -35,11 +35,11 @@ export const ConfirmEmailTemplate = ({
   onResend,
   onBackToSignIn,
 }: ConfirmEmailTemplateProps) => {
-  const isIos = Platform.OS === 'ios';
+  const isIos = Platform.OS === "ios";
 
   return (
     <LinearGradient
-      colors={['#f5f9ff', '#eef5ff']}
+      colors={["#f5f9ff", "#eef5ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       className="flex-1"
@@ -49,7 +49,7 @@ export const ConfirmEmailTemplate = ({
       <SafeAreaView className="flex-1" style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={isIos ? 'padding' : undefined}
+          behavior={isIos ? "padding" : undefined}
           enabled={isIos}
           keyboardVerticalOffset={0}
         >
@@ -61,25 +61,36 @@ export const ConfirmEmailTemplate = ({
             <View className="flex-1 w-full items-center" style={styles.content}>
               <View className="items-center">
                 <LogoBadge />
-                <Text className="mt-6 text-3xl font-semibold text-text-primary">Check your email</Text>
+                <Text className="mt-6 text-3xl font-semibold text-text-primary">
+                  Check your email
+                </Text>
                 <Text className="mt-2 text-lg text-text-secondary text-center">
                   We sent a confirmation link to finish setting up your account.
                 </Text>
               </View>
 
-              <View className="w-full mt-8" style={{ maxWidth: CARD_MAX_WIDTH }}>
+              <View
+                className="w-full mt-8"
+                style={{ maxWidth: CARD_MAX_WIDTH }}
+              >
                 <View style={[styles.card, styles.cardShadow]}>
-                  <Text className="text-2xl font-extrabold text-text-primary">Confirm your email</Text>
+                  <Text className="text-2xl font-extrabold text-text-primary">
+                    Confirm your email
+                  </Text>
                   <Text className="mt-2 text-base text-text-secondary">
                     Open the link in your inbox to continue.
                   </Text>
 
                   {statusMessage ? (
-                    <Text className="mt-4 text-sm font-semibold text-green-600">{statusMessage}</Text>
+                    <Text className="mt-4 text-sm font-semibold text-green-600">
+                      {statusMessage}
+                    </Text>
                   ) : null}
 
                   {errorMessage ? (
-                    <Text className="mt-4 text-sm font-semibold text-red-500">{errorMessage}</Text>
+                    <Text className="mt-4 text-sm font-semibold text-red-500">
+                      {errorMessage}
+                    </Text>
                   ) : null}
 
                   <View className="mt-6">
@@ -112,7 +123,9 @@ export const ConfirmEmailTemplate = ({
               <View style={styles.flexSpacer} />
 
               <View className="flex-row items-center justify-center">
-                <Text className="text-base text-text-secondary">Ready to sign in?</Text>
+                <Text className="text-base text-text-secondary">
+                  Ready to sign in?
+                </Text>
                 <Text
                   className="ml-2 text-base font-semibold text-text-primary"
                   onPress={onBackToSignIn}
@@ -151,18 +164,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   card: {
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 24,
     paddingVertical: 28,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     borderWidth: 1,
   },
   cardShadow: {
-    shadowColor: '#1D4ED8',
+    shadowColor: "#1D4ED8",
     shadowOpacity: 0.07,
     shadowRadius: 28,
     shadowOffset: { width: 0, height: 14 },

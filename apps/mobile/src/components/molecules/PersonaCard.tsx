@@ -1,5 +1,5 @@
-import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import type { LucideIcon } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
 
 interface PersonaCardProps {
   title: string;
@@ -11,7 +11,7 @@ interface PersonaCardProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -23,7 +23,7 @@ export const PersonaCard = ({
   description,
   icon: Icon,
   selected = false,
-  selectedLabel = 'Selected',
+  selectedLabel = "Selected",
   onPress,
 }: PersonaCardProps) => {
   return (
@@ -32,7 +32,9 @@ export const PersonaCard = ({
       accessibilityState={{ selected }}
       onPress={onPress}
       className={`w-full rounded-3xl border px-5 py-6 ${
-        selected ? 'border-brand-primary bg-[#F5F9FF]' : 'border-[#E4E8F0] bg-white'
+        selected
+          ? "border-brand-primary bg-[#F5F9FF]"
+          : "border-[#E4E8F0] bg-white"
       }`}
       style={({ pressed }) => [
         cardShadowStyle,
@@ -42,16 +44,16 @@ export const PersonaCard = ({
       <View className="flex-row items-start gap-4">
         <View
           className={`h-12 w-12 items-center justify-center rounded-2xl ${
-            selected ? 'bg-[#E1ECFF]' : 'bg-[#F3F4F6]'
+            selected ? "bg-[#E1ECFF]" : "bg-[#F3F4F6]"
           }`}
         >
-          <Icon size={22} color={selected ? '#2563EB' : '#6B7280'} />
+          <Icon size={22} color={selected ? "#2563EB" : "#6B7280"} />
         </View>
         <View className="flex-1 gap-2">
           <View className="flex-row items-start justify-between gap-2">
             <Text
               className={`text-lg font-semibold ${
-                selected ? 'text-brand-primary' : 'text-text-primary'
+                selected ? "text-brand-primary" : "text-text-primary"
               }`}
             >
               {title}

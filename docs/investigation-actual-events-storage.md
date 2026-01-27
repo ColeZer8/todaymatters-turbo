@@ -17,17 +17,20 @@ The client is querying `tm.events` and only seeing events with `type = 'meeting'
 ## Data Storage Architecture
 
 ### 1. **Location Data** → `tm.location_samples`
+
 - **Table**: `tm.location_samples`
 - **Purpose**: Raw location samples from iOS background tasks
 - **Fields**: `recorded_at`, `latitude`, `longitude`, `accuracy_m`, `speed_mps`, etc.
 - **Status**: ✅ Data is being collected and stored
 
 ### 2. **Screen Time Data** → `tm.screen_time_app_sessions`
+
 - **Table**: `tm.screen_time_app_sessions` (and related tables)
 - **Purpose**: App usage sessions and screen time data
 - **Status**: ✅ Tables exist, data should be synced from iOS Screen Time API
 
 ### 3. **Actual Events** → `tm.events` with `type = 'calendar_actual'`
+
 - **Table**: `tm.events`
 - **Type**: `'calendar_actual'` (NOT `'meeting'`)
 - **Purpose**: Events derived from evidence (location, screen time, workouts)
@@ -35,7 +38,8 @@ The client is querying `tm.events` and only seeing events with `type = 'meeting'
 - **Status**: ⚠️ **This is where the issue likely is**
 
 ### 4. **Scheduled/Meeting Events** → `tm.events` with `type = 'meeting'` or `'calendar_planned'`
-- **Table**: `tm.events` 
+
+- **Table**: `tm.events`
 - **Type**: `'meeting'` (from Google Calendar) or `'calendar_planned'` (user-created)
 - **Source**: Google Calendar sync or user-created events
 - **Status**: ✅ Client can see these
@@ -45,16 +49,19 @@ The client is querying `tm.events` and only seeing events with `type = 'meeting'
 ## How Actual Events Are Created
 
 ### Flow:
+
 1. **Evidence Collection**: Location samples and screen time data are collected
 2. **Block Generation**: `generateActualBlocks()` creates `ActualBlock[]` from evidence
 3. **Sync to Database**: `syncActualEvidenceBlocks()` saves blocks as events with `type = 'calendar_actual'`
 
 ### Code Location:
+
 - **Evidence Processing**: `apps/mobile/src/lib/calendar/verification-engine.ts` → `generateActualBlocks()`
 - **Database Sync**: `apps/mobile/src/lib/supabase/services/actual-evidence-events.ts` → `syncActualEvidenceBlocks()`
 - **Trigger**: `apps/mobile/src/app/comprehensive-calendar.tsx` (lines 471-496)
 
 ### What Gets Stored:
+
 ```typescript
 {
   user_id: userId,
@@ -85,19 +92,21 @@ The client is querying `tm.events` and only seeing events with `type = 'meeting'
 ## The Problem: Query Mismatch
 
 ### Client's Query (from image):
+
 ```sql
-select * from tm.events 
-where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6' 
-  and created_at::date = '2026-01-22' 
+select * from tm.events
+where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
+  and created_at::date = '2026-01-22'
 order by received_at desc;
 ```
 
 **OR** (commented out):
+
 ```sql
-select title, description, status, scheduled_start, scheduled_end, location, attendees 
-from tm.events 
-where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6' 
-  and type = 'meeting' 
+select title, description, status, scheduled_start, scheduled_end, location, attendees
+from tm.events
+where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
+  and type = 'meeting'
   and scheduled_start::date = '2026-01-22';
 ```
 
@@ -112,8 +121,9 @@ where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
 ## Correct Query to See All Events
 
 ### To see ALL events for the day (including actual):
+
 ```sql
-select 
+select
   id,
   type,
   title,
@@ -122,10 +132,10 @@ select
   scheduled_end,
   created_at,
   meta
-from tm.events 
-where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6' 
+from tm.events
+where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and (
-    scheduled_start::date = '2026-01-22' 
+    scheduled_start::date = '2026-01-22'
     or scheduled_end::date = '2026-01-22'
     or (scheduled_start::date < '2026-01-22' and scheduled_end::date > '2026-01-22')
   )
@@ -133,8 +143,9 @@ order by scheduled_start;
 ```
 
 ### To see ONLY actual events (location/screen time/unknown):
+
 ```sql
-select 
+select
   id,
   type,
   title,
@@ -146,19 +157,20 @@ select
   meta->>'source' as source,
   meta->>'location' as location,
   meta->>'screen_time_minutes' as screen_time_minutes
-from tm.events 
-where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6' 
+from tm.events
+where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and type = 'calendar_actual'
   and (
-    scheduled_start::date = '2026-01-22' 
+    scheduled_start::date = '2026-01-22'
     or scheduled_end::date = '2026-01-22'
   )
 order by scheduled_start;
 ```
 
 ### To see the "all day unknown event":
+
 ```sql
-select 
+select
   id,
   type,
   title,
@@ -166,8 +178,8 @@ select
   scheduled_start,
   scheduled_end,
   meta
-from tm.events 
-where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6' 
+from tm.events
+where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and type = 'calendar_actual'
   and meta->>'category' = 'unknown'
   and scheduled_start::date = '2026-01-22'
@@ -179,20 +191,24 @@ order by scheduled_start;
 ## Potential Issues to Investigate
 
 ### 1. **Are Actual Events Being Created?**
+
 - Check if `actualBlocks` array is being generated (needs location/screen time data)
 - Check if `syncActualEvidenceBlocks()` is being called
 - Check for errors in the sync process (might be silently failing)
 
 ### 2. **Is Evidence Data Available?**
+
 - Verify location samples exist: `select count(*) from tm.location_samples where user_id = '...' and recorded_at::date = '2026-01-22'`
 - Verify screen time data exists: `select count(*) from tm.screen_time_app_sessions where user_id = '...' and date = '2026-01-22'`
 
 ### 3. **Is the Sync Function Running?**
+
 - The sync happens in `comprehensive-calendar.tsx` when `actualBlocks` changes
 - Check if the component is mounted and `actualBlocks` has data
 - Check for console errors: `[Calendar] Failed to sync actual evidence blocks`
 
 ### 4. **Date/Time Issues**
+
 - Actual events use `scheduled_start` and `scheduled_end` (not `created_at`)
 - The client's query uses `created_at::date` which might miss events created on a different day
 
@@ -200,13 +216,13 @@ order by scheduled_start;
 
 ## Tables Summary
 
-| Data Type | Table | Key Fields | How to Query |
-|-----------|-------|------------|--------------|
-| **Location Samples** | `tm.location_samples` | `recorded_at`, `latitude`, `longitude` | Raw location data |
-| **Screen Time** | `tm.screen_time_app_sessions` | `start_time`, `end_time`, `app` | App usage sessions |
-| **Actual Events** | `tm.events` | `type = 'calendar_actual'` | Evidence-based events |
-| **Meeting Events** | `tm.events` | `type = 'meeting'` | Google Calendar meetings |
-| **Planned Events** | `tm.events` | `type = 'calendar_planned'` | User-created events |
+| Data Type            | Table                         | Key Fields                             | How to Query             |
+| -------------------- | ----------------------------- | -------------------------------------- | ------------------------ |
+| **Location Samples** | `tm.location_samples`         | `recorded_at`, `latitude`, `longitude` | Raw location data        |
+| **Screen Time**      | `tm.screen_time_app_sessions` | `start_time`, `end_time`, `app`        | App usage sessions       |
+| **Actual Events**    | `tm.events`                   | `type = 'calendar_actual'`             | Evidence-based events    |
+| **Meeting Events**   | `tm.events`                   | `type = 'meeting'`                     | Google Calendar meetings |
+| **Planned Events**   | `tm.events`                   | `type = 'calendar_planned'`            | User-created events      |
 
 ---
 

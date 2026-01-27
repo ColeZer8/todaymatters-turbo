@@ -1,8 +1,18 @@
-import { ArrowRight, Info, Target, Briefcase, Plus, X } from 'lucide-react-native';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import {
+  ArrowRight,
+  Info,
+  Target,
+  Briefcase,
+  Plus,
+  X,
+} from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface GoalsTemplateProps {
   step?: number;
@@ -20,7 +30,7 @@ interface GoalsTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -61,7 +71,9 @@ const ListItem = ({
 }) => (
   <View className="flex-row items-center gap-3 rounded-2xl border border-[#D1DBEC] bg-white px-4 py-3">
     <View className="min-w-[42px] items-center justify-center rounded-xl bg-[#EEF2FF]">
-      <Text className="text-sm font-semibold text-brand-primary">#{index + 1}</Text>
+      <Text className="text-sm font-semibold text-brand-primary">
+        #{index + 1}
+      </Text>
     </View>
     <TextInput
       value={value}
@@ -121,27 +133,37 @@ export const GoalsTemplate = ({
       title="Goals"
       subtitle="Define goals and initiatives to track your progress."
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="mt-4 gap-4">
-        <View className="rounded-2xl border border-[#E4E8F0] bg-[#F5F9FF] px-4 py-3" style={cardShadowStyle}>
+        <View
+          className="rounded-2xl border border-[#E4E8F0] bg-[#F5F9FF] px-4 py-3"
+          style={cardShadowStyle}
+        >
           <View className="flex-row items-start gap-3">
             <View className="mt-[2px]">
               <Info size={18} color="#F59E0B" />
             </View>
             <View className="flex-1 gap-1">
-              <Text className="text-base font-semibold text-text-primary">Why this matters</Text>
+              <Text className="text-base font-semibold text-text-primary">
+                Why this matters
+              </Text>
               <Text className="text-sm leading-5 text-text-secondary">
-                These aren’t just list items. We use these to measure if your daily actions align with your long-term vision. Think big, but actionable.
+                These aren’t just list items. We use these to measure if your
+                daily actions align with your long-term vision. Think big, but
+                actionable.
               </Text>
             </View>
           </View>
         </View>
 
-        <ListCard
-          title="Goals"
-          icon={<Target size={18} color="#2563EB" />}
-        >
+        <ListCard title="Goals" icon={<Target size={18} color="#2563EB" />}>
           <Text className="text-sm leading-5 text-text-secondary">
             What are the 1–3 outcomes you must achieve soon?
           </Text>

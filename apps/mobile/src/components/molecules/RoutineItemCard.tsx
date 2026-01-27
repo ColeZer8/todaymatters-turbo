@@ -1,7 +1,14 @@
-import type { LucideIcon } from 'lucide-react-native';
-import { Clock4, Trash2 } from 'lucide-react-native';
-import { Pressable, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
-import type { ReactNode } from 'react';
+import type { LucideIcon } from "lucide-react-native";
+import { Clock4, Trash2 } from "lucide-react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  type GestureResponderEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import type { ReactNode } from "react";
 
 interface RoutineItemCardProps {
   title: string;
@@ -17,7 +24,7 @@ interface RoutineItemCardProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -40,7 +47,7 @@ export const RoutineItemCard = ({
       accessibilityRole="button"
       onPress={onPress}
       className={`w-full flex-row items-center gap-3 border border-[#E4E8F0] bg-white px-4 py-4 ${
-        expanded ? 'rounded-t-2xl rounded-b-none border-b-0' : 'rounded-2xl'
+        expanded ? "rounded-t-2xl rounded-b-none border-b-0" : "rounded-2xl"
       }`}
       style={({ pressed }) => [
         cardShadowStyle,
@@ -55,16 +62,22 @@ export const RoutineItemCard = ({
       </View>
 
       <View className="flex-1 gap-2">
-        <Text className="text-base font-semibold text-text-primary">{title}</Text>
+        <Text className="text-base font-semibold text-text-primary">
+          {title}
+        </Text>
         <View className="flex-row items-center gap-3">
           <View className="flex-row items-center gap-1">
             <Clock4 size={14} color="#6B7280" />
-            <Text className="text-sm text-text-secondary">{minutesLabel ?? `${minutes}m`}</Text>
+            <Text className="text-sm text-text-secondary">
+              {minutesLabel ?? `${minutes}m`}
+            </Text>
           </View>
         </View>
       </View>
 
-      {dragHandle ? <View className="mr-1 items-center justify-center">{dragHandle}</View> : null}
+      {dragHandle ? (
+        <View className="mr-1 items-center justify-center">{dragHandle}</View>
+      ) : null}
 
       <Pressable
         accessibilityLabel={`Delete ${title}`}

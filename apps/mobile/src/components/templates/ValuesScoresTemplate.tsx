@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
-import { ArrowRight, TrendingUp } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
-import { GradientButton, HardenedSlider } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { CoreValue, ValueScore } from '@/stores/onboarding-store';
+import { useMemo } from "react";
+import { ArrowRight, TrendingUp } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { GradientButton, HardenedSlider } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { CoreValue, ValueScore } from "@/stores/onboarding-store";
 
 interface ValuesScoresTemplateProps {
   step?: number;
@@ -17,7 +20,7 @@ interface ValuesScoresTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -25,15 +28,15 @@ const cardShadowStyle = {
 };
 
 const getScoreColor = (score: number) => {
-  if (score <= 3) return '#EF4444'; // Red
-  if (score <= 6) return '#F59E0B'; // Yellow
-  return '#10B981'; // Green
+  if (score <= 3) return "#EF4444"; // Red
+  if (score <= 6) return "#F59E0B"; // Yellow
+  return "#10B981"; // Green
 };
 
 const getScoreLabel = (score: number) => {
-  if (score <= 3) return 'Needs Work';
-  if (score <= 6) return 'Getting There';
-  return 'Doing Well';
+  if (score <= 3) return "Needs Work";
+  if (score <= 6) return "Getting There";
+  return "Doing Well";
 };
 
 interface ScoreSliderProps {
@@ -51,14 +54,16 @@ const ScoreSlider = ({ label, score, onScoreChange }: ScoreSliderProps) => {
       style={cardShadowStyle}
     >
       <View className="flex-row items-center justify-between mb-3">
-        <Text className="text-base font-semibold text-text-primary">{label}</Text>
+        <Text className="text-base font-semibold text-text-primary">
+          {label}
+        </Text>
         <View className="flex-row items-center gap-2">
           <Text className="text-xs font-medium" style={{ color: scoreColor }}>
             {getScoreLabel(score)}
           </Text>
           <View
             className="min-w-[32px] rounded-lg px-2 py-1"
-            style={{ backgroundColor: scoreColor + '20' }}
+            style={{ backgroundColor: scoreColor + "20" }}
           >
             <Text
               className="text-center text-sm font-bold"
@@ -101,7 +106,7 @@ export const ValuesScoresTemplate = ({
 }: ValuesScoresTemplateProps) => {
   const selectedValues = useMemo(
     () => coreValues.filter((v) => v.isSelected),
-    [coreValues]
+    [coreValues],
   );
 
   const getScoreForValue = (valueId: string) => {
@@ -113,7 +118,7 @@ export const ValuesScoresTemplate = ({
     if (selectedValues.length === 0) return 0;
     const totalScore = selectedValues.reduce(
       (sum, v) => sum + getScoreForValue(v.id),
-      0
+      0,
     );
     return Math.round((totalScore / selectedValues.length) * 10) / 10;
   }, [selectedValues, valuesScores]);
@@ -127,7 +132,13 @@ export const ValuesScoresTemplate = ({
       title="How Are You Doing?"
       subtitle="Rate yourself honestly in each area. This helps us understand where to focus."
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="mt-2 gap-4">
         {/* Average Score Card */}
@@ -138,7 +149,7 @@ export const ValuesScoresTemplate = ({
           <View className="flex-row items-center gap-3">
             <View
               className="h-12 w-12 items-center justify-center rounded-xl"
-              style={{ backgroundColor: averageColor + '20' }}
+              style={{ backgroundColor: averageColor + "20" }}
             >
               <TrendingUp size={24} color={averageColor} />
             </View>
@@ -153,9 +164,12 @@ export const ValuesScoresTemplate = ({
             </View>
             <View
               className="rounded-full px-3 py-1"
-              style={{ backgroundColor: averageColor + '20' }}
+              style={{ backgroundColor: averageColor + "20" }}
             >
-              <Text className="text-sm font-semibold" style={{ color: averageColor }}>
+              <Text
+                className="text-sm font-semibold"
+                style={{ color: averageColor }}
+              >
                 {getScoreLabel(averageScore)}
               </Text>
             </View>
@@ -174,8 +188,8 @@ export const ValuesScoresTemplate = ({
 
         {/* Info Text */}
         <Text className="text-xs text-center text-[#94A3B8] px-4">
-          Be honest with yourself. There's no judgment here - this is just to help
-          you understand where you are today.
+          Be honest with yourself. There's no judgment here - this is just to
+          help you understand where you are today.
         </Text>
       </View>
     </SetupStepLayout>

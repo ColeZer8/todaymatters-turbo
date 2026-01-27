@@ -1,4 +1,4 @@
-import appConfig from './config/index';
+import appConfig from "./config/index";
 
 // Default export: centralized app config (from Expo `extra`)
 // This keeps `import appConfig from '@/lib/config'` valid across the codebase
@@ -10,14 +10,16 @@ function readEnv(key: string): string | undefined {
   // Guard so this doesn’t explode in unusual runtimes.
   try {
     // eslint-disable-next-line no-undef
-    return typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>)[key] : undefined;
+    return typeof process !== "undefined"
+      ? (process.env as Record<string, string | undefined>)[key]
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
 export function readBooleanEnv(key: string): boolean {
-  return readEnv(key) === 'true';
+  return readEnv(key) === "true";
 }
 
 /**
@@ -27,6 +29,6 @@ export function readBooleanEnv(key: string): boolean {
  * Set via `.env`:
  * - EXPO_PUBLIC_USE_MOCK_CALENDAR=true
  */
-export const USE_MOCK_CALENDAR = readBooleanEnv('EXPO_PUBLIC_USE_MOCK_CALENDAR');
-
-
+export const USE_MOCK_CALENDAR = readBooleanEnv(
+  "EXPO_PUBLIC_USE_MOCK_CALENDAR",
+);

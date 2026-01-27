@@ -1,6 +1,6 @@
-import { GradientButton } from '@/components/atoms';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
+import { GradientButton } from "@/components/atoms";
+import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,19 +15,22 @@ import {
   Globe,
   Smartphone,
   LucideIcon,
-} from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+} from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 export type PermissionKey =
-  | 'calendar'
-  | 'notifications'
-  | 'email'
-  | 'location'
-  | 'contacts'
-  | 'browsing'
-  | 'appUsage';
+  | "calendar"
+  | "notifications"
+  | "email"
+  | "location"
+  | "contacts"
+  | "browsing"
+  | "appUsage";
 
 export interface IndividualPermissions {
   calendar: boolean;
@@ -49,53 +52,53 @@ interface PermissionRowConfig {
 
 const PERMISSION_ROWS: PermissionRowConfig[] = [
   {
-    key: 'calendar',
-    title: 'Calendar & Reminders',
-    description: 'See your events and open time.',
+    key: "calendar",
+    title: "Calendar & Reminders",
+    description: "See your events and open time.",
     icon: Calendar,
-    bgColor: 'bg-blue-500',
+    bgColor: "bg-blue-500",
   },
   {
-    key: 'notifications',
-    title: 'Notifications',
-    description: 'Send gentle nudges and reminders.',
+    key: "notifications",
+    title: "Notifications",
+    description: "Send gentle nudges and reminders.",
     icon: Bell,
-    bgColor: 'bg-amber-500',
+    bgColor: "bg-amber-500",
   },
   {
-    key: 'email',
-    title: 'Email & Tasks',
-    description: 'Pull important follow-ups and deadlines.',
+    key: "email",
+    title: "Email & Tasks",
+    description: "Pull important follow-ups and deadlines.",
     icon: Mail,
-    bgColor: 'bg-violet-500',
+    bgColor: "bg-violet-500",
   },
   {
-    key: 'location',
-    title: 'Location',
-    description: 'Access your location for better scheduling.',
+    key: "location",
+    title: "Location",
+    description: "Access your location for better scheduling.",
     icon: MapPin,
-    bgColor: 'bg-emerald-500',
+    bgColor: "bg-emerald-500",
   },
   {
-    key: 'contacts',
-    title: 'Contacts',
-    description: 'Access your contacts for better scheduling.',
+    key: "contacts",
+    title: "Contacts",
+    description: "Access your contacts for better scheduling.",
     icon: Users,
-    bgColor: 'bg-pink-500',
+    bgColor: "bg-pink-500",
   },
   {
-    key: 'browsing',
-    title: 'Browsing History',
-    description: 'Access your browsing history for better scheduling.',
+    key: "browsing",
+    title: "Browsing History",
+    description: "Access your browsing history for better scheduling.",
     icon: Globe,
-    bgColor: 'bg-red-500',
+    bgColor: "bg-red-500",
   },
   {
-    key: 'appUsage',
-    title: 'Screen Time',
-    description: 'Read app usage to estimate screen time.',
+    key: "appUsage",
+    title: "Screen Time",
+    description: "Read app usage to estimate screen time.",
     icon: Smartphone,
-    bgColor: 'bg-orange-500',
+    bgColor: "bg-orange-500",
   },
 ];
 
@@ -129,7 +132,7 @@ export const PermissionsTemplate = ({
 
   return (
     <LinearGradient
-      colors={['#f8fafc', '#eff6ff', '#f0f9ff']}
+      colors={["#f8fafc", "#eff6ff", "#f0f9ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
@@ -145,7 +148,8 @@ export const PermissionsTemplate = ({
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <Text className="text-sm font-semibold text-slate-500">
-                <Text className="text-blue-600">Step {step}</Text> of {totalSteps}
+                <Text className="text-blue-600">Step {step}</Text> of{" "}
+                {totalSteps}
               </Text>
               {onBack && (
                 <Pressable
@@ -154,7 +158,9 @@ export const PermissionsTemplate = ({
                   className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-white/80 active:opacity-70"
                 >
                   <ArrowLeft size={14} color="#334155" />
-                  <Text className="text-xs font-semibold text-slate-700">Back</Text>
+                  <Text className="text-xs font-semibold text-slate-700">
+                    Back
+                  </Text>
                 </Pressable>
               )}
             </View>
@@ -175,14 +181,16 @@ export const PermissionsTemplate = ({
               Sync your day in the background
             </Text>
             <Text className="text-base leading-6 text-slate-600">
-              To build your ideal schedule, we&apos;ll read your existing events and habits while
-              you answer a few quick questions.
+              To build your ideal schedule, we&apos;ll read your existing events
+              and habits while you answer a few quick questions.
             </Text>
           </View>
 
           {/* Permissions Section */}
           <View className="mt-8">
-            <Text className="text-lg font-bold text-slate-900 mb-4">Permissions needed</Text>
+            <Text className="text-lg font-bold text-slate-900 mb-4">
+              Permissions needed
+            </Text>
 
             {/* Allow All Pill */}
             <Pressable
@@ -191,17 +199,22 @@ export const PermissionsTemplate = ({
               className="overflow-hidden rounded-2xl active:opacity-95"
             >
               <LinearGradient
-                colors={['#3b82f6', '#2563eb']}
+                colors={["#3b82f6", "#2563eb"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.allowPillGradient}
               >
                 <View className="flex-row items-center px-5 py-5">
-                  <View className="w-11 h-11 rounded-xl items-center justify-center bg-white/20 mr-4" style={styles.allowIconWrap}>
+                  <View
+                    className="w-11 h-11 rounded-xl items-center justify-center bg-white/20 mr-4"
+                    style={styles.allowIconWrap}
+                  >
                     <CheckSquare size={22} color="#fff" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-base font-semibold text-white">Allow all permissions</Text>
+                    <Text className="text-base font-semibold text-white">
+                      Allow all permissions
+                    </Text>
                     <Text className="text-sm text-white/80 mt-0.5">
                       Calendar, notifications, email &amp; more
                     </Text>
@@ -209,7 +222,7 @@ export const PermissionsTemplate = ({
                   <View className="w-14 h-8 rounded-full bg-white/25 justify-center px-1">
                     <View
                       className={`w-6 h-6 rounded-full bg-white ${
-                        allowAllEnabled ? 'self-end' : 'self-start'
+                        allowAllEnabled ? "self-end" : "self-start"
                       }`}
                       style={styles.toggleKnob}
                     />
@@ -225,7 +238,9 @@ export const PermissionsTemplate = ({
               className="flex-row items-center justify-center gap-1.5 py-4 active:opacity-70"
             >
               <Text className="text-sm font-semibold text-blue-600">
-                {showIndividual ? 'Hide individual permissions' : 'View individual permissions'}
+                {showIndividual
+                  ? "Hide individual permissions"
+                  : "View individual permissions"}
               </Text>
               <ChevronIcon size={16} color="#2563eb" />
             </Pressable>
@@ -251,7 +266,11 @@ export const PermissionsTemplate = ({
 
           {/* Continue Button */}
           <View className="mt-6">
-            <GradientButton label="Allow & continue" onPress={onContinue} rightIcon={ArrowRight} />
+            <GradientButton
+              label="Allow & continue"
+              onPress={onContinue}
+              rightIcon={ArrowRight}
+            />
           </View>
 
           {/* Footer text */}
@@ -271,7 +290,12 @@ interface PermissionRowProps {
   showDivider?: boolean;
 }
 
-const PermissionRow = ({ config, enabled, onToggle, showDivider = false }: PermissionRowProps) => {
+const PermissionRow = ({
+  config,
+  enabled,
+  onToggle,
+  showDivider = false,
+}: PermissionRowProps) => {
   const Icon = config.icon;
 
   return (
@@ -282,20 +306,26 @@ const PermissionRow = ({ config, enabled, onToggle, showDivider = false }: Permi
         onPress={onToggle}
         className="flex-row items-center py-4 active:opacity-70"
       >
-        <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3.5 ${config.bgColor}`}>
+        <View
+          className={`w-10 h-10 rounded-xl items-center justify-center mr-3.5 ${config.bgColor}`}
+        >
           <Icon size={18} color="#fff" />
         </View>
         <View className="flex-1">
-          <Text className="text-base font-semibold text-slate-800">{config.title}</Text>
-          <Text className="text-sm text-slate-500 mt-0.5">{config.description}</Text>
+          <Text className="text-base font-semibold text-slate-800">
+            {config.title}
+          </Text>
+          <Text className="text-sm text-slate-500 mt-0.5">
+            {config.description}
+          </Text>
         </View>
         <View
           className={`w-12 h-7 rounded-full justify-center px-0.5 ${
-            enabled ? 'bg-blue-500' : 'bg-slate-300'
+            enabled ? "bg-blue-500" : "bg-slate-300"
           }`}
         >
           <View
-            className={`w-6 h-6 rounded-full bg-white shadow ${enabled ? 'self-end' : 'self-start'}`}
+            className={`w-6 h-6 rounded-full bg-white shadow ${enabled ? "self-end" : "self-start"}`}
           />
         </View>
       </Pressable>
@@ -325,10 +355,10 @@ const styles = StyleSheet.create({
   },
   allowIconWrap: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: "rgba(255,255,255,0.3)",
   },
   toggleKnob: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,

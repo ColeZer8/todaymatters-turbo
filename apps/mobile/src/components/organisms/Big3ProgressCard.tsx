@@ -1,8 +1,14 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { Target, Check, Clock, Plus } from 'lucide-react-native';
-import type { DailyBig3 } from '@/lib/supabase/services';
-import type { ScheduledEvent } from '@/stores';
+import { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+} from "react-native";
+import { Target, Check, Clock, Plus } from "lucide-react-native";
+import type { DailyBig3 } from "@/lib/supabase/services";
+import type { ScheduledEvent } from "@/stores";
 
 export interface Big3ProgressData {
   big3: DailyBig3 | null;
@@ -15,7 +21,10 @@ export interface Big3ProgressCardProps {
   onSetBig3: (p1: string, p2: string, p3: string) => void;
 }
 
-export const Big3ProgressCard = ({ data, onSetBig3 }: Big3ProgressCardProps) => {
+export const Big3ProgressCard = ({
+  data,
+  onSetBig3,
+}: Big3ProgressCardProps) => {
   const { big3, actualEvents } = data;
 
   if (!big3) {
@@ -38,16 +47,14 @@ export const Big3ProgressCard = ({ data, onSetBig3 }: Big3ProgressCardProps) => 
   }
 
   const completedCount = priorities.filter(
-    (p) => p.text && minutesByPriority[p.num] > 0
+    (p) => p.text && minutesByPriority[p.num] > 0,
   ).length;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.headerLabel}>YOUR BIG 3</Text>
-        <Text style={styles.completionBadge}>
-          {completedCount}/3
-        </Text>
+        <Text style={styles.completionBadge}>{completedCount}/3</Text>
       </View>
 
       <View style={styles.card}>
@@ -62,7 +69,9 @@ export const Big3ProgressCard = ({ data, onSetBig3 }: Big3ProgressCardProps) => 
                 <View
                   style={[
                     styles.checkCircle,
-                    hasTime ? styles.checkCircleActive : styles.checkCircleInactive,
+                    hasTime
+                      ? styles.checkCircleActive
+                      : styles.checkCircleInactive,
                   ]}
                 >
                   {hasTime ? (
@@ -79,14 +88,12 @@ export const Big3ProgressCard = ({ data, onSetBig3 }: Big3ProgressCardProps) => 
                     ]}
                     numberOfLines={1}
                   >
-                    {hasText ? priority.text : '(not set)'}
+                    {hasText ? priority.text : "(not set)"}
                   </Text>
                   {hasTime ? (
                     <View style={styles.timeRow}>
                       <Clock size={11} color="#6B7280" />
-                      <Text style={styles.timeText}>
-                        {minutes} min
-                      </Text>
+                      <Text style={styles.timeText}>{minutes} min</Text>
                     </View>
                   ) : null}
                 </View>
@@ -100,13 +107,18 @@ export const Big3ProgressCard = ({ data, onSetBig3 }: Big3ProgressCardProps) => 
   );
 };
 
-function SetBig3Cta({ onSetBig3 }: { onSetBig3: (p1: string, p2: string, p3: string) => void }) {
+function SetBig3Cta({
+  onSetBig3,
+}: {
+  onSetBig3: (p1: string, p2: string, p3: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [p1, setP1] = useState('');
-  const [p2, setP2] = useState('');
-  const [p3, setP3] = useState('');
+  const [p1, setP1] = useState("");
+  const [p2, setP2] = useState("");
+  const [p3, setP3] = useState("");
 
-  const canSave = p1.trim().length > 0 || p2.trim().length > 0 || p3.trim().length > 0;
+  const canSave =
+    p1.trim().length > 0 || p2.trim().length > 0 || p3.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
@@ -121,7 +133,10 @@ function SetBig3Cta({ onSetBig3 }: { onSetBig3: (p1: string, p2: string, p3: str
       </View>
 
       {!expanded ? (
-        <TouchableOpacity style={styles.ctaCard} onPress={() => setExpanded(true)}>
+        <TouchableOpacity
+          style={styles.ctaCard}
+          onPress={() => setExpanded(true)}
+        >
           <View style={styles.ctaIconContainer}>
             <Target size={20} color="#2563EB" />
           </View>
@@ -150,7 +165,7 @@ function SetBig3Cta({ onSetBig3 }: { onSetBig3: (p1: string, p2: string, p3: str
                 placeholderTextColor="#9CA3AF"
                 value={field.value}
                 onChangeText={field.setter}
-                returnKeyType={field.num === 3 ? 'done' : 'next'}
+                returnKeyType={field.num === 3 ? "done" : "next"}
               />
             </View>
           ))}
@@ -182,105 +197,105 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   headerLabel: {
     fontSize: 11.5,
     letterSpacing: 0.9,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   completionBadge: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
+    fontWeight: "700",
+    color: "#2563EB",
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     paddingVertical: 4,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(148,163,184,0.32)',
+    borderColor: "rgba(148,163,184,0.32)",
   },
   priorityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 11,
   },
   checkCircle: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   checkCircleActive: {
-    backgroundColor: '#22C55E',
+    backgroundColor: "#22C55E",
   },
   checkCircleInactive: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E5E7EB",
   },
   priorityNumber: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#6B7280',
+    fontWeight: "700",
+    color: "#6B7280",
   },
   priorityTextContainer: {
     flex: 1,
   },
   priorityText: {
     fontSize: 14.5,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "600",
+    color: "#111827",
   },
   priorityTextCompleted: {
-    color: '#22C55E',
+    color: "#22C55E",
   },
   timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 2,
     gap: 4,
   },
   timeText: {
     fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
+    color: "#6B7280",
+    fontWeight: "500",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(148,163,184,0.3)',
+    backgroundColor: "rgba(148,163,184,0.3)",
     marginLeft: 36,
   },
   // CTA styles
   ctaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(148,163,184,0.32)',
+    borderColor: "rgba(148,163,184,0.32)",
   },
   ctaIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(37,99,235,0.08)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(37,99,235,0.08)",
     marginRight: 12,
   },
   ctaTextContainer: {
@@ -288,35 +303,35 @@ const styles = StyleSheet.create({
   },
   ctaTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: "700",
+    color: "#111827",
   },
   ctaDescription: {
     fontSize: 13,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 2,
   },
   // Inline input styles
   inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
   },
   input: {
     flex: 1,
     fontSize: 14.5,
-    fontWeight: '500',
-    color: '#111827',
+    fontWeight: "500",
+    color: "#111827",
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(148,163,184,0.4)',
+    borderColor: "rgba(148,163,184,0.4)",
   },
   buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 10,
     paddingTop: 6,
     paddingBottom: 10,
@@ -328,21 +343,21 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontWeight: "600",
+    color: "#6B7280",
   },
   saveButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
   },
   saveButtonDisabled: {
     opacity: 0.4,
   },
   saveButtonText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { HomeBriefResult } from '@/lib/home-brief';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { HomeBriefResult } from "@/lib/home-brief";
 
 interface HomeBriefState {
   brief: HomeBriefResult | null;
@@ -28,12 +28,8 @@ export const useHomeBriefStore = create<HomeBriefState>()(
       clear: () => set({ brief: null, lastEvaluatedAt: null, lastLlmAt: null }),
     }),
     {
-      name: 'home-brief-storage',
+      name: "home-brief-storage",
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+    },
+  ),
 );
-
-
-
-

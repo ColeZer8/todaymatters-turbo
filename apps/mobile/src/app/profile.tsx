@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Activity,
   Bell,
@@ -16,13 +16,18 @@ import {
   Settings,
   Sparkles,
   Target,
-} from 'lucide-react-native';
-import { Alert, InteractionManager, Platform } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import Constants from 'expo-constants';
-import { ProfileTemplate } from '@/components/templates';
-import { DatePickerPopup } from '@/components/molecules';
-import { useDemoStore, useAuthStore, useOnboardingStore, useReviewTimeStore } from '@/stores';
+} from "lucide-react-native";
+import { Alert, InteractionManager, Platform } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import Constants from "expo-constants";
+import { ProfileTemplate } from "@/components/templates";
+import { DatePickerPopup } from "@/components/molecules";
+import {
+  useDemoStore,
+  useAuthStore,
+  useOnboardingStore,
+  useReviewTimeStore,
+} from "@/stores";
 import {
   addProfileValue,
   fetchProfile,
@@ -34,8 +39,8 @@ import {
   syncAndroidUsageSummary,
   syncIosScreenTimeSummary,
   syncIosHealthSummary,
-} from '@/lib/supabase/services';
-import { deriveFullNameFromEmail } from '@/lib/user-name';
+} from "@/lib/supabase/services";
+import { deriveFullNameFromEmail } from "@/lib/user-name";
 import {
   getCachedScreenTimeSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
@@ -44,34 +49,40 @@ import {
   getHealthSummarySafeAsync,
   getTodayActivityRingsSummarySafeAsync,
   getLatestWorkoutSummarySafeAsync,
-} from '@/lib/ios-insights';
+} from "@/lib/ios-insights";
 import {
   getAndroidInsightsSupportStatus,
   getUsageAccessAuthorizationStatusSafeAsync,
   getUsageSummarySafeAsync,
   openUsageAccessSettingsSafeAsync,
-} from '@/lib/android-insights';
-import { flushPendingLocationSamplesToSupabaseAsync } from '@/lib/ios-location';
+} from "@/lib/android-insights";
+import { flushPendingLocationSamplesToSupabaseAsync } from "@/lib/ios-location";
 import {
   captureAndroidLocationSampleNowAsync,
   flushPendingAndroidLocationSamplesToSupabaseAsync,
   getAndroidLocationDiagnostics,
-} from '@/lib/android-location';
-import { requestIosLocationPermissionsAsync } from '@/lib/ios-location';
-import { requestAndroidLocationPermissionsAsync } from '@/lib/android-location';
-import appConfig from '@/lib/config';
+} from "@/lib/android-location";
+import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
+import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
+import appConfig from "@/lib/config";
 
 // Start with empty values - will load from Supabase if authenticated
 const CORE_VALUES: string[] = [];
 
-type AccentTone = 'blue' | 'purple';
+type AccentTone = "blue" | "purple";
 
-type ProfileItem = { id: string; label: string; icon: LucideIcon; accent?: AccentTone };
+type ProfileItem = {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  accent?: AccentTone;
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const setDemoActive = useDemoStore((state) => state.setActive);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -82,361 +93,403 @@ export default function ProfileScreen() {
   const initiatives = useOnboardingStore((s) => s.initiatives);
   const setGoalsStore = useOnboardingStore((s) => s.setGoals);
   const setInitiativesStore = useOnboardingStore((s) => s.setInitiatives);
-  const requestAutoAssignAll = useReviewTimeStore((s) => s.requestAutoAssignAll);
+  const requestAutoAssignAll = useReviewTimeStore(
+    (s) => s.requestAutoAssignAll,
+  );
 
   // Redirect to sign-in if user becomes unauthenticated
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
   const handleStartDemo = () => {
     setDemoActive(true);
-    router.push('/home');
+    router.push("/home");
   };
 
   const handleDevReviewTime = () => {
-    router.push('/review-time');
+    router.push("/review-time");
   };
 
   const handleDevSyncScreenTime = useCallback(async () => {
     if (!user?.id) return;
     try {
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === "ios") {
         const status = await getScreenTimeAuthorizationStatusSafeAsync();
-        if (status !== 'approved') {
+        if (status !== "approved") {
           const next = await requestScreenTimeAuthorizationSafeAsync();
-          if (next !== 'approved') {
+          if (next !== "approved") {
             return;
           }
         }
-        await presentScreenTimeReportSafeAsync('today');
-        const summary = await getCachedScreenTimeSummarySafeAsync('today');
+        await presentScreenTimeReportSafeAsync("today");
+        const summary = await getCachedScreenTimeSummarySafeAsync("today");
         if (summary) {
-          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+          const timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
           await syncIosScreenTimeSummary(user.id, summary, timezone);
         }
-        router.push('/review-time');
+        router.push("/review-time");
         return;
       }
 
-      if (Platform.OS === 'android') {
+      if (Platform.OS === "android") {
         const support = getAndroidInsightsSupportStatus();
-        if (support !== 'available') {
-          Alert.alert('Screen time', 'Android usage access requires the custom dev client.');
+        if (support !== "available") {
+          Alert.alert(
+            "Screen time",
+            "Android usage access requires the custom dev client.",
+          );
           return;
         }
         const status = await getUsageAccessAuthorizationStatusSafeAsync();
-        if (status !== 'authorized') {
+        if (status !== "authorized") {
           await openUsageAccessSettingsSafeAsync();
-          Alert.alert('Screen time', 'Enable Usage Access for TodayMatters, then retry.');
+          Alert.alert(
+            "Screen time",
+            "Enable Usage Access for TodayMatters, then retry.",
+          );
           return;
         }
-        const summary = await getUsageSummarySafeAsync('today');
+        const summary = await getUsageSummarySafeAsync("today");
         if (summary) {
-          const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+          const timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
           try {
             await syncAndroidUsageSummary(user.id, summary, timezone);
           } catch (error) {
             Alert.alert(
-              'Screen Time sync',
-              'Usage data is available locally, but Supabase tables are missing. Open the dashboard to view without syncing.'
+              "Screen Time sync",
+              "Usage data is available locally, but Supabase tables are missing. Open the dashboard to view without syncing.",
             );
-            router.push('/dev/screen-time');
+            router.push("/dev/screen-time");
             return;
           }
         }
-        router.push('/review-time');
+        router.push("/review-time");
       }
     } catch (error) {
-      Alert.alert('Screen Time sync failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert(
+        "Screen Time sync failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }, [router, user?.id]);
 
   const handleDevSyncHealth = useCallback(async () => {
     if (!user?.id) return;
-    if (Platform.OS !== 'ios') {
-      Alert.alert('Health', 'Health sync is currently iOS-only.');
+    if (Platform.OS !== "ios") {
+      Alert.alert("Health", "Health sync is currently iOS-only.");
       return;
     }
     try {
       const [summary, rings, workout] = await Promise.all([
-        getHealthSummarySafeAsync('today'),
+        getHealthSummarySafeAsync("today"),
         getTodayActivityRingsSummarySafeAsync(),
-        getLatestWorkoutSummarySafeAsync('today'),
+        getLatestWorkoutSummarySafeAsync("today"),
       ]);
       if (summary) {
-        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+        const timezone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
         await syncIosHealthSummary(user.id, summary, timezone, rings, workout);
       }
-      Alert.alert('Health sync', 'Health data synced.');
+      Alert.alert("Health sync", "Health data synced.");
     } catch (error) {
-      Alert.alert('Health sync failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert(
+        "Health sync failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }, [user?.id]);
 
   const handleDevFlushLocation = useCallback(async () => {
     if (!user?.id) return;
     try {
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === "ios") {
         await flushPendingLocationSamplesToSupabaseAsync(user.id);
-      } else if (Platform.OS === 'android') {
+      } else if (Platform.OS === "android") {
         await flushPendingAndroidLocationSamplesToSupabaseAsync(user.id);
       }
-      Alert.alert('Location sync', 'Location samples flushed.');
+      Alert.alert("Location sync", "Location samples flushed.");
     } catch (error) {
-      Alert.alert('Location sync failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert(
+        "Location sync failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }, [user?.id]);
 
   const handleDevCaptureLocationNow = useCallback(async () => {
-    if (Platform.OS !== 'android') {
-      Alert.alert('Location', 'This tool is Android-only.');
+    if (Platform.OS !== "android") {
+      Alert.alert("Location", "This tool is Android-only.");
       return;
     }
     if (!user?.id) return;
-    const result = await captureAndroidLocationSampleNowAsync(user.id, { flushToSupabase: true });
+    const result = await captureAndroidLocationSampleNowAsync(user.id, {
+      flushToSupabase: true,
+    });
     if (!result.ok) {
-      Alert.alert('Capture location failed', `${result.reason}${result.detail ? `\n\n${result.detail}` : ''}`);
+      Alert.alert(
+        "Capture location failed",
+        `${result.reason}${result.detail ? `\n\n${result.detail}` : ""}`,
+      );
       return;
     }
     Alert.alert(
-      'Captured location sample',
-      `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`
+      "Captured location sample",
+      `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`,
     );
   }, [user?.id]);
 
   const handleDevAndroidLocationDiagnostics = useCallback(async () => {
-    if (Platform.OS !== 'android') {
-      Alert.alert('Android diagnostics', 'This diagnostic is only available on Android devices.');
+    if (Platform.OS !== "android") {
+      Alert.alert(
+        "Android diagnostics",
+        "This diagnostic is only available on Android devices.",
+      );
       return;
     }
     try {
       const diagnostics = await getAndroidLocationDiagnostics();
       const summary = [
         `Support: ${diagnostics.support}`,
-        `Location module: ${diagnostics.locationModule ? 'yes' : 'no'}`,
-        `Services enabled: ${diagnostics.servicesEnabled ? 'yes' : 'no'}`,
+        `Location module: ${diagnostics.locationModule ? "yes" : "no"}`,
+        `Services enabled: ${diagnostics.servicesEnabled ? "yes" : "no"}`,
         `Foreground permission: ${diagnostics.foregroundPermission}`,
         `Background permission: ${diagnostics.backgroundPermission}`,
-        `Task started: ${diagnostics.taskStarted ? 'yes' : 'no'}`,
-        `Can start: ${diagnostics.canStart ? 'yes' : 'no'}`,
+        `Task started: ${diagnostics.taskStarted ? "yes" : "no"}`,
+        `Can start: ${diagnostics.canStart ? "yes" : "no"}`,
         `Pending samples: ${diagnostics.pendingSamples}`,
-        `Last sample: ${diagnostics.lastSampleTimestamp ?? 'none'}`,
+        `Last sample: ${diagnostics.lastSampleTimestamp ?? "none"}`,
         `Samples (24h): ${diagnostics.sampleCount24h}`,
-      ].join('\n');
-      const errors = diagnostics.errors.length > 0 ? `\n\nBlocking issues:\n- ${diagnostics.errors.join('\n- ')}` : '';
-      Alert.alert('Android Location Diagnostics', `${summary}${errors}`);
+      ].join("\n");
+      const errors =
+        diagnostics.errors.length > 0
+          ? `\n\nBlocking issues:\n- ${diagnostics.errors.join("\n- ")}`
+          : "";
+      Alert.alert("Android Location Diagnostics", `${summary}${errors}`);
     } catch (error) {
       Alert.alert(
-        'Android diagnostics failed',
-        error instanceof Error ? error.message : 'Unknown error while running diagnostics.'
+        "Android diagnostics failed",
+        error instanceof Error
+          ? error.message
+          : "Unknown error while running diagnostics.",
       );
     }
   }, []);
 
   const handleDevRequestLocation = useCallback(async () => {
     try {
-      if (Platform.OS === 'ios') {
+      if (Platform.OS === "ios") {
         const result = await requestIosLocationPermissionsAsync();
         Alert.alert(
-          'Location permission',
+          "Location permission",
           `Foreground: ${result.foreground}\nBackground: ${result.background}`,
         );
-      } else if (Platform.OS === 'android') {
+      } else if (Platform.OS === "android") {
         const result = await requestAndroidLocationPermissionsAsync();
         Alert.alert(
-          'Location permission',
+          "Location permission",
           `Foreground: ${result.foreground}\nBackground: ${result.background}`,
         );
       } else {
-        Alert.alert('Location permission', 'Unsupported platform.');
+        Alert.alert("Location permission", "Unsupported platform.");
       }
     } catch (error) {
-      Alert.alert('Location permission failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert(
+        "Location permission failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
     }
   }, []);
 
   const handleDevAutoAssignReview = useCallback(() => {
     requestAutoAssignAll();
-    router.push('/review-time');
+    router.push("/review-time");
   }, [requestAutoAssignAll, router]);
 
   // Personalization settings - edit onboarding preferences
   const personalizationItems = [
     {
-      id: 'personalization',
-      label: 'Personalization',
+      id: "personalization",
+      label: "Personalization",
       icon: Sparkles,
-      onPress: () => router.push('/Personalization'),
+      onPress: () => router.push("/Personalization"),
     },
     {
-      id: 'pattern-insights',
-      label: 'Pattern Insights',
+      id: "pattern-insights",
+      label: "Pattern Insights",
       icon: Activity,
-      onPress: () => router.push('/PatternInsights'),
+      onPress: () => router.push("/PatternInsights"),
     },
     {
-      id: 'daily-rhythm',
-      label: 'Daily Rhythm',
+      id: "daily-rhythm",
+      label: "Daily Rhythm",
       icon: MoonStar,
-      onPress: () => router.push('/settings/daily-rhythm'),
+      onPress: () => router.push("/settings/daily-rhythm"),
     },
     {
-      id: 'coach-persona',
-      label: 'Coach Persona',
+      id: "coach-persona",
+      label: "Coach Persona",
       icon: MessageCircle,
-      onPress: () => router.push('/settings/coach-persona'),
+      onPress: () => router.push("/settings/coach-persona"),
     },
     {
-      id: 'build-routine',
-      label: 'Morning Routine',
+      id: "build-routine",
+      label: "Morning Routine",
       icon: ListChecks,
-      onPress: () => router.push('/settings/build-routine'),
+      onPress: () => router.push("/settings/build-routine"),
     },
     {
-      id: 'ideal-day',
-      label: 'Ideal Day',
+      id: "ideal-day",
+      label: "Ideal Day",
       icon: Calendar,
-      onPress: () => router.push('/settings/ideal-day'),
+      onPress: () => router.push("/settings/ideal-day"),
     },
     {
-      id: 'place-labels',
-      label: 'Place Labels',
+      id: "place-labels",
+      label: "Place Labels",
       icon: MapPin,
-      onPress: () => router.push('/settings/place-labels'),
+      onPress: () => router.push("/settings/place-labels"),
     },
   ];
 
   // Build menu items - include Demo Mode in development builds
   // Always show dev menu in preview builds (check via Constants.executionEnvironment)
   // Preview builds are standalone builds, so check for that OR if not production
-  const isPreviewBuild = Constants.executionEnvironment === 'standalone';
-  const isStoreClient = Constants.executionEnvironment === 'storeClient';
+  const isPreviewBuild = Constants.executionEnvironment === "standalone";
+  const isStoreClient = Constants.executionEnvironment === "storeClient";
   // Show dev menu if: dev mode, not production env, standalone build (preview), or store client
   const showDevMenu =
-    __DEV__ || !appConfig.env.isProd || isPreviewBuild || isStoreClient || appConfig.features.enableTestingMenu;
-  
+    __DEV__ ||
+    !appConfig.env.isProd ||
+    isPreviewBuild ||
+    isStoreClient ||
+    appConfig.features.enableTestingMenu;
+
   const menuItems = [
-    { id: 'account-settings', label: 'Account Settings', icon: Settings },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'subscription', label: 'Subscription', icon: CreditCard },
+    { id: "account-settings", label: "Account Settings", icon: Settings },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "subscription", label: "Subscription", icon: CreditCard },
     // Demo Mode - visible in development and preview builds (not production)
     ...(showDevMenu
       ? [
           {
-            id: 'demo-mode',
-            label: '🎬 Demo Mode',
+            id: "demo-mode",
+            label: "🎬 Demo Mode",
             icon: Play,
             onPress: handleStartDemo,
           },
           {
-            id: 'dev-review-time',
-            label: '🧪 Review Time (dev)',
+            id: "dev-review-time",
+            label: "🧪 Review Time (dev)",
             icon: Calendar,
             onPress: handleDevReviewTime,
           },
           {
-            id: 'dev-sync-screen-time',
-            label: '🧪 Sync Screen Time (dev)',
+            id: "dev-sync-screen-time",
+            label: "🧪 Sync Screen Time (dev)",
             icon: Calendar,
             onPress: handleDevSyncScreenTime,
           },
           {
-            id: 'dev-screen-time-dashboard',
-            label: '🧪 Screen Time Dashboard (dev)',
+            id: "dev-screen-time-dashboard",
+            label: "🧪 Screen Time Dashboard (dev)",
             icon: Calendar,
-            onPress: () => router.push('/dev/screen-time'),
+            onPress: () => router.push("/dev/screen-time"),
           },
           {
-            id: 'dev-location-dashboard',
-            label: '🧪 Location Samples (dev)',
+            id: "dev-location-dashboard",
+            label: "🧪 Location Samples (dev)",
             icon: Calendar,
-            onPress: () => router.push('/dev/location'),
+            onPress: () => router.push("/dev/location"),
           },
           {
-            id: 'dev-android-location-diagnostics',
-            label: '🧪 Android Location Diagnostics (dev)',
+            id: "dev-android-location-diagnostics",
+            label: "🧪 Android Location Diagnostics (dev)",
             icon: Calendar,
             onPress: handleDevAndroidLocationDiagnostics,
           },
           {
-            id: 'dev-sync-health',
-            label: '🧪 Sync Health (dev)',
+            id: "dev-sync-health",
+            label: "🧪 Sync Health (dev)",
             icon: Calendar,
             onPress: handleDevSyncHealth,
           },
           {
-            id: 'dev-flush-location',
-            label: '🧪 Flush Location (dev)',
+            id: "dev-flush-location",
+            label: "🧪 Flush Location (dev)",
             icon: Calendar,
             onPress: handleDevFlushLocation,
           },
           {
-            id: 'dev-capture-location-now',
-            label: '🧪 Capture Location Now (dev)',
+            id: "dev-capture-location-now",
+            label: "🧪 Capture Location Now (dev)",
             icon: Calendar,
             onPress: handleDevCaptureLocationNow,
           },
           {
-            id: 'dev-request-location',
-            label: '🧪 Request Location (dev)',
+            id: "dev-request-location",
+            label: "🧪 Request Location (dev)",
             icon: Calendar,
             onPress: handleDevRequestLocation,
           },
           {
-            id: 'dev-auto-assign-review',
-            label: '🧪 Auto-Assign Review (AI)',
+            id: "dev-auto-assign-review",
+            label: "🧪 Auto-Assign Review (AI)",
             icon: Calendar,
             onPress: handleDevAutoAssignReview,
           },
           {
-            id: 'dev-check-update',
-            label: '🔄 Check for Update',
+            id: "dev-check-update",
+            label: "🔄 Check for Update",
             icon: Calendar,
             onPress: async () => {
-              const { checkAndApplyUpdate, isUpdateEnabled, getUpdateInfo, getUpdateDiagnostics } = await import('@/lib/updates');
+              const {
+                checkAndApplyUpdate,
+                isUpdateEnabled,
+                getUpdateInfo,
+                getUpdateDiagnostics,
+              } = await import("@/lib/updates");
               const enabled = isUpdateEnabled();
               const info = getUpdateInfo();
               const diagnostics = getUpdateDiagnostics();
-              
-              const diagnosticText = `Dev Mode: ${diagnostics.isDev ? 'Yes' : 'No'}
-EAS Build: ${diagnostics.isEasBuild ? 'Yes' : 'No'}
-Updates Enabled: ${diagnostics.updatesEnabled ? 'Yes' : 'No'}
+
+              const diagnosticText = `Dev Mode: ${diagnostics.isDev ? "Yes" : "No"}
+EAS Build: ${diagnostics.isEasBuild ? "Yes" : "No"}
+Updates Enabled: ${diagnostics.updatesEnabled ? "Yes" : "No"}
 Channel: ${diagnostics.channel}
 Runtime: ${diagnostics.runtimeVersion}
 Update ID: ${diagnostics.updateId}
-Embedded Launch: ${diagnostics.isEmbeddedLaunch ? 'Yes' : 'No'}
+Embedded Launch: ${diagnostics.isEmbeddedLaunch ? "Yes" : "No"}
 Environment: ${diagnostics.executionEnvironment}
 Update URL: ${diagnostics.updateUrl}`;
-              
-              Alert.alert(
-                'Update Diagnostics',
-                diagnosticText,
-                [
-                  { text: 'OK' },
-                  ...(enabled
-                    ? [
-                        {
-                          text: 'Check Now',
-                          onPress: async () => {
-                            const result = await checkAndApplyUpdate();
-                            Alert.alert(
-                              result.applied ? 'Update Applied' : 'No Update',
-                              result.applied
-                                ? 'App will reload with the latest update.'
-                                : result.error || 'You are on the latest version.'
-                            );
-                          },
+
+              Alert.alert("Update Diagnostics", diagnosticText, [
+                { text: "OK" },
+                ...(enabled
+                  ? [
+                      {
+                        text: "Check Now",
+                        onPress: async () => {
+                          const result = await checkAndApplyUpdate();
+                          Alert.alert(
+                            result.applied ? "Update Applied" : "No Update",
+                            result.applied
+                              ? "App will reload with the latest update."
+                              : result.error ||
+                                  "You are on the latest version.",
+                          );
                         },
-                      ]
-                    : []),
-                ]
-              );
+                      },
+                    ]
+                  : []),
+              ]);
             },
           },
         ]
@@ -445,75 +498,78 @@ Update URL: ${diagnostics.updateUrl}`;
     ...(isPreviewBuild && !showDevMenu
       ? [
           {
-            id: 'check-update',
-            label: '🔄 Check for Update',
+            id: "check-update",
+            label: "🔄 Check for Update",
             icon: RefreshCw,
             onPress: async () => {
-              const { checkAndApplyUpdate, getUpdateDiagnostics } = await import('@/lib/updates');
+              const { checkAndApplyUpdate, getUpdateDiagnostics } =
+                await import("@/lib/updates");
               const diagnostics = getUpdateDiagnostics();
-              
-              const diagnosticText = `Updates Enabled: ${diagnostics.updatesEnabled ? 'Yes' : 'No'}
+
+              const diagnosticText = `Updates Enabled: ${diagnostics.updatesEnabled ? "Yes" : "No"}
 Channel: ${diagnostics.channel}
 Runtime: ${diagnostics.runtimeVersion}
 Update ID: ${diagnostics.updateId}`;
-              
-              Alert.alert(
-                'Update Status',
-                diagnosticText,
-                [
-                  { text: 'OK' },
-                  ...(diagnostics.updatesEnabled
-                    ? [
-                        {
-                          text: 'Check Now',
-                          onPress: async () => {
-                            const result = await checkAndApplyUpdate();
-                            Alert.alert(
-                              result.applied ? 'Update Applied' : 'No Update',
-                              result.applied
-                                ? 'App will reload with the latest update.'
-                                : result.error || 'You are on the latest version.'
-                            );
-                          },
+
+              Alert.alert("Update Status", diagnosticText, [
+                { text: "OK" },
+                ...(diagnostics.updatesEnabled
+                  ? [
+                      {
+                        text: "Check Now",
+                        onPress: async () => {
+                          const result = await checkAndApplyUpdate();
+                          Alert.alert(
+                            result.applied ? "Update Applied" : "No Update",
+                            result.applied
+                              ? "App will reload with the latest update."
+                              : result.error ||
+                                  "You are on the latest version.",
+                          );
                         },
-                      ]
-                    : []),
-                ]
-              );
+                      },
+                    ]
+                  : []),
+              ]);
             },
           },
         ]
       : []),
     {
-      id: 'logout',
-      label: 'Log Out',
+      id: "logout",
+      label: "Log Out",
       icon: LogOut,
       onPress: async () => {
         if (__DEV__) {
-          console.log('🔴 Logout button pressed');
+          console.log("🔴 Logout button pressed");
         }
         try {
           // Sign out - this clears the session and updates auth state
           if (__DEV__) {
-            console.log('🔴 Calling signOut()...');
+            console.log("🔴 Calling signOut()...");
           }
           await signOut();
-          
+
           if (__DEV__) {
-            console.log('🔴 SignOut completed, navigating to sign-in...');
+            console.log("🔴 SignOut completed, navigating to sign-in...");
           }
-          
+
           // Force navigation to sign-in screen
           // Use a small delay to ensure auth state has updated
           setTimeout(() => {
             if (__DEV__) {
-              console.log('🔴 Navigating to /');
+              console.log("🔴 Navigating to /");
             }
-            router.replace('/');
+            router.replace("/");
           }, 100);
         } catch (error) {
-          console.error('❌ Logout error:', error);
-          Alert.alert('Error', error instanceof Error ? error.message : 'Failed to sign out. Please try again.');
+          console.error("❌ Logout error:", error);
+          Alert.alert(
+            "Error",
+            error instanceof Error
+              ? error.message
+              : "Failed to sign out. Please try again.",
+          );
         }
       },
     },
@@ -521,25 +577,35 @@ Update ID: ${diagnostics.updateId}`;
   const [isEditing, setIsEditing] = useState(false);
   const [draftFullName, setDraftFullName] = useState(fullName);
   const [coreValues, setCoreValues] = useState<string[]>([]);
-  const [newValueText, setNewValueText] = useState('');
+  const [newValueText, setNewValueText] = useState("");
   const goalItems = useMemo<ProfileItem[]>(
     () =>
       goals
         .map((goal) => goal.trim())
         .filter(Boolean)
-        .map((goal) => ({ id: goal, label: goal, icon: Target, accent: 'blue' })),
-    [goals]
+        .map((goal) => ({
+          id: goal,
+          label: goal,
+          icon: Target,
+          accent: "blue",
+        })),
+    [goals],
   );
-  const [newGoalText, setNewGoalText] = useState('');
+  const [newGoalText, setNewGoalText] = useState("");
   const initiativeItems = useMemo<ProfileItem[]>(
     () =>
       initiatives
         .map((initiative) => initiative.trim())
         .filter(Boolean)
-        .map((initiative) => ({ id: initiative, label: initiative, icon: Briefcase, accent: 'purple' })),
-    [initiatives]
+        .map((initiative) => ({
+          id: initiative,
+          label: initiative,
+          icon: Briefcase,
+          accent: "purple",
+        })),
+    [initiatives],
   );
-  const [newInitiativeText, setNewInitiativeText] = useState('');
+  const [newInitiativeText, setNewInitiativeText] = useState("");
   const [isLoadingValues, setIsLoadingValues] = useState(false);
   const [hasLoadedValues, setHasLoadedValues] = useState(false);
   const [birthday, setBirthday] = useState<Date | null>(null);
@@ -550,26 +616,36 @@ Update ID: ${diagnostics.updateId}`;
   useEffect(() => {
     if (!isAuthenticated || !user?.id || hasLoadedValues) {
       if (!isAuthenticated) {
-        console.log('🔒 Not authenticated, skipping profile values fetch');
+        console.log("🔒 Not authenticated, skipping profile values fetch");
       }
       return;
     }
 
     const loadValues = async () => {
-      console.log('🔄 Loading profile values for user:', user.id, user.email);
+      console.log("🔄 Loading profile values for user:", user.id, user.email);
       setIsLoadingValues(true);
       try {
         const values = await fetchProfileValues(user.id);
         if (values.length > 0) {
-          console.log('✅ Loaded', values.length, 'values from Supabase:', values);
+          console.log(
+            "✅ Loaded",
+            values.length,
+            "values from Supabase:",
+            values,
+          );
           setCoreValues(values);
         } else {
-          console.log('ℹ️ No values found in Supabase, starting with empty list');
+          console.log(
+            "ℹ️ No values found in Supabase, starting with empty list",
+          );
           setCoreValues([]);
         }
         setHasLoadedValues(true);
       } catch (error) {
-        console.error('❌ Failed to load profile values from Supabase, using local defaults:', error);
+        console.error(
+          "❌ Failed to load profile values from Supabase, using local defaults:",
+          error,
+        );
         // Fallback to default values - don't break the UI
         setHasLoadedValues(true);
       } finally {
@@ -600,7 +676,7 @@ Update ID: ${diagnostics.updateId}`;
         setBirthday(profile?.birthday ? ymdToDate(profile.birthday) : null);
         setHasLoadedProfile(true);
       } catch (error) {
-        console.error('❌ Failed to load profile:', error);
+        console.error("❌ Failed to load profile:", error);
         setHasLoadedProfile(true);
       }
     })();
@@ -618,12 +694,12 @@ Update ID: ${diagnostics.updateId}`;
       try {
         await saveProfileValues(user.id, values);
       } catch (error) {
-        console.error('Failed to save profile values to Supabase:', error);
+        console.error("Failed to save profile values to Supabase:", error);
         // Don't throw - optimistic update already happened
         // User can retry by editing again
       }
     },
-    [isAuthenticated, user?.id]
+    [isAuthenticated, user?.id],
   );
 
   const handleAddValue = async () => {
@@ -636,14 +712,14 @@ Update ID: ${diagnostics.updateId}`;
     // Optimistic update - update UI immediately
     const newValues = [...coreValues, next];
     setCoreValues(newValues);
-    setNewValueText('');
+    setNewValueText("");
 
     // Sync to Supabase in background
     if (isAuthenticated && user?.id) {
       try {
         await addProfileValue(user.id, next);
       } catch (error) {
-        console.error('Failed to add value to Supabase:', error);
+        console.error("Failed to add value to Supabase:", error);
         // Rollback on error
         setCoreValues(previousValues);
       }
@@ -663,7 +739,7 @@ Update ID: ${diagnostics.updateId}`;
       try {
         await removeProfileValue(user.id, value);
       } catch (error) {
-        console.error('Failed to remove value from Supabase:', error);
+        console.error("Failed to remove value from Supabase:", error);
         // Rollback on error
         setCoreValues(previousValues);
       }
@@ -682,7 +758,7 @@ Update ID: ${diagnostics.updateId}`;
         try {
           await updateFullName(user.id, nextName);
         } catch (error) {
-          console.error('❌ Failed to update name:', error);
+          console.error("❌ Failed to update name:", error);
         }
       }
       await syncValuesToSupabase(coreValues);
@@ -690,8 +766,12 @@ Update ID: ${diagnostics.updateId}`;
   };
 
   const birthdayLabel = birthday
-    ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(birthday)
-    : 'Not set';
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(birthday)
+    : "Not set";
 
   const handleBirthdaySelect = async (date: Date) => {
     setBirthday(date);
@@ -701,7 +781,7 @@ Update ID: ${diagnostics.updateId}`;
       try {
         await updateBirthday(user.id, date);
       } catch (error) {
-        console.error('❌ Failed to update birthday:', error);
+        console.error("❌ Failed to update birthday:", error);
       }
     }
   };
@@ -710,7 +790,7 @@ Update ID: ${diagnostics.updateId}`;
     const next = newGoalText.trim();
     if (!next) return;
     setGoalsStore(Array.from(new Set([...goals, next])));
-    setNewGoalText('');
+    setNewGoalText("");
   };
 
   const handleRemoveGoal = (id: string) => {
@@ -721,7 +801,7 @@ Update ID: ${diagnostics.updateId}`;
     const next = newInitiativeText.trim();
     if (!next) return;
     setInitiativesStore(Array.from(new Set([...initiatives, next])));
-    setNewInitiativeText('');
+    setNewInitiativeText("");
   };
 
   const handleRemoveInitiative = (id: string) => {
@@ -731,7 +811,9 @@ Update ID: ${diagnostics.updateId}`;
   return (
     <>
       <ProfileTemplate
-        name={fullName.trim() || deriveFullNameFromEmail(user?.email) || 'Profile'}
+        name={
+          fullName.trim() || deriveFullNameFromEmail(user?.email) || "Profile"
+        }
         role="Professional"
         badgeLabel="Pro Member"
         coreValues={coreValues}
@@ -742,8 +824,8 @@ Update ID: ${diagnostics.updateId}`;
         onChangeName={setDraftFullName}
         personalizationItems={[
           {
-            id: 'birthday',
-            label: 'Birthday',
+            id: "birthday",
+            label: "Birthday",
             icon: Calendar,
             value: birthdayLabel,
             onPress: () => setIsBirthdayPickerVisible(true),

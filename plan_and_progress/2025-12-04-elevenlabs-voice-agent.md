@@ -56,12 +56,14 @@ All code has been written and compiles successfully. The following manual steps 
 ### 2. Environment Variables
 
 Add to your mobile `.env`:
+
 ```bash
 EXPO_PUBLIC_ELEVENLABS_AGENT_ID=your_agent_id
 EXPO_PUBLIC_ELEVENLABS_PRIVATE_AGENT=false  # or true for private agents
 ```
 
 Add to Supabase secrets:
+
 ```bash
 supabase secrets set ELEVENLABS_API_KEY=xi_your_api_key
 supabase secrets set ELEVENLABS_AGENT_ID=your_agent_id
@@ -85,6 +87,7 @@ supabase db push
 ### 5. Run Expo Prebuild
 
 WebRTC requires native code:
+
 ```bash
 cd apps/mobile
 npx expo prebuild
@@ -111,6 +114,7 @@ pnpm --filter mobile android
 ## Files Created/Modified
 
 ### New Files
+
 - `apps/mobile/src/lib/elevenlabs/config.ts`
 - `apps/mobile/src/lib/elevenlabs/types.ts`
 - `apps/mobile/src/lib/elevenlabs/permissions.ts`
@@ -126,6 +130,7 @@ pnpm --filter mobile android
 - `docs/elevenlabs-voice-agent-integration.md`
 
 ### Modified Files
+
 - `apps/mobile/app.json` - Added permissions and plugins
 - `apps/mobile/src/app/_layout.tsx` - Added ElevenLabsProvider
 - `apps/mobile/src/hooks/index.ts` - Exported useVoiceCoach
@@ -139,11 +144,3 @@ pnpm --filter mobile android
 4. Add haptic feedback for voice interactions
 5. Implement conversation history screen
 6. Add push notifications for scheduled coaching sessions
-
-
-
-
-
-
-
-

@@ -1,14 +1,22 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { useAuthStore } from '@/stores';
+import { useCallback, useEffect, useRef } from "react";
+import { useAuthStore } from "@/stores";
 import {
   getIdealDayDefaultCategories,
   getIdealDayIconByName,
   useIdealDayStore,
   type DayType,
   type IdealDayCategory,
-} from '@/stores/ideal-day-store';
-import { fetchProfile, getProfilePreferences, updateIdealDayUiState } from '../services/profiles';
-import { fetchIdealDay, saveIdealDay, type IdealDayCategoryRow } from '../services/ideal-day';
+} from "@/stores/ideal-day-store";
+import {
+  fetchProfile,
+  getProfilePreferences,
+  updateIdealDayUiState,
+} from "../services/profiles";
+import {
+  fetchIdealDay,
+  saveIdealDay,
+  type IdealDayCategoryRow,
+} from "../services/ideal-day";
 
 interface UseIdealDaySyncOptions {
   autoLoad?: boolean;
@@ -36,22 +44,27 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
   const loadIdealDay = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     try {
-      const [profile, idealDay] = await Promise.all([fetchProfile(user.id), fetchIdealDay(user.id)]);
+      const [profile, idealDay] = await Promise.all([
+        fetchProfile(user.id),
+        fetchIdealDay(user.id),
+      ]);
       const prefs = getProfilePreferences(profile);
-      const desiredDayType = ((prefs.ideal_day_day_type ?? 'weekdays') as DayType) ?? 'weekdays';
+      const desiredDayType =
+        ((prefs.ideal_day_day_type ?? "weekdays") as DayType) ?? "weekdays";
 
       if (!idealDay) return;
 
       // IMPORTANT: read the latest store snapshot at execution time so this function
       // doesn't re-run on every local edit (which would overwrite in-progress changes).
-      const currentCategoriesByType = useIdealDayStore.getState().categoriesByType;
+      const currentCategoriesByType =
+        useIdealDayStore.getState().categoriesByType;
 
       // Convert db rows -> store categories
       const toStoreCategory = (row: IdealDayCategoryRow): IdealDayCategory => {
         // IdealDay store uses hours, db uses minutes.
         const hours = row.minutes / 60;
         const maxHours = row.maxMinutes > 0 ? row.maxMinutes / 60 : 12;
-        const iconName = row.iconName ?? 'Sparkles';
+        const iconName = row.iconName ?? "Sparkles";
         // The store's restoreIcon uses ICON_MAP + fallback Sparkles; we reuse iconName to keep it consistent.
         // We'll let the store's persisted merge handle icon mapping; for now use a best-effort fallback.
         // (If you want perfect icon mapping, we can export a helper from the store next.)
@@ -60,29 +73,41 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
           name: row.name,
           hours,
           maxHours,
-          color: row.color ?? '#4F8BFF',
+          color: row.color ?? "#4F8BFF",
           icon: getIdealDayIconByName(iconName),
           iconName,
         };
       };
 
       const fallbackWeekdays =
-        currentCategoriesByType.weekdays.length > 0 ? currentCategoriesByType.weekdays : getIdealDayDefaultCategories();
+        currentCategoriesByType.weekdays.length > 0
+          ? currentCategoriesByType.weekdays
+          : getIdealDayDefaultCategories();
       const fallbackSaturday =
-        currentCategoriesByType.saturday.length > 0 ? currentCategoriesByType.saturday : getIdealDayDefaultCategories();
+        currentCategoriesByType.saturday.length > 0
+          ? currentCategoriesByType.saturday
+          : getIdealDayDefaultCategories();
       const fallbackSunday =
-        currentCategoriesByType.sunday.length > 0 ? currentCategoriesByType.sunday : getIdealDayDefaultCategories();
+        currentCategoriesByType.sunday.length > 0
+          ? currentCategoriesByType.sunday
+          : getIdealDayDefaultCategories();
 
       const nextCategoriesByType = {
         ...currentCategoriesByType,
         // If templates are missing/empty but overrides exist, do NOT wipe the base templates;
         // that causes the UI to "blank out" when switching tabs.
         weekdays:
-          idealDay.templates.weekdays.length > 0 ? idealDay.templates.weekdays.map(toStoreCategory) : fallbackWeekdays,
+          idealDay.templates.weekdays.length > 0
+            ? idealDay.templates.weekdays.map(toStoreCategory)
+            : fallbackWeekdays,
         saturday:
-          idealDay.templates.saturday.length > 0 ? idealDay.templates.saturday.map(toStoreCategory) : fallbackSaturday,
+          idealDay.templates.saturday.length > 0
+            ? idealDay.templates.saturday.map(toStoreCategory)
+            : fallbackSaturday,
         sunday:
-          idealDay.templates.sunday.length > 0 ? idealDay.templates.sunday.map(toStoreCategory) : fallbackSunday,
+          idealDay.templates.sunday.length > 0
+            ? idealDay.templates.sunday.map(toStoreCategory)
+            : fallbackSunday,
         // Keep current editing buffer for custom; it will be set when user selects a day.
         custom: currentCategoriesByType.custom,
       };
@@ -98,7 +123,8 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
         customDayConfigs: nextCustomDayConfigs,
       });
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load ideal day');
+      const err =
+        error instanceof Error ? error : new Error("Failed to load ideal day");
       onErrorRef.current?.(err);
     }
   }, [isAuthenticated, user?.id, setFromSupabase]);
@@ -106,7 +132,10 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
   const saveIdealDaySnapshot = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
     try {
-      const toDbCategory = (cat: IdealDayCategory, index: number): IdealDayCategoryRow => ({
+      const toDbCategory = (
+        cat: IdealDayCategory,
+        index: number,
+      ): IdealDayCategoryRow => ({
         categoryKey: cat.id,
         name: cat.name,
         minutes: Math.round(cat.hours * 60),
@@ -128,13 +157,14 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
             Object.entries(customDayConfigs).map(([dayKey, cats]) => [
               Number(dayKey),
               cats.map(toDbCategory),
-            ])
+            ]),
           ),
         }),
         updateIdealDayUiState(user.id, dayType),
       ]);
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to save ideal day');
+      const err =
+        error instanceof Error ? error : new Error("Failed to save ideal day");
       onErrorRef.current?.(err);
     }
   }, [isAuthenticated, user?.id, dayType, categoriesByType, customDayConfigs]);
@@ -156,8 +186,3 @@ export function useIdealDaySync(options: UseIdealDaySyncOptions = {}) {
 
   return { loadIdealDay, saveIdealDay: saveIdealDaySnapshot };
 }
-
-
-
-
-

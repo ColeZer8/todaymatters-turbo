@@ -1,24 +1,53 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { Brain, HeartHandshake, ShieldCheck, Trophy } from 'lucide-react-native';
-import { PurposeSelectionTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import {
+  Brain,
+  HeartHandshake,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react-native";
+import { PurposeSelectionTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const PURPOSE_OPTIONS = [
-  { id: 'balance', title: 'Work-Life Balance', description: undefined, icon: HeartHandshake },
-  { id: 'clarity', title: 'Mental Clarity', description: undefined, icon: Brain },
-  { id: 'stress', title: 'Reduce Stress', description: undefined, icon: ShieldCheck },
-  { id: 'goals', title: 'Achieve Big Goals', description: undefined, icon: Trophy },
+  {
+    id: "balance",
+    title: "Work-Life Balance",
+    description: undefined,
+    icon: HeartHandshake,
+  },
+  {
+    id: "clarity",
+    title: "Mental Clarity",
+    description: undefined,
+    icon: Brain,
+  },
+  {
+    id: "stress",
+    title: "Reduce Stress",
+    description: undefined,
+    icon: ShieldCheck,
+  },
+  {
+    id: "goals",
+    title: "Achieve Big Goals",
+    description: undefined,
+    icon: Trophy,
+  },
 ];
 
 export default function YourWhyScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -26,7 +55,10 @@ export default function YourWhyScreen() {
   const setSelected = useOnboardingStore((state) => state.setPurpose);
 
   // Supabase sync
-  const { savePurpose } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { savePurpose } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   // Save to Supabase when purpose changes
   useEffect(() => {
@@ -39,7 +71,7 @@ export default function YourWhyScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -59,8 +91,8 @@ export default function YourWhyScreen() {
       options={PURPOSE_OPTIONS}
       selectedId={selected}
       onSelect={setSelected}
-      onContinue={() => router.replace('/focus-style')}
-      onBack={() => router.replace('/drains')}
+      onContinue={() => router.replace("/focus-style")}
+      onBack={() => router.replace("/drains")}
     />
   );
 }

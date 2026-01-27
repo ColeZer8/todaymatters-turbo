@@ -8,6 +8,7 @@
 ## Objective
 
 Improve landing page scrolling so:
+
 - The user doesn’t easily overshoot “Designed for Daily Life”.
 - The “Crafted with Care. Loved Everywhere.” section snaps to a consistently aligned position (no partial/misaligned snap).
 
@@ -39,4 +40,3 @@ Improve landing page scrolling so:
 ## Follow-ups
 
 - Consider adding a small visual scroll affordance or section nav if needed.
-

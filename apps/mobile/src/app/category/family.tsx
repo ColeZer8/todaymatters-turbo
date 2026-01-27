@@ -1,5 +1,5 @@
-import { Stack } from 'expo-router';
-import { CategoryHealthTemplate } from '@/components/templates';
+import { Stack } from "expo-router";
+import { CategoryHealthTemplate } from "@/components/templates";
 
 export default function FamilyHealthScreen() {
   return (
@@ -9,4 +9,3 @@ export default function FamilyHealthScreen() {
     </>
   );
 }
-

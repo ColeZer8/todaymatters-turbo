@@ -1,6 +1,6 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
-import { ReviewTimeTemplate } from '@/components/templates';
+import { Stack, useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
+import { ReviewTimeTemplate } from "@/components/templates";
 
 export default function ReviewTimeScreen() {
   const params = useLocalSearchParams<{
@@ -15,15 +15,24 @@ export default function ReviewTimeScreen() {
     if (!params.startMinutes || !params.duration) return undefined;
     const startMinutes = Number(params.startMinutes);
     const duration = Number(params.duration);
-    if (!Number.isFinite(startMinutes) || !Number.isFinite(duration)) return undefined;
+    if (!Number.isFinite(startMinutes) || !Number.isFinite(duration))
+      return undefined;
     return {
-      id: params.focusId ?? `focus_${Math.round(startMinutes)}_${Math.round(duration)}`,
+      id:
+        params.focusId ??
+        `focus_${Math.round(startMinutes)}_${Math.round(duration)}`,
       startMinutes,
       duration,
       title: params.title,
       description: params.description,
     };
-  }, [params.description, params.duration, params.focusId, params.startMinutes, params.title]);
+  }, [
+    params.description,
+    params.duration,
+    params.focusId,
+    params.startMinutes,
+    params.title,
+  ]);
 
   return (
     <>

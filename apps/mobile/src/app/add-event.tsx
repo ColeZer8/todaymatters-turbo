@@ -1,275 +1,300 @@
-import { Alert } from 'react-native';
-import { useEffect, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AddEventTemplate, type Big3Priorities } from '../components/templates/AddEventTemplate';
-import { USE_MOCK_CALENDAR } from '@/lib/config';
-import { useAuthStore, useEventsStore, useUserPreferencesStore } from '@/stores';
-import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+import { Alert } from "react-native";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    buildPatternIndex,
-    buildPatternIndexFromSlots,
-    serializePatternIndex,
-    type PatternIndex,
-} from '@/lib/calendar/pattern-recognition';
-import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
-import { fetchBig3ForDate, upsertBig3ForDate } from '@/lib/supabase/services/daily-big3';
+  AddEventTemplate,
+  type Big3Priorities,
+} from "../components/templates/AddEventTemplate";
+import { USE_MOCK_CALENDAR } from "@/lib/config";
+import {
+  useAuthStore,
+  useEventsStore,
+  useUserPreferencesStore,
+} from "@/stores";
+import { useCalendarEventsSync } from "@/lib/supabase/hooks/use-calendar-events-sync";
+import {
+  buildPatternIndex,
+  buildPatternIndexFromSlots,
+  serializePatternIndex,
+  type PatternIndex,
+} from "@/lib/calendar/pattern-recognition";
+import {
+  fetchActivityPatterns,
+  upsertActivityPatterns,
+} from "@/lib/supabase/services/activity-patterns";
+import {
+  fetchBig3ForDate,
+  upsertBig3ForDate,
+} from "@/lib/supabase/services/daily-big3";
 
 export default function AddEventScreen() {
-    const router = useRouter();
-    const params = useLocalSearchParams<{ date?: string; column?: string; startMinutes?: string }>();
-    const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
-    const addScheduledEvent = useEventsStore((s) => s.addScheduledEvent);
-    const addActualEvent = useEventsStore((s) => s.addActualEvent);
-    const userId = useAuthStore((s) => s.user?.id ?? null);
-    const preferences = useUserPreferencesStore((s) => s.preferences);
-    const big3Enabled = useUserPreferencesStore((s) => s.preferences.big3Enabled);
-    const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
-    const [big3Priorities, setBig3Priorities] = useState<Big3Priorities | null>(null);
-    const { createPlanned, createActual, loadActualForRange } = useCalendarEventsSync({
-        onError: (error) => {
-            Alert.alert('Unable to save event', error.message);
-        },
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    date?: string;
+    column?: string;
+    startMinutes?: string;
+  }>();
+  const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
+  const addScheduledEvent = useEventsStore((s) => s.addScheduledEvent);
+  const addActualEvent = useEventsStore((s) => s.addActualEvent);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const preferences = useUserPreferencesStore((s) => s.preferences);
+  const big3Enabled = useUserPreferencesStore((s) => s.preferences.big3Enabled);
+  const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
+  const [big3Priorities, setBig3Priorities] = useState<Big3Priorities | null>(
+    null,
+  );
+  const { createPlanned, createActual, loadActualForRange } =
+    useCalendarEventsSync({
+      onError: (error) => {
+        Alert.alert("Unable to save event", error.message);
+      },
     });
 
-    const ymd = typeof params.date === 'string' ? params.date : selectedDateYmd;
-    const column = params.column === 'actual' ? 'actual' : 'planned';
-    const initialDate = ymdToDate(ymd);
-    const initialStartMinutes = params.startMinutes ? parseInt(params.startMinutes, 10) : undefined;
+  const ymd = typeof params.date === "string" ? params.date : selectedDateYmd;
+  const column = params.column === "actual" ? "actual" : "planned";
+  const initialDate = ymdToDate(ymd);
+  const initialStartMinutes = params.startMinutes
+    ? parseInt(params.startMinutes, 10)
+    : undefined;
 
-    useEffect(() => {
-        if (!userId || !preferences.autoSuggestEvents) {
-            setPatternIndex(null);
-            return;
-        }
-        let cancelled = false;
-        const run = async () => {
-            const stored = await fetchActivityPatterns(userId);
-            if (cancelled) return;
-            if (stored?.slots?.length) {
-                setPatternIndex(buildPatternIndexFromSlots(stored.slots));
-                return;
-            }
-            const baseDate = ymdToDate(ymd);
-            const start = new Date(baseDate);
-            start.setDate(start.getDate() - 14);
-            const startYmd = dateToYmd(start);
-            const endYmd = dateToYmd(baseDate);
-            const history = await loadActualForRange(startYmd, endYmd);
-            if (cancelled) return;
-            const filtered = history.filter((entry) => entry.ymd !== ymd);
-            const nextIndex = buildPatternIndex(filtered);
-            setPatternIndex(nextIndex);
-            await upsertActivityPatterns({
-                userId,
-                slots: serializePatternIndex(nextIndex),
-                windowStartYmd: startYmd,
-                windowEndYmd: endYmd,
-            });
-        };
-        void run();
-        return () => {
-            cancelled = true;
-        };
-    }, [loadActualForRange, preferences.autoSuggestEvents, userId, ymd]);
-
-    // Load today's Big 3 priorities when feature is enabled
-    useEffect(() => {
-        if (!userId || !big3Enabled) {
-            setBig3Priorities(null);
-            return;
-        }
-        let cancelled = false;
-        (async () => {
-            try {
-                const result = await fetchBig3ForDate(userId, ymd);
-                if (!cancelled) {
-                    setBig3Priorities(
-                        result
-                            ? {
-                                  priority_1: result.priority_1 ?? '',
-                                  priority_2: result.priority_2 ?? '',
-                                  priority_3: result.priority_3 ?? '',
-                              }
-                            : null
-                    );
-                }
-            } catch (err) {
-                if (__DEV__) console.warn('[AddEvent] Failed to load Big 3:', err);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [userId, big3Enabled, ymd]);
-
-    const handleSetBig3Inline = async (p1: string, p2: string, p3: string) => {
-        if (!userId) return;
-        const newPriorities: Big3Priorities = {
-            priority_1: p1,
-            priority_2: p2,
-            priority_3: p3,
-        };
-        setBig3Priorities(newPriorities);
-        // Persist to Supabase (fire-and-forget)
-        void upsertBig3ForDate({
-            user_id: userId,
-            date: ymd,
-            priority_1: p1,
-            priority_2: p2,
-            priority_3: p3,
-        }).catch((err) => {
-            if (__DEV__) console.warn('[AddEvent] Failed to save Big 3:', err);
-        });
+  useEffect(() => {
+    if (!userId || !preferences.autoSuggestEvents) {
+      setPatternIndex(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      const stored = await fetchActivityPatterns(userId);
+      if (cancelled) return;
+      if (stored?.slots?.length) {
+        setPatternIndex(buildPatternIndexFromSlots(stored.slots));
+        return;
+      }
+      const baseDate = ymdToDate(ymd);
+      const start = new Date(baseDate);
+      start.setDate(start.getDate() - 14);
+      const startYmd = dateToYmd(start);
+      const endYmd = dateToYmd(baseDate);
+      const history = await loadActualForRange(startYmd, endYmd);
+      if (cancelled) return;
+      const filtered = history.filter((entry) => entry.ymd !== ymd);
+      const nextIndex = buildPatternIndex(filtered);
+      setPatternIndex(nextIndex);
+      await upsertActivityPatterns({
+        userId,
+        slots: serializePatternIndex(nextIndex),
+        windowStartYmd: startYmd,
+        windowEndYmd: endYmd,
+      });
     };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadActualForRange, preferences.autoSuggestEvents, userId, ymd]);
 
-    return (
-        <AddEventTemplate
-            initialDate={initialDate}
-            initialStartMinutes={initialStartMinutes}
-            patternIndex={patternIndex}
-            patternMinConfidence={preferences.confidenceThreshold}
-            allowAutoSuggestions={preferences.autoSuggestEvents}
-            big3Enabled={big3Enabled}
-            big3Priorities={big3Priorities}
-            onSetBig3Inline={handleSetBig3Inline}
-            onClose={() => router.back()}
-            onSave={async (draft) => {
-                const title = draft.title.trim();
-                if (!title) {
-                    Alert.alert('Missing title', 'Please enter a title for your event.');
-                    return;
+  // Load today's Big 3 priorities when feature is enabled
+  useEffect(() => {
+    if (!userId || !big3Enabled) {
+      setBig3Priorities(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fetchBig3ForDate(userId, ymd);
+        if (!cancelled) {
+          setBig3Priorities(
+            result
+              ? {
+                  priority_1: result.priority_1 ?? "",
+                  priority_2: result.priority_2 ?? "",
+                  priority_3: result.priority_3 ?? "",
                 }
+              : null,
+          );
+        }
+      } catch (err) {
+        if (__DEV__) console.warn("[AddEvent] Failed to load Big 3:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, big3Enabled, ymd]);
 
-                const start = combineDateAndTime(draft.selectedDate, draft.startTime);
-                const end = combineDateAndTime(draft.selectedDate, draft.endTime);
-                if (end.getTime() <= start.getTime()) {
-                    Alert.alert('Invalid time range', 'End time must be after start time.');
-                    return;
-                }
+  const handleSetBig3Inline = async (p1: string, p2: string, p3: string) => {
+    if (!userId) return;
+    const newPriorities: Big3Priorities = {
+      priority_1: p1,
+      priority_2: p2,
+      priority_3: p3,
+    };
+    setBig3Priorities(newPriorities);
+    // Persist to Supabase (fire-and-forget)
+    void upsertBig3ForDate({
+      user_id: userId,
+      date: ymd,
+      priority_1: p1,
+      priority_2: p2,
+      priority_3: p3,
+    }).catch((err) => {
+      if (__DEV__) console.warn("[AddEvent] Failed to save Big 3:", err);
+    });
+  };
 
-                const targetYmd = dateToYmd(draft.selectedDate);
+  return (
+    <AddEventTemplate
+      initialDate={initialDate}
+      initialStartMinutes={initialStartMinutes}
+      patternIndex={patternIndex}
+      patternMinConfidence={preferences.confidenceThreshold}
+      allowAutoSuggestions={preferences.autoSuggestEvents}
+      big3Enabled={big3Enabled}
+      big3Priorities={big3Priorities}
+      onSetBig3Inline={handleSetBig3Inline}
+      onClose={() => router.back()}
+      onSave={async (draft) => {
+        const title = draft.title.trim();
+        if (!title) {
+          Alert.alert("Missing title", "Please enter a title for your event.");
+          return;
+        }
 
-                if (USE_MOCK_CALENDAR) {
-                    const startMinutes = start.getHours() * 60 + start.getMinutes();
-                    const duration = Math.max(Math.round((end.getTime() - start.getTime()) / 60_000), 1);
-                    const localEvent = {
-                        id: `mock_user_${column}_${targetYmd}_${Date.now()}`,
-                        title,
-                        description: '',
-                        location: draft.location,
-                        startMinutes,
-                        duration,
-                        category: draft.category,
-                        isBig3: draft.isBig3,
-                        meta: {
-                            category: draft.category,
-                            isBig3: draft.isBig3,
-                            big3_priority: draft.big3Priority,
-                            source: 'user' as const,
-                        },
-                    };
-                    if (column === 'actual') addActualEvent(localEvent, targetYmd);
-                    else addScheduledEvent(localEvent, targetYmd);
-                    router.back();
-                    return;
-                }
+        const start = combineDateAndTime(draft.selectedDate, draft.startTime);
+        const end = combineDateAndTime(draft.selectedDate, draft.endTime);
+        if (end.getTime() <= start.getTime()) {
+          Alert.alert(
+            "Invalid time range",
+            "End time must be after start time.",
+          );
+          return;
+        }
 
-                try {
-                    if (__DEV__) {
-                        console.log(`[AddEvent] Creating ${column} event:`, {
-                            title,
-                            start: start.toISOString(),
-                            end: end.toISOString(),
-                            category: draft.category,
-                            isBig3: draft.isBig3,
-                            big3Priority: draft.big3Priority,
-                        });
-                    }
+        const targetYmd = dateToYmd(draft.selectedDate);
 
-                    const suggestionMeta =
-                        draft.patternSuggestion?.applied
-                            ? {
-                                  suggested_category: draft.patternSuggestion.category,
-                                  confidence: draft.patternSuggestion.confidence,
-                              }
-                            : {};
+        if (USE_MOCK_CALENDAR) {
+          const startMinutes = start.getHours() * 60 + start.getMinutes();
+          const duration = Math.max(
+            Math.round((end.getTime() - start.getTime()) / 60_000),
+            1,
+          );
+          const localEvent = {
+            id: `mock_user_${column}_${targetYmd}_${Date.now()}`,
+            title,
+            description: "",
+            location: draft.location,
+            startMinutes,
+            duration,
+            category: draft.category,
+            isBig3: draft.isBig3,
+            meta: {
+              category: draft.category,
+              isBig3: draft.isBig3,
+              big3_priority: draft.big3Priority,
+              source: "user" as const,
+            },
+          };
+          if (column === "actual") addActualEvent(localEvent, targetYmd);
+          else addScheduledEvent(localEvent, targetYmd);
+          router.back();
+          return;
+        }
 
-                    const created =
-                        column === 'actual'
-                            ? await createActual({
-                                  title,
-                                  description: '',
-                                  location: draft.location,
-                                  scheduledStartIso: start.toISOString(),
-                                  scheduledEndIso: end.toISOString(),
-                                  meta: { 
-                                      category: draft.category, 
-                                      isBig3: draft.isBig3, 
-                                      big3_priority: draft.big3Priority,
-                                      source: 'user' 
-                                  },
-                              })
-                            : await createPlanned({
-                                  title,
-                                  description: '',
-                                  location: draft.location,
-                                  scheduledStartIso: start.toISOString(),
-                                  scheduledEndIso: end.toISOString(),
-                                  meta: {
-                                      category: draft.category,
-                                      isBig3: draft.isBig3,
-                                      big3_priority: draft.big3Priority,
-                                      source: 'user',
-                                      ...suggestionMeta,
-                                  },
-                              });
+        try {
+          if (__DEV__) {
+            console.log(`[AddEvent] Creating ${column} event:`, {
+              title,
+              start: start.toISOString(),
+              end: end.toISOString(),
+              category: draft.category,
+              isBig3: draft.isBig3,
+              big3Priority: draft.big3Priority,
+            });
+          }
 
-                    if (__DEV__) {
-                        console.log(`[AddEvent] ✅ Successfully saved ${column} event to Supabase:`, created.id);
-                    }
+          const suggestionMeta = draft.patternSuggestion?.applied
+            ? {
+                suggested_category: draft.patternSuggestion.category,
+                confidence: draft.patternSuggestion.confidence,
+              }
+            : {};
 
-                    if (column === 'actual') addActualEvent(created, targetYmd);
-                    else addScheduledEvent(created, targetYmd);
-                    router.back();
-                } catch (error) {
-                    // Error is already handled by onError callback in useCalendarEventsSync
-                    // But we need to catch it here to prevent unhandled promise rejection
-                    if (__DEV__) {
-                        console.error(`[AddEvent] ❌ Failed to save ${column} event:`, error);
-                    }
-                    // Don't navigate back on error - let user see the error alert and retry
-                }
-            }}
-        />
-    );
+          const created =
+            column === "actual"
+              ? await createActual({
+                  title,
+                  description: "",
+                  location: draft.location,
+                  scheduledStartIso: start.toISOString(),
+                  scheduledEndIso: end.toISOString(),
+                  meta: {
+                    category: draft.category,
+                    isBig3: draft.isBig3,
+                    big3_priority: draft.big3Priority,
+                    source: "user",
+                  },
+                })
+              : await createPlanned({
+                  title,
+                  description: "",
+                  location: draft.location,
+                  scheduledStartIso: start.toISOString(),
+                  scheduledEndIso: end.toISOString(),
+                  meta: {
+                    category: draft.category,
+                    isBig3: draft.isBig3,
+                    big3_priority: draft.big3Priority,
+                    source: "user",
+                    ...suggestionMeta,
+                  },
+                });
+
+          if (__DEV__) {
+            console.log(
+              `[AddEvent] ✅ Successfully saved ${column} event to Supabase:`,
+              created.id,
+            );
+          }
+
+          if (column === "actual") addActualEvent(created, targetYmd);
+          else addScheduledEvent(created, targetYmd);
+          router.back();
+        } catch (error) {
+          // Error is already handled by onError callback in useCalendarEventsSync
+          // But we need to catch it here to prevent unhandled promise rejection
+          if (__DEV__) {
+            console.error(
+              `[AddEvent] ❌ Failed to save ${column} event:`,
+              error,
+            );
+          }
+          // Don't navigate back on error - let user see the error alert and retry
+        }
+      }}
+    />
+  );
 }
 
 function ymdToDate(ymd: string): Date {
-    const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return new Date();
-    const year = Number(match[1]);
-    const month = Number(match[2]) - 1;
-    const day = Number(match[3]);
-    return new Date(year, month, day);
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date();
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  return new Date(year, month, day);
 }
 
 function dateToYmd(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function combineDateAndTime(day: Date, time: Date): Date {
-    const combined = new Date(day);
-    combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
-    return combined;
+  const combined = new Date(day);
+  combined.setHours(time.getHours(), time.getMinutes(), 0, 0);
+  return combined;
 }
-
-
-
-
-
-
-
-

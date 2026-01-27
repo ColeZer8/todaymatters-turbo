@@ -1,5 +1,5 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
 
 export interface HomeBriefLlmDraft {
   line1: string;
@@ -19,10 +19,10 @@ export interface HomeBriefLlmResponse {
 
 export async function generateHomeBriefLlm(
   context: Record<string, unknown>,
-  draft: HomeBriefLlmDraft
+  draft: HomeBriefLlmDraft,
 ): Promise<HomeBriefLlmResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('home-brief', {
+    const { data, error } = await supabase.functions.invoke("home-brief", {
       body: { context, draft },
     });
 
@@ -30,13 +30,13 @@ export async function generateHomeBriefLlm(
       throw handleSupabaseError(error);
     }
 
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid response from home-brief function');
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid response from home-brief function");
     }
 
     const d = data as Partial<HomeBriefLlmResponse>;
     if (!d.line1 || !d.line2 || !d.expiresAt || !d.reason) {
-      throw new Error('Incomplete response from home-brief function');
+      throw new Error("Incomplete response from home-brief function");
     }
 
     return {
@@ -50,7 +50,3 @@ export async function generateHomeBriefLlm(
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
-
-
-
-

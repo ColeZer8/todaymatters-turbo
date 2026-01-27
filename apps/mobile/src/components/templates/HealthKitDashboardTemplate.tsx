@@ -1,10 +1,22 @@
-import { useMemo } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Activity, HeartPulse, Moon, Ruler, Flame, Dumbbell, ShieldAlert, RefreshCcw } from 'lucide-react-native';
-import { Card, Icon } from '@/components/atoms';
-import { AnalyticsRangeToggle } from '@/components/molecules';
-import type { HealthRangeKey, HealthSummary } from '@/lib/ios-insights';
+import { useMemo } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import {
+  Activity,
+  HeartPulse,
+  Moon,
+  Ruler,
+  Flame,
+  Dumbbell,
+  ShieldAlert,
+  RefreshCcw,
+} from "lucide-react-native";
+import { Card, Icon } from "@/components/atoms";
+import { AnalyticsRangeToggle } from "@/components/molecules";
+import type { HealthRangeKey, HealthSummary } from "@/lib/ios-insights";
 
 interface HealthKitDashboardTemplateProps {
   range: HealthRangeKey;
@@ -19,10 +31,10 @@ interface HealthKitDashboardTemplateProps {
 }
 
 const RANGE_OPTIONS: { label: string; value: HealthRangeKey }[] = [
-  { label: 'Today', value: 'today' },
-  { label: 'Week', value: 'week' },
-  { label: 'Month', value: 'month' },
-  { label: 'Year', value: 'year' },
+  { label: "Today", value: "today" },
+  { label: "Week", value: "week" },
+  { label: "Month", value: "month" },
+  { label: "Year", value: "year" },
 ];
 
 const formatDuration = (seconds: number): string => {
@@ -33,10 +45,14 @@ const formatDuration = (seconds: number): string => {
 };
 
 const formatNumber = (value: number, fractionDigits = 0) =>
-  new Intl.NumberFormat(undefined, { maximumFractionDigits: fractionDigits }).format(value);
+  new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
 
-const formatOptional = (value: number | null | undefined, formatter: (v: number) => string) =>
-  value === null || value === undefined ? '—' : formatter(value);
+const formatOptional = (
+  value: number | null | undefined,
+  formatter: (v: number) => string,
+) => (value === null || value === undefined ? "—" : formatter(value));
 
 export const HealthKitDashboardTemplate = ({
   range,
@@ -54,14 +70,36 @@ export const HealthKitDashboardTemplate = ({
   const metrics = useMemo(() => {
     return {
       steps: formatOptional(summary?.steps, (v) => `${formatNumber(v)} steps`),
-      activeEnergy: formatOptional(summary?.activeEnergyKcal, (v) => `${formatNumber(v)} kcal`),
-      distance: formatOptional(summary?.distanceWalkingRunningMeters, (v) => `${formatNumber(v / 1000, 1)} km`),
-      sleep: formatOptional(summary?.sleepAsleepSeconds, (v) => formatDuration(v)),
-      heartRate: formatOptional(summary?.heartRateAvgBpm, (v) => `${formatNumber(v)} bpm`),
-      restingHeartRate: formatOptional(summary?.restingHeartRateAvgBpm, (v) => `${formatNumber(v)} bpm`),
-      hrv: formatOptional(summary?.hrvSdnnAvgSeconds, (v) => `${formatNumber(v * 1000)} ms`),
-      workouts: formatOptional(summary?.workoutsCount, (v) => `${formatNumber(v)} workouts`),
-      workoutsDuration: formatOptional(summary?.workoutsDurationSeconds, (v) => formatDuration(v)),
+      activeEnergy: formatOptional(
+        summary?.activeEnergyKcal,
+        (v) => `${formatNumber(v)} kcal`,
+      ),
+      distance: formatOptional(
+        summary?.distanceWalkingRunningMeters,
+        (v) => `${formatNumber(v / 1000, 1)} km`,
+      ),
+      sleep: formatOptional(summary?.sleepAsleepSeconds, (v) =>
+        formatDuration(v),
+      ),
+      heartRate: formatOptional(
+        summary?.heartRateAvgBpm,
+        (v) => `${formatNumber(v)} bpm`,
+      ),
+      restingHeartRate: formatOptional(
+        summary?.restingHeartRateAvgBpm,
+        (v) => `${formatNumber(v)} bpm`,
+      ),
+      hrv: formatOptional(
+        summary?.hrvSdnnAvgSeconds,
+        (v) => `${formatNumber(v * 1000)} ms`,
+      ),
+      workouts: formatOptional(
+        summary?.workoutsCount,
+        (v) => `${formatNumber(v)} workouts`,
+      ),
+      workoutsDuration: formatOptional(summary?.workoutsDurationSeconds, (v) =>
+        formatDuration(v),
+      ),
     };
   }, [summary]);
 
@@ -69,14 +107,25 @@ export const HealthKitDashboardTemplate = ({
   const isAuthorizationDisabled = !canRequestAuthorization;
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-950" style={{ paddingTop: insets.top }}>
+    <SafeAreaView
+      className="flex-1 bg-slate-950"
+      style={{ paddingTop: insets.top }}
+    >
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 + insets.bottom }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: 16,
+          paddingBottom: 40 + insets.bottom,
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Apple Health</Text>
-        <Text className="mt-2 text-3xl font-semibold text-white">Physical Health</Text>
+        <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Apple Health
+        </Text>
+        <Text className="mt-2 text-3xl font-semibold text-white">
+          Physical Health
+        </Text>
         <Text className="mt-2 text-sm text-slate-300">{statusLabel}</Text>
 
         <View className="mt-5">
@@ -90,7 +139,9 @@ export const HealthKitDashboardTemplate = ({
 
         <View className="mt-6">
           <Card className="bg-white/5 border border-white/10">
-            <Text className="text-base font-semibold text-white">Permissions</Text>
+            <Text className="text-base font-semibold text-white">
+              Permissions
+            </Text>
 
             <View className="mt-4 flex-row gap-3">
               <Pressable
@@ -98,10 +149,16 @@ export const HealthKitDashboardTemplate = ({
                 onPress={onRequestAuthorization}
                 disabled={isAuthorizationDisabled}
                 className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 py-3"
-                style={({ pressed }) => [{ opacity: isAuthorizationDisabled ? 0.6 : pressed ? 0.92 : 1 }]}
+                style={({ pressed }) => [
+                  {
+                    opacity: isAuthorizationDisabled ? 0.6 : pressed ? 0.92 : 1,
+                  },
+                ]}
               >
                 <Icon icon={ShieldAlert} size={18} color="#fff" />
-                <Text className="text-sm font-semibold text-white">Connect Health</Text>
+                <Text className="text-sm font-semibold text-white">
+                  Connect Health
+                </Text>
               </Pressable>
 
               <Pressable
@@ -109,10 +166,14 @@ export const HealthKitDashboardTemplate = ({
                 onPress={onRefresh}
                 disabled={isRefreshDisabled}
                 className="flex-1 flex-row items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3"
-                style={({ pressed }) => [{ opacity: isRefreshDisabled ? 0.6 : pressed ? 0.92 : 1 }]}
+                style={({ pressed }) => [
+                  { opacity: isRefreshDisabled ? 0.6 : pressed ? 0.92 : 1 },
+                ]}
               >
                 <Icon icon={RefreshCcw} size={18} color="#fff" />
-                <Text className="text-sm font-semibold text-white">{isRefreshing ? 'Refreshing…' : 'Refresh'}</Text>
+                <Text className="text-sm font-semibold text-white">
+                  {isRefreshing ? "Refreshing…" : "Refresh"}
+                </Text>
               </Pressable>
             </View>
           </Card>
@@ -123,9 +184,13 @@ export const HealthKitDashboardTemplate = ({
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Activity} size={18} color="#fff" />
-                <Text className="text-base font-semibold text-white">Steps</Text>
+                <Text className="text-base font-semibold text-white">
+                  Steps
+                </Text>
               </View>
-              <Text className="text-sm font-semibold text-slate-200">{metrics.steps}</Text>
+              <Text className="text-sm font-semibold text-slate-200">
+                {metrics.steps}
+              </Text>
             </View>
           </Card>
 
@@ -133,9 +198,13 @@ export const HealthKitDashboardTemplate = ({
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Flame} size={18} color="#fff" />
-                <Text className="text-base font-semibold text-white">Active Energy</Text>
+                <Text className="text-base font-semibold text-white">
+                  Active Energy
+                </Text>
               </View>
-              <Text className="text-sm font-semibold text-slate-200">{metrics.activeEnergy}</Text>
+              <Text className="text-sm font-semibold text-slate-200">
+                {metrics.activeEnergy}
+              </Text>
             </View>
           </Card>
 
@@ -143,9 +212,13 @@ export const HealthKitDashboardTemplate = ({
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Ruler} size={18} color="#fff" />
-                <Text className="text-base font-semibold text-white">Distance</Text>
+                <Text className="text-base font-semibold text-white">
+                  Distance
+                </Text>
               </View>
-              <Text className="text-sm font-semibold text-slate-200">{metrics.distance}</Text>
+              <Text className="text-sm font-semibold text-slate-200">
+                {metrics.distance}
+              </Text>
             </View>
           </Card>
 
@@ -153,9 +226,13 @@ export const HealthKitDashboardTemplate = ({
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Moon} size={18} color="#fff" />
-                <Text className="text-base font-semibold text-white">Sleep</Text>
+                <Text className="text-base font-semibold text-white">
+                  Sleep
+                </Text>
               </View>
-              <Text className="text-sm font-semibold text-slate-200">{metrics.sleep}</Text>
+              <Text className="text-sm font-semibold text-slate-200">
+                {metrics.sleep}
+              </Text>
             </View>
           </Card>
 
@@ -165,17 +242,25 @@ export const HealthKitDashboardTemplate = ({
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Icon icon={HeartPulse} size={18} color="#fff" />
-                  <Text className="text-sm font-semibold text-slate-200">Avg Heart Rate</Text>
+                  <Text className="text-sm font-semibold text-slate-200">
+                    Avg Heart Rate
+                  </Text>
                 </View>
-                <Text className="text-sm font-semibold text-slate-200">{metrics.heartRate}</Text>
+                <Text className="text-sm font-semibold text-slate-200">
+                  {metrics.heartRate}
+                </Text>
               </View>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm text-slate-300">Resting HR</Text>
-                <Text className="text-sm font-semibold text-slate-200">{metrics.restingHeartRate}</Text>
+                <Text className="text-sm font-semibold text-slate-200">
+                  {metrics.restingHeartRate}
+                </Text>
               </View>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm text-slate-300">HRV (SDNN)</Text>
-                <Text className="text-sm font-semibold text-slate-200">{metrics.hrv}</Text>
+                <Text className="text-sm font-semibold text-slate-200">
+                  {metrics.hrv}
+                </Text>
               </View>
             </View>
           </Card>
@@ -186,13 +271,19 @@ export const HealthKitDashboardTemplate = ({
               <View className="flex-row items-center justify-between">
                 <View className="flex-row items-center gap-2">
                   <Icon icon={Dumbbell} size={18} color="#fff" />
-                  <Text className="text-sm font-semibold text-slate-200">Count</Text>
+                  <Text className="text-sm font-semibold text-slate-200">
+                    Count
+                  </Text>
                 </View>
-                <Text className="text-sm font-semibold text-slate-200">{metrics.workouts}</Text>
+                <Text className="text-sm font-semibold text-slate-200">
+                  {metrics.workouts}
+                </Text>
               </View>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm text-slate-300">Total duration</Text>
-                <Text className="text-sm font-semibold text-slate-200">{metrics.workoutsDuration}</Text>
+                <Text className="text-sm font-semibold text-slate-200">
+                  {metrics.workoutsDuration}
+                </Text>
               </View>
             </View>
           </Card>
@@ -200,9 +291,11 @@ export const HealthKitDashboardTemplate = ({
 
         {summary?.errors?.length ? (
           <View className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4">
-            <Text className="text-sm font-semibold text-amber-200">HealthKit notes</Text>
+            <Text className="text-sm font-semibold text-amber-200">
+              HealthKit notes
+            </Text>
             <Text className="mt-2 text-sm text-amber-100">
-              {summary.errors.slice(0, 3).join('\n')}
+              {summary.errors.slice(0, 3).join("\n")}
             </Text>
           </View>
         ) : null}
@@ -210,5 +303,3 @@ export const HealthKitDashboardTemplate = ({
     </SafeAreaView>
   );
 };
-
-

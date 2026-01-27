@@ -19,4 +19,3 @@ export const SETUP_SCREENS_STEPS = {
 } as const;
 
 export type SetupScreensStepKey = keyof typeof SETUP_SCREENS_STEPS;
-

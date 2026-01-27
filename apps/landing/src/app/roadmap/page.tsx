@@ -13,7 +13,9 @@ export default function RoadmapPage() {
           <h2 className="text-lg font-bold text-[#0a0a0a]">Near-term</h2>
           <ul className="mt-3 list-disc pl-5 text-sm text-[#52525b] space-y-2">
             <li>More flexible planning templates (work, family, weekends)</li>
-            <li>Better “why” tagging for activities (values, goals, callings)</li>
+            <li>
+              Better “why” tagging for activities (values, goals, callings)
+            </li>
             <li>Cleaner weekly reviews and trend insights</li>
           </ul>
         </div>
@@ -40,5 +42,3 @@ export default function RoadmapPage() {
     </PageLayout>
   );
 }
-
-

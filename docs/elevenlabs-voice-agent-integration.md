@@ -13,6 +13,7 @@ npx expo install @elevenlabs/react-native @livekit/react-native @livekit/react-n
 ```
 
 **Package breakdown:**
+
 - `@elevenlabs/react-native` - Official React Native SDK with `useConversation` hook
 - `@livekit/react-native` - Real-time audio/video SDK (powers voice streaming)
 - `@livekit/react-native-webrtc` - WebRTC implementation for React Native
@@ -113,11 +114,13 @@ ElevenLabs supports three types of tools that the agent can invoke:
 Server tools make HTTP requests to your backend. The agent triggers them, and ElevenLabs servers call your webhook endpoint.
 
 **Use cases:**
+
 - Fetch user data from your database
 - Create/update records (e.g., log a completed routine)
 - Query external APIs (weather, calendar, etc.)
 
 **Configuration (in ElevenLabs dashboard):**
+
 ```json
 {
   "type": "webhook",
@@ -146,20 +149,22 @@ Server tools make HTTP requests to your backend. The agent triggers them, and El
 Client tools call functions directly in your mobile app. The agent triggers them, and the SDK invokes your registered callback.
 
 **Use cases:**
+
 - Navigate to a specific screen
 - Update local UI state
 - Show notifications or modals
 - Play sounds or haptic feedback
 
 **Example implementation:**
+
 ```typescript
 const conversation = useConversation({
-  onConnect: () => console.log('Connected'),
-  onDisconnect: () => console.log('Disconnected'),
+  onConnect: () => console.log("Connected"),
+  onDisconnect: () => console.log("Disconnected"),
 });
 
 await conversation.startSession({
-  agentId: 'your-agent-id',
+  agentId: "your-agent-id",
   clientTools: {
     navigate_to_screen: ({ screen }: { screen: string }) => {
       router.push(screen);
@@ -192,7 +197,7 @@ Built-in tools provided by ElevenLabs:
 ```typescript
 // Direct connection with just agentId (agent must be set to "public")
 await conversation.startSession({
-  agentId: 'your-agent-id',
+  agentId: "your-agent-id",
 });
 ```
 
@@ -201,36 +206,38 @@ await conversation.startSession({
 Requires a backend endpoint to generate tokens:
 
 **Backend (Supabase Edge Function):**
+
 ```typescript
 // supabase/functions/conversation-token/index.ts
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 serve(async (req) => {
   // Verify user is authenticated
-  const authHeader = req.headers.get('Authorization');
+  const authHeader = req.headers.get("Authorization");
   // ... validate JWT with Supabase Auth ...
 
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${Deno.env.get('ELEVENLABS_AGENT_ID')}`,
+    `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${Deno.env.get("ELEVENLABS_AGENT_ID")}`,
     {
       headers: {
-        'xi-api-key': Deno.env.get('ELEVENLABS_API_KEY')!,
+        "xi-api-key": Deno.env.get("ELEVENLABS_API_KEY")!,
       },
-    }
+    },
   );
 
   const { token } = await response.json();
   return new Response(JSON.stringify({ token }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 });
 ```
 
 **Mobile app:**
+
 ```typescript
 const startConversation = async () => {
   // Get token from your backend
-  const response = await supabase.functions.invoke('conversation-token');
+  const response = await supabase.functions.invoke("conversation-token");
   const { token } = response.data;
 
   await conversation.startSession({
@@ -269,7 +276,7 @@ Configure in ElevenLabs dashboard to receive conversation data:
         "time_in_call_secs": 0
       },
       {
-        "role": "user", 
+        "role": "user",
         "message": "It went great! I completed my meditation.",
         "time_in_call_secs": 3
       }
@@ -287,31 +294,34 @@ Configure in ElevenLabs dashboard to receive conversation data:
 ```
 
 **Webhook endpoint (Supabase Edge Function):**
+
 ```typescript
 // supabase/functions/elevenlabs-webhook/index.ts
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 serve(async (req) => {
   const payload = await req.json();
-  
-  if (payload.type === 'post_call_transcription') {
+
+  if (payload.type === "post_call_transcription") {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     // Store conversation data
-    await supabase.from('coach_conversations').insert({
+    await supabase.from("coach_conversations").insert({
       conversation_id: payload.data.conversation_id,
-      user_id: payload.data.conversation_initiation_client_data?.dynamic_variables?.user_id,
+      user_id:
+        payload.data.conversation_initiation_client_data?.dynamic_variables
+          ?.user_id,
       transcript: payload.data.transcript,
       summary: payload.data.analysis?.transcript_summary,
       duration_secs: payload.data.metadata.call_duration_secs,
     });
   }
 
-  return new Response('OK', { status: 200 });
+  return new Response("OK", { status: 200 });
 });
 ```
 
@@ -321,12 +331,12 @@ Pass user-specific data to personalize conversations:
 
 ```typescript
 await conversation.startSession({
-  agentId: 'your-agent-id',
+  agentId: "your-agent-id",
   dynamicVariables: {
-    user_name: 'Cole',
-    morning_routine_status: 'incomplete',
+    user_name: "Cole",
+    morning_routine_status: "incomplete",
     current_time: new Date().toLocaleTimeString(),
-    todays_priority: 'Complete the project proposal',
+    todays_priority: "Complete the project proposal",
   },
 });
 ```
@@ -368,18 +378,19 @@ Your endpoint returns data that populates dynamic variables:
 Always request microphone permission before starting a conversation:
 
 ```typescript
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from "react-native";
 
 const requestMicPermission = async () => {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     const granted = await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
       {
-        title: 'Microphone Permission',
-        message: 'TodayMatters needs microphone access for voice conversations with your coach.',
-        buttonPositive: 'Allow',
-        buttonNegative: 'Deny',
-      }
+        title: "Microphone Permission",
+        message:
+          "TodayMatters needs microphone access for voice conversations with your coach.",
+        buttonPositive: "Allow",
+        buttonNegative: "Deny",
+      },
     );
     return granted === PermissionsAndroid.RESULTS.GRANTED;
   }
@@ -415,11 +426,11 @@ const conversation = useConversation({
 ```typescript
 const conversation = useConversation({
   onError: (error) => {
-    console.error('Conversation error:', error);
+    console.error("Conversation error:", error);
     // Show user-friendly error message
     Alert.alert(
-      'Connection Issue',
-      'Unable to connect to your coach. Please check your internet connection.'
+      "Connection Issue",
+      "Unable to connect to your coach. Please check your internet connection.",
     );
   },
 });
@@ -432,9 +443,9 @@ Keep the agent informed of app state changes:
 ```typescript
 // When user navigates to a different screen
 useEffect(() => {
-  if (conversation.status === 'connected') {
+  if (conversation.status === "connected") {
     conversation.sendContextualUpdate(
-      `User navigated to ${currentScreen}. Adjust conversation if relevant.`
+      `User navigated to ${currentScreen}. Adjust conversation if relevant.`,
     );
   }
 }, [currentScreen]);
@@ -455,6 +466,7 @@ ELEVENLABS_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxx
 ## Cost Considerations
 
 ElevenLabs Conversational AI pricing (as of late 2024):
+
 - Per-minute pricing based on usage
 - Includes STT + LLM + TTS costs
 - Development discount available
@@ -465,6 +477,7 @@ ElevenLabs Conversational AI pricing (as of late 2024):
 The following has been implemented in this codebase:
 
 ### Installed Dependencies
+
 - `@elevenlabs/react-native` - Official React Native SDK
 - `@livekit/react-native` - Real-time audio streaming
 - `@livekit/react-native-webrtc` - WebRTC for React Native
@@ -475,6 +488,7 @@ The following has been implemented in this codebase:
 ### Created Files
 
 **Mobile App:**
+
 - `src/lib/elevenlabs/` - Configuration, types, and permission utilities
 - `src/hooks/use-voice-coach.ts` - Comprehensive hook for voice conversations
 - `src/components/organisms/VoiceCoachButton.tsx` - Floating action button
@@ -483,6 +497,7 @@ The following has been implemented in this codebase:
 - Updated `_layout.tsx` with ElevenLabsProvider
 
 **Supabase Edge Functions:**
+
 - `supabase/functions/conversation-token/` - Token generation for private agents
 - `supabase/functions/elevenlabs-webhook/` - Post-call data handling
 - `supabase/functions/agent-tools/` - Server-side tool execution
@@ -493,6 +508,7 @@ The following has been implemented in this codebase:
 ### 1. Set Up Environment Variables
 
 **In your mobile `.env` file, add:**
+
 ```bash
 # ElevenLabs Agent ID (from ElevenLabs dashboard)
 EXPO_PUBLIC_ELEVENLABS_AGENT_ID=your_agent_id_here
@@ -502,6 +518,7 @@ EXPO_PUBLIC_ELEVENLABS_PRIVATE_AGENT=false
 ```
 
 **In Supabase Edge Function secrets, add:**
+
 ```bash
 supabase secrets set ELEVENLABS_API_KEY=xi_your_api_key_here
 supabase secrets set ELEVENLABS_AGENT_ID=your_agent_id_here
@@ -518,6 +535,7 @@ supabase secrets set ELEVENLABS_WEBHOOK_SECRET=your_webhook_secret_here
 ### 3. Run Expo Prebuild
 
 Since WebRTC requires native code:
+
 ```bash
 cd apps/mobile
 npx expo prebuild
@@ -535,6 +553,7 @@ supabase functions deploy agent-tools
 ### 5. Configure Webhooks in ElevenLabs
 
 In your ElevenLabs agent settings:
+
 1. Go to "Webhooks" section
 2. Add your webhook URL: `https://your-project.supabase.co/functions/v1/elevenlabs-webhook`
 3. Enable "Post-call transcription" events
@@ -557,8 +576,8 @@ pnpm --filter mobile android
 ## Usage Example
 
 ```tsx
-import { VoiceCoachButton, VoiceCoachModal } from '@/components/organisms';
-import { useState } from 'react';
+import { VoiceCoachButton, VoiceCoachModal } from "@/components/organisms";
+import { useState } from "react";
 
 export function HomeScreen() {
   const [showModal, setShowModal] = useState(false);
@@ -566,22 +585,20 @@ export function HomeScreen() {
   return (
     <View className="flex-1">
       {/* Your screen content */}
-      
+
       {/* Option 1: Floating button */}
-      <VoiceCoachButton 
+      <VoiceCoachButton
         currentScreen="home"
-        dynamicVariables={{ todays_priority: 'Complete morning routine' }}
+        dynamicVariables={{ todays_priority: "Complete morning routine" }}
       />
-      
+
       {/* Option 2: Modal (trigger with your own button) */}
-      <Button onPress={() => setShowModal(true)}>
-        Talk to Coach
-      </Button>
-      
+      <Button onPress={() => setShowModal(true)}>Talk to Coach</Button>
+
       <VoiceCoachModal
         visible={showModal}
         onClose={() => setShowModal(false)}
-        dynamicVariables={{ routine_status: '3 of 5 complete' }}
+        dynamicVariables={{ routine_status: "3 of 5 complete" }}
       />
     </View>
   );
@@ -597,4 +614,3 @@ export function HomeScreen() {
 - [Webhooks Documentation](https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks)
 - [@elevenlabs/react-native (npm)](https://www.npmjs.com/package/@elevenlabs/react-native)
 - [@elevenlabs/client (npm) - signedUrl + conversationToken examples](https://www.npmjs.com/package/@elevenlabs/client)
-

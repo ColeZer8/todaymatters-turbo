@@ -8,10 +8,12 @@
 Based on the schema migrations and service implementations, here's what data structures exist:
 
 ### ✅ **1. User Profile Data** (`tm.profiles`)
+
 **Service**: `services/profiles.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - `full_name` - User's name
 - `role` - User role from setup questions
 - `mission` - Purpose/"Your Why" selection
@@ -32,10 +34,12 @@ Available fields:
 ---
 
 ### ✅ **2. Profile Values** (`tm.profile_values`)
+
 **Service**: `services/profile-values.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - `value_label` - Core value name (e.g., "Family", "Integrity")
 - `rank` - Priority/order (1, 2, 3...)
 
@@ -44,10 +48,12 @@ Available fields:
 ---
 
 ### ✅ **3. Goals & Initiatives** (`tm.events` with `type='goal'`)
+
 **Service**: `services/events.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - `title` - Goal/initiative name
 - `type` - 'goal' (used for both goals and initiatives)
 - `meta.category` - 'goal' or 'initiative'
@@ -59,10 +65,12 @@ Available fields:
 ---
 
 ### ✅ **4. Planned Calendar Events** (`tm.events` with `type='calendar_planned'`)
+
 **Service**: `services/calendar-events.ts` ✅ Built  
 **Status**: Ready to fetch (user-created events, NOT Google Calendar)
 
 Available fields:
+
 - `title` - Event title
 - `description` - Event description
 - `scheduled_start` - Start timestamp
@@ -77,10 +85,12 @@ Available fields:
 ---
 
 ### ✅ **5. Routines** (`tm.routines` + `tm.routine_items`)
+
 **Service**: `services/routines.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - `kind` - Routine type (e.g., 'morning')
 - `wake_time` - Wake time for routine
 - Routine items:
@@ -94,10 +104,12 @@ Available fields:
 ---
 
 ### ✅ **6. Ideal Day Templates** (`tm.ideal_day_templates` + `tm.ideal_day_categories`)
+
 **Service**: `services/ideal-day.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - `day_type` - 'weekdays', 'saturday', 'sunday'
 - Categories:
   - `category_key` - Category identifier
@@ -113,10 +125,12 @@ Available fields:
 ---
 
 ### ⚠️ **7. Health Metrics** (`tm.health_daily_metrics`, `tm.health_workouts`)
+
 **Service**: ❌ Not built yet  
 **Status**: Tables exist, but no service layer
 
 Available data structures:
+
 - **Daily Metrics**:
   - `local_date` - Date of metrics
   - `steps` - Step count
@@ -144,10 +158,12 @@ Available data structures:
 ---
 
 ### ⚠️ **8. Screen Time Data** (`tm.screen_time_daily`, `tm.screen_time_app_daily`, etc.)
+
 **Service**: ❌ Not built yet  
 **Status**: Tables exist, but no service layer
 
 Available data structures:
+
 - **Daily Screen Time**:
   - `local_date` - Date
   - `total_seconds` - Total screen time
@@ -172,10 +188,12 @@ Available data structures:
 ---
 
 ### ✅ **9. Links** (`tm.links`)
+
 **Service**: `services/links.ts` ✅ Built  
 **Status**: Ready to fetch
 
 Available fields:
+
 - Polymorphic links between objects (events, contacts, goals, tasks, etc.)
 - `link_kind` - Type of relationship
 - `obj1_type`, `obj1_id` - First object
@@ -188,11 +206,13 @@ Available fields:
 ### ❌ **Google Calendar Integration: NOT IMPLEMENTED**
 
 **Current State**:
+
 - The app has **user-created planned events** stored in `tm.events` with `type='calendar_planned'`
 - These are events the user creates in the app, NOT synced from Google Calendar
-- The database structure *could* support Google Calendar events, but there's no integration
+- The database structure _could_ support Google Calendar events, but there's no integration
 
 **What Would Be Needed**:
+
 1. Google Calendar API integration
 2. OAuth flow for Google Calendar access
 3. Sync service to fetch events from Google Calendar API
@@ -200,6 +220,7 @@ Available fields:
 5. Periodic sync to keep events up to date
 
 **Database Structure**: The `tm.events` table has fields that could support this:
+
 - `external_id` - Could store Google Calendar event ID
 - `source_provider` - Could identify 'google_calendar'
 - `scheduled_start`, `scheduled_end` - Already support calendar events
@@ -210,6 +231,7 @@ Available fields:
 ## 📋 Summary: What Can Be Pulled Into App Right Now
 
 ### ✅ **Already Integrated & Working**:
+
 1. ✅ Profile data (name, role, mission, times, preferences)
 2. ✅ Core values
 3. ✅ Goals & initiatives
@@ -219,6 +241,7 @@ Available fields:
 7. ✅ Links between objects
 
 ### ⚠️ **Tables Exist But No Services Built**:
+
 1. ⚠️ Health metrics (`tm.health_daily_metrics`, `tm.health_workouts`)
    - **Need**: Service layer to fetch this data
    - **Tables**: Ready with RLS policies
@@ -230,6 +253,7 @@ Available fields:
    - **Data**: Would need to be synced from iOS Screen Time API first
 
 ### ❌ **Not Available**:
+
 1. ❌ Google Calendar events (no integration exists)
 2. ❌ External calendar sync (only user-created events)
 3. ❌ Email data (tables might exist in `public` schema, but not in `tm` schema)
@@ -239,11 +263,13 @@ Available fields:
 ## 🚀 Recommendations
 
 ### Immediate Next Steps (If Data Exists):
+
 1. **Check if health/screen time data exists**: Query the tables to see if any data has been synced
 2. **Build service layers**: Create services for health and screen time data if data exists
 3. **Verify data existence**: Run test queries to see what data is actually in the database
 
 ### For Google Calendar Integration:
+
 1. Research Google Calendar API for React Native/Expo
 2. Set up OAuth flow
 3. Create sync service
@@ -251,6 +277,7 @@ Available fields:
 5. Handle periodic sync
 
 ### Quick Test Queries:
+
 You could run these queries in Supabase SQL Editor to check for data:
 
 ```sql
@@ -275,4 +302,3 @@ SELECT COUNT(*), MIN(local_date), MAX(local_date) FROM tm.screen_time_daily;
 - All queries must use `.schema('tm')` in Supabase client
 - RLS policies are in place - users can only see their own data
 - Services use TypeScript types from `database.types.ts`
-

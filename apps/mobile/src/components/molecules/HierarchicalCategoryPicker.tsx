@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView } from 'react-native';
-import { ChevronRight, ChevronDown, Search, Check } from 'lucide-react-native';
+import { useState, useMemo, useCallback } from "react";
+import { View, Text, Pressable, TextInput, ScrollView } from "react-native";
+import { ChevronRight, ChevronDown, Search, Check } from "lucide-react-native";
 import type {
   ActivityCategory,
   ActivityCategoryNode,
-} from '@/lib/supabase/services/activity-categories';
-import { buildCategoryTree } from '@/lib/supabase/services/activity-categories';
+} from "@/lib/supabase/services/activity-categories";
+import { buildCategoryTree } from "@/lib/supabase/services/activity-categories";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,7 +33,7 @@ export const HierarchicalCategoryPicker = ({
   onSelect,
 }: HierarchicalCategoryPickerProps) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Build the tree structure once from flat categories
   const tree = useMemo(() => buildCategoryTree(categories), [categories]);
@@ -60,7 +60,7 @@ export const HierarchicalCategoryPicker = ({
       }
       return path;
     },
-    [categoryMap]
+    [categoryMap],
   );
 
   // Filter categories by search query
@@ -75,9 +75,7 @@ export const HierarchicalCategoryPicker = ({
       if (cat.name.toLowerCase().includes(query)) {
         matchingIds.add(cat.id);
         // Walk up to root, adding ancestors
-        let parent = cat.parent_id
-          ? categoryMap.get(cat.parent_id)
-          : undefined;
+        let parent = cat.parent_id ? categoryMap.get(cat.parent_id) : undefined;
         while (parent) {
           matchingIds.add(parent.id);
           parent = parent.parent_id
@@ -123,7 +121,7 @@ export const HierarchicalCategoryPicker = ({
     (categoryId: string) => {
       onSelect(categoryId, buildPath(categoryId));
     },
-    [onSelect, buildPath]
+    [onSelect, buildPath],
   );
 
   // Recursive renderer
@@ -143,7 +141,7 @@ export const HierarchicalCategoryPicker = ({
             accessibilityState={{ selected: isSelected }}
             onPress={() => handleSelect(node.id)}
             className={`flex-row items-center rounded-xl px-3 py-3 ${
-              isSelected ? 'bg-[#DBEAFE]' : 'bg-transparent'
+              isSelected ? "bg-[#DBEAFE]" : "bg-transparent"
             } active:opacity-80`}
             style={{ paddingLeft: 12 + depth * 20 }}
           >
@@ -179,10 +177,10 @@ export const HierarchicalCategoryPicker = ({
             <Text
               className={`flex-1 text-base ${
                 isSelected
-                  ? 'font-bold text-[#2563EB]'
+                  ? "font-bold text-[#2563EB]"
                   : depth === 0
-                    ? 'font-semibold text-[#111827]'
-                    : 'font-normal text-[#374151]'
+                    ? "font-semibold text-[#111827]"
+                    : "font-normal text-[#374151]"
               }`}
               numberOfLines={1}
             >
@@ -206,7 +204,7 @@ export const HierarchicalCategoryPicker = ({
       searchQuery,
       handleSelect,
       toggleExpand,
-    ]
+    ],
   );
 
   return (
@@ -233,8 +231,8 @@ export const HierarchicalCategoryPicker = ({
           <View className="items-center py-8">
             <Text className="text-base text-[#94A3B8]">
               {searchQuery.trim()
-                ? 'No categories match your search'
-                : 'No categories available'}
+                ? "No categories match your search"
+                : "No categories available"}
             </Text>
           </View>
         )}

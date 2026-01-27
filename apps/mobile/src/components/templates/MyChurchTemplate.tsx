@@ -1,10 +1,24 @@
-import { useMemo, useState } from 'react';
-import { ArrowRight, Check, ChevronDown, Church, Globe, MapPin, Plus } from 'lucide-react-native';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { formatChurchOptionLabel, type ChurchOption } from '@/constants/churches';
+import { useMemo, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Church,
+  Globe,
+  MapPin,
+  Plus,
+} from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import {
+  formatChurchOptionLabel,
+  type ChurchOption,
+} from "@/constants/churches";
 
 interface MyChurchTemplateProps {
   step?: number;
@@ -22,7 +36,7 @@ interface MyChurchTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -59,10 +73,16 @@ export const MyChurchTemplate = ({
   }, [churchOptions, normalizedQuery]);
 
   const showDropdown =
-    !isManualEntry && isDropdownOpen && normalizedQuery.length > 0 && filteredOptions.length > 0;
+    !isManualEntry &&
+    isDropdownOpen &&
+    normalizedQuery.length > 0 &&
+    filteredOptions.length > 0;
 
   const showNoResults =
-    !isManualEntry && isDropdownOpen && normalizedQuery.length >= 2 && filteredOptions.length === 0;
+    !isManualEntry &&
+    isDropdownOpen &&
+    normalizedQuery.length >= 2 &&
+    filteredOptions.length === 0;
 
   return (
     <SetupStepLayout
@@ -73,7 +93,11 @@ export const MyChurchTemplate = ({
       onBack={onBack}
       footer={
         <View className="gap-3">
-          <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
+          <GradientButton
+            label="Continue"
+            onPress={onContinue}
+            rightIcon={ArrowRight}
+          />
           {onSkip && (
             <Pressable
               accessibilityRole="button"
@@ -81,7 +105,9 @@ export const MyChurchTemplate = ({
               className="items-center py-2"
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text className="text-sm font-semibold text-[#94A3B8]">Skip for now</Text>
+              <Text className="text-sm font-semibold text-[#94A3B8]">
+                Skip for now
+              </Text>
             </Pressable>
           )}
         </View>
@@ -94,8 +120,8 @@ export const MyChurchTemplate = ({
           style={cardShadowStyle}
         >
           <Text className="text-sm leading-5 text-text-secondary">
-            If faith is one of your core values, knowing your church helps us understand
-            your spiritual community and routine.
+            If faith is one of your core values, knowing your church helps us
+            understand your spiritual community and routine.
           </Text>
         </View>
 
@@ -107,7 +133,9 @@ export const MyChurchTemplate = ({
           {/* Church Name */}
           <View className="mb-4">
             <View className="flex-row items-center justify-between mb-1.5">
-              <Text className="text-xs font-semibold text-[#94A3B8]">CHURCH</Text>
+              <Text className="text-xs font-semibold text-[#94A3B8]">
+                CHURCH
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
@@ -118,13 +146,13 @@ export const MyChurchTemplate = ({
                 style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
               >
                 <Text className="text-[12px] font-semibold text-text-secondary">
-                  {isManualEntry ? 'Use dropdown' : "Can't find it?"}
+                  {isManualEntry ? "Use dropdown" : "Can't find it?"}
                 </Text>
               </Pressable>
             </View>
             <View
               className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
-              style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
+              style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
             >
               <Church size={18} color="#94A3B8" />
               <TextInput
@@ -140,7 +168,9 @@ export const MyChurchTemplate = ({
                   // Let taps on results register before closing.
                   setTimeout(() => setIsDropdownOpen(false), 150);
                 }}
-                placeholder={isManualEntry ? "Enter your church name" : 'Search churches…'}
+                placeholder={
+                  isManualEntry ? "Enter your church name" : "Search churches…"
+                }
                 placeholderTextColor="#94A3B8"
                 className="flex-1 py-3 ml-3 text-[15px] text-text-primary"
               />
@@ -162,7 +192,9 @@ export const MyChurchTemplate = ({
                   const isSelected = label === churchName;
                   return (
                     <View key={item.id}>
-                      {index > 0 ? <View className="h-px bg-[#E2E8F0]" /> : null}
+                      {index > 0 ? (
+                        <View className="h-px bg-[#E2E8F0]" />
+                      ) : null}
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => {
@@ -170,12 +202,18 @@ export const MyChurchTemplate = ({
                           setIsDropdownOpen(false);
                         }}
                         className="flex-row items-center justify-between px-4 py-3"
-                        style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                        style={({ pressed }) => [
+                          { opacity: pressed ? 0.85 : 1 },
+                        ]}
                       >
                         <Text className="text-[15px] font-semibold text-text-primary">
                           {label}
                         </Text>
-                        {isSelected ? <Check size={18} color="#2563EB" /> : <View className="h-4 w-4" />}
+                        {isSelected ? (
+                          <Check size={18} color="#2563EB" />
+                        ) : (
+                          <View className="h-4 w-4" />
+                        )}
                       </Pressable>
                     </View>
                   );
@@ -197,7 +235,9 @@ export const MyChurchTemplate = ({
                   className="flex-row items-center gap-1 rounded-full bg-white px-3 py-1"
                   style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
                 >
-                  <Text className="text-[12px] font-semibold text-brand-primary">Add</Text>
+                  <Text className="text-[12px] font-semibold text-brand-primary">
+                    Add
+                  </Text>
                   <Plus size={14} color="#2563EB" />
                 </Pressable>
               </View>
@@ -209,7 +249,10 @@ export const MyChurchTemplate = ({
             <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
               ADDRESS <Text className="text-[#C7D2FE]">(optional)</Text>
             </Text>
-            <View className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View
+              className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
+              style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+            >
               <MapPin size={18} color="#94A3B8" />
               <TextInput
                 value={churchAddress}
@@ -226,7 +269,10 @@ export const MyChurchTemplate = ({
             <Text className="text-xs font-semibold text-[#94A3B8] mb-1.5">
               WEBSITE <Text className="text-[#C7D2FE]">(optional)</Text>
             </Text>
-            <View className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4" style={{ borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View
+              className="flex-row items-center rounded-xl bg-[#F8FAFC] px-4"
+              style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+            >
               <Globe size={18} color="#94A3B8" />
               <TextInput
                 value={churchWebsite}
@@ -243,7 +289,8 @@ export const MyChurchTemplate = ({
 
         {/* Footer Note */}
         <Text className="text-xs text-center text-[#94A3B8] px-4">
-          All fields are optional. You can always update this later in your profile.
+          All fields are optional. You can always update this later in your
+          profile.
         </Text>
       </View>
     </SetupStepLayout>

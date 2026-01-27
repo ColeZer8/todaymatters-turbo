@@ -3,8 +3,8 @@
  * Handles loading, saving, and syncing events (goals/initiatives)
  */
 
-import { useCallback } from 'react';
-import { useAuthStore } from '@/stores';
+import { useCallback } from "react";
+import { useAuthStore } from "@/stores";
 import {
   fetchGoals,
   fetchInitiatives,
@@ -16,7 +16,7 @@ import {
   bulkCreateInitiatives,
   type EventData,
   type GoalMeta,
-} from '../services/events';
+} from "../services/events";
 
 interface UseEventsSyncOptions {
   onError?: (error: Error) => void;
@@ -37,8 +37,9 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
       const goals = await fetchGoals(user.id);
       return goals;
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load goals');
-      console.error('Failed to load goals:', err);
+      const err =
+        error instanceof Error ? error : new Error("Failed to load goals");
+      console.error("Failed to load goals:", err);
       onError?.(err);
       return [];
     }
@@ -54,8 +55,11 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
       const initiatives = await fetchInitiatives(user.id);
       return initiatives;
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load initiatives');
-      console.error('Failed to load initiatives:', err);
+      const err =
+        error instanceof Error
+          ? error
+          : new Error("Failed to load initiatives");
+      console.error("Failed to load initiatives:", err);
       onError?.(err);
       return [];
     }
@@ -63,81 +67,102 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
 
   // Create a goal
   const saveGoal = useCallback(
-    async (title: string, meta?: Partial<GoalMeta>): Promise<EventData | null> => {
+    async (
+      title: string,
+      meta?: Partial<GoalMeta>,
+    ): Promise<EventData | null> => {
       if (!isAuthenticated || !user?.id) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
 
       try {
         const goal = await createGoal(user.id, title, meta);
         return goal;
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to create goal');
-        console.error('Failed to create goal:', err);
+        const err =
+          error instanceof Error ? error : new Error("Failed to create goal");
+        console.error("Failed to create goal:", err);
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Create an initiative
   const saveInitiative = useCallback(
-    async (title: string, description?: string, meta?: Partial<GoalMeta>): Promise<EventData | null> => {
+    async (
+      title: string,
+      description?: string,
+      meta?: Partial<GoalMeta>,
+    ): Promise<EventData | null> => {
       if (!isAuthenticated || !user?.id) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
 
       try {
-        const initiative = await createInitiative(user.id, title, description, meta);
+        const initiative = await createInitiative(
+          user.id,
+          title,
+          description,
+          meta,
+        );
         return initiative;
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to create initiative');
-        console.error('Failed to create initiative:', err);
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to create initiative");
+        console.error("Failed to create initiative:", err);
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Update an event
   const updateEventData = useCallback(
-    async (eventId: string, updates: Partial<Pick<EventData, 'title' | 'meta'>>): Promise<EventData> => {
+    async (
+      eventId: string,
+      updates: Partial<Pick<EventData, "title" | "meta">>,
+    ): Promise<EventData> => {
       if (!isAuthenticated || !user?.id) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
 
       try {
         const updated = await updateEvent(eventId, updates);
         return updated;
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to update event');
-        console.error('Failed to update event:', err);
+        const err =
+          error instanceof Error ? error : new Error("Failed to update event");
+        console.error("Failed to update event:", err);
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Delete an event
   const removeEvent = useCallback(
     async (eventId: string): Promise<void> => {
       if (!isAuthenticated || !user?.id) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
 
       try {
         await deleteEvent(eventId);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to delete event');
-        console.error('Failed to delete event:', err);
+        const err =
+          error instanceof Error ? error : new Error("Failed to delete event");
+        console.error("Failed to delete event:", err);
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Bulk create goals (from onboarding)
@@ -151,13 +176,16 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
         const goals = await bulkCreateGoals(user.id, goalTitles);
         return goals;
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to bulk create goals');
-        console.error('Failed to bulk create goals:', err);
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to bulk create goals");
+        console.error("Failed to bulk create goals:", err);
         onError?.(err);
         return [];
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Bulk create initiatives (from onboarding)
@@ -168,16 +196,22 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
       }
 
       try {
-        const initiatives = await bulkCreateInitiatives(user.id, initiativeTitles);
+        const initiatives = await bulkCreateInitiatives(
+          user.id,
+          initiativeTitles,
+        );
         return initiatives;
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to bulk create initiatives');
-        console.error('Failed to bulk create initiatives:', err);
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to bulk create initiatives");
+        console.error("Failed to bulk create initiatives:", err);
         onError?.(err);
         return [];
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   return {
@@ -191,7 +225,3 @@ export function useEventsSync(options: UseEventsSyncOptions = {}) {
     bulkSaveInitiatives,
   };
 }
-
-
-
-

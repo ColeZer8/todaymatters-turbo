@@ -1,11 +1,18 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Json } from '../database.types';
-import type { HealthSummary, WorkoutSummary, ActivityRingsSummary } from '@/lib/ios-insights';
-import type { HealthSummary as AndroidHealthSummary, WorkoutSummary as AndroidWorkoutSummary } from '@/lib/android-insights';
-import { upsertDataSyncState } from './data-sync-state';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Json } from "../database.types";
+import type {
+  HealthSummary,
+  WorkoutSummary,
+  ActivityRingsSummary,
+} from "@/lib/ios-insights";
+import type {
+  HealthSummary as AndroidHealthSummary,
+  WorkoutSummary as AndroidWorkoutSummary,
+} from "@/lib/android-insights";
+import { upsertDataSyncState } from "./data-sync-state";
 
-type HealthPlatform = 'ios' | 'android';
+type HealthPlatform = "ios" | "android";
 
 interface HealthDailyInsert {
   user_id: string;
@@ -54,35 +61,47 @@ interface HealthWorkoutInsert {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tmSchema(): any {
-  return supabase.schema('tm');
+  return supabase.schema("tm");
 }
 
 function toLocalDateIso(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
+  if (Number.isNaN(date.getTime()))
+    return new Date().toISOString().slice(0, 10);
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
 async function upsertHealthDaily(row: HealthDailyInsert): Promise<void> {
   const { error } = await tmSchema()
-    .from('health_daily_metrics')
-    .upsert(row, { onConflict: 'user_id,local_date,platform,provider' });
+    .from("health_daily_metrics")
+    .upsert(row, { onConflict: "user_id,local_date,platform,provider" });
 
   if (error) throw handleSupabaseError(error);
 }
 
 async function upsertWorkout(row: HealthWorkoutInsert): Promise<void> {
   const { error } = await tmSchema()
-    .from('health_workouts')
-    .upsert(row, { onConflict: 'user_id,provider,platform,provider_workout_id' });
+    .from("health_workouts")
+    .upsert(row, {
+      onConflict: "user_id,provider,platform,provider_workout_id",
+    });
 
   if (error) throw handleSupabaseError(error);
 }
 
-function activityRingsToFields(rings: ActivityRingsSummary | null): Pick<HealthDailyInsert, 'exercise_minutes' | 'stand_hours' | 'move_goal_kcal' | 'exercise_goal_minutes' | 'stand_goal_hours'> {
+function activityRingsToFields(
+  rings: ActivityRingsSummary | null,
+): Pick<
+  HealthDailyInsert,
+  | "exercise_minutes"
+  | "stand_hours"
+  | "move_goal_kcal"
+  | "exercise_goal_minutes"
+  | "stand_goal_hours"
+> {
   if (!rings) {
     return {
       exercise_minutes: null,
@@ -107,10 +126,10 @@ export async function syncIosHealthSummary(
   summary: HealthSummary,
   timezone: string,
   rings: ActivityRingsSummary | null,
-  latestWorkout: WorkoutSummary | null
+  latestWorkout: WorkoutSummary | null,
 ): Promise<void> {
   const localDate = toLocalDateIso(summary.startIso);
-  const provider = 'apple_health';
+  const provider = "apple_health";
 
   const ringsFields = activityRingsToFields(rings);
 
@@ -118,7 +137,7 @@ export async function syncIosHealthSummary(
     user_id: userId,
     local_date: localDate,
     timezone,
-    platform: 'ios',
+    platform: "ios",
     provider,
     window_start: summary.startIso,
     window_end: summary.endIso,
@@ -135,7 +154,7 @@ export async function syncIosHealthSummary(
     raw_payload: summary as unknown as Json,
     meta: {
       generatedAtIso: summary.generatedAtIso,
-      ringSource: rings ? 'activity_rings' : null,
+      ringSource: rings ? "activity_rings" : null,
       errors: summary.errors ?? null,
     } as Json,
   };
@@ -145,7 +164,7 @@ export async function syncIosHealthSummary(
   if (latestWorkout) {
     const workoutRow: HealthWorkoutInsert = {
       user_id: userId,
-      platform: 'ios',
+      platform: "ios",
       provider,
       provider_workout_id: latestWorkout.workoutStartIso,
       started_at: latestWorkout.workoutStartIso,
@@ -164,12 +183,12 @@ export async function syncIosHealthSummary(
 
   await upsertDataSyncState({
     userId,
-    dataset: 'health',
-    platform: 'ios',
+    dataset: "health",
+    platform: "ios",
     provider,
     newestSyncedLocalDate: localDate,
     lastSyncFinishedAt: new Date().toISOString(),
-    lastSyncStatus: 'ok',
+    lastSyncStatus: "ok",
     lastSyncError: null,
   });
 }
@@ -178,16 +197,16 @@ export async function syncAndroidHealthSummary(
   userId: string,
   summary: AndroidHealthSummary,
   timezone: string,
-  latestWorkout: AndroidWorkoutSummary | null
+  latestWorkout: AndroidWorkoutSummary | null,
 ): Promise<void> {
   const localDate = toLocalDateIso(summary.startIso);
-  const provider = 'health_connect';
+  const provider = "health_connect";
 
   const dailyRow: HealthDailyInsert = {
     user_id: userId,
     local_date: localDate,
     timezone,
-    platform: 'android',
+    platform: "android",
     provider,
     window_start: summary.startIso,
     window_end: summary.endIso,
@@ -212,7 +231,7 @@ export async function syncAndroidHealthSummary(
   if (latestWorkout) {
     const workoutRow: HealthWorkoutInsert = {
       user_id: userId,
-      platform: 'android',
+      platform: "android",
       provider,
       provider_workout_id: latestWorkout.workoutStartIso,
       started_at: latestWorkout.workoutStartIso,
@@ -231,12 +250,12 @@ export async function syncAndroidHealthSummary(
 
   await upsertDataSyncState({
     userId,
-    dataset: 'health',
-    platform: 'android',
+    dataset: "health",
+    platform: "android",
     provider,
     newestSyncedLocalDate: localDate,
     lastSyncFinishedAt: new Date().toISOString(),
-    lastSyncStatus: 'ok',
+    lastSyncStatus: "ok",
     lastSyncError: null,
   });
 }

@@ -10,7 +10,9 @@ export default function GettingStartedPage() {
     >
       <div className="rounded-3xl border border-gray-100 bg-[#fafafa] p-6">
         <ol className="list-decimal pl-5 text-sm text-[#52525b] space-y-2">
-          <li>Pick your top priorities (the things you want your life to reflect).</li>
+          <li>
+            Pick your top priorities (the things you want your life to reflect).
+          </li>
           <li>Plan your day with breathing room.</li>
           <li>Log what actually happens—especially transitions.</li>
           <li>Review planned vs actual once per day.</li>
@@ -20,7 +22,10 @@ export default function GettingStartedPage() {
 
       <p className="text-sm text-[#52525b]">
         Want help getting set up?{" "}
-        <Link href="/contact" className="font-semibold text-[#0a0a0a] hover:text-brand-primary transition-colors">
+        <Link
+          href="/contact"
+          className="font-semibold text-[#0a0a0a] hover:text-brand-primary transition-colors"
+        >
           Contact us
         </Link>
         .
@@ -28,5 +33,3 @@ export default function GettingStartedPage() {
     </PageLayout>
   );
 }
-
-

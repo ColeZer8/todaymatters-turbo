@@ -1,30 +1,33 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { BriefcaseBusiness, ShieldCheck, Sparkles } from 'lucide-react-native';
-import { CoachPersonaTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { BriefcaseBusiness, ShieldCheck, Sparkles } from "lucide-react-native";
+import { CoachPersonaTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const COACH_PERSONA_OPTIONS = [
   {
-    id: 'strategist',
-    title: 'The Strategist',
-    description: 'Logical, data-driven, and efficient.',
+    id: "strategist",
+    title: "The Strategist",
+    description: "Logical, data-driven, and efficient.",
     icon: BriefcaseBusiness,
   },
   {
-    id: 'cheerleader',
-    title: 'The Cheerleader',
-    description: 'Warm, encouraging, and positive.',
+    id: "cheerleader",
+    title: "The Cheerleader",
+    description: "Warm, encouraging, and positive.",
     icon: Sparkles,
   },
   {
-    id: 'sergeant',
-    title: 'The Sergeant',
-    description: 'Direct, no-nonsense accountability.',
+    id: "sergeant",
+    title: "The Sergeant",
+    description: "Direct, no-nonsense accountability.",
     icon: ShieldCheck,
   },
 ] as const;
@@ -32,7 +35,8 @@ const COACH_PERSONA_OPTIONS = [
 export default function CoachPersonaScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -40,7 +44,10 @@ export default function CoachPersonaScreen() {
   const setSelected = useOnboardingStore((state) => state.setCoachPersona);
 
   // Supabase sync
-  const { saveCoachPersona } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveCoachPersona } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   // Save to Supabase when coach persona changes
   useEffect(() => {
@@ -53,7 +60,7 @@ export default function CoachPersonaScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -73,8 +80,8 @@ export default function CoachPersonaScreen() {
       options={COACH_PERSONA_OPTIONS}
       selectedId={selected}
       onSelect={setSelected}
-      onContinue={() => router.replace('/morning-mindset')}
-      onBack={() => router.replace('/focus-style')}
+      onContinue={() => router.replace("/morning-mindset")}
+      onBack={() => router.replace("/focus-style")}
     />
   );
 }

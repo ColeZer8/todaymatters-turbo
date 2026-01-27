@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { useRouter } from 'expo-router';
-import { DailyRhythmTemplate } from '@/components/templates';
-import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useMemo } from "react";
+import { useRouter } from "expo-router";
+import { DailyRhythmTemplate } from "@/components/templates";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 
 export default function SettingsDailyRhythmScreen() {
   const router = useRouter();
@@ -25,9 +25,3 @@ export default function SettingsDailyRhythmScreen() {
     />
   );
 }
-
-
-
-
-
-

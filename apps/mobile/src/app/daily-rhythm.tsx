@@ -1,16 +1,20 @@
-import { useEffect, useMemo } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { DailyRhythmTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect, useMemo } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { DailyRhythmTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 export default function DailyRhythmScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -23,7 +27,10 @@ export default function DailyRhythmScreen() {
   const sleepTime = useMemo(() => new Date(sleepTimeStr), [sleepTimeStr]);
 
   // Supabase sync
-  const { saveDailyRhythm } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveDailyRhythm } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   // Save to Supabase when times change (debounced)
   useEffect(() => {
@@ -39,7 +46,7 @@ export default function DailyRhythmScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -60,8 +67,8 @@ export default function DailyRhythmScreen() {
       sleepTime={sleepTime}
       onSelectWakeTime={setWakeTime}
       onSelectSleepTime={setSleepTime}
-      onContinue={() => router.replace('/my-church')}
-      onBack={() => router.replace('/ideal-day')}
+      onContinue={() => router.replace("/my-church")}
+      onBack={() => router.replace("/ideal-day")}
     />
   );
 }

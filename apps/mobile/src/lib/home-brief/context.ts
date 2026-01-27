@@ -1,11 +1,11 @@
-import type { ScheduledEvent } from '@/stores';
+import type { ScheduledEvent } from "@/stores";
 import type {
   HomeBriefContext,
   HomeBriefEventSummary,
   HomeBriefGoalSummary,
   HomeBriefPersona,
-} from './types';
-import { getTimeOfDayBucket } from './time';
+} from "./types";
+import { getTimeOfDayBucket } from "./time";
 
 function toEventSummary(e: ScheduledEvent): HomeBriefEventSummary {
   return {
@@ -44,14 +44,20 @@ export interface BuildHomeBriefContextInput {
   };
 }
 
-export function buildHomeBriefContext(input: BuildHomeBriefContextInput): HomeBriefContext {
+export function buildHomeBriefContext(
+  input: BuildHomeBriefContextInput,
+): HomeBriefContext {
   const { nowDate, nowMinutesFromMidnight, scheduledEvents } = input;
 
   const hour24 = nowDate.getHours();
   const bucket = getTimeOfDayBucket(hour24);
 
-  const wakeMinutesFromMidnight = isoTimeToMinutesFromMidnight(input.rhythm.wakeTimeIso);
-  const sleepMinutesFromMidnight = isoTimeToMinutesFromMidnight(input.rhythm.sleepTimeIso);
+  const wakeMinutesFromMidnight = isoTimeToMinutesFromMidnight(
+    input.rhythm.wakeTimeIso,
+  );
+  const sleepMinutesFromMidnight = isoTimeToMinutesFromMidnight(
+    input.rhythm.sleepTimeIso,
+  );
   const isWakeWindowActive =
     wakeMinutesFromMidnight != null &&
     nowMinutesFromMidnight >= wakeMinutesFromMidnight &&
@@ -59,7 +65,9 @@ export function buildHomeBriefContext(input: BuildHomeBriefContextInput): HomeBr
 
   // Current event = event covering now.
   const current = scheduledEvents.find(
-    (e) => e.startMinutes <= nowMinutesFromMidnight && e.startMinutes + e.duration > nowMinutesFromMidnight
+    (e) =>
+      e.startMinutes <= nowMinutesFromMidnight &&
+      e.startMinutes + e.duration > nowMinutesFromMidnight,
   );
 
   // Next event = earliest event that starts after now.
@@ -67,7 +75,9 @@ export function buildHomeBriefContext(input: BuildHomeBriefContextInput): HomeBr
     .filter((e) => e.startMinutes > nowMinutesFromMidnight)
     .sort((a, b) => a.startMinutes - b.startMinutes)[0];
 
-  const minutesUntilNextEvent = next ? Math.max(0, next.startMinutes - nowMinutesFromMidnight) : null;
+  const minutesUntilNextEvent = next
+    ? Math.max(0, next.startMinutes - nowMinutesFromMidnight)
+    : null;
 
   return {
     now: {
@@ -99,13 +109,11 @@ export function buildHomeBriefContext(input: BuildHomeBriefContextInput): HomeBr
   };
 }
 
-function isoTimeToMinutesFromMidnight(iso: string | null | undefined): number | null {
+function isoTimeToMinutesFromMidnight(
+  iso: string | null | undefined,
+): number | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.getHours() * 60 + d.getMinutes();
 }
-
-
-
-

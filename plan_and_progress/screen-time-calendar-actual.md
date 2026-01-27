@@ -40,4 +40,3 @@ Use iOS Screen Time data we already collect to populate/annotate the **Actual** 
 ## Follow-ups
 
 - Add per-app/per-interval Screen Time segments when native module supports it (current API is hourly buckets + top apps).
-

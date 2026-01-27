@@ -8,6 +8,7 @@
 ## Objective
 
 Make Step 1 (“Explainer Video”) feel consistent with the rest of onboarding:
+
 - Center/contain the video card
 - Match the same background gradient + spacing rhythm
 - Minor typography + card polish (no behavior changes)
@@ -25,9 +26,8 @@ Make Step 1 (“Explainer Video”) feel consistent with the rest of onboarding:
 
 ## Progress
 
- - 2026-01-13: Updated `ExplainerVideoTemplate` to use a shared max-width container, centered video card, and aligned gradient/colors with `SetupStepLayout`.
+- 2026-01-13: Updated `ExplainerVideoTemplate` to use a shared max-width container, centered video card, and aligned gradient/colors with `SetupStepLayout`.
 
 ## Verification
 
 - `read_lints` on touched files: no issues
-

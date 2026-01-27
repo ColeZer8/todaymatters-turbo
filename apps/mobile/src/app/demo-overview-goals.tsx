@@ -1,4 +1,4 @@
-import { DemoOverviewGoals } from '@/components/organisms';
+import { DemoOverviewGoals } from "@/components/organisms";
 
 /**
  * Demo Overview Goals Screen
@@ -9,9 +9,3 @@ import { DemoOverviewGoals } from '@/components/organisms';
 export default function DemoOverviewGoalsScreen() {
   return <DemoOverviewGoals />;
 }
-
-
-
-
-
-

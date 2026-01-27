@@ -41,5 +41,3 @@ Fix the `/demo-screen-time` screen rendering as blank on iOS simulator, while ke
 ## Follow-ups
 
 - If blank screen persists, capture the runtime exception from device logs and patch the exact failing component callsite.
-
-

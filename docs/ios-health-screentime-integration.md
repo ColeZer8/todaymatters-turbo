@@ -26,17 +26,20 @@ HealthKit provides read/write access to health data (with explicit user permissi
 ### Required Info.plist keys
 
 HealthKit authorization prompts require:
+
 - `NSHealthShareUsageDescription`
 - `NSHealthUpdateUsageDescription` (only if writing)
 
 ## Expo Modules approach (project structure)
 
 We implement native functionality as a **local Expo Module** so:
+
 - native code stays isolated (no random edits inside the app runtime)
 - JS API is typed and easy to wrap with app-specific helpers
 - the module is autolinked by Expo’s module system
 
 Official Expo docs:
+
 - Expo Modules API get started: `https://docs.expo.dev/modules/get-started/`
 - Module config (`expo-module.config.json`): `https://docs.expo.dev/modules/module-config/`
 
@@ -52,10 +55,12 @@ Official Expo docs:
 ## Entitlements + iOS usage strings (Expo config plugin)
 
 We set entitlements and usage strings via a config plugin:
+
 - plugin: `apps/mobile/plugins/with-ios-insights.js`
 - wired in: `apps/mobile/app.config.js`
 
 This plugin adds:
+
 - Entitlements:
   - `com.apple.developer.healthkit`
   - `com.apple.developer.family-controls`
@@ -67,10 +72,12 @@ This plugin adds:
 ## Current capabilities (what’s implemented now)
 
 ### HealthKit
+
 - Request authorization (read access to a small set: steps, heart rate, sleep, active energy)
 - Query **step count sum** for a time range
 
 ### Screen Time APIs
+
 - Read current authorization status
 - Request authorization
   - iOS 16+: `AuthorizationCenter.shared.requestAuthorization(for: .individual)`
@@ -85,6 +92,7 @@ We added a **DeviceActivity report extension** target so the app can render Scre
 - **Minimum iOS**: iOS 16.0+ (required for `DeviceActivityReportScene` APIs)
 
 Code lives at:
+
 - `apps/mobile/ios/IosInsightsReport/IosInsightsReportExtension.swift`
 - `apps/mobile/ios/IosInsightsReport/Info.plist`
 
@@ -100,6 +108,3 @@ Apple’s privacy model runs the report extension in a sandbox. We keep everythi
 
 Official note on sandboxing: Apple docs mention the report extension runs sandboxed and cannot make network requests.  
 `https://developer.apple.com/documentation/deviceactivity/deviceactivityreport`
-
-
-

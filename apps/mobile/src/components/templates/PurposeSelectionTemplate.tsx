@@ -1,10 +1,13 @@
-import { ArrowRight } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { IconChoiceCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { ArrowRight } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+import { View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { IconChoiceCard } from "@/components/molecules";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface PurposeOption {
   id: string;
@@ -39,7 +42,13 @@ export const PurposeSelectionTemplate = ({
       title="Your Why"
       subtitle="What is your primary driver?"
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="flex-row flex-wrap justify-between mt-5 gap-3.5">
         {options.map((option) => (

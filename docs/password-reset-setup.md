@@ -62,6 +62,7 @@ The app automatically handles password reset deep links:
 ### URL Parsing
 
 The implementation uses `expo-auth-session/build/QueryParams` which handles both:
+
 - `?` query parameters (standard)
 - `#` fragment parameters (sometimes used by Supabase)
 

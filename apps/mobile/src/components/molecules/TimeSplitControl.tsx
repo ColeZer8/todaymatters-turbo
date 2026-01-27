@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, Pressable, LayoutChangeEvent } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Check, X } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
+import { useState, useCallback, useMemo, useRef } from "react";
+import { View, Text, Pressable, LayoutChangeEvent } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Check, X } from "lucide-react-native";
+import { Icon } from "@/components/atoms";
 
 interface TimeSplitControlProps {
   duration: number; // total minutes
@@ -19,8 +19,8 @@ const parseTimeToMinutes = (timeStr: string): number => {
   let hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
   const period = match[3].toUpperCase();
-  if (period === 'PM' && hours !== 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
   return hours * 60 + minutes;
 };
 
@@ -28,9 +28,9 @@ const parseTimeToMinutes = (timeStr: string): number => {
 const formatMinutesToTime = (totalMinutes: number): string => {
   const hours24 = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
 };
 
 const formatDuration = (minutes: number): string => {
@@ -51,10 +51,10 @@ export const TimeSplitControl = ({
 }: TimeSplitControlProps) => {
   const trackWidth = useRef(0);
   const minSplit = 5;
-  
-  const defaultSplit = Math.round((duration / 2) / 5) * 5;
+
+  const defaultSplit = Math.round(duration / 2 / 5) * 5;
   const [splitMinutes, setSplitMinutes] = useState(
-    Math.max(minSplit, Math.min(defaultSplit, duration - minSplit))
+    Math.max(minSplit, Math.min(defaultSplit, duration - minSplit)),
   );
   const [isDragging, setIsDragging] = useState(false);
   const startSplitRef = useRef(splitMinutes);
@@ -63,17 +63,23 @@ export const TimeSplitControl = ({
     trackWidth.current = event.nativeEvent.layout.width;
   }, []);
 
-  const pixelToMinutes = useCallback((pixelX: number): number => {
-    if (trackWidth.current === 0) return minSplit;
-    const ratio = Math.max(0, Math.min(1, pixelX / trackWidth.current));
-    const rawMinutes = ratio * duration;
-    const snapped = Math.round(rawMinutes / 5) * 5;
-    return Math.max(minSplit, Math.min(snapped, duration - minSplit));
-  }, [duration]);
+  const pixelToMinutes = useCallback(
+    (pixelX: number): number => {
+      if (trackWidth.current === 0) return minSplit;
+      const ratio = Math.max(0, Math.min(1, pixelX / trackWidth.current));
+      const rawMinutes = ratio * duration;
+      const snapped = Math.round(rawMinutes / 5) * 5;
+      return Math.max(minSplit, Math.min(snapped, duration - minSplit));
+    },
+    [duration],
+  );
 
-  const handleTrackPress = useCallback((event: { nativeEvent: { locationX: number } }) => {
-    setSplitMinutes(pixelToMinutes(event.nativeEvent.locationX));
-  }, [pixelToMinutes]);
+  const handleTrackPress = useCallback(
+    (event: { nativeEvent: { locationX: number } }) => {
+      setSplitMinutes(pixelToMinutes(event.nativeEvent.locationX));
+    },
+    [pixelToMinutes],
+  );
 
   const gesture = useMemo(() => {
     const pan = Gesture.Pan()
@@ -135,11 +141,11 @@ export const TimeSplitControl = ({
       <Pressable onPress={handleTrackPress} onLayout={handleTrackLayout}>
         <View className="h-16 rounded-2xl overflow-hidden flex-row bg-[#F1F5F9]">
           {/* Left segment */}
-          <View 
+          <View
             className="h-full justify-center pl-4"
-            style={{ 
+            style={{
               width: `${splitPosition}%`,
-              backgroundColor: '#E0F2FE',
+              backgroundColor: "#E0F2FE",
             }}
           >
             <Text className="text-[15px] font-bold text-[#0369A1]">
@@ -148,9 +154,9 @@ export const TimeSplitControl = ({
           </View>
 
           {/* Right segment */}
-          <View 
+          <View
             className="h-full justify-center items-end pr-4 flex-1"
-            style={{ backgroundColor: '#FEF9C3' }}
+            style={{ backgroundColor: "#FEF9C3" }}
           >
             <Text className="text-[15px] font-bold text-[#A16207]">
               {formatDuration(duration - splitMinutes)}
@@ -162,14 +168,14 @@ export const TimeSplitControl = ({
         <GestureDetector gesture={gesture}>
           <View
             style={{
-              position: 'absolute',
+              position: "absolute",
               left: `${splitPosition}%`,
               top: -4,
               bottom: -4,
               width: 44,
               marginLeft: -22,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
               zIndex: 10,
             }}
           >
@@ -177,22 +183,22 @@ export const TimeSplitControl = ({
             <View
               style={{
                 width: 3,
-                height: '100%',
-                backgroundColor: isDragging ? '#1D4ED8' : '#2563EB',
+                height: "100%",
+                backgroundColor: isDragging ? "#1D4ED8" : "#2563EB",
                 borderRadius: 1.5,
               }}
             />
             {/* Small knob */}
             <View
               style={{
-                position: 'absolute',
+                position: "absolute",
                 width: 20,
                 height: 20,
                 borderRadius: 10,
-                backgroundColor: '#FFFFFF',
+                backgroundColor: "#FFFFFF",
                 borderWidth: 3,
-                borderColor: isDragging ? '#1D4ED8' : '#2563EB',
-                shadowColor: '#000',
+                borderColor: isDragging ? "#1D4ED8" : "#2563EB",
+                shadowColor: "#000",
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.2,
                 shadowRadius: 2,
@@ -211,9 +217,3 @@ export const TimeSplitControl = ({
     </View>
   );
 };
-
-
-
-
-
-

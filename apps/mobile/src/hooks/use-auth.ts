@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useAuthStore } from '@/stores';
+import { useEffect } from "react";
+import { useAuthStore } from "@/stores";
 
 /**
  * Hook for accessing authentication state and actions.
@@ -29,4 +29,3 @@ export const useAuth = () => {
     signOut: store.signOut,
   };
 };
-

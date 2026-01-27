@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { DemoWorkoutInterruption } from '@/components/organisms';
-import { deriveFullNameFromEmail, getFirstName } from '@/lib/user-name';
-import { useAuthStore, useOnboardingStore } from '@/stores';
+import { useMemo } from "react";
+import { DemoWorkoutInterruption } from "@/components/organisms";
+import { deriveFullNameFromEmail, getFirstName } from "@/lib/user-name";
+import { useAuthStore, useOnboardingStore } from "@/stores";
 
 /**
  * Demo Workout Interruption Screen
@@ -15,14 +15,12 @@ export default function DemoWorkoutInterruptionScreen() {
 
   const userFirstName = useMemo(() => {
     const derivedFromEmail = deriveFullNameFromEmail(user?.email);
-    return (getFirstName(fullName) ?? getFirstName(derivedFromEmail) ?? 'there').trim();
+    return (
+      getFirstName(fullName) ??
+      getFirstName(derivedFromEmail) ??
+      "there"
+    ).trim();
   }, [fullName, user?.email]);
 
   return <DemoWorkoutInterruption userName={userFirstName} />;
 }
-
-
-
-
-
-

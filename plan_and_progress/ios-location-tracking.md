@@ -38,5 +38,3 @@ Collect iOS location data in production using Expo-supported APIs so we can comp
 
 - Add Android implementation (mirroring the same schema + hourly semantics).
 - Add UX surface to explain and request “Always” permission at the right moment in onboarding.
-
-

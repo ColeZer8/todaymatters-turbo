@@ -1,9 +1,12 @@
-import { ArrowRight, Target, Info } from 'lucide-react-native';
-import { Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { GoalWhy } from '@/stores/onboarding-store';
+import { ArrowRight, Target, Info } from "lucide-react-native";
+import { Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { GoalWhy } from "@/stores/onboarding-store";
 
 interface GoalWhysTemplateProps {
   step?: number;
@@ -17,7 +20,7 @@ interface GoalWhysTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -36,7 +39,7 @@ export const GoalWhysTemplate = ({
 }: GoalWhysTemplateProps) => {
   const getWhyForGoal = (goalIndex: number) => {
     const found = goalWhys.find((w) => w.goalIndex === goalIndex);
-    return found?.why || '';
+    return found?.why || "";
   };
 
   const validGoals = goals.filter((g) => g.trim().length > 0);
@@ -48,7 +51,13 @@ export const GoalWhysTemplate = ({
       title="Define Your Why"
       subtitle="Understanding why each goal matters will help you stay motivated."
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="mt-2 gap-4">
         {/* Info Card */}
@@ -63,8 +72,9 @@ export const GoalWhysTemplate = ({
                 Why does this matter?
               </Text>
               <Text className="text-sm leading-5 text-[#A16207] mt-1">
-                Goals without a clear "why" are easily abandoned. When you know deeply
-                why something matters, you'll push through obstacles to achieve it.
+                Goals without a clear "why" are easily abandoned. When you know
+                deeply why something matters, you'll push through obstacles to
+                achieve it.
               </Text>
             </View>
           </View>
@@ -122,8 +132,8 @@ export const GoalWhysTemplate = ({
                     className="rounded-xl bg-[#F8FAFC] px-4 py-3 text-sm text-text-primary min-h-[80px]"
                     style={{
                       borderWidth: 1,
-                      borderColor: '#E2E8F0',
-                      textAlignVertical: 'top',
+                      borderColor: "#E2E8F0",
+                      textAlignVertical: "top",
                     }}
                   />
                 </View>

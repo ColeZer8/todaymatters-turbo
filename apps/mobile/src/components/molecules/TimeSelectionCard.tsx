@@ -1,7 +1,7 @@
-import type { LucideIcon } from 'lucide-react-native';
-import { Clock3 } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
-import { Icon } from '../atoms';
+import type { LucideIcon } from "lucide-react-native";
+import { Clock3 } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { Icon } from "../atoms";
 
 interface TimeSelectionCardProps {
   label: string;
@@ -35,8 +35,12 @@ export const TimeSelectionCard = ({
           <Icon icon={icon} size={20} color={accentColor} />
         </View>
         <View className="gap-1">
-          <Text className="text-sm font-semibold text-text-primary">{label}</Text>
-          <Text className="text-3xl font-extrabold text-text-primary tracking-tight">{value}</Text>
+          <Text className="text-sm font-semibold text-text-primary">
+            {label}
+          </Text>
+          <Text className="text-3xl font-extrabold text-text-primary tracking-tight">
+            {value}
+          </Text>
         </View>
       </View>
       <View className="items-center justify-center h-10 w-10 rounded-2xl border border-[#E1E7F5] bg-[#F6F8FD]">

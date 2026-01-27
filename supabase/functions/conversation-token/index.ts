@@ -9,29 +9,33 @@
  * IMPORTANT: This function keeps the ElevenLabs API key server-side.
  */
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req: Request) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     // Allow agent_id to be provided by the client (safe to expose), or fall back to server env.
     // This avoids requiring ELEVENLABS_AGENT_ID to be configured server-side.
     const url = new URL(req.url);
-    const agentIdFromQuery = url.searchParams.get('agent_id') || undefined;
+    const agentIdFromQuery = url.searchParams.get("agent_id") || undefined;
     let agentIdFromBody: string | undefined;
-    if (req.headers.get('content-type')?.includes('application/json')) {
+    if (req.headers.get("content-type")?.includes("application/json")) {
       try {
-        const body = (await req.json()) as { agentId?: string; agent_id?: string } | null;
+        const body = (await req.json()) as {
+          agentId?: string;
+          agent_id?: string;
+        } | null;
         agentIdFromBody = body?.agentId ?? body?.agent_id;
       } catch {
         // ignore body parsing errors; agentId is optional
@@ -39,50 +43,65 @@ serve(async (req: Request) => {
     }
 
     // Verify the user is authenticated
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Create Supabase client and verify the JWT
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       {
         global: {
           headers: { Authorization: authHeader },
         },
-      }
+      },
     );
 
     // Get the user from the JWT
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
     if (userError || !user) {
       return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Invalid or expired token" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Get ElevenLabs configuration from environment
-    const elevenLabsApiKey = Deno.env.get('ELEVENLABS_API_KEY');
-    const agentId = agentIdFromQuery ?? agentIdFromBody ?? Deno.env.get('ELEVENLABS_AGENT_ID');
+    const elevenLabsApiKey = Deno.env.get("ELEVENLABS_API_KEY");
+    const agentId =
+      agentIdFromQuery ??
+      agentIdFromBody ??
+      Deno.env.get("ELEVENLABS_AGENT_ID");
 
     if (!elevenLabsApiKey || !agentId) {
-      console.error('Missing ElevenLabs configuration');
+      console.error("Missing ElevenLabs configuration");
       return new Response(
         JSON.stringify({
-          error: 'Server configuration error',
+          error: "Server configuration error",
           missing: {
             ELEVENLABS_API_KEY: !elevenLabsApiKey,
             ELEVENLABS_AGENT_ID: !agentId,
           },
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -90,23 +109,26 @@ serve(async (req: Request) => {
     const response = await fetch(
       `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'xi-api-key': elevenLabsApiKey,
+          "xi-api-key": elevenLabsApiKey,
         },
-      }
+      },
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('ElevenLabs API error:', response.status, errorText);
+      console.error("ElevenLabs API error:", response.status, errorText);
       return new Response(
         JSON.stringify({
-          error: 'Failed to get conversation token',
+          error: "Failed to get conversation token",
           elevenlabsStatus: response.status,
           elevenlabsBody: errorText,
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -122,15 +144,14 @@ serve(async (req: Request) => {
       }),
       {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (error) {
-    console.error('Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Unexpected error:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
-

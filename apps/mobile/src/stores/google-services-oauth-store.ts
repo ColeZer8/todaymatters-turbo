@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { GoogleOAuthResult } from '@/lib/google-services-oauth';
+import { create } from "zustand";
+import type { GoogleOAuthResult } from "@/lib/google-services-oauth";
 
 interface GoogleServicesOAuthState {
   isProcessing: boolean;
@@ -9,10 +9,12 @@ interface GoogleServicesOAuthState {
   clearResult: () => void;
 }
 
-export const useGoogleServicesOAuthStore = create<GoogleServicesOAuthState>((set) => ({
-  isProcessing: false,
-  result: null,
-  setProcessing: (value) => set({ isProcessing: value }),
-  setResult: (result) => set({ result, isProcessing: false }),
-  clearResult: () => set({ result: null }),
-}));
+export const useGoogleServicesOAuthStore = create<GoogleServicesOAuthState>(
+  (set) => ({
+    isProcessing: false,
+    result: null,
+    setProcessing: (value) => set({ isProcessing: value }),
+    setResult: (result) => set({ result, isProcessing: false }),
+    clearResult: () => set({ result: null }),
+  }),
+);

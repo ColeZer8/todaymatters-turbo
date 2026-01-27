@@ -1,23 +1,23 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Category types matching ComprehensiveCalendarTemplate
 export type EventCategory =
-  | 'routine'
-  | 'work'
-  | 'meal'
-  | 'meeting'
-  | 'health'
-  | 'family'
-  | 'social'
-  | 'travel'
-  | 'finance'
-  | 'comm'
-  | 'digital'
-  | 'sleep'
-  | 'unknown'
-  | 'free';
+  | "routine"
+  | "work"
+  | "meal"
+  | "meeting"
+  | "health"
+  | "family"
+  | "social"
+  | "travel"
+  | "finance"
+  | "comm"
+  | "digital"
+  | "sleep"
+  | "unknown"
+  | "free";
 
 export interface CalendarEventMeta {
   category: EventCategory;
@@ -34,22 +34,22 @@ export interface CalendarEventMeta {
   note?: string | null;
   source_provider?: string | null;
   external_id?: string | null;
-  source?: 'user' | 'system' | 'evidence' | 'derived' | 'actual_adjust';
+  source?: "user" | "system" | "evidence" | "derived" | "actual_adjust";
   plannedEventId?: string;
   kind?:
-    | 'sleep_schedule'
-    | 'sleep_interrupted'
-    | 'sleep_late'
-    | 'screen_time'
-    | 'unknown_gap'
-    | 'pattern_gap'
-    | 'planned_actual'
-    | 'evidence_block'
-    | 'transition_commute'
-    | 'transition_prep'
-    | 'transition_wind_down'
-    | 'location_inferred'
-    | 'travel';
+    | "sleep_schedule"
+    | "sleep_interrupted"
+    | "sleep_late"
+    | "screen_time"
+    | "unknown_gap"
+    | "pattern_gap"
+    | "planned_actual"
+    | "evidence_block"
+    | "transition_commute"
+    | "transition_prep"
+    | "transition_wind_down"
+    | "location_inferred"
+    | "travel";
   startYmd?: string;
   actual?: boolean;
   tags?: string[];
@@ -76,16 +76,23 @@ export interface CalendarEventMeta {
       heartRateAvgBpm?: number | null;
       qualityScore?: number | null;
     };
-    conflicts?: Array<{ source: 'location' | 'screen_time' | 'health' | 'pattern'; detail: string }>;
+    conflicts?: Array<{
+      source: "location" | "screen_time" | "health" | "pattern";
+      detail: string;
+    }>;
   };
   evidenceFusion?: {
     confidence: number;
-    sources: Array<{ type: 'location' | 'screen_time' | 'health' | 'pattern' | 'user_history'; weight: number; detail: string }>;
+    sources: Array<{
+      type: "location" | "screen_time" | "health" | "pattern" | "user_history";
+      weight: number;
+      detail: string;
+    }>;
     conflicts: Array<{
-      source1: 'location' | 'screen_time' | 'health' | 'pattern';
-      source2: 'plan' | 'pattern';
+      source1: "location" | "screen_time" | "health" | "pattern";
+      source2: "plan" | "pattern";
       conflict: string;
-      resolution: 'source1_wins' | 'source2_wins' | 'compromise' | 'unresolved';
+      resolution: "source1_wins" | "source2_wins" | "compromise" | "unresolved";
     }>;
   };
   dataQuality?: {
@@ -102,8 +109,8 @@ export interface CalendarEventMeta {
   };
   learnedFrom?: {
     originalId?: string;
-    kind?: CalendarEventMeta['kind'];
-    source?: CalendarEventMeta['source'];
+    kind?: CalendarEventMeta["kind"];
+    source?: CalendarEventMeta["source"];
     title?: string;
     category?: EventCategory;
     confidence?: number | null;
@@ -112,7 +119,12 @@ export interface CalendarEventMeta {
   verificationReport?: {
     status: string;
     confidence: number;
-    discrepancies?: Array<{ type: string; expected: string; actual: string; severity: string }>;
+    discrepancies?: Array<{
+      type: string;
+      expected: string;
+      actual: string;
+      severity: string;
+    }>;
     suggestions?: string[];
   };
   ai?: {
@@ -182,8 +194,8 @@ const DEFAULT_ACTUAL_EVENTS: ScheduledEvent[] = [];
 export function getTodayYmd(): string {
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
@@ -215,7 +227,10 @@ export const useEventsStore = create<EventsState>()(
       setPlannedEventsForDate: (ymd, events) =>
         set((state) => {
           const normalized = normalizePlanned(events);
-          const nextByDate = { ...state.plannedEventsByDate, [ymd]: normalized };
+          const nextByDate = {
+            ...state.plannedEventsByDate,
+            [ymd]: normalized,
+          };
           const isSelected = ymd === state.selectedDateYmd;
           return {
             plannedEventsByDate: nextByDate,
@@ -250,7 +265,10 @@ export const useEventsStore = create<EventsState>()(
           const targetYmd = ymd ?? state.selectedDateYmd;
           const prev = state.plannedEventsByDate[targetYmd] ?? [];
           const nextList = normalizePlanned([...prev, event]);
-          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const nextByDate = {
+            ...state.plannedEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.selectedDateYmd;
           return {
             plannedEventsByDate: nextByDate,
@@ -262,8 +280,13 @@ export const useEventsStore = create<EventsState>()(
         set((state) => {
           const targetYmd = ymd ?? state.selectedDateYmd;
           const prev = state.plannedEventsByDate[targetYmd] ?? [];
-          const nextList = normalizePlanned(prev.map((e) => (e.id === event.id ? event : e)));
-          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const nextList = normalizePlanned(
+            prev.map((e) => (e.id === event.id ? event : e)),
+          );
+          const nextByDate = {
+            ...state.plannedEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.selectedDateYmd;
           return {
             plannedEventsByDate: nextByDate,
@@ -276,7 +299,10 @@ export const useEventsStore = create<EventsState>()(
           const targetYmd = ymd ?? state.selectedDateYmd;
           const prev = state.plannedEventsByDate[targetYmd] ?? [];
           const nextList = prev.filter((e) => e.id !== id);
-          const nextByDate = { ...state.plannedEventsByDate, [targetYmd]: nextList };
+          const nextByDate = {
+            ...state.plannedEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.selectedDateYmd;
           return {
             plannedEventsByDate: nextByDate,
@@ -289,7 +315,10 @@ export const useEventsStore = create<EventsState>()(
           const targetYmd = ymd ?? state.actualDateYmd;
           const prev = state.actualEventsByDate[targetYmd] ?? [];
           const nextList = normalizePlanned([...prev, event]);
-          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const nextByDate = {
+            ...state.actualEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.actualDateYmd;
           return {
             actualEventsByDate: nextByDate,
@@ -301,8 +330,13 @@ export const useEventsStore = create<EventsState>()(
         set((state) => {
           const targetYmd = ymd ?? state.actualDateYmd;
           const prev = state.actualEventsByDate[targetYmd] ?? [];
-          const nextList = normalizePlanned(prev.map((e) => (e.id === event.id ? event : e)));
-          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const nextList = normalizePlanned(
+            prev.map((e) => (e.id === event.id ? event : e)),
+          );
+          const nextByDate = {
+            ...state.actualEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.actualDateYmd;
           return {
             actualEventsByDate: nextByDate,
@@ -315,7 +349,10 @@ export const useEventsStore = create<EventsState>()(
           const targetYmd = ymd ?? state.actualDateYmd;
           const prev = state.actualEventsByDate[targetYmd] ?? [];
           const nextList = prev.filter((e) => e.id !== id);
-          const nextByDate = { ...state.actualEventsByDate, [targetYmd]: nextList };
+          const nextByDate = {
+            ...state.actualEventsByDate,
+            [targetYmd]: nextList,
+          };
           const isSelected = targetYmd === state.actualDateYmd;
           return {
             actualEventsByDate: nextByDate,
@@ -327,15 +364,17 @@ export const useEventsStore = create<EventsState>()(
         set((state) => ({
           plannedEventsByDate: {
             ...state.plannedEventsByDate,
-            [state.selectedDateYmd]: (state.plannedEventsByDate[state.selectedDateYmd] ?? []).map((e) =>
-              e.id === id ? { ...e, isBig3: !e.isBig3 } : e
-            ),
+            [state.selectedDateYmd]: (
+              state.plannedEventsByDate[state.selectedDateYmd] ?? []
+            ).map((e) => (e.id === id ? { ...e, isBig3: !e.isBig3 } : e)),
           },
-          scheduledEvents: state.scheduledEvents.map((e) => (e.id === id ? { ...e, isBig3: !e.isBig3 } : e)),
+          scheduledEvents: state.scheduledEvents.map((e) =>
+            e.id === id ? { ...e, isBig3: !e.isBig3 } : e,
+          ),
         })),
     }),
     {
-      name: 'events-storage',
+      name: "events-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         selectedDateYmd: state.selectedDateYmd,
@@ -344,21 +383,27 @@ export const useEventsStore = create<EventsState>()(
         actualEventsByDate: state.actualEventsByDate,
       }),
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as {
-          selectedDateYmd?: string;
-          plannedEventsByDate?: Record<string, ScheduledEvent[]>;
-          actualDateYmd?: string;
-          actualEventsByDate?: Record<string, ScheduledEvent[]>;
-        } | undefined;
+        const persisted = persistedState as
+          | {
+              selectedDateYmd?: string;
+              plannedEventsByDate?: Record<string, ScheduledEvent[]>;
+              actualDateYmd?: string;
+              actualEventsByDate?: Record<string, ScheduledEvent[]>;
+            }
+          | undefined;
 
         if (!persisted) {
           return { ...currentState, _hasHydrated: true };
         }
 
-        const selectedDateYmd = persisted.selectedDateYmd ?? currentState.selectedDateYmd;
-        const plannedEventsByDate = persisted.plannedEventsByDate ?? currentState.plannedEventsByDate;
-        const actualDateYmd = persisted.actualDateYmd ?? currentState.actualDateYmd;
-        const actualEventsByDate = persisted.actualEventsByDate ?? currentState.actualEventsByDate;
+        const selectedDateYmd =
+          persisted.selectedDateYmd ?? currentState.selectedDateYmd;
+        const plannedEventsByDate =
+          persisted.plannedEventsByDate ?? currentState.plannedEventsByDate;
+        const actualDateYmd =
+          persisted.actualDateYmd ?? currentState.actualDateYmd;
+        const actualEventsByDate =
+          persisted.actualEventsByDate ?? currentState.actualEventsByDate;
 
         return {
           ...currentState,
@@ -372,10 +417,10 @@ export const useEventsStore = create<EventsState>()(
         };
       },
       onRehydrateStorage: () => () => {
-        console.log('✅ Events Store - Hydration complete');
+        console.log("✅ Events Store - Hydration complete");
       },
-    }
-  )
+    },
+  ),
 );
 
 // Helper to get current minutes from midnight
@@ -388,11 +433,9 @@ export const getCurrentMinutes = (): number => {
 export const formatMinutesToDisplay = (minutes: number): string => {
   const hours24 = Math.floor(minutes / 60) % 24;
   const mins = minutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return mins === 0 ? `${hours12}:00 ${period}` : `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  return mins === 0
+    ? `${hours12}:00 ${period}`
+    : `${hours12}:${mins.toString().padStart(2, "0")} ${period}`;
 };
-
-
-
-

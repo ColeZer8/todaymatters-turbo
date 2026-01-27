@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { 
-  Flame, 
-  Heart, 
-  Timer, 
-  TrendingUp, 
-  Footprints, 
+import { useState } from "react";
+import { View, Text, ScrollView, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import {
+  Flame,
+  Heart,
+  Timer,
+  TrendingUp,
+  Footprints,
   Zap,
   Award,
   ChevronRight,
@@ -15,14 +15,14 @@ import {
   Target,
   Trophy,
   Sparkles,
-} from 'lucide-react-native';
-import Svg, { Circle as SvgCircle, G } from 'react-native-svg';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+} from "lucide-react-native";
+import Svg, { Circle as SvgCircle, G } from "react-native-svg";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoWorkoutSummary - Apple-style workout summary for demo mode
- * 
+ *
  * Mimics Apple Fitness reports/analytics with rings, stats, and achievements.
  * Shows workout data that will later pull from Apple HealthKit.
  * Follows home page golden standard for spacing and typography.
@@ -58,26 +58,27 @@ interface DemoWorkoutSummaryProps {
 const formatNumber = (value: number) =>
   new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
 
-const formatOptionalNumber = (value: number | null, suffix: string) => (value === null ? '—' : `${formatNumber(value)}${suffix}`);
+const formatOptionalNumber = (value: number | null, suffix: string) =>
+  value === null ? "—" : `${formatNumber(value)}${suffix}`;
 
 // Apple-style activity ring component
-const ActivityRing = ({ 
-  progress, 
-  color, 
-  bgColor, 
-  size, 
-  strokeWidth 
-}: { 
-  progress: number; 
-  color: string; 
+const ActivityRing = ({
+  progress,
+  color,
+  bgColor,
+  size,
+  strokeWidth,
+}: {
+  progress: number;
+  color: string;
   bgColor: string;
-  size: number; 
+  size: number;
   strokeWidth: number;
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - Math.min(progress, 1));
-  
+
   return (
     <Svg width={size} height={size}>
       <G rotation="-90" origin={`${size / 2}, ${size / 2}`}>
@@ -108,38 +109,40 @@ const ActivityRing = ({
 };
 
 // Weekly bar chart component
-const WeeklyBarChart = ({ 
-  data, 
-  color, 
+const WeeklyBarChart = ({
+  data,
+  color,
   bgColor,
-  goal 
-}: { 
-  data: number[]; 
+  goal,
+}: {
+  data: number[];
   color: string;
   bgColor: string;
   goal: number;
 }) => {
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const days = ["M", "T", "W", "T", "F", "S", "S"];
   const maxValue = Math.max(...data, goal);
-  
+
   return (
     <View className="flex-row items-end justify-between gap-1.5 h-16">
       {data.map((value, index) => {
         const heightPercent = (value / maxValue) * 100;
         const isToday = index === data.length - 1;
         const metGoal = value >= goal;
-        
+
         return (
           <View key={index} className="flex-1 items-center">
-            <View 
+            <View
               className="w-full rounded-t-sm"
-              style={{ 
+              style={{
                 height: `${heightPercent}%`,
                 backgroundColor: metGoal ? color : bgColor,
                 minHeight: 4,
               }}
             />
-            <Text className={`text-[10px] mt-1 ${isToday ? 'font-bold text-[#111827]' : 'text-[#9CA3AF]'}`}>
+            <Text
+              className={`text-[10px] mt-1 ${isToday ? "font-bold text-[#111827]" : "text-[#9CA3AF]"}`}
+            >
               {days[index]}
             </Text>
           </View>
@@ -150,24 +153,24 @@ const WeeklyBarChart = ({
 };
 
 // Stat card component - now tappable
-const StatCard = ({ 
-  icon, 
-  label, 
-  value, 
-  unit, 
-  color, 
+const StatCard = ({
+  icon,
+  label,
+  value,
+  unit,
+  color,
   bgColor,
   onPress,
-}: { 
-  icon: typeof Flame; 
-  label: string; 
-  value: string; 
+}: {
+  icon: typeof Flame;
+  label: string;
+  value: string;
   unit: string;
   color: string;
   bgColor: string;
   onPress: () => void;
 }) => (
-  <Pressable 
+  <Pressable
     onPress={onPress}
     className="flex-1 rounded-2xl px-4 py-4 border border-[#E5E7EB]"
     style={{ backgroundColor: bgColor }}
@@ -211,31 +214,39 @@ const StatDetailPanel = ({
   totalValue: string;
   unit: string;
 }) => (
-  <Animated.View 
-    entering={FadeIn.duration(200)} 
+  <Animated.View
+    entering={FadeIn.duration(200)}
     exiting={FadeOut.duration(150)}
     className="bg-white rounded-2xl px-4 py-4 border border-[#E5E7EB] mb-3"
   >
-    <Text className="text-[13px] font-bold text-[#111827] mb-3">{label} - This Week</Text>
-    
-    <WeeklyBarChart 
-      data={weeklyData} 
-      color={color} 
+    <Text className="text-[13px] font-bold text-[#111827] mb-3">
+      {label} - This Week
+    </Text>
+
+    <WeeklyBarChart
+      data={weeklyData}
+      color={color}
       bgColor={bgColor}
       goal={weeklyGoal}
     />
-    
+
     <View className="flex-row mt-4 pt-3 border-t border-[#F3F4F6]">
       <View className="flex-1 items-center border-r border-[#F3F4F6]">
-        <Text className="text-[18px] font-bold" style={{ color }}>{avgValue}</Text>
+        <Text className="text-[18px] font-bold" style={{ color }}>
+          {avgValue}
+        </Text>
         <Text className="text-[11px] text-[#9CA3AF]">Daily Avg</Text>
       </View>
       <View className="flex-1 items-center border-r border-[#F3F4F6]">
-        <Text className="text-[18px] font-bold text-[#111827]">{bestValue}</Text>
+        <Text className="text-[18px] font-bold text-[#111827]">
+          {bestValue}
+        </Text>
         <Text className="text-[11px] text-[#9CA3AF]">Best Day</Text>
       </View>
       <View className="flex-1 items-center">
-        <Text className="text-[18px] font-bold" style={{ color }}>{totalValue}</Text>
+        <Text className="text-[18px] font-bold" style={{ color }}>
+          {totalValue}
+        </Text>
         <Text className="text-[11px] text-[#9CA3AF]">Total {unit}</Text>
       </View>
     </View>
@@ -264,15 +275,15 @@ const RingDetailCard = ({
 }) => {
   const progress = Math.min(current / goal, 1);
   const percentComplete = Math.round(progress * 100);
-  
+
   return (
-    <View 
+    <View
       className="flex-row items-center rounded-xl px-3 py-3 mb-2"
       style={{ backgroundColor: bgColor }}
     >
       <View className="mr-3">
         <View className="relative items-center justify-center">
-          <ActivityRing 
+          <ActivityRing
             progress={progress}
             color={color}
             bgColor={`${color}30`}
@@ -286,13 +297,19 @@ const RingDetailCard = ({
       </View>
       <View className="flex-1">
         <View className="flex-row items-baseline">
-          <Text className="text-[18px] font-bold" style={{ color }}>{current}</Text>
-          <Text className="text-[13px] text-[#6B7280]">/{goal} {unit}</Text>
+          <Text className="text-[18px] font-bold" style={{ color }}>
+            {current}
+          </Text>
+          <Text className="text-[13px] text-[#6B7280]">
+            /{goal} {unit}
+          </Text>
         </View>
         <Text className="text-[12px] text-[#6B7280]">{description}</Text>
       </View>
       <View className="items-end">
-        <Text className="text-[20px] font-bold" style={{ color }}>{percentComplete}%</Text>
+        <Text className="text-[20px] font-bold" style={{ color }}>
+          {percentComplete}%
+        </Text>
       </View>
     </View>
   );
@@ -316,27 +333,31 @@ const ProgressDetailPanel = ({
   avgValue: string;
   bestValue: string;
 }) => (
-  <Animated.View 
-    entering={FadeIn.duration(200)} 
+  <Animated.View
+    entering={FadeIn.duration(200)}
     exiting={FadeOut.duration(150)}
     className="mt-3 pt-3 border-t border-[#F3F4F6]"
   >
     <Text className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#6B7280] mb-2">
       7-Day Trend
     </Text>
-    <WeeklyBarChart 
-      data={weeklyData} 
-      color={color} 
+    <WeeklyBarChart
+      data={weeklyData}
+      color={color}
       bgColor={bgColor}
       goal={weeklyGoal}
     />
     <View className="flex-row mt-3 pt-3 border-t border-[#F3F4F6]">
       <View className="flex-1 items-center border-r border-[#F3F4F6]">
-        <Text className="text-[16px] font-bold" style={{ color }}>{avgValue}</Text>
+        <Text className="text-[16px] font-bold" style={{ color }}>
+          {avgValue}
+        </Text>
         <Text className="text-[11px] text-[#9CA3AF]">Daily Avg</Text>
       </View>
       <View className="flex-1 items-center">
-        <Text className="text-[16px] font-bold text-[#111827]">{bestValue}</Text>
+        <Text className="text-[16px] font-bold text-[#111827]">
+          {bestValue}
+        </Text>
         <Text className="text-[11px] text-[#9CA3AF]">Best This Week</Text>
       </View>
     </View>
@@ -346,43 +367,95 @@ const ProgressDetailPanel = ({
 // Achievements list
 const AchievementsList = ({ onClose }: { onClose: () => void }) => {
   const achievements = [
-    { title: '5-Day Streak', description: 'Worked out 5 days in a row', icon: Flame, color: '#EF4444', bgColor: '#FEE2E2', date: 'Today', isNew: true },
-    { title: 'Early Bird', description: 'Completed a workout before 7 AM', icon: Sparkles, color: '#F59E0B', bgColor: '#FEF3C7', date: 'Yesterday', isNew: false },
-    { title: 'Calorie Crusher', description: 'Burned 500+ calories in one workout', icon: Zap, color: '#8B5CF6', bgColor: '#EDE9FE', date: 'Dec 8', isNew: false },
-    { title: 'Heart Racer', description: 'Reached 170+ BPM during workout', icon: Heart, color: '#EC4899', bgColor: '#FCE7F3', date: 'Dec 6', isNew: false },
-    { title: 'Step Master', description: 'Achieved 10,000 steps in one day', icon: Footprints, color: '#2563EB', bgColor: '#DBEAFE', date: 'Dec 5', isNew: false },
+    {
+      title: "5-Day Streak",
+      description: "Worked out 5 days in a row",
+      icon: Flame,
+      color: "#EF4444",
+      bgColor: "#FEE2E2",
+      date: "Today",
+      isNew: true,
+    },
+    {
+      title: "Early Bird",
+      description: "Completed a workout before 7 AM",
+      icon: Sparkles,
+      color: "#F59E0B",
+      bgColor: "#FEF3C7",
+      date: "Yesterday",
+      isNew: false,
+    },
+    {
+      title: "Calorie Crusher",
+      description: "Burned 500+ calories in one workout",
+      icon: Zap,
+      color: "#8B5CF6",
+      bgColor: "#EDE9FE",
+      date: "Dec 8",
+      isNew: false,
+    },
+    {
+      title: "Heart Racer",
+      description: "Reached 170+ BPM during workout",
+      icon: Heart,
+      color: "#EC4899",
+      bgColor: "#FCE7F3",
+      date: "Dec 6",
+      isNew: false,
+    },
+    {
+      title: "Step Master",
+      description: "Achieved 10,000 steps in one day",
+      icon: Footprints,
+      color: "#2563EB",
+      bgColor: "#DBEAFE",
+      date: "Dec 5",
+      isNew: false,
+    },
   ];
-  
+
   return (
-    <Animated.View entering={FadeIn.duration(200)} className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
+    <Animated.View
+      entering={FadeIn.duration(200)}
+      className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden"
+    >
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-[#E5E7EB] bg-[#FAFAFA]">
         <View className="flex-row items-center gap-2">
           <Icon icon={Trophy} size={18} color="#F59E0B" />
-          <Text className="text-[15px] font-bold text-[#111827]">Achievements</Text>
+          <Text className="text-[15px] font-bold text-[#111827]">
+            Achievements
+          </Text>
         </View>
         <Pressable onPress={onClose}>
           <Text className="text-[14px] font-semibold text-[#2563EB]">Done</Text>
         </Pressable>
       </View>
-      
+
       {achievements.map((achievement, index) => (
-        <View 
+        <View
           key={index}
-          className={`flex-row items-center px-4 py-3 ${index < achievements.length - 1 ? 'border-b border-[#F3F4F6]' : ''}`}
+          className={`flex-row items-center px-4 py-3 ${index < achievements.length - 1 ? "border-b border-[#F3F4F6]" : ""}`}
         >
-          <View className="h-11 w-11 items-center justify-center rounded-xl mr-3" style={{ backgroundColor: achievement.bgColor }}>
+          <View
+            className="h-11 w-11 items-center justify-center rounded-xl mr-3"
+            style={{ backgroundColor: achievement.bgColor }}
+          >
             <Icon icon={achievement.icon} size={22} color={achievement.color} />
           </View>
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
-              <Text className="text-[14px] font-semibold text-[#111827]">{achievement.title}</Text>
+              <Text className="text-[14px] font-semibold text-[#111827]">
+                {achievement.title}
+              </Text>
               {achievement.isNew && (
                 <View className="bg-[#EF4444] px-1.5 py-0.5 rounded">
                   <Text className="text-[9px] font-bold text-white">NEW</Text>
                 </View>
               )}
             </View>
-            <Text className="text-[12px] text-[#6B7280]">{achievement.description}</Text>
+            <Text className="text-[12px] text-[#6B7280]">
+              {achievement.description}
+            </Text>
           </View>
           <Text className="text-[12px] text-[#9CA3AF]">{achievement.date}</Text>
         </View>
@@ -394,8 +467,8 @@ const AchievementsList = ({ onClose }: { onClose: () => void }) => {
 export const DemoWorkoutSummary = ({
   data: incomingData,
   statusLabel,
-  healthProviderLabel = 'Apple Health',
-  fallbackUserName = 'Paul',
+  healthProviderLabel = "Apple Health",
+  fallbackUserName = "Paul",
   isHealthConnected,
   canConnectHealth,
   canRefresh,
@@ -421,14 +494,26 @@ export const DemoWorkoutSummary = ({
     move: { currentKcal: 487, goalKcal: 600 },
     exercise: { currentMinutes: 52, goalMinutes: 45 },
     stand: { currentHours: 9, goalHours: 12 },
-    workout: { caloriesKcal: 487, durationMinutes: 52, avgHeartBpm: 142, peakHeartBpm: 168 },
+    workout: {
+      caloriesKcal: 487,
+      durationMinutes: 52,
+      avgHeartBpm: 142,
+      peakHeartBpm: 168,
+    },
     steps: { current: 6842, goal: 10000 },
   };
   const data = incomingData ?? fallbackData;
 
-  const moveProgress = data.move.goalKcal > 0 ? data.move.currentKcal / data.move.goalKcal : 0;
-  const exerciseProgress = data.exercise.goalMinutes > 0 ? data.exercise.currentMinutes / data.exercise.goalMinutes : 0;
-  const standProgress = data.stand.goalHours > 0 ? data.stand.currentHours / data.stand.goalHours : 0;
+  const moveProgress =
+    data.move.goalKcal > 0 ? data.move.currentKcal / data.move.goalKcal : 0;
+  const exerciseProgress =
+    data.exercise.goalMinutes > 0
+      ? data.exercise.currentMinutes / data.exercise.goalMinutes
+      : 0;
+  const standProgress =
+    data.stand.goalHours > 0
+      ? data.stand.currentHours / data.stand.goalHours
+      : 0;
 
   const toggleStat = (stat: string) => {
     setExpandedStat(expandedStat === stat ? null : stat);
@@ -443,7 +528,7 @@ export const DemoWorkoutSummary = ({
       className="flex-1 bg-[#F7FAFF]"
       style={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 72 }}
     >
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-6"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -467,8 +552,12 @@ export const DemoWorkoutSummary = ({
 
         {statusLabel && !isHealthConnected ? (
           <View className="mb-5 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4">
-            <Text className="text-[13px] font-semibold text-[#111827]">{healthProviderLabel}</Text>
-            <Text className="mt-2 text-[12px] text-[#6B7280]">{statusLabel}</Text>
+            <Text className="text-[13px] font-semibold text-[#111827]">
+              {healthProviderLabel}
+            </Text>
+            <Text className="mt-2 text-[12px] text-[#6B7280]">
+              {statusLabel}
+            </Text>
 
             {onConnectHealth || onRefresh ? (
               <View className="mt-4 flex-row gap-3">
@@ -478,7 +567,9 @@ export const DemoWorkoutSummary = ({
                     className="flex-1 items-center justify-center rounded-2xl bg-[#111827] px-4 py-3"
                     style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}
                   >
-                    <Text className="text-[13px] font-semibold text-white">Connect Health</Text>
+                    <Text className="text-[13px] font-semibold text-white">
+                      Connect Health
+                    </Text>
                   </Pressable>
                 ) : null}
 
@@ -487,10 +578,15 @@ export const DemoWorkoutSummary = ({
                     onPress={onRefresh}
                     disabled={!canRefresh || isRefreshing}
                     className="flex-1 items-center justify-center rounded-2xl bg-[#2563EB] px-4 py-3"
-                    style={({ pressed }) => [{ opacity: !canRefresh || isRefreshing ? 0.5 : pressed ? 0.9 : 1 }]}
+                    style={({ pressed }) => [
+                      {
+                        opacity:
+                          !canRefresh || isRefreshing ? 0.5 : pressed ? 0.9 : 1,
+                      },
+                    ]}
                   >
                     <Text className="text-[13px] font-semibold text-white">
-                      {isRefreshing ? 'Refreshing…' : 'Refresh'}
+                      {isRefreshing ? "Refreshing…" : "Refresh"}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -503,22 +599,52 @@ export const DemoWorkoutSummary = ({
         <View className="h-px bg-[#E5E7EB] mb-5" />
 
         {/* Activity Rings Section - Tappable */}
-        <Pressable 
+        <Pressable
           onPress={() => setShowRingDetails(!showRingDetails)}
           className="items-center mb-6"
         >
-          <View 
+          <View
             className="items-center justify-center mb-4"
             style={{ width: outerSize, height: outerSize }}
           >
             <View className="absolute" style={{ top: 0, left: 0 }}>
-              <ActivityRing progress={moveProgress} color="#EF4444" bgColor="#FEE2E2" size={outerSize} strokeWidth={strokeWidth} />
+              <ActivityRing
+                progress={moveProgress}
+                color="#EF4444"
+                bgColor="#FEE2E2"
+                size={outerSize}
+                strokeWidth={strokeWidth}
+              />
             </View>
-            <View className="absolute" style={{ top: (outerSize - middleSize) / 2, left: (outerSize - middleSize) / 2 }}>
-              <ActivityRing progress={exerciseProgress} color="#16A34A" bgColor="#DCFCE7" size={middleSize} strokeWidth={strokeWidth} />
+            <View
+              className="absolute"
+              style={{
+                top: (outerSize - middleSize) / 2,
+                left: (outerSize - middleSize) / 2,
+              }}
+            >
+              <ActivityRing
+                progress={exerciseProgress}
+                color="#16A34A"
+                bgColor="#DCFCE7"
+                size={middleSize}
+                strokeWidth={strokeWidth}
+              />
             </View>
-            <View className="absolute" style={{ top: (outerSize - innerSize) / 2, left: (outerSize - innerSize) / 2 }}>
-              <ActivityRing progress={standProgress} color="#2563EB" bgColor="#DBEAFE" size={innerSize} strokeWidth={strokeWidth} />
+            <View
+              className="absolute"
+              style={{
+                top: (outerSize - innerSize) / 2,
+                left: (outerSize - innerSize) / 2,
+              }}
+            >
+              <ActivityRing
+                progress={standProgress}
+                color="#2563EB"
+                bgColor="#DBEAFE"
+                size={innerSize}
+                strokeWidth={strokeWidth}
+              />
             </View>
           </View>
 
@@ -526,25 +652,62 @@ export const DemoWorkoutSummary = ({
           <View className="flex-row items-center gap-6">
             <View className="flex-row items-center gap-1.5">
               <View className="h-3 w-3 rounded-full bg-[#EF4444]" />
-              <Text className="text-[12px] font-semibold text-[#6B7280]">Move</Text>
+              <Text className="text-[12px] font-semibold text-[#6B7280]">
+                Move
+              </Text>
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className="h-3 w-3 rounded-full bg-[#16A34A]" />
-              <Text className="text-[12px] font-semibold text-[#6B7280]">Exercise</Text>
+              <Text className="text-[12px] font-semibold text-[#6B7280]">
+                Exercise
+              </Text>
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className="h-3 w-3 rounded-full bg-[#2563EB]" />
-              <Text className="text-[12px] font-semibold text-[#6B7280]">Stand</Text>
+              <Text className="text-[12px] font-semibold text-[#6B7280]">
+                Stand
+              </Text>
             </View>
           </View>
         </Pressable>
 
         {/* Ring Details (expanded) */}
         {showRingDetails && (
-          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)} className="mb-5">
-            <RingDetailCard label="Move" current={Math.round(data.move.currentKcal)} goal={Math.round(data.move.goalKcal)} unit="kcal" color="#EF4444" bgColor="#FEF2F2" icon={Flame} description="Active calories burned today" />
-            <RingDetailCard label="Exercise" current={Math.round(data.exercise.currentMinutes)} goal={Math.round(data.exercise.goalMinutes)} unit="min" color="#16A34A" bgColor="#F0FDF4" icon={Activity} description="Minutes of exercise today" />
-            <RingDetailCard label="Stand" current={Math.round(data.stand.currentHours)} goal={Math.round(data.stand.goalHours)} unit="hrs" color="#2563EB" bgColor="#EFF6FF" icon={Target} description="Hours with standing activity" />
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(150)}
+            className="mb-5"
+          >
+            <RingDetailCard
+              label="Move"
+              current={Math.round(data.move.currentKcal)}
+              goal={Math.round(data.move.goalKcal)}
+              unit="kcal"
+              color="#EF4444"
+              bgColor="#FEF2F2"
+              icon={Flame}
+              description="Active calories burned today"
+            />
+            <RingDetailCard
+              label="Exercise"
+              current={Math.round(data.exercise.currentMinutes)}
+              goal={Math.round(data.exercise.goalMinutes)}
+              unit="min"
+              color="#16A34A"
+              bgColor="#F0FDF4"
+              icon={Activity}
+              description="Minutes of exercise today"
+            />
+            <RingDetailCard
+              label="Stand"
+              current={Math.round(data.stand.currentHours)}
+              goal={Math.round(data.stand.goalHours)}
+              unit="hrs"
+              color="#2563EB"
+              bgColor="#EFF6FF"
+              icon={Target}
+              description="Hours with standing activity"
+            />
           </Animated.View>
         )}
 
@@ -555,12 +718,28 @@ export const DemoWorkoutSummary = ({
 
         {/* Stats Grid - Row 1 */}
         <View className="flex-row gap-3 mb-3">
-          <StatCard icon={Flame} label="Calories" value={formatOptionalNumber(data.workout.caloriesKcal, '')} unit="kcal" color="#EF4444" bgColor="#FFFFFF" onPress={() => toggleStat('calories')} />
-          <StatCard icon={Timer} label="Duration" value={formatOptionalNumber(data.workout.durationMinutes, '')} unit="min" color="#2563EB" bgColor="#FFFFFF" onPress={() => toggleStat('duration')} />
+          <StatCard
+            icon={Flame}
+            label="Calories"
+            value={formatOptionalNumber(data.workout.caloriesKcal, "")}
+            unit="kcal"
+            color="#EF4444"
+            bgColor="#FFFFFF"
+            onPress={() => toggleStat("calories")}
+          />
+          <StatCard
+            icon={Timer}
+            label="Duration"
+            value={formatOptionalNumber(data.workout.durationMinutes, "")}
+            unit="min"
+            color="#2563EB"
+            bgColor="#FFFFFF"
+            onPress={() => toggleStat("duration")}
+          />
         </View>
 
         {/* Calories Detail */}
-        {expandedStat === 'calories' && (
+        {expandedStat === "calories" && (
           <StatDetailPanel
             label="Calories"
             color="#EF4444"
@@ -575,7 +754,7 @@ export const DemoWorkoutSummary = ({
         )}
 
         {/* Duration Detail */}
-        {expandedStat === 'duration' && (
+        {expandedStat === "duration" && (
           <StatDetailPanel
             label="Duration"
             color="#2563EB"
@@ -591,12 +770,28 @@ export const DemoWorkoutSummary = ({
 
         {/* Stats Grid - Row 2 */}
         <View className="flex-row gap-3 mb-3">
-          <StatCard icon={Heart} label="Avg Heart" value={formatOptionalNumber(data.workout.avgHeartBpm, '')} unit="bpm" color="#EC4899" bgColor="#FFFFFF" onPress={() => toggleStat('avgHeart')} />
-          <StatCard icon={TrendingUp} label="Peak Heart" value={formatOptionalNumber(data.workout.peakHeartBpm, '')} unit="bpm" color="#F97316" bgColor="#FFFFFF" onPress={() => toggleStat('peakHeart')} />
+          <StatCard
+            icon={Heart}
+            label="Avg Heart"
+            value={formatOptionalNumber(data.workout.avgHeartBpm, "")}
+            unit="bpm"
+            color="#EC4899"
+            bgColor="#FFFFFF"
+            onPress={() => toggleStat("avgHeart")}
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Peak Heart"
+            value={formatOptionalNumber(data.workout.peakHeartBpm, "")}
+            unit="bpm"
+            color="#F97316"
+            bgColor="#FFFFFF"
+            onPress={() => toggleStat("peakHeart")}
+          />
         </View>
 
         {/* Avg Heart Detail */}
-        {expandedStat === 'avgHeart' && (
+        {expandedStat === "avgHeart" && (
           <StatDetailPanel
             label="Average Heart Rate"
             color="#EC4899"
@@ -611,7 +806,7 @@ export const DemoWorkoutSummary = ({
         )}
 
         {/* Peak Heart Detail */}
-        {expandedStat === 'peakHeart' && (
+        {expandedStat === "peakHeart" && (
           <StatDetailPanel
             label="Peak Heart Rate"
             color="#F97316"
@@ -633,14 +828,19 @@ export const DemoWorkoutSummary = ({
         {/* Progress Bars */}
         <View className="bg-white rounded-2xl px-4 py-4 border border-[#E5E7EB] gap-4 mb-5">
           {/* Steps */}
-          <Pressable onPress={() => toggleProgress('steps')}>
+          <Pressable onPress={() => toggleProgress("steps")}>
             <View className="flex-row items-center justify-between mb-2">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Footprints} size={16} color="#2563EB" />
-                <Text className="text-[14px] font-semibold text-[#111827]">Steps</Text>
+                <Text className="text-[14px] font-semibold text-[#111827]">
+                  Steps
+                </Text>
               </View>
               <Text className="text-[14px] font-bold text-[#2563EB]">
-                {data.steps.current === null ? '—' : formatNumber(data.steps.current)} / {formatNumber(data.steps.goal)}
+                {data.steps.current === null
+                  ? "—"
+                  : formatNumber(data.steps.current)}{" "}
+                / {formatNumber(data.steps.goal)}
               </Text>
             </View>
             <View className="h-2 bg-[#DBEAFE] rounded-full overflow-hidden">
@@ -649,12 +849,12 @@ export const DemoWorkoutSummary = ({
                 style={{
                   width:
                     data.steps.current === null
-                      ? '0%'
+                      ? "0%"
                       : `${Math.min((data.steps.current / data.steps.goal) * 100, 100)}%`,
                 }}
               />
             </View>
-            {expandedProgress === 'steps' && (
+            {expandedProgress === "steps" && (
               <ProgressDetailPanel
                 label="Steps"
                 color="#2563EB"
@@ -668,14 +868,17 @@ export const DemoWorkoutSummary = ({
           </Pressable>
 
           {/* Active Calories */}
-          <Pressable onPress={() => toggleProgress('activeCalories')}>
+          <Pressable onPress={() => toggleProgress("activeCalories")}>
             <View className="flex-row items-center justify-between mb-2">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Zap} size={16} color="#EF4444" />
-                <Text className="text-[14px] font-semibold text-[#111827]">Active Calories</Text>
+                <Text className="text-[14px] font-semibold text-[#111827]">
+                  Active Calories
+                </Text>
               </View>
               <Text className="text-[14px] font-bold text-[#EF4444]">
-                {formatNumber(Math.round(data.move.currentKcal))} / {formatNumber(Math.round(data.move.goalKcal))}
+                {formatNumber(Math.round(data.move.currentKcal))} /{" "}
+                {formatNumber(Math.round(data.move.goalKcal))}
               </Text>
             </View>
             <View className="h-2 bg-[#FEE2E2] rounded-full overflow-hidden">
@@ -683,11 +886,13 @@ export const DemoWorkoutSummary = ({
                 className="h-full bg-[#EF4444] rounded-full"
                 style={{
                   width:
-                    data.move.goalKcal <= 0 ? '0%' : `${Math.min((data.move.currentKcal / data.move.goalKcal) * 100, 100)}%`,
+                    data.move.goalKcal <= 0
+                      ? "0%"
+                      : `${Math.min((data.move.currentKcal / data.move.goalKcal) * 100, 100)}%`,
                 }}
               />
             </View>
-            {expandedProgress === 'activeCalories' && (
+            {expandedProgress === "activeCalories" && (
               <ProgressDetailPanel
                 label="Active Calories"
                 color="#EF4444"
@@ -701,14 +906,17 @@ export const DemoWorkoutSummary = ({
           </Pressable>
 
           {/* Exercise Minutes */}
-          <Pressable onPress={() => toggleProgress('exercise')}>
+          <Pressable onPress={() => toggleProgress("exercise")}>
             <View className="flex-row items-center justify-between mb-2">
               <View className="flex-row items-center gap-2">
                 <Icon icon={Timer} size={16} color="#16A34A" />
-                <Text className="text-[14px] font-semibold text-[#111827]">Exercise</Text>
+                <Text className="text-[14px] font-semibold text-[#111827]">
+                  Exercise
+                </Text>
               </View>
               <Text className="text-[14px] font-bold text-[#16A34A]">
-                {formatNumber(Math.round(data.exercise.currentMinutes))} / {formatNumber(Math.round(data.exercise.goalMinutes))} min
+                {formatNumber(Math.round(data.exercise.currentMinutes))} /{" "}
+                {formatNumber(Math.round(data.exercise.goalMinutes))} min
               </Text>
             </View>
             <View className="h-2 bg-[#DCFCE7] rounded-full overflow-hidden">
@@ -717,12 +925,12 @@ export const DemoWorkoutSummary = ({
                 style={{
                   width:
                     data.exercise.goalMinutes <= 0
-                      ? '0%'
+                      ? "0%"
                       : `${Math.min((data.exercise.currentMinutes / data.exercise.goalMinutes) * 100, 100)}%`,
                 }}
               />
             </View>
-            {expandedProgress === 'exercise' && (
+            {expandedProgress === "exercise" && (
               <ProgressDetailPanel
                 label="Exercise"
                 color="#16A34A"
@@ -739,13 +947,20 @@ export const DemoWorkoutSummary = ({
         {/* Achievement Card */}
         {!showAchievements ? (
           <Pressable onPress={() => setShowAchievements(true)}>
-            <View className="flex-row items-center rounded-2xl px-4 py-4 border border-[#DBEAFE]" style={{ backgroundColor: '#EFF6FF' }}>
+            <View
+              className="flex-row items-center rounded-2xl px-4 py-4 border border-[#DBEAFE]"
+              style={{ backgroundColor: "#EFF6FF" }}
+            >
               <View className="h-12 w-12 items-center justify-center rounded-xl bg-[#DBEAFE] mr-3">
                 <Icon icon={Award} size={24} color="#2563EB" />
               </View>
               <View className="flex-1">
-                <Text className="text-[14px] font-bold text-[#1E40AF] mb-0.5">New Achievement Unlocked!</Text>
-                <Text className="text-[13px] text-[#3B82F6]">5-day workout streak • Keep it going!</Text>
+                <Text className="text-[14px] font-bold text-[#1E40AF] mb-0.5">
+                  New Achievement Unlocked!
+                </Text>
+                <Text className="text-[13px] text-[#3B82F6]">
+                  5-day workout streak • Keep it going!
+                </Text>
               </View>
               <Icon icon={ChevronRight} size={20} color="#2563EB" />
             </View>
@@ -759,9 +974,3 @@ export const DemoWorkoutSummary = ({
     </View>
   );
 };
-
-
-
-
-
-

@@ -9,6 +9,7 @@ To permanently delete your Today Matters account and all associated data, please
 **Email:** cole@thedatagroup.cloud
 
 Please include the following in your request:
+
 - Your account email address
 - Confirmation that you want to permanently delete your account and all associated data
 
@@ -38,6 +39,7 @@ Some anonymized, aggregated data may be retained for analytics purposes, but thi
 ## Need Help?
 
 If you have trouble deleting your account or have questions, please contact us at:
+
 - Email: cole@thedatagroup.cloud
 - Through the App: Settings → Support
 

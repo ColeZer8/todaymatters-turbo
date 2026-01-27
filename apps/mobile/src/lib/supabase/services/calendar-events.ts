@@ -1,23 +1,27 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Database, Json } from '../database.types';
-import type { CalendarEventMeta, EventCategory, ScheduledEvent } from '@/stores';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Database, Json } from "../database.types";
+import type {
+  CalendarEventMeta,
+  EventCategory,
+  ScheduledEvent,
+} from "@/stores";
 
-const PLANNED_EVENT_TYPE = 'calendar_planned';
-const ACTUAL_EVENT_TYPE = 'calendar_actual';
+const PLANNED_EVENT_TYPE = "calendar_planned";
+const ACTUAL_EVENT_TYPE = "calendar_actual";
 
-type TmEventRow = Database['tm']['Tables']['events']['Row'];
-type TmEventInsert = Database['tm']['Tables']['events']['Insert'];
-type TmEventUpdate = Database['tm']['Tables']['events']['Update'];
-type PublicEventRow = Database['public']['Tables']['events']['Row'];
+type TmEventRow = Database["tm"]["Tables"]["events"]["Row"];
+type TmEventInsert = Database["tm"]["Tables"]["events"]["Insert"];
+type TmEventUpdate = Database["tm"]["Tables"]["events"]["Update"];
+type PublicEventRow = Database["public"]["Tables"]["events"]["Row"];
 
 export type PlannedCalendarMeta = CalendarEventMeta & Record<string, Json>;
 
 function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const rec = value as Record<string, Json>;
   const category = rec.category;
-  return typeof category === 'string' && category.length > 0;
+  return typeof category === "string" && category.length > 0;
 }
 
 function ymdToLocalDayStart(ymd: string): Date {
@@ -56,19 +60,22 @@ function parseDbTimestamp(timestamp: string): Date {
     return new Date(timestamp);
   }
   // Otherwise, treat it as UTC by appending 'Z'
-  return new Date(timestamp + 'Z');
+  return new Date(timestamp + "Z");
 }
 
 function isoToLocalYmd(iso: string): string {
   const date = parseDbTimestamp(iso);
-  if (Number.isNaN(date.getTime())) return '';
+  if (Number.isNaN(date.getTime())) return "";
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
-function parseTimeIsoToHoursMinutes(timeIso: string): { hours: number; minutes: number } {
+function parseTimeIsoToHoursMinutes(timeIso: string): {
+  hours: number;
+  minutes: number;
+} {
   const parsed = parseDbTimestamp(timeIso);
   if (Number.isNaN(parsed.getTime())) return { hours: 22, minutes: 30 };
   return { hours: parsed.getHours(), minutes: parsed.getMinutes() };
@@ -78,14 +85,19 @@ function dateToMinutesFromMidnightLocal(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date): ScheduledEvent | null {
+function rowToScheduledEventForDay(
+  row: TmEventRow,
+  dayStart: Date,
+  dayEnd: Date,
+): ScheduledEvent | null {
   if (!row.id) return null;
   if (!row.scheduled_start || !row.scheduled_end) return null;
   const start = parseDbTimestamp(row.scheduled_start);
   const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
+    return null;
 
   // Clip to the visible day window so cross-midnight events render correctly on both days.
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
@@ -94,29 +106,46 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
   const clippedEndMs = clippedEnd.getTime();
   if (clippedEndMs <= clippedStartMs) return null;
 
-  const startMinutes = Math.max(0, Math.round((clippedStartMs - dayStart.getTime()) / 60_000));
-  const duration = Math.max(Math.round((clippedEndMs - clippedStartMs) / 60_000), 1);
+  const startMinutes = Math.max(
+    0,
+    Math.round((clippedStartMs - dayStart.getTime()) / 60_000),
+  );
+  const duration = Math.max(
+    Math.round((clippedEndMs - clippedStartMs) / 60_000),
+    1,
+  );
 
   const meta = row.meta as Json;
-  const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
+  const metaParsed: PlannedCalendarMeta | null =
+    meta && isPlannedCalendarMeta(meta) ? meta : null;
   const suggestedCategory =
-    typeof metaParsed?.suggested_category === 'string' ? metaParsed.suggested_category : null;
-  const fallbackCategory = metaParsed?.category ?? 'work';
+    typeof metaParsed?.suggested_category === "string"
+      ? metaParsed.suggested_category
+      : null;
+  const fallbackCategory = metaParsed?.category ?? "work";
   const category = (
-    fallbackCategory === 'unknown' && suggestedCategory ? suggestedCategory : fallbackCategory
+    fallbackCategory === "unknown" && suggestedCategory
+      ? suggestedCategory
+      : fallbackCategory
   ) as EventCategory;
-  const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
+  const locationFromMeta =
+    typeof metaParsed?.location === "string" &&
+    metaParsed.location.trim().length > 0
+      ? metaParsed.location
+      : undefined;
 
   const actualFlag = row.type === ACTUAL_EVENT_TYPE;
   const metaWithActual: PlannedCalendarMeta = {
     ...(metaParsed ?? {}),
-    ...(actualFlag ? { actual: true, source: metaParsed?.source ?? 'user' } : {}),
+    ...(actualFlag
+      ? { actual: true, source: metaParsed?.source ?? "user" }
+      : {}),
   };
 
   return {
     id: row.id,
     title: row.title,
-    description: row.description ?? '',
+    description: row.description ?? "",
     location: locationFromMeta,
     startMinutes,
     duration,
@@ -128,67 +157,67 @@ function rowToScheduledEventForDay(row: TmEventRow, dayStart: Date, dayEnd: Date
 
 function isEventCategory(value: unknown): value is EventCategory {
   return (
-    typeof value === 'string' &&
+    typeof value === "string" &&
     [
-      'routine',
-      'work',
-      'meal',
-      'meeting',
-      'health',
-      'family',
-      'social',
-      'travel',
-      'finance',
-      'comm',
-      'digital',
-      'sleep',
-      'unknown',
-      'free',
+      "routine",
+      "work",
+      "meal",
+      "meeting",
+      "health",
+      "family",
+      "social",
+      "travel",
+      "finance",
+      "comm",
+      "digital",
+      "sleep",
+      "unknown",
+      "free",
     ].includes(value)
   );
 }
 
 function mapPublicEventTypeToCategory(
-  type: Database['public']['Enums']['event_type'] | string | null,
-  fallback?: EventCategory | null
+  type: Database["public"]["Enums"]["event_type"] | string | null,
+  fallback?: EventCategory | null,
 ): EventCategory {
   if (fallback && isEventCategory(fallback)) return fallback;
   switch (type) {
-    case 'calendar_planned':
-    case 'calendar_actual':
-    case 'meeting':
-    case 'call':
-    case 'video_call':
-    case 'phone_call':
-      return 'meeting';
-    case 'drive':
-      return 'travel';
-    case 'sleep':
-      return 'sleep';
-    case 'message':
-    case 'email':
-    case 'chat':
-    case 'slack_message':
-    case 'sms':
-    case 'communication':
-      return 'social';
-    case 'task':
-    case 'project':
-    case 'goal':
-    case 'category':
-    case 'tag':
-      return 'work';
-    case 'note':
-    case 'other':
+    case "calendar_planned":
+    case "calendar_actual":
+    case "meeting":
+    case "call":
+    case "video_call":
+    case "phone_call":
+      return "meeting";
+    case "drive":
+      return "travel";
+    case "sleep":
+      return "sleep";
+    case "message":
+    case "email":
+    case "chat":
+    case "slack_message":
+    case "sms":
+    case "communication":
+      return "social";
+    case "task":
+    case "project":
+    case "goal":
+    case "category":
+    case "tag":
+      return "work";
+    case "note":
+    case "other":
     default:
-      return 'work';
+      return "work";
   }
 }
 
 function rowToScheduledEventForDayFromPublic(
   row: PublicEventRow,
   dayStart: Date,
-  dayEnd: Date
+  dayEnd: Date,
 ): ScheduledEvent | null {
   if (!row.id) return null;
   if (!row.scheduled_start || !row.scheduled_end) return null;
@@ -196,7 +225,8 @@ function rowToScheduledEventForDayFromPublic(
   const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
+    return null;
 
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
   const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
@@ -204,37 +234,51 @@ function rowToScheduledEventForDayFromPublic(
   const clippedEndMs = clippedEnd.getTime();
   if (clippedEndMs <= clippedStartMs) return null;
 
-  const startMinutes = Math.max(0, Math.round((clippedStartMs - dayStart.getTime()) / 60_000));
-  const duration = Math.max(Math.round((clippedEndMs - clippedStartMs) / 60_000), 1);
+  const startMinutes = Math.max(
+    0,
+    Math.round((clippedStartMs - dayStart.getTime()) / 60_000),
+  );
+  const duration = Math.max(
+    Math.round((clippedEndMs - clippedStartMs) / 60_000),
+    1,
+  );
 
   const meta = row.meta as Json;
-  const metaParsed = meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, Json>) : null;
+  const metaParsed =
+    meta && typeof meta === "object" && !Array.isArray(meta)
+      ? (meta as Record<string, Json>)
+      : null;
   const metaCategory = metaParsed?.category;
-  const category = mapPublicEventTypeToCategory(row.type, isEventCategory(metaCategory) ? metaCategory : null);
+  const category = mapPublicEventTypeToCategory(
+    row.type,
+    isEventCategory(metaCategory) ? metaCategory : null,
+  );
 
   const title =
     row.title?.trim() ||
     row.subject?.trim() ||
-    (typeof metaParsed?.title === 'string' ? metaParsed.title : '') ||
-    'Calendar event';
+    (typeof metaParsed?.title === "string" ? metaParsed.title : "") ||
+    "Calendar event";
   const description =
     row.description?.trim() ||
     row.preview?.trim() ||
-    (typeof metaParsed?.description === 'string' ? metaParsed.description : '') ||
-    '';
+    (typeof metaParsed?.description === "string"
+      ? metaParsed.description
+      : "") ||
+    "";
 
   const location =
     row.location?.trim() ||
-    (typeof metaParsed?.location === 'string' ? metaParsed.location : '') ||
+    (typeof metaParsed?.location === "string" ? metaParsed.location : "") ||
     undefined;
 
   const isActual = row.type === ACTUAL_EVENT_TYPE;
   const metaForDisplay: PlannedCalendarMeta = {
     ...(metaParsed ?? {}),
     category,
-    source: isActual ? 'user' : 'system',
+    source: isActual ? "user" : "system",
     actual: isActual ? true : undefined,
-    tags: ['external_calendar'],
+    tags: ["external_calendar"],
     source_provider: row.source_provider ?? null,
     external_id: row.external_id ?? null,
     source_id: row.source_id ?? undefined,
@@ -257,8 +301,10 @@ function rowToScheduledEventForDayFromPublic(
 function buildDedupKey(event: ScheduledEvent): string {
   const sourceId = event.meta?.source_id;
   const externalId = event.meta?.external_id;
-  if (typeof sourceId === 'string' && sourceId.trim()) return `source:${sourceId.trim()}`;
-  if (typeof externalId === 'string' && externalId.trim()) return `external:${externalId.trim()}`;
+  if (typeof sourceId === "string" && sourceId.trim())
+    return `source:${sourceId.trim()}`;
+  if (typeof externalId === "string" && externalId.trim())
+    return `external:${externalId.trim()}`;
   return `time:${event.startMinutes}-${event.duration}-${event.title.trim().toLowerCase()}`;
 }
 
@@ -269,31 +315,43 @@ function rowToScheduledEvent(row: TmEventRow): ScheduledEvent | null {
   const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
+    return null;
 
   const startMinutes = dateToMinutesFromMidnightLocal(start);
   const duration = Math.max(Math.round((endMs - startMs) / 60_000), 1);
   const meta = row.meta as Json;
 
-  const metaParsed: PlannedCalendarMeta | null = meta && isPlannedCalendarMeta(meta) ? meta : null;
+  const metaParsed: PlannedCalendarMeta | null =
+    meta && isPlannedCalendarMeta(meta) ? meta : null;
   const suggestedCategory =
-    typeof metaParsed?.suggested_category === 'string' ? metaParsed.suggested_category : null;
-  const fallbackCategory = metaParsed?.category ?? 'work';
+    typeof metaParsed?.suggested_category === "string"
+      ? metaParsed.suggested_category
+      : null;
+  const fallbackCategory = metaParsed?.category ?? "work";
   const category = (
-    fallbackCategory === 'unknown' && suggestedCategory ? suggestedCategory : fallbackCategory
+    fallbackCategory === "unknown" && suggestedCategory
+      ? suggestedCategory
+      : fallbackCategory
   ) as EventCategory;
-  const locationFromMeta = typeof metaParsed?.location === 'string' && metaParsed.location.trim().length > 0 ? metaParsed.location : undefined;
+  const locationFromMeta =
+    typeof metaParsed?.location === "string" &&
+    metaParsed.location.trim().length > 0
+      ? metaParsed.location
+      : undefined;
 
   const actualFlag = row.type === ACTUAL_EVENT_TYPE;
   const metaWithActual: PlannedCalendarMeta = {
     ...(metaParsed ?? {}),
-    ...(actualFlag ? { actual: true, source: metaParsed?.source ?? 'user' } : {}),
+    ...(actualFlag
+      ? { actual: true, source: metaParsed?.source ?? "user" }
+      : {}),
   };
 
   return {
     id: row.id,
     title: row.title,
-    description: row.description ?? '',
+    description: row.description ?? "",
     location: locationFromMeta,
     startMinutes,
     duration,
@@ -310,16 +368,18 @@ interface GoogleCalendarMeta extends Record<string, Json> {
 }
 
 function isGoogleCalendarMeta(meta: Json): meta is GoogleCalendarMeta {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
   const rec = meta as Record<string, Json>;
   // Google Calendar rows we ingest today include `calendar_id` + `ical_uid`.
-  return typeof rec.calendar_id === 'string' && typeof rec.ical_uid === 'string';
+  return (
+    typeof rec.calendar_id === "string" && typeof rec.ical_uid === "string"
+  );
 }
 
 function rowToScheduledEventForDayFromTmGoogleMeeting(
   row: TmEventRow,
   dayStart: Date,
-  dayEnd: Date
+  dayEnd: Date,
 ): ScheduledEvent | null {
   if (!row.id) return null;
   if (!row.scheduled_start || !row.scheduled_end) return null;
@@ -327,7 +387,8 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
   const end = parseDbTimestamp(row.scheduled_end);
   const startMs = start.getTime();
   const endMs = end.getTime();
-  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
+    return null;
 
   // Clip to visible day window so cross-midnight meetings render correctly.
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
@@ -336,8 +397,14 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
   const clippedEndMs = clippedEnd.getTime();
   if (clippedEndMs <= clippedStartMs) return null;
 
-  const startMinutes = Math.max(0, Math.round((clippedStartMs - dayStart.getTime()) / 60_000));
-  const duration = Math.max(Math.round((clippedEndMs - clippedStartMs) / 60_000), 1);
+  const startMinutes = Math.max(
+    0,
+    Math.round((clippedStartMs - dayStart.getTime()) / 60_000),
+  );
+  const duration = Math.max(
+    Math.round((clippedEndMs - clippedStartMs) / 60_000),
+    1,
+  );
 
   const metaRaw = row.meta as Json;
   if (!isGoogleCalendarMeta(metaRaw)) return null;
@@ -346,20 +413,22 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
   // If absent, fall back to the Meet URL inside meta.
   const rowWithLocation = row as unknown as { location?: string | null };
   const location =
-    typeof rowWithLocation.location === 'string' && rowWithLocation.location.trim().length > 0
+    typeof rowWithLocation.location === "string" &&
+    rowWithLocation.location.trim().length > 0
       ? rowWithLocation.location
-      : typeof metaRaw.conference_url === 'string' && metaRaw.conference_url.trim().length > 0
+      : typeof metaRaw.conference_url === "string" &&
+          metaRaw.conference_url.trim().length > 0
         ? metaRaw.conference_url
         : undefined;
 
   const sourceId = metaRaw.ical_uid;
 
   const metaForDisplay: PlannedCalendarMeta = {
-    category: 'meeting',
-    source: 'system',
-    source_provider: 'google',
+    category: "meeting",
+    source: "system",
+    source_provider: "google",
     source_id: sourceId,
-    tags: ['external_calendar'],
+    tags: ["external_calendar"],
     // Preserve raw calendar metadata for debugging/inspection
     raw: metaRaw,
     ...(location ? { location } : {}),
@@ -368,17 +437,20 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
   return {
     id: row.id,
     title: row.title,
-    description: row.description ?? '',
+    description: row.description ?? "",
     location,
     startMinutes,
     duration,
-    category: 'meeting',
+    category: "meeting",
     isBig3: false,
     meta: metaForDisplay,
   };
 }
 
-export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: string): Promise<ScheduledEvent[]> {
+export async function fetchPlannedCalendarEventsForDay(
+  userId: string,
+  ymd: string,
+): Promise<ScheduledEvent[]> {
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
@@ -387,50 +459,65 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
 
     const [tmResult, publicResult, tmGoogleMeetingsResult] = await Promise.all([
       supabase
-        .schema('tm')
-        .from('events')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', PLANNED_EVENT_TYPE)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true }),
+        .schema("tm")
+        .from("events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("type", PLANNED_EVENT_TYPE)
+        .lt("scheduled_start", endIso)
+        .gt("scheduled_end", startIso)
+        .order("scheduled_start", { ascending: true }),
       supabase
-        .schema('public')
-        .from('events')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', PLANNED_EVENT_TYPE)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true }),
+        .schema("public")
+        .from("events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("type", PLANNED_EVENT_TYPE)
+        .lt("scheduled_start", endIso)
+        .gt("scheduled_end", startIso)
+        .order("scheduled_start", { ascending: true }),
       // Google Calendar ingestion currently stores meetings as `tm.events.type = 'meeting'`.
       // We want those to show up in the PLANNED column, but only for Google Calendar rows.
       supabase
-        .schema('tm')
-        .from('events')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', 'meeting')
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true }),
+        .schema("tm")
+        .from("events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("type", "meeting")
+        .lt("scheduled_start", endIso)
+        .gt("scheduled_end", startIso)
+        .order("scheduled_start", { ascending: true }),
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
     if (publicResult.error) throw handleSupabaseError(publicResult.error);
-    if (tmGoogleMeetingsResult.error) throw handleSupabaseError(tmGoogleMeetingsResult.error);
+    if (tmGoogleMeetingsResult.error)
+      throw handleSupabaseError(tmGoogleMeetingsResult.error);
 
     const tmEvents = (tmResult.data ?? [])
-      .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
+      .map((row) =>
+        rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd),
+      )
       .filter((e): e is ScheduledEvent => !!e);
 
     const externalEvents = (publicResult.data ?? [])
-      .map((row) => rowToScheduledEventForDayFromPublic(row as PublicEventRow, dayStart, dayEnd))
+      .map((row) =>
+        rowToScheduledEventForDayFromPublic(
+          row as PublicEventRow,
+          dayStart,
+          dayEnd,
+        ),
+      )
       .filter((e): e is ScheduledEvent => !!e);
 
     const googleMeetingEvents = (tmGoogleMeetingsResult.data ?? [])
-      .map((row) => rowToScheduledEventForDayFromTmGoogleMeeting(row as TmEventRow, dayStart, dayEnd))
+      .map((row) =>
+        rowToScheduledEventForDayFromTmGoogleMeeting(
+          row as TmEventRow,
+          dayStart,
+          dayEnd,
+        ),
+      )
       .filter((e): e is ScheduledEvent => !!e);
 
     const seen = new Set<string>();
@@ -462,7 +549,10 @@ export async function fetchPlannedCalendarEventsForDay(userId: string, ymd: stri
   }
 }
 
-export async function fetchActualCalendarEventsForDay(userId: string, ymd: string): Promise<ScheduledEvent[]> {
+export async function fetchActualCalendarEventsForDay(
+  userId: string,
+  ymd: string,
+): Promise<ScheduledEvent[]> {
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
@@ -471,34 +561,42 @@ export async function fetchActualCalendarEventsForDay(userId: string, ymd: strin
 
     const [tmResult, publicResult] = await Promise.all([
       supabase
-        .schema('tm')
-        .from('events')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', ACTUAL_EVENT_TYPE)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true }),
+        .schema("tm")
+        .from("events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("type", ACTUAL_EVENT_TYPE)
+        .lt("scheduled_start", endIso)
+        .gt("scheduled_end", startIso)
+        .order("scheduled_start", { ascending: true }),
       supabase
-        .schema('public')
-        .from('events')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('type', ACTUAL_EVENT_TYPE)
-        .lt('scheduled_start', endIso)
-        .gt('scheduled_end', startIso)
-        .order('scheduled_start', { ascending: true }),
+        .schema("public")
+        .from("events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("type", ACTUAL_EVENT_TYPE)
+        .lt("scheduled_start", endIso)
+        .gt("scheduled_end", startIso)
+        .order("scheduled_start", { ascending: true }),
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
     if (publicResult.error) throw handleSupabaseError(publicResult.error);
 
     const tmEvents = (tmResult.data ?? [])
-      .map((row) => rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd))
+      .map((row) =>
+        rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd),
+      )
       .filter((e): e is ScheduledEvent => !!e);
 
     const externalEvents = (publicResult.data ?? [])
-      .map((row) => rowToScheduledEventForDayFromPublic(row as PublicEventRow, dayStart, dayEnd))
+      .map((row) =>
+        rowToScheduledEventForDayFromPublic(
+          row as PublicEventRow,
+          dayStart,
+          dayEnd,
+        ),
+      )
       .filter((e): e is ScheduledEvent => !!e);
 
     const seen = new Set<string>();
@@ -531,7 +629,7 @@ export interface ActualPatternSourceEvent {
 export async function fetchActualCalendarEventsForRange(
   userId: string,
   startYmd: string,
-  endYmd: string
+  endYmd: string,
 ): Promise<ActualPatternSourceEvent[]> {
   try {
     const rangeStart = ymdToLocalDayStart(startYmd);
@@ -540,14 +638,14 @@ export async function fetchActualCalendarEventsForRange(
     const endIso = rangeEnd.toISOString();
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('type', ACTUAL_EVENT_TYPE)
-      .lt('scheduled_start', endIso)
-      .gt('scheduled_end', startIso)
-      .order('scheduled_start', { ascending: true });
+      .schema("tm")
+      .from("events")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", ACTUAL_EVENT_TYPE)
+      .lt("scheduled_start", endIso)
+      .gt("scheduled_end", startIso)
+      .order("scheduled_start", { ascending: true });
 
     if (error) throw handleSupabaseError(error);
 
@@ -575,9 +673,12 @@ export interface CreatePlannedCalendarEventInput {
   meta: PlannedCalendarMeta;
 }
 
-export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEventInput): Promise<ScheduledEvent> {
+export async function createPlannedCalendarEvent(
+  input: CreatePlannedCalendarEventInput,
+): Promise<ScheduledEvent> {
   try {
-    const trimmedLocation = typeof input.location === 'string' ? input.location.trim() : '';
+    const trimmedLocation =
+      typeof input.location === "string" ? input.location.trim() : "";
     const metaWithLocation: PlannedCalendarMeta = {
       ...input.meta,
       ...(trimmedLocation ? { location: trimmedLocation } : {}),
@@ -586,14 +687,14 @@ export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEve
       user_id: input.userId,
       type: PLANNED_EVENT_TYPE,
       title: input.title.trim(),
-      description: input.description?.trim() ?? '',
+      description: input.description?.trim() ?? "",
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
       meta: metaWithLocation as unknown as Json,
     };
 
     if (__DEV__) {
-      console.log('[Supabase] Inserting planned calendar event:', {
+      console.log("[Supabase] Inserting planned calendar event:", {
         userId: input.userId,
         title: insert.title,
         scheduled_start: insert.scheduled_start,
@@ -602,21 +703,29 @@ export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEve
       });
     }
 
-    const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
+    const { data, error } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(insert)
+      .select("*")
+      .single();
     if (error) {
       if (__DEV__) {
-        console.error('[Supabase] ❌ Error inserting planned event:', error);
+        console.error("[Supabase] ❌ Error inserting planned event:", error);
       }
       throw handleSupabaseError(error);
     }
 
     if (__DEV__) {
-      console.log('[Supabase] ✅ Successfully inserted planned event:', data.id);
+      console.log(
+        "[Supabase] ✅ Successfully inserted planned event:",
+        data.id,
+      );
     }
 
     const mapped = rowToScheduledEvent(data as TmEventRow);
     if (!mapped) {
-      throw new Error('Failed to map created planned event');
+      throw new Error("Failed to map created planned event");
     }
     return mapped;
   } catch (error) {
@@ -624,11 +733,15 @@ export async function createPlannedCalendarEvent(input: CreatePlannedCalendarEve
   }
 }
 
-export interface CreateActualCalendarEventInput extends CreatePlannedCalendarEventInput {}
+export interface CreateActualCalendarEventInput
+  extends CreatePlannedCalendarEventInput {}
 
-export async function createActualCalendarEvent(input: CreateActualCalendarEventInput): Promise<ScheduledEvent> {
+export async function createActualCalendarEvent(
+  input: CreateActualCalendarEventInput,
+): Promise<ScheduledEvent> {
   try {
-    const trimmedLocation = typeof input.location === 'string' ? input.location.trim() : '';
+    const trimmedLocation =
+      typeof input.location === "string" ? input.location.trim() : "";
     const metaWithLocation: PlannedCalendarMeta = {
       ...input.meta,
       ...(trimmedLocation ? { location: trimmedLocation } : {}),
@@ -637,14 +750,14 @@ export async function createActualCalendarEvent(input: CreateActualCalendarEvent
       user_id: input.userId,
       type: ACTUAL_EVENT_TYPE,
       title: input.title.trim(),
-      description: input.description?.trim() ?? '',
+      description: input.description?.trim() ?? "",
       scheduled_start: input.scheduledStartIso,
       scheduled_end: input.scheduledEndIso,
       meta: metaWithLocation as unknown as Json,
     };
 
     if (__DEV__) {
-      console.log('[Supabase] Inserting actual calendar event:', {
+      console.log("[Supabase] Inserting actual calendar event:", {
         userId: input.userId,
         title: insert.title,
         scheduled_start: insert.scheduled_start,
@@ -653,21 +766,26 @@ export async function createActualCalendarEvent(input: CreateActualCalendarEvent
       });
     }
 
-    const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
+    const { data, error } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(insert)
+      .select("*")
+      .single();
     if (error) {
       if (__DEV__) {
-        console.error('[Supabase] ❌ Error inserting actual event:', error);
+        console.error("[Supabase] ❌ Error inserting actual event:", error);
       }
       throw handleSupabaseError(error);
     }
 
     if (__DEV__) {
-      console.log('[Supabase] ✅ Successfully inserted actual event:', data.id);
+      console.log("[Supabase] ✅ Successfully inserted actual event:", data.id);
     }
 
     const mapped = rowToScheduledEvent(data as TmEventRow);
     if (!mapped) {
-      throw new Error('Failed to map created actual event');
+      throw new Error("Failed to map created actual event");
     }
     return mapped;
   } catch (error) {
@@ -686,7 +804,9 @@ export interface EnsureSleepScheduleInput {
  * Ensures there is a single "system" sleep schedule planned event for the given start day.
  * Creates (or updates) a cross-midnight event from sleepTime -> wakeTime.
  */
-export async function ensurePlannedSleepScheduleForDay(input: EnsureSleepScheduleInput): Promise<ScheduledEvent> {
+export async function ensurePlannedSleepScheduleForDay(
+  input: EnsureSleepScheduleInput,
+): Promise<ScheduledEvent> {
   const { userId, startYmd, wakeTimeIso, sleepTimeIso } = input;
   try {
     const day = ymdToDate(startYmd);
@@ -709,21 +829,21 @@ export async function ensurePlannedSleepScheduleForDay(input: EnsureSleepSchedul
     const desiredEndIso = end.toISOString();
 
     const targetMeta: PlannedCalendarMeta = {
-      category: 'sleep',
+      category: "sleep",
       isBig3: false,
-      source: 'system',
-      kind: 'sleep_schedule',
+      source: "system",
+      kind: "sleep_schedule",
       startYmd,
     };
 
     const { data: existing, error: existingError } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('type', PLANNED_EVENT_TYPE)
-      .eq('meta->>kind', 'sleep_schedule')
-      .eq('meta->>startYmd', startYmd)
+      .schema("tm")
+      .from("events")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", PLANNED_EVENT_TYPE)
+      .eq("meta->>kind", "sleep_schedule")
+      .eq("meta->>startYmd", startYmd)
       .maybeSingle();
 
     if (existingError) throw handleSupabaseError(existingError);
@@ -732,51 +852,58 @@ export async function ensurePlannedSleepScheduleForDay(input: EnsureSleepSchedul
       const needsUpdate =
         existing.scheduled_start !== desiredStartIso ||
         existing.scheduled_end !== desiredEndIso ||
-        existing.title !== 'Sleep' ||
-        existing.description !== 'Sleep schedule';
+        existing.title !== "Sleep" ||
+        existing.description !== "Sleep schedule";
 
       if (!needsUpdate) {
         const mapped = rowToScheduledEvent(existing as TmEventRow);
-        if (!mapped) throw new Error('Failed to map existing sleep schedule event');
+        if (!mapped)
+          throw new Error("Failed to map existing sleep schedule event");
         return mapped;
       }
 
       const updates: TmEventUpdate = {
-        title: 'Sleep',
-        description: 'Sleep schedule',
+        title: "Sleep",
+        description: "Sleep schedule",
         scheduled_start: desiredStartIso,
         scheduled_end: desiredEndIso,
         meta: targetMeta as unknown as Json,
       };
 
       const { data, error } = await supabase
-        .schema('tm')
-        .from('events')
+        .schema("tm")
+        .from("events")
         .update(updates)
-        .eq('id', existing.id)
-        .select('*')
+        .eq("id", existing.id)
+        .select("*")
         .single();
 
       if (error) throw handleSupabaseError(error);
       const mapped = rowToScheduledEvent(data as TmEventRow);
-      if (!mapped) throw new Error('Failed to map updated sleep schedule event');
+      if (!mapped)
+        throw new Error("Failed to map updated sleep schedule event");
       return mapped;
     }
 
     const insert: TmEventInsert = {
       user_id: userId,
       type: PLANNED_EVENT_TYPE,
-      title: 'Sleep',
-      description: 'Sleep schedule',
+      title: "Sleep",
+      description: "Sleep schedule",
       scheduled_start: desiredStartIso,
       scheduled_end: desiredEndIso,
       meta: targetMeta as unknown as Json,
     };
 
-    const { data, error } = await supabase.schema('tm').from('events').insert(insert).select('*').single();
+    const { data, error } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(insert)
+      .select("*")
+      .single();
     if (error) throw handleSupabaseError(error);
     const mapped = rowToScheduledEvent(data as TmEventRow);
-    if (!mapped) throw new Error('Failed to map created sleep schedule event');
+    if (!mapped) throw new Error("Failed to map created sleep schedule event");
     return mapped;
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
@@ -793,54 +920,65 @@ export interface UpdatePlannedCalendarEventInput {
   meta?: PlannedCalendarMeta;
 }
 
-export async function updatePlannedCalendarEvent(input: UpdatePlannedCalendarEventInput): Promise<ScheduledEvent> {
+export async function updatePlannedCalendarEvent(
+  input: UpdatePlannedCalendarEventInput,
+): Promise<ScheduledEvent> {
   try {
     const updates: TmEventUpdate = {};
-    if (typeof input.title === 'string') updates.title = input.title.trim();
-    if (typeof input.description === 'string') updates.description = input.description.trim();
-    if (typeof input.scheduledStartIso === 'string') updates.scheduled_start = input.scheduledStartIso;
-    if (typeof input.scheduledEndIso === 'string') updates.scheduled_end = input.scheduledEndIso;
+    if (typeof input.title === "string") updates.title = input.title.trim();
+    if (typeof input.description === "string")
+      updates.description = input.description.trim();
+    if (typeof input.scheduledStartIso === "string")
+      updates.scheduled_start = input.scheduledStartIso;
+    if (typeof input.scheduledEndIso === "string")
+      updates.scheduled_end = input.scheduledEndIso;
 
-    const locationWasProvided = typeof input.location === 'string';
+    const locationWasProvided = typeof input.location === "string";
     const trimmedLocation = locationWasProvided ? input.location.trim() : null;
 
     if (input.meta && locationWasProvided) {
       // If meta is provided, apply the location override into meta in the same update.
-      updates.meta = { ...input.meta, location: trimmedLocation || null } as unknown as Json;
+      updates.meta = {
+        ...input.meta,
+        location: trimmedLocation || null,
+      } as unknown as Json;
     } else if (input.meta) {
       updates.meta = input.meta as unknown as Json;
     } else if (locationWasProvided) {
       // If only location was provided, merge it into existing meta so we don't wipe category/isBig3.
       const { data: existing, error: existingError } = await supabase
-        .schema('tm')
-        .from('events')
-        .select('meta')
-        .eq('id', input.eventId)
+        .schema("tm")
+        .from("events")
+        .select("meta")
+        .eq("id", input.eventId)
         .single();
       if (existingError) throw handleSupabaseError(existingError);
 
       const existingMeta = (existing?.meta ?? {}) as Json;
       const nextMeta: Record<string, Json> =
-        existingMeta && typeof existingMeta === 'object' && !Array.isArray(existingMeta)
+        existingMeta &&
+        typeof existingMeta === "object" &&
+        !Array.isArray(existingMeta)
           ? (existingMeta as Record<string, Json>)
           : {};
-      nextMeta.location = trimmedLocation && trimmedLocation.length > 0 ? trimmedLocation : null;
+      nextMeta.location =
+        trimmedLocation && trimmedLocation.length > 0 ? trimmedLocation : null;
       updates.meta = nextMeta as unknown as Json;
     }
 
     const { data, error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .update(updates)
-      .eq('id', input.eventId)
-      .select('*')
+      .eq("id", input.eventId)
+      .select("*")
       .single();
 
     if (error) throw handleSupabaseError(error);
 
     const mapped = rowToScheduledEvent(data as TmEventRow);
     if (!mapped) {
-      throw new Error('Failed to map updated planned event');
+      throw new Error("Failed to map updated planned event");
     }
     return mapped;
   } catch (error) {
@@ -848,35 +986,49 @@ export async function updatePlannedCalendarEvent(input: UpdatePlannedCalendarEve
   }
 }
 
-export interface UpdateActualCalendarEventInput extends UpdatePlannedCalendarEventInput {}
+export interface UpdateActualCalendarEventInput
+  extends UpdatePlannedCalendarEventInput {}
 
-export async function updateActualCalendarEvent(input: UpdateActualCalendarEventInput): Promise<ScheduledEvent> {
+export async function updateActualCalendarEvent(
+  input: UpdateActualCalendarEventInput,
+): Promise<ScheduledEvent> {
   return await updatePlannedCalendarEvent(input);
 }
 
-export async function deletePlannedCalendarEvent(eventId: string): Promise<void> {
+export async function deletePlannedCalendarEvent(
+  eventId: string,
+): Promise<void> {
   try {
-    const { error } = await supabase.schema('tm').from('events').delete().eq('id', eventId);
+    const { error } = await supabase
+      .schema("tm")
+      .from("events")
+      .delete()
+      .eq("id", eventId);
     if (error) throw handleSupabaseError(error);
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
 
-export async function deleteActualCalendarEvent(eventId: string): Promise<void> {
+export async function deleteActualCalendarEvent(
+  eventId: string,
+): Promise<void> {
   return await deletePlannedCalendarEvent(eventId);
 }
 
-export async function deleteActualCalendarEventsByIds(userId: string, eventIds: string[]): Promise<void> {
+export async function deleteActualCalendarEventsByIds(
+  userId: string,
+  eventIds: string[],
+): Promise<void> {
   if (eventIds.length === 0) return;
   try {
     const { error } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .delete()
-      .eq('user_id', userId)
-      .eq('type', ACTUAL_EVENT_TYPE)
-      .in('id', eventIds);
+      .eq("user_id", userId)
+      .eq("type", ACTUAL_EVENT_TYPE)
+      .in("id", eventIds);
     if (error) throw handleSupabaseError(error);
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
@@ -893,9 +1045,11 @@ export interface SyncDerivedActualEventsInput {
  * Automatically saves derived actual events to Supabase.
  * Only saves events that don't already exist (checked by source_id in meta).
  */
-export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInput): Promise<ScheduledEvent[]> {
+export async function syncDerivedActualEvents(
+  input: SyncDerivedActualEventsInput,
+): Promise<ScheduledEvent[]> {
   const { userId, ymd, derivedEvents } = input;
-  
+
   if (derivedEvents.length === 0) return [];
 
   try {
@@ -906,13 +1060,13 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
     // Fetch existing actual events for this day to check for duplicates
     const { data: existing, error: fetchError } = await supabase
-      .schema('tm')
-      .from('events')
-      .select('id, scheduled_start, scheduled_end, meta')
-      .eq('user_id', userId)
-      .eq('type', ACTUAL_EVENT_TYPE)
-      .lt('scheduled_start', endIso)
-      .gt('scheduled_end', startIso);
+      .schema("tm")
+      .from("events")
+      .select("id, scheduled_start, scheduled_end, meta")
+      .eq("user_id", userId)
+      .eq("type", ACTUAL_EVENT_TYPE)
+      .lt("scheduled_start", endIso)
+      .gt("scheduled_end", startIso);
 
     if (fetchError) throw handleSupabaseError(fetchError);
 
@@ -922,17 +1076,17 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
     if (existing) {
       for (const row of existing) {
         const meta = row.meta as Record<string, Json> | null;
-        if (meta?.source_id && typeof meta.source_id === 'string') {
+        if (meta?.source_id && typeof meta.source_id === "string") {
           existingSourceIds.add(meta.source_id);
         }
         // Also check for derived events by checking if meta.source is 'derived' and matching time ranges
-        if (meta?.source === 'derived' && meta?.kind) {
+        if (meta?.source === "derived" && meta?.kind) {
           const start = new Date(row.scheduled_start).getTime();
           const end = new Date(row.scheduled_end).getTime();
           existingSourceIds.add(`derived_${start}_${end}_${meta.kind}`);
         }
         // Track user-edited event time ranges to prevent re-derivation over them
-        if (meta?.source === 'actual_adjust' || meta?.source === 'user') {
+        if (meta?.source === "actual_adjust" || meta?.source === "user") {
           const start = new Date(row.scheduled_start).getTime();
           const end = new Date(row.scheduled_end).getTime();
           if (!Number.isNaN(start) && !Number.isNaN(end)) {
@@ -947,13 +1101,16 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
     for (const event of derivedEvents) {
       // Skip if this is not a derived event (already saved)
-      if (!event.id.startsWith('derived_actual:') && !event.id.startsWith('derived_evidence:')) {
+      if (
+        !event.id.startsWith("derived_actual:") &&
+        !event.id.startsWith("derived_evidence:")
+      ) {
         continue;
       }
 
       // Create a source_id based on the event's derived ID
       const sourceId = event.id;
-      
+
       // Check if we already have this event saved
       if (existingSourceIds.has(sourceId)) {
         continue;
@@ -961,11 +1118,16 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
       // Also check by time range and kind for derived events
       const startDate = new Date(dayStart);
-      startDate.setHours(Math.floor(event.startMinutes / 60), event.startMinutes % 60, 0, 0);
+      startDate.setHours(
+        Math.floor(event.startMinutes / 60),
+        event.startMinutes % 60,
+        0,
+        0,
+      );
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + event.duration);
 
-      const timeRangeKey = `derived_${startDate.getTime()}_${endDate.getTime()}_${event.meta?.kind ?? 'unknown'}`;
+      const timeRangeKey = `derived_${startDate.getTime()}_${endDate.getTime()}_${event.meta?.kind ?? "unknown"}`;
       if (existingSourceIds.has(timeRangeKey)) {
         continue;
       }
@@ -974,7 +1136,7 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
       const derivedStartMs = startDate.getTime();
       const derivedEndMs = endDate.getTime();
       const overlapsUserEdit = userEditedRanges.some(
-        (range) => derivedStartMs < range.end && derivedEndMs > range.start
+        (range) => derivedStartMs < range.end && derivedEndMs > range.start,
       );
       if (overlapsUserEdit) {
         continue;
@@ -982,18 +1144,28 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
       const meta: Record<string, Json> = {
         category: event.category,
-        source: event.meta?.source ?? 'derived',
-        kind: event.meta?.kind ?? 'unknown_gap',
+        source: event.meta?.source ?? "derived",
+        kind: event.meta?.kind ?? "unknown_gap",
         source_id: sourceId,
         actual: true,
-        tags: ['actual'],
+        tags: ["actual"],
         confidence: event.meta?.confidence ?? 0.2,
         ...(event.meta?.evidence ? { evidence: event.meta.evidence } : {}),
-        ...(event.meta?.dataQuality ? { dataQuality: event.meta.dataQuality } : {}),
-        ...(event.meta?.verificationReport ? { verificationReport: event.meta.verificationReport } : {}),
-        ...(event.meta?.patternSummary ? { patternSummary: event.meta.patternSummary } : {}),
-        ...(event.meta?.evidenceFusion ? { evidenceFusion: event.meta.evidenceFusion } : {}),
-        ...(event.meta?.plannedEventId ? { plannedEventId: event.meta.plannedEventId } : {}),
+        ...(event.meta?.dataQuality
+          ? { dataQuality: event.meta.dataQuality }
+          : {}),
+        ...(event.meta?.verificationReport
+          ? { verificationReport: event.meta.verificationReport }
+          : {}),
+        ...(event.meta?.patternSummary
+          ? { patternSummary: event.meta.patternSummary }
+          : {}),
+        ...(event.meta?.evidenceFusion
+          ? { evidenceFusion: event.meta.evidenceFusion }
+          : {}),
+        ...(event.meta?.plannedEventId
+          ? { plannedEventId: event.meta.plannedEventId }
+          : {}),
       };
 
       if (event.location) {
@@ -1004,7 +1176,7 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
         user_id: userId,
         type: ACTUAL_EVENT_TYPE,
         title: event.title,
-        description: event.description ?? '',
+        description: event.description ?? "",
         scheduled_start: startDate.toISOString(),
         scheduled_end: endDate.toISOString(),
         meta: meta as unknown as Json,
@@ -1014,14 +1186,16 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
     if (inserts.length === 0) return [];
 
     if (__DEV__) {
-      console.log(`[Supabase] Syncing ${inserts.length} derived actual events for ${ymd}`);
+      console.log(
+        `[Supabase] Syncing ${inserts.length} derived actual events for ${ymd}`,
+      );
     }
 
     const { data: inserted, error: insertError } = await supabase
-      .schema('tm')
-      .from('events')
+      .schema("tm")
+      .from("events")
       .insert(inserts)
-      .select('*');
+      .select("*");
 
     if (insertError) throw handleSupabaseError(insertError);
 
@@ -1029,23 +1203,30 @@ export async function syncDerivedActualEvents(input: SyncDerivedActualEventsInpu
 
     // Map inserted rows to ScheduledEvent format
     for (const row of inserted) {
-      const mapped = rowToScheduledEventForDay(row as TmEventRow, dayStart, dayEnd);
+      const mapped = rowToScheduledEventForDay(
+        row as TmEventRow,
+        dayStart,
+        dayEnd,
+      );
       if (mapped) {
         savedEvents.push(mapped);
       }
     }
 
     if (__DEV__) {
-      console.log(`[Supabase] ✅ Successfully synced ${savedEvents.length} derived actual events`);
+      console.log(
+        `[Supabase] ✅ Successfully synced ${savedEvents.length} derived actual events`,
+      );
     }
 
     return savedEvents;
   } catch (error) {
     if (__DEV__) {
-      console.error('[Supabase] ❌ Error syncing derived actual events:', error);
+      console.error(
+        "[Supabase] ❌ Error syncing derived actual events:",
+        error,
+      );
     }
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
-
-

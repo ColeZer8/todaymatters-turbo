@@ -1,19 +1,19 @@
-import { Platform } from 'react-native';
-import { requireOptionalNativeModule } from 'expo-modules-core';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase/client';
-import type { Json } from '@/lib/supabase/database.types';
-import { enqueueAndroidLocationSamplesForUserAsync } from './queue';
-import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from './task-names';
-import type { AndroidLocationSample } from './types';
+import { Platform } from "react-native";
+import { requireOptionalNativeModule } from "expo-modules-core";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase/client";
+import type { Json } from "@/lib/supabase/database.types";
+import { enqueueAndroidLocationSamplesForUserAsync } from "./queue";
+import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+import type { AndroidLocationSample } from "./types";
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
 
-const LAST_AUTHED_USER_ID_KEY = 'tm:lastAuthedUserId';
-const LAST_TASK_FIRED_AT_KEY = 'tm:androidLocation:lastTaskFiredAt';
-const LAST_TASK_QUEUED_COUNT_KEY = 'tm:androidLocation:lastTaskQueuedCount';
-const LAST_TASK_ERROR_KEY = 'tm:androidLocation:lastTaskError';
+const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
+const LAST_TASK_FIRED_AT_KEY = "tm:androidLocation:lastTaskFiredAt";
+const LAST_TASK_QUEUED_COUNT_KEY = "tm:androidLocation:lastTaskQueuedCount";
+const LAST_TASK_ERROR_KEY = "tm:androidLocation:lastTaskError";
 
 type RawLocationObject = {
   timestamp: number;
@@ -29,7 +29,7 @@ type RawLocationObject = {
 };
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function normalizeNonNegative(value: unknown): number | null {
@@ -54,7 +54,9 @@ function normalizeRaw(value: unknown): Json | null {
   }
 }
 
-function toSample(location: RawLocationObject): Omit<AndroidLocationSample, 'dedupe_key'> | null {
+function toSample(
+  location: RawLocationObject,
+): Omit<AndroidLocationSample, "dedupe_key"> | null {
   if (!isFiniteNumber(location.timestamp)) return null;
   if (!isFiniteNumber(location.coords.latitude)) return null;
   if (!isFiniteNumber(location.coords.longitude)) return null;
@@ -75,7 +77,7 @@ function toSample(location: RawLocationObject): Omit<AndroidLocationSample, 'ded
     speed_mps: normalizeNonNegative(coords.speed),
     heading_deg: normalizeHeadingDeg(coords.heading),
     is_mocked: location.mocked ?? null,
-    source: 'background',
+    source: "background",
     raw: normalizeRaw({
       timestamp: location.timestamp,
       coords,
@@ -84,64 +86,101 @@ function toSample(location: RawLocationObject): Omit<AndroidLocationSample, 'ded
 }
 
 // IMPORTANT: Task definitions must live at module scope (per Expo docs).
-if (Platform.OS === 'android' && requireOptionalNativeModule('ExpoTaskManager')) {
+if (
+  Platform.OS === "android" &&
+  requireOptionalNativeModule("ExpoTaskManager")
+) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const TaskManager = require('expo-task-manager') as typeof import('expo-task-manager');
-  TaskManager.defineTask(ANDROID_BACKGROUND_LOCATION_TASK_NAME, async ({ data, error }) => {
-    try {
-      const firedAtIso = new Date().toISOString();
-      AsyncStorage.setItem(LAST_TASK_FIRED_AT_KEY, firedAtIso).catch(() => undefined);
-      if (__DEV__) {
-        console.log(`📍 [task] Background location task fired at ${firedAtIso}`);
-      }
-
-      if (error) {
-        AsyncStorage.setItem(LAST_TASK_ERROR_KEY, JSON.stringify({ at: firedAtIso, error: String(error) })).catch(
-          () => undefined
+  const TaskManager =
+    require("expo-task-manager") as typeof import("expo-task-manager");
+  TaskManager.defineTask(
+    ANDROID_BACKGROUND_LOCATION_TASK_NAME,
+    async ({ data, error }) => {
+      try {
+        const firedAtIso = new Date().toISOString();
+        AsyncStorage.setItem(LAST_TASK_FIRED_AT_KEY, firedAtIso).catch(
+          () => undefined,
         );
-        const now = Date.now();
-        if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
-          lastTaskErrorLogAtMs = now;
-          console.warn('📍 [task] Android background location task warning:', error);
+        if (__DEV__) {
+          console.log(
+            `📍 [task] Background location task fired at ${firedAtIso}`,
+          );
         }
-        return;
-      }
 
-      const locations = (data as unknown as { locations?: RawLocationObject[] } | null | undefined)?.locations ?? [];
-      if (__DEV__) {
-        console.log(`📍 [task] Received ${locations.length} raw location(s)`);
-      }
-      if (locations.length === 0) return;
+        if (error) {
+          AsyncStorage.setItem(
+            LAST_TASK_ERROR_KEY,
+            JSON.stringify({ at: firedAtIso, error: String(error) }),
+          ).catch(() => undefined);
+          const now = Date.now();
+          if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
+            lastTaskErrorLogAtMs = now;
+            console.warn(
+              "📍 [task] Android background location task warning:",
+              error,
+            );
+          }
+          return;
+        }
 
-      const sessionResult = await supabase.auth.getSession();
-      const sessionUserId = sessionResult.data.session?.user?.id ?? null;
-      const cachedUserId = await AsyncStorage.getItem(LAST_AUTHED_USER_ID_KEY).catch(() => null);
-      const userId = sessionUserId ?? cachedUserId ?? null;
-      if (!userId) {
-        if (__DEV__) console.log('📍 [task] No authenticated user — dropping locations');
-        return;
-      }
+        const locations =
+          (
+            data as unknown as
+              | { locations?: RawLocationObject[] }
+              | null
+              | undefined
+          )?.locations ?? [];
+        if (__DEV__) {
+          console.log(`📍 [task] Received ${locations.length} raw location(s)`);
+        }
+        if (locations.length === 0) return;
 
-      const samples = locations.map(toSample).filter((s): s is Omit<AndroidLocationSample, 'dedupe_key'> => s != null);
-      if (__DEV__) {
-        console.log(`📍 [task] Converted to ${samples.length} valid sample(s) from ${locations.length} raw`);
-      }
-      if (samples.length === 0) return;
-      const { pendingCount } = await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
-      AsyncStorage.setItem(LAST_TASK_QUEUED_COUNT_KEY, String(samples.length)).catch(() => undefined);
-      AsyncStorage.removeItem(LAST_TASK_ERROR_KEY).catch(() => undefined);
+        const sessionResult = await supabase.auth.getSession();
+        const sessionUserId = sessionResult.data.session?.user?.id ?? null;
+        const cachedUserId = await AsyncStorage.getItem(
+          LAST_AUTHED_USER_ID_KEY,
+        ).catch(() => null);
+        const userId = sessionUserId ?? cachedUserId ?? null;
+        if (!userId) {
+          if (__DEV__)
+            console.log("📍 [task] No authenticated user — dropping locations");
+          return;
+        }
 
-      if (__DEV__) {
-        console.log(`📍 [task] Queued ${samples.length} Android location samples (pending=${pendingCount})`);
+        const samples = locations
+          .map(toSample)
+          .filter(
+            (s): s is Omit<AndroidLocationSample, "dedupe_key"> => s != null,
+          );
+        if (__DEV__) {
+          console.log(
+            `📍 [task] Converted to ${samples.length} valid sample(s) from ${locations.length} raw`,
+          );
+        }
+        if (samples.length === 0) return;
+        const { pendingCount } =
+          await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
+        AsyncStorage.setItem(
+          LAST_TASK_QUEUED_COUNT_KEY,
+          String(samples.length),
+        ).catch(() => undefined);
+        AsyncStorage.removeItem(LAST_TASK_ERROR_KEY).catch(() => undefined);
+
+        if (__DEV__) {
+          console.log(
+            `📍 [task] Queued ${samples.length} Android location samples (pending=${pendingCount})`,
+          );
+        }
+      } catch (e) {
+        AsyncStorage.setItem(
+          LAST_TASK_ERROR_KEY,
+          JSON.stringify({
+            at: new Date().toISOString(),
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        ).catch(() => undefined);
+        console.error("📍 [task] Android background location task failed:", e);
       }
-    } catch (e) {
-      AsyncStorage.setItem(
-        LAST_TASK_ERROR_KEY,
-        JSON.stringify({ at: new Date().toISOString(), error: e instanceof Error ? e.message : String(e) })
-      ).catch(() => undefined);
-      console.error('📍 [task] Android background location task failed:', e);
-    }
-  });
+    },
+  );
 }
-
-

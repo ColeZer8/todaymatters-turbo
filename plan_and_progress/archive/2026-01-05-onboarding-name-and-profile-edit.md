@@ -41,5 +41,3 @@ Capture a user’s name during onboarding (mid-flow), allow editing it in Profil
 ## Follow-ups
 
 - Later: auto-fill name from auth/email and potentially remove/skip this step.
-
-

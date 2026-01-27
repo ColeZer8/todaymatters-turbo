@@ -8,6 +8,7 @@
 ## Objective
 
 Eliminate recurring console errors during background location tracking + sync by:
+
 - Preventing invalid sample values (e.g. heading = -1/NaN) from violating Supabase DB constraints
 - Handling network failures without throwing every flush interval (reduce log spam, keep queue intact)
 

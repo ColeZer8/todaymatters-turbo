@@ -6,7 +6,9 @@ interface ScrollSnapControllerProps {
   enabled: boolean;
 }
 
-export const ScrollSnapController = ({ enabled }: ScrollSnapControllerProps) => {
+export const ScrollSnapController = ({
+  enabled,
+}: ScrollSnapControllerProps) => {
   useEffect(() => {
     const root = document.documentElement;
 
@@ -36,5 +38,3 @@ export const ScrollSnapController = ({ enabled }: ScrollSnapControllerProps) => 
 
   return null;
 };
-
-

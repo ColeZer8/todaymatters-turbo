@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { useAuthStore } from '@/stores';
+import { useCallback } from "react";
+import { useAuthStore } from "@/stores";
 import {
   createActualCalendarEvent,
   createPlannedCalendarEvent,
@@ -13,14 +13,16 @@ import {
   type ActualPatternSourceEvent,
   type CreatePlannedCalendarEventInput,
   type PlannedCalendarMeta,
-} from '../services/calendar-events';
-import type { ScheduledEvent } from '@/stores';
+} from "../services/calendar-events";
+import type { ScheduledEvent } from "@/stores";
 
 interface UseCalendarEventsSyncOptions {
   onError?: (error: Error) => void;
 }
 
-export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}) {
+export function useCalendarEventsSync(
+  options: UseCalendarEventsSyncOptions = {},
+) {
   const { onError } = options;
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -31,12 +33,15 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
       try {
         return await fetchPlannedCalendarEventsForDay(userId, ymd);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to load planned events');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to load planned events");
         onError?.(err);
         return [];
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const loadActualForDay = useCallback(
@@ -45,58 +50,81 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
       try {
         return await fetchActualCalendarEventsForDay(userId, ymd);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to load actual events');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to load actual events");
         onError?.(err);
         return [];
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const loadActualForRange = useCallback(
-    async (startYmd: string, endYmd: string): Promise<ActualPatternSourceEvent[]> => {
+    async (
+      startYmd: string,
+      endYmd: string,
+    ): Promise<ActualPatternSourceEvent[]> => {
       if (!isAuthenticated || !userId) return [];
       try {
-        return await fetchActualCalendarEventsForRange(userId, startYmd, endYmd);
+        return await fetchActualCalendarEventsForRange(
+          userId,
+          startYmd,
+          endYmd,
+        );
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to load actual events range');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to load actual events range");
         onError?.(err);
         return [];
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const createPlanned = useCallback(
-    async (input: Omit<CreatePlannedCalendarEventInput, 'userId'>): Promise<ScheduledEvent> => {
+    async (
+      input: Omit<CreatePlannedCalendarEventInput, "userId">,
+    ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         return await createPlannedCalendarEvent({ ...input, userId });
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to create planned event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to create planned event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const createActual = useCallback(
-    async (input: Omit<CreatePlannedCalendarEventInput, 'userId'>): Promise<ScheduledEvent> => {
+    async (
+      input: Omit<CreatePlannedCalendarEventInput, "userId">,
+    ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         return await createActualCalendarEvent({ ...input, userId });
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to create actual event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to create actual event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const updatePlanned = useCallback(
@@ -109,20 +137,23 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
         scheduledStartIso?: string;
         scheduledEndIso?: string;
         meta?: PlannedCalendarMeta;
-      }
+      },
     ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         return await updatePlannedCalendarEvent({ eventId, ...updates });
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to update planned event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to update planned event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const updateActual = useCallback(
@@ -135,52 +166,61 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
         scheduledStartIso?: string;
         scheduledEndIso?: string;
         meta?: PlannedCalendarMeta;
-      }
+      },
     ): Promise<ScheduledEvent> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         return await updateActualCalendarEvent({ eventId, ...updates });
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to update actual event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to update actual event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const deletePlanned = useCallback(
     async (eventId: string): Promise<void> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         await deletePlannedCalendarEvent(eventId);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to delete planned event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to delete planned event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   const deleteActual = useCallback(
     async (eventId: string): Promise<void> => {
       if (!isAuthenticated || !userId) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
       try {
         await deleteActualCalendarEvent(eventId);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to delete actual event');
+        const err =
+          error instanceof Error
+            ? error
+            : new Error("Failed to delete actual event");
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, onError, userId]
+    [isAuthenticated, onError, userId],
   );
 
   return {
@@ -195,5 +235,3 @@ export function useCalendarEventsSync(options: UseCalendarEventsSyncOptions = {}
     deleteActual,
   };
 }
-
-

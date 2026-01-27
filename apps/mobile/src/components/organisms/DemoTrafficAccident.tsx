@@ -1,25 +1,35 @@
-import { View, Text, Pressable, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AlertTriangle, Navigation, Clock, MapPin, Send } from 'lucide-react-native';
-import Svg, { Path, Circle, G, Rect } from 'react-native-svg';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+import { View, Text, Pressable, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  AlertTriangle,
+  Navigation,
+  Clock,
+  MapPin,
+  Send,
+} from "lucide-react-native";
+import Svg, { Path, Circle, G, Rect } from "react-native-svg";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoTrafficAccident - Accident alert with alternate route for demo mode
- * 
+ *
  * Shows a "wrap up meeting" alert about traffic accident and alternate route.
  * Includes map visualization with accident marker and new route.
  * Follows home page golden standard for spacing and typography.
  */
-export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }) => {
+export const DemoTrafficAccident = ({
+  userName = "Paul",
+}: {
+  userName?: string;
+}) => {
   const insets = useSafeAreaInsets();
 
   // Use monospace font for timer
   const timerFontFamily = Platform.select({
-    ios: 'Menlo-Bold',
-    android: 'monospace',
-    default: 'monospace',
+    ios: "Menlo-Bold",
+    android: "monospace",
+    default: "monospace",
   });
 
   return (
@@ -41,14 +51,13 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
         {/* Message - matches DailyBrief: mt-3.5 mb-5 */}
         <View className="mt-3.5 mb-4">
           <Text className="text-[17.5px] leading-[29px] font-bold text-[#4A5568]">
-            There's an accident ahead and traffic is backed up. You'll need to take an alternate route home.
+            There's an accident ahead and traffic is backed up. You'll need to
+            take an alternate route home.
           </Text>
         </View>
 
         {/* Alert Banner - Blue themed */}
-        <View 
-          className="flex-row items-center gap-3 bg-[#EFF6FF] rounded-xl px-4 py-3 mb-4 border border-[#DBEAFE]"
-        >
+        <View className="flex-row items-center gap-3 bg-[#EFF6FF] rounded-xl px-4 py-3 mb-4 border border-[#DBEAFE]">
           <View className="h-10 w-10 items-center justify-center rounded-full bg-[#DBEAFE]">
             <Icon icon={Send} size={20} color="#2563EB" />
           </View>
@@ -65,10 +74,10 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
         {/* Map Card */}
         <View className="bg-[#EBF0F5] rounded-2xl overflow-hidden border border-[#D4DDE8] mb-4">
           {/* Accident Badge */}
-          <View 
+          <View
             className="absolute top-3 left-3 z-10 flex-row items-center gap-2 bg-white px-3 py-2 rounded-full"
             style={{
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.1,
               shadowRadius: 3,
@@ -86,8 +95,22 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
             <Svg width="100%" height="100%" viewBox="0 0 350 180">
               {/* Map background elements */}
               {/* Park areas - muted blue-gray */}
-              <Rect x="20" y="20" width="50" height="45" fill="#D1DBE8" rx="3" />
-              <Rect x="280" y="100" width="55" height="50" fill="#D1DBE8" rx="3" />
+              <Rect
+                x="20"
+                y="20"
+                width="50"
+                height="45"
+                fill="#D1DBE8"
+                rx="3"
+              />
+              <Rect
+                x="280"
+                y="100"
+                width="55"
+                height="50"
+                fill="#D1DBE8"
+                rx="3"
+              />
               <Circle cx="180" cy="150" r="22" fill="#D1DBE8" />
 
               {/* Street grid - main roads */}
@@ -96,14 +119,14 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
                 <Path d="M 0 50 L 350 50" stroke="#FFFFFF" strokeWidth="12" />
                 <Path d="M 0 100 L 350 100" stroke="#FFFFFF" strokeWidth="14" />
                 <Path d="M 0 145 L 350 145" stroke="#FFFFFF" strokeWidth="10" />
-                
+
                 {/* Major vertical roads */}
                 <Path d="M 60 0 L 60 180" stroke="#FFFFFF" strokeWidth="10" />
                 <Path d="M 140 0 L 140 180" stroke="#FFFFFF" strokeWidth="10" />
                 <Path d="M 220 0 L 220 180" stroke="#FFFFFF" strokeWidth="12" />
                 <Path d="M 300 0 L 300 180" stroke="#FFFFFF" strokeWidth="10" />
               </G>
-              
+
               {/* Road outlines for depth */}
               <G opacity={0.15}>
                 <Path d="M 0 50 L 350 50" stroke="#666" strokeWidth="12" />
@@ -141,7 +164,7 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
               <Circle cx="60" cy="160" r="10" fill="#2563EB" />
               <Circle cx="60" cy="160" r="6" fill="#FFFFFF" />
               <Circle cx="60" cy="160" r="4" fill="#2563EB" />
-              
+
               {/* Destination marker - Blue pin */}
               <Path
                 d="M 290 85 C 290 75 300 68 300 68 C 300 68 310 75 310 85 C 310 92 300 102 300 102 C 300 102 290 92 290 85 Z"
@@ -151,17 +174,17 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
             </Svg>
 
             {/* Accident warning icon - positioned on the old route */}
-            <View 
+            <View
               className="absolute items-center justify-center"
-              style={{ 
+              style={{
                 top: 78,
                 left: 115,
               }}
             >
-              <View 
+              <View
                 className="h-7 w-7 items-center justify-center rounded-full bg-[#EF4444]"
                 style={{
-                  shadowColor: '#000',
+                  shadowColor: "#000",
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.25,
                   shadowRadius: 4,
@@ -173,12 +196,12 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
             </View>
 
             {/* New Route badge - Blue */}
-            <View 
+            <View
               className="absolute flex-row items-center gap-1.5 bg-[#2563EB] px-2.5 py-1.5 rounded-md"
-              style={{ 
+              style={{
                 top: 25,
                 left: 165,
-                shadowColor: '#000',
+                shadowColor: "#000",
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
                 shadowRadius: 4,
@@ -202,11 +225,11 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
                 New ETA
               </Text>
             </View>
-            <Text 
-              style={{ 
+            <Text
+              style={{
                 fontFamily: timerFontFamily,
-                fontSize: 28, 
-                color: '#2563EB',
+                fontSize: 28,
+                color: "#2563EB",
                 letterSpacing: -0.5,
               }}
             >
@@ -222,11 +245,11 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
                 Distance
               </Text>
             </View>
-            <Text 
-              style={{ 
+            <Text
+              style={{
                 fontFamily: timerFontFamily,
-                fontSize: 28, 
-                color: '#2563EB',
+                fontSize: 28,
+                color: "#2563EB",
                 letterSpacing: -0.5,
               }}
             >
@@ -238,9 +261,9 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
         {/* Start Navigation Button - Blue */}
         <Pressable
           className="flex-row items-center justify-center gap-3 bg-[#2563EB] rounded-2xl px-5 py-4"
-          style={({ pressed }) => ({ 
+          style={({ pressed }) => ({
             opacity: pressed ? 0.9 : 1,
-            shadowColor: '#2563EB',
+            shadowColor: "#2563EB",
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.3,
             shadowRadius: 8,
@@ -258,9 +281,3 @@ export const DemoTrafficAccident = ({ userName = 'Paul' }: { userName?: string }
     </View>
   );
 };
-
-
-
-
-
-

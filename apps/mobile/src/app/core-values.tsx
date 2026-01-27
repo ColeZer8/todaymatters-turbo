@@ -1,23 +1,37 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { CoreValuesTemplate } from '@/components/templates/CoreValuesTemplate';
-import { useAuthStore } from '@/stores';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { CoreValuesTemplate } from "@/components/templates/CoreValuesTemplate";
+import { useAuthStore } from "@/stores";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 export default function CoreValuesScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const coreValues = useOnboardingStore((state) => state.coreValues);
   const setCoreValues = useOnboardingStore((state) => state.setCoreValues);
-  const { saveCoreValues } = useOnboardingSync({ autoLoad: false, autoSave: false });
-  const baseValueIds = ['faith', 'family', 'health', 'work', 'personal-growth', 'finances'];
+  const { saveCoreValues } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
+  const baseValueIds = [
+    "faith",
+    "family",
+    "health",
+    "work",
+    "personal-growth",
+    "finances",
+  ];
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -26,7 +40,7 @@ export default function CoreValuesScreen() {
       isSelected: baseValueIds.includes(value.id),
     }));
     const needsUpdate = coreValues.some(
-      (value, index) => value.isSelected !== normalized[index]?.isSelected
+      (value, index) => value.isSelected !== normalized[index]?.isSelected,
     );
     if (needsUpdate) {
       setCoreValues(normalized);
@@ -36,7 +50,7 @@ export default function CoreValuesScreen() {
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
-      router.replace('/');
+      router.replace("/");
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
@@ -50,11 +64,11 @@ export default function CoreValuesScreen() {
 
   const handleContinue = () => {
     saveCoreValues(coreValues);
-    router.replace('/core-categories');
+    router.replace("/core-categories");
   };
 
   const handleBack = () => {
-    router.replace('/permissions');
+    router.replace("/permissions");
   };
 
   if (!isNavigationReady || !hasHydrated) {

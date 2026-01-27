@@ -5,7 +5,7 @@
  * Shows conversation transcript, visual feedback, and controls.
  */
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   ScrollView,
   Animated,
   Easing,
-} from 'react-native';
+} from "react-native";
 import {
   Mic,
   MicOff,
@@ -23,8 +23,8 @@ import {
   ThumbsDown,
   Volume2,
   MessageCircle,
-} from 'lucide-react-native';
-import type { ConversationMessage, ConversationStatus } from '@/lib/elevenlabs';
+} from "lucide-react-native";
+import type { ConversationMessage, ConversationStatus } from "@/lib/elevenlabs";
 
 interface VoiceCoachModalProps {
   /** Whether the modal is visible */
@@ -75,7 +75,7 @@ export function VoiceCoachModal({
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       Animated.loop(
@@ -84,7 +84,7 @@ export function VoiceCoachModal({
           duration: 1500,
           easing: Easing.linear,
           useNativeDriver: true,
-        })
+        }),
       ).start();
     } else {
       pulseAnim.setValue(1);
@@ -100,32 +100,32 @@ export function VoiceCoachModal({
     (liked: boolean) => {
       onSendFeedback(liked);
     },
-    [onSendFeedback]
+    [onSendFeedback],
   );
 
   const getStatusColor = () => {
     switch (status) {
-      case 'connected':
-        return '#10b981';
-      case 'connecting':
-        return '#f59e0b';
-      case 'error':
-        return '#ef4444';
+      case "connected":
+        return "#10b981";
+      case "connecting":
+        return "#f59e0b";
+      case "error":
+        return "#ef4444";
       default:
-        return '#6b7280';
+        return "#6b7280";
     }
   };
 
   const getStatusText = () => {
     switch (status) {
-      case 'connected':
-        return isSpeaking ? 'Coach is speaking' : 'Listening to you';
-      case 'connecting':
-        return 'Connecting to your coach...';
-      case 'error':
-        return errorMessage || 'Connection error';
+      case "connected":
+        return isSpeaking ? "Coach is speaking" : "Listening to you";
+      case "connecting":
+        return "Connecting to your coach...";
+      case "error":
+        return errorMessage || "Connection error";
       default:
-        return 'Not connected';
+        return "Not connected";
     }
   };
 
@@ -144,7 +144,9 @@ export function VoiceCoachModal({
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: getStatusColor() }}
             />
-            <Text className="text-white font-semibold text-lg">Voice Coach</Text>
+            <Text className="text-white font-semibold text-lg">
+              Voice Coach
+            </Text>
           </View>
           <TouchableOpacity
             onPress={handleClose}
@@ -169,16 +171,16 @@ export function VoiceCoachModal({
           >
             <View
               className={`w-32 h-32 rounded-full items-center justify-center ${
-                status === 'connected'
+                status === "connected"
                   ? isSpeaking
-                    ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                    : 'bg-blue-500/20 border-2 border-blue-500'
-                  : 'bg-slate-800 border-2 border-slate-700'
+                    ? "bg-emerald-500/20 border-2 border-emerald-500"
+                    : "bg-blue-500/20 border-2 border-blue-500"
+                  : "bg-slate-800 border-2 border-slate-700"
               }`}
             >
               {isSpeaking ? (
                 <Volume2 size={48} color="#10b981" />
-              ) : status === 'connected' ? (
+              ) : status === "connected" ? (
                 <Mic size={48} color="#3b82f6" />
               ) : (
                 <MessageCircle size={48} color="#6b7280" />
@@ -187,7 +189,7 @@ export function VoiceCoachModal({
           </Animated.View>
 
           {/* Sound wave visualization */}
-          {status === 'connected' && (
+          {status === "connected" && (
             <View className="flex-row items-center gap-1 mt-4 h-8">
               {[...Array(5)].map((_, i) => (
                 <Animated.View
@@ -215,23 +217,23 @@ export function VoiceCoachModal({
           >
             {messages.length === 0 ? (
               <Text className="text-slate-500 text-center italic">
-                {status === 'connecting'
-                  ? 'Connecting...'
-                  : 'Start a conversation with your coach'}
+                {status === "connecting"
+                  ? "Connecting..."
+                  : "Start a conversation with your coach"}
               </Text>
             ) : (
               messages.map((msg, index) => (
                 <View
                   key={index}
                   className={`mb-3 ${
-                    msg.role === 'agent' ? 'items-start' : 'items-end'
+                    msg.role === "agent" ? "items-start" : "items-end"
                   }`}
                 >
                   <View
                     className={`max-w-[85%] px-4 py-2 rounded-2xl ${
-                      msg.role === 'agent'
-                        ? 'bg-slate-700 rounded-tl-none'
-                        : 'bg-blue-600 rounded-tr-none'
+                      msg.role === "agent"
+                        ? "bg-slate-700 rounded-tl-none"
+                        : "bg-blue-600 rounded-tr-none"
                     }`}
                   >
                     <Text className="text-white text-sm leading-5">
@@ -239,7 +241,7 @@ export function VoiceCoachModal({
                     </Text>
                   </View>
                   <Text className="text-slate-500 text-xs mt-1 px-1">
-                    {msg.role === 'agent' ? 'Coach' : 'You'}
+                    {msg.role === "agent" ? "Coach" : "You"}
                   </Text>
                 </View>
               ))
@@ -274,20 +276,23 @@ export function VoiceCoachModal({
             {/* Mute button */}
             <TouchableOpacity
               onPress={onToggleMute}
-              disabled={status !== 'connected'}
+              disabled={status !== "connected"}
               className={`w-14 h-14 rounded-full items-center justify-center ${
                 isMicMuted
-                  ? 'bg-red-500'
-                  : status === 'connected'
-                    ? 'bg-slate-700'
-                    : 'bg-slate-800'
+                  ? "bg-red-500"
+                  : status === "connected"
+                    ? "bg-slate-700"
+                    : "bg-slate-800"
               }`}
-              accessibilityLabel={isMicMuted ? 'Unmute' : 'Mute'}
+              accessibilityLabel={isMicMuted ? "Unmute" : "Mute"}
             >
               {isMicMuted ? (
                 <MicOff size={24} color="#fff" />
               ) : (
-                <Mic size={24} color={status === 'connected' ? '#fff' : '#6b7280'} />
+                <Mic
+                  size={24}
+                  color={status === "connected" ? "#fff" : "#6b7280"}
+                />
               )}
             </TouchableOpacity>
 
@@ -302,9 +307,9 @@ export function VoiceCoachModal({
           </View>
 
           {/* Status text */}
-          {status === 'connected' && (
+          {status === "connected" && (
             <Text className="text-slate-500 text-xs text-center mt-3">
-              {isMicMuted ? 'Microphone muted' : 'Tap mic to mute'}
+              {isMicMuted ? "Microphone muted" : "Tap mic to mute"}
             </Text>
           )}
         </View>

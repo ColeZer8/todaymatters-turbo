@@ -38,12 +38,12 @@ Complete rewrite of `DraggableRoutineList.tsx` with a simpler architecture:
 
 ### Key Changes
 
-| Before | After |
-|--------|-------|
-| All items absolutely positioned | Flex layout with marginBottom |
-| Manual Y offset calculations in worklets | Layout engine handles spacing |
-| Spring animation on drop (caused glitches) | Instant reset on drop |
-| 550+ lines | ~350 lines |
+| Before                                     | After                         |
+| ------------------------------------------ | ----------------------------- |
+| All items absolutely positioned            | Flex layout with marginBottom |
+| Manual Y offset calculations in worklets   | Layout engine handles spacing |
+| Spring animation on drop (caused glitches) | Instant reset on drop         |
+| 550+ lines                                 | ~350 lines                    |
 
 ## Done Criteria
 
@@ -80,12 +80,12 @@ Complete rewrite of `DraggableRoutineList.tsx` with a simpler architecture:
 
 ### Architecture Trade-offs
 
-| Aspect | Old | New |
-|--------|-----|-----|
-| Resting state positioning | Absolute (manual) | Flex (automatic) |
-| During-drag positioning | Absolute | Flex + translateY |
-| Animation complexity | High (springs everywhere) | Low (targeted springs) |
-| Spacing reliability | Fragile | Robust |
+| Aspect                    | Old                       | New                    |
+| ------------------------- | ------------------------- | ---------------------- |
+| Resting state positioning | Absolute (manual)         | Flex (automatic)       |
+| During-drag positioning   | Absolute                  | Flex + translateY      |
+| Animation complexity      | High (springs everywhere) | Low (targeted springs) |
+| Spacing reliability       | Fragile                   | Robust                 |
 
 ## Follow-ups
 

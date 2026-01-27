@@ -19,5 +19,3 @@
 - `apps/mobile/src/app/_layout.tsx` wraps the app in `ElevenLabsProvider` (dev builds only).
 - Voice UI is mounted by `VoiceCoachOverlay` (feature-level, not a route) and uses the existing `use-voice-coach` hook.
 - Supabase Edge Function `conversation-token` is used to generate private-agent tokens (keeps API key server-side).
-
-

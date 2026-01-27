@@ -6,6 +6,7 @@
 ## What Was Built
 
 ### 1. ✅ Error Handling (`utils/error-handler.ts`)
+
 - Enhanced error messages for common Supabase errors
 - Specific handling for:
   - Schema access errors (42501)
@@ -17,7 +18,9 @@
 - Helper functions to check error types
 
 ### 2. ✅ Profiles Service (`services/profiles.ts`)
+
 **Full CRUD operations:**
+
 - `ensureProfileExists(userId)` - Create profile if missing
 - `fetchProfile(userId)` - Get full profile
 - `updateProfile(userId, updates)` - Partial update
@@ -28,6 +31,7 @@
 - Helper functions: `dateToTimeString()`, `timeStringToDate()`
 
 **Data Mapping:**
+
 - `full_name` ← Profile name
 - `ideal_work_day` ← Wake time ("HH:MM" format)
 - `ideal_sabbath` ← Sleep time ("HH:MM" format)
@@ -35,7 +39,9 @@
 - `role` ← Setup questions role (needs DB column)
 
 ### 3. ✅ Events Service (`services/events.ts`)
+
 **Full CRUD operations:**
+
 - `fetchGoals(userId)` - Get all goals
 - `fetchInitiatives(userId)` - Get all initiatives
 - `createGoal(userId, title, meta?)` - Create goal
@@ -46,14 +52,17 @@
 - `bulkCreateInitiatives(userId, titles[])` - Bulk create from onboarding
 
 **Data Structure:**
+
 - Goals: `type='goal'`, `meta.category='goal'`
 - Initiatives: `type='goal'`, `meta.category='initiative'`
 - Complex data (tasks, milestones, progress) stored in `meta` JSONB
 
 ### 4. ✅ Integration Hooks (`hooks/`)
+
 **React hooks for easy integration:**
 
 #### `useProfileSync(options?)`
+
 - `loadProfile()` - Load from Supabase
 - `saveProfile(updates)` - Save to Supabase
 - `updateFullName(name)` - Update name
@@ -62,6 +71,7 @@
 - Auto-loads on mount (configurable)
 
 #### `useEventsSync(options?)`
+
 - `loadGoals()` - Load goals
 - `loadInitiatives()` - Load initiatives
 - `saveGoal(title, meta?)` - Create goal
@@ -72,12 +82,14 @@
 - `bulkSaveInitiatives(titles[])` - Bulk create initiatives
 
 ### 5. ✅ Test Script (`test-services.ts`)
+
 - Comprehensive test suite for all services
 - Available globally as `window.testSupabaseServices()`
 - Tests all CRUD operations
 - Provides detailed success/failure report
 
 ### 6. ✅ Updated Existing Services
+
 - `profile-values.ts` - Now uses enhanced error handling
 - `verify-auth.ts` - Now uses enhanced error handling
 
@@ -104,20 +116,26 @@ apps/mobile/src/lib/supabase/
 ## Usage Examples
 
 ### Profiles Service
+
 ```typescript
-import { fetchProfile, updateFullName, updateDailyRhythm } from '@/lib/supabase/services';
+import {
+  fetchProfile,
+  updateFullName,
+  updateDailyRhythm,
+} from "@/lib/supabase/services";
 
 // Fetch profile
 const profile = await fetchProfile(userId);
 
 // Update name
-await updateFullName(userId, 'John Doe');
+await updateFullName(userId, "John Doe");
 
 // Update daily rhythm
-await updateDailyRhythm(userId, '06:30', '22:30');
+await updateDailyRhythm(userId, "06:30", "22:30");
 ```
 
 ### Events Service
+
 ```typescript
 import { createGoal, fetchGoals, bulkCreateGoals } from '@/lib/supabase/services';
 
@@ -136,8 +154,9 @@ await bulkCreateGoals(userId, ['Goal 1', 'Goal 2']);
 ```
 
 ### Using Hooks
+
 ```typescript
-import { useProfileSync, useEventsSync } from '@/lib/supabase/hooks';
+import { useProfileSync, useEventsSync } from "@/lib/supabase/hooks";
 
 function MyComponent() {
   const { loadProfile, updateFullName } = useProfileSync();
@@ -151,9 +170,10 @@ function MyComponent() {
 ## Testing
 
 ### Run Test Suite
+
 ```typescript
 // In app console or component
-import { testSupabaseServices } from '@/lib/supabase/test-services';
+import { testSupabaseServices } from "@/lib/supabase/test-services";
 await testSupabaseServices();
 
 // Or use global function
@@ -161,6 +181,7 @@ await window.testSupabaseServices();
 ```
 
 ### Manual Testing
+
 1. Sign in to the app
 2. Open console
 3. Run `await window.testSupabaseServices()`
@@ -169,31 +190,37 @@ await window.testSupabaseServices();
 ## Next Steps
 
 ### 1. Wait for Schema Access
+
 - Team needs to expose `tm` schema in API settings
 - Team needs to refresh schema cache: `NOTIFY pgrst, 'reload schema';`
 
 ### 2. Test All Services
+
 - Run `testSupabaseServices()` once schema is accessible
 - Verify all CRUD operations work
 - Check error handling for edge cases
 
 ### 3. Integrate with Stores
+
 - Wire `useProfileSync` to onboarding store
 - Wire `useEventsSync` to goals/initiatives stores
 - Add optimistic updates where appropriate
 
 ### 4. Regenerate Types
+
 - Once schema is accessible, regenerate types from `tm` schema
 - Update `database.types.ts` with correct types
 
 ## Error Handling
 
 All services now use `handleSupabaseError()` which provides:
+
 - User-friendly error messages
 - Specific guidance for common issues (schema access, table not found, etc.)
 - Proper error propagation
 
 Example error messages:
+
 - Schema access: "The 'tm' schema is not exposed in Supabase API settings..."
 - Table not found: "Table not found: profile_values doesn't exist in the schema cache..."
 - Network error: "Unable to connect to Supabase. Please check your internet connection..."
@@ -206,7 +233,3 @@ Example error messages:
 ✅ **Test suite available**
 
 ⏳ **Waiting for schema access to test**
-
-
-
-

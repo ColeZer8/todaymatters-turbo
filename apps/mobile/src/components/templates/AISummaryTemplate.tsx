@@ -1,10 +1,21 @@
-import { useMemo } from 'react';
-import { ArrowRight, CheckCircle, Edit3, Sparkles, Target, Heart, TrendingUp } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { CoreValue, ValueScore } from '@/stores/onboarding-store';
+import { useMemo } from "react";
+import {
+  ArrowRight,
+  CheckCircle,
+  Edit3,
+  Sparkles,
+  Target,
+  Heart,
+  TrendingUp,
+} from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { CoreValue, ValueScore } from "@/stores/onboarding-store";
 
 interface AISummaryTemplateProps {
   step?: number;
@@ -19,7 +30,7 @@ interface AISummaryTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -27,9 +38,9 @@ const cardShadowStyle = {
 };
 
 const getScoreColor = (score: number) => {
-  if (score <= 3) return '#EF4444';
-  if (score <= 6) return '#F59E0B';
-  return '#10B981';
+  if (score <= 3) return "#EF4444";
+  if (score <= 6) return "#F59E0B";
+  return "#10B981";
 };
 
 export const AISummaryTemplate = ({
@@ -45,12 +56,12 @@ export const AISummaryTemplate = ({
 }: AISummaryTemplateProps) => {
   const selectedValues = useMemo(
     () => coreValues.filter((v) => v.isSelected),
-    [coreValues]
+    [coreValues],
   );
 
   const validGoals = useMemo(
     () => goals.filter((g) => g.trim().length > 0),
-    [goals]
+    [goals],
   );
 
   const getScoreForValue = (valueId: string) => {
@@ -72,7 +83,7 @@ export const AISummaryTemplate = ({
       .slice(0, 2);
   }, [selectedValues, valuesScores]);
 
-  const displayName = userName || 'there';
+  const displayName = userName || "there";
 
   return (
     <SetupStepLayout
@@ -83,7 +94,11 @@ export const AISummaryTemplate = ({
       onBack={onBack}
       footer={
         <View className="gap-3">
-          <GradientButton label="Looks Good!" onPress={onConfirm} rightIcon={ArrowRight} />
+          <GradientButton
+            label="Looks Good!"
+            onPress={onConfirm}
+            rightIcon={ArrowRight}
+          />
           {onEdit && (
             <Pressable
               accessibilityRole="button"
@@ -113,14 +128,18 @@ export const AISummaryTemplate = ({
             </Text>
           </View>
           <Text className="text-base leading-6 text-[#3730A3]">
-            Hi {displayName}! Based on what you've shared, you're someone who values{' '}
+            Hi {displayName}! Based on what you've shared, you're someone who
+            values{" "}
             <Text className="font-semibold">
-              {selectedValues.slice(0, 3).map((v) => v.label.toLowerCase()).join(', ')}
+              {selectedValues
+                .slice(0, 3)
+                .map((v) => v.label.toLowerCase())
+                .join(", ")}
             </Text>
-            {selectedValues.length > 3 && ' and more'}. You're working toward{' '}
+            {selectedValues.length > 3 && " and more"}. You're working toward{" "}
             <Text className="font-semibold">
-              {validGoals.length} {validGoals.length === 1 ? 'goal' : 'goals'}
-            </Text>{' '}
+              {validGoals.length} {validGoals.length === 1 ? "goal" : "goals"}
+            </Text>{" "}
             and we're here to help you make progress every day.
           </Text>
         </View>
@@ -166,7 +185,9 @@ export const AISummaryTemplate = ({
               {validGoals.map((goal, index) => (
                 <View key={index} className="flex-row items-center gap-2">
                   <CheckCircle size={16} color="#10B981" />
-                  <Text className="text-sm text-text-primary flex-1">{goal}</Text>
+                  <Text className="text-sm text-text-primary flex-1">
+                    {goal}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -182,12 +203,20 @@ export const AISummaryTemplate = ({
           >
             <View className="flex-row items-center gap-1.5 mb-2">
               <TrendingUp size={14} color="#059669" />
-              <Text className="text-xs font-semibold text-[#047857]">Strengths</Text>
+              <Text className="text-xs font-semibold text-[#047857]">
+                Strengths
+              </Text>
             </View>
             {topStrengths.map((item) => (
-              <View key={item.id} className="flex-row items-center justify-between py-1">
+              <View
+                key={item.id}
+                className="flex-row items-center justify-between py-1"
+              >
                 <Text className="text-xs text-[#065F46]">{item.label}</Text>
-                <Text className="text-xs font-semibold" style={{ color: getScoreColor(item.score) }}>
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: getScoreColor(item.score) }}
+                >
                   {item.score}/10
                 </Text>
               </View>
@@ -201,12 +230,20 @@ export const AISummaryTemplate = ({
           >
             <View className="flex-row items-center gap-1.5 mb-2">
               <TrendingUp size={14} color="#D97706" />
-              <Text className="text-xs font-semibold text-[#B45309]">Growth Areas</Text>
+              <Text className="text-xs font-semibold text-[#B45309]">
+                Growth Areas
+              </Text>
             </View>
             {growthAreas.map((item) => (
-              <View key={item.id} className="flex-row items-center justify-between py-1">
+              <View
+                key={item.id}
+                className="flex-row items-center justify-between py-1"
+              >
                 <Text className="text-xs text-[#92400E]">{item.label}</Text>
-                <Text className="text-xs font-semibold" style={{ color: getScoreColor(item.score) }}>
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: getScoreColor(item.score) }}
+                >
                   {item.score}/10
                 </Text>
               </View>

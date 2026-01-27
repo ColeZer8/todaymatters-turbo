@@ -1,6 +1,6 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
+import { View, Text, ScrollView, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
   Heart,
   Sparkles,
   TrendingUp,
@@ -11,28 +11,32 @@ import {
   Shield,
   Users,
   Brain,
-  Zap
-} from 'lucide-react-native';
-import Svg, { Circle as SvgCircle, G, Path } from 'react-native-svg';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
-import { useIdealDayStore } from '@/stores/ideal-day-store';
+  Zap,
+} from "lucide-react-native";
+import Svg, { Circle as SvgCircle, G, Path } from "react-native-svg";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
+import { useIdealDayStore } from "@/stores/ideal-day-store";
 
 /**
  * DemoOverviewValues - Values/life pillars analytics for demo mode
- * 
+ *
  * Shows how time is being spent across life values/categories.
  * Pulls from ideal-day store to display user's configured values.
  * Follows home page golden standard for spacing and typography.
  */
 
 // Radar chart for values alignment
-const ValuesRadar = ({ values }: { values: { name: string; score: number; color: string }[] }) => {
+const ValuesRadar = ({
+  values,
+}: {
+  values: { name: string; score: number; color: string }[];
+}) => {
   const size = 200;
   const center = size / 2;
   const maxRadius = 80;
   const levels = 4;
-  
+
   // Calculate points for polygon
   const angleStep = (2 * Math.PI) / values.length;
   const points = values.map((value, index) => {
@@ -43,9 +47,11 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
       y: center + radius * Math.sin(angle),
     };
   });
-  
-  const polygonPath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
-  
+
+  const polygonPath =
+    points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") +
+    " Z";
+
   return (
     <View className="items-center">
       <Svg width={size} height={size}>
@@ -62,7 +68,7 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
             strokeDasharray="4,4"
           />
         ))}
-        
+
         {/* Axis lines */}
         {values.map((_, index) => {
           const angle = angleStep * index - Math.PI / 2;
@@ -75,7 +81,7 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
             />
           );
         })}
-        
+
         {/* Value polygon */}
         <Path
           d={polygonPath}
@@ -84,7 +90,7 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
           stroke="#2563EB"
           strokeWidth={2}
         />
-        
+
         {/* Data points */}
         {points.map((point, index) => (
           <SvgCircle
@@ -98,14 +104,14 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
           />
         ))}
       </Svg>
-      
+
       {/* Labels */}
       {values.map((value, index) => {
         const angle = angleStep * index - Math.PI / 2;
         const labelRadius = maxRadius + 25;
         const x = center + labelRadius * Math.cos(angle);
         const y = center + labelRadius * Math.sin(angle);
-        
+
         return (
           <View
             key={index}
@@ -127,25 +133,25 @@ const ValuesRadar = ({ values }: { values: { name: string; score: number; color:
 };
 
 // Value card component
-const ValueCard = ({ 
-  name, 
-  icon, 
-  score, 
-  trend, 
+const ValueCard = ({
+  name,
+  icon,
+  score,
+  trend,
   hours,
   color,
-  bgColor 
-}: { 
-  name: string; 
+  bgColor,
+}: {
+  name: string;
   icon: typeof Heart;
-  score: number; 
-  trend: 'up' | 'stable' | 'down';
+  score: number;
+  trend: "up" | "stable" | "down";
   hours: number;
   color: string;
   bgColor: string;
 }) => {
   return (
-    <View 
+    <View
       className="rounded-2xl px-4 py-4 border"
       style={{ backgroundColor: bgColor, borderColor: `${color}30` }}
     >
@@ -154,17 +160,21 @@ const ValueCard = ({
           <Icon icon={icon} size={18} color={color} />
           <Text className="text-[14px] font-bold text-[#111827]">{name}</Text>
         </View>
-        {trend === 'up' && (
+        {trend === "up" && (
           <View className="flex-row items-center gap-1">
             <Icon icon={TrendingUp} size={12} color="#16A34A" />
-            <Text className="text-[11px] font-semibold text-[#16A34A]">+5%</Text>
+            <Text className="text-[11px] font-semibold text-[#16A34A]">
+              +5%
+            </Text>
           </View>
         )}
       </View>
-      
+
       <View className="flex-row items-end justify-between">
         <View>
-          <Text className="text-[11px] text-[#6B7280] mb-1">Alignment Score</Text>
+          <Text className="text-[11px] text-[#6B7280] mb-1">
+            Alignment Score
+          </Text>
           <Text className="text-[28px] font-bold" style={{ color }}>
             {Math.round(score * 100)}%
           </Text>
@@ -176,12 +186,15 @@ const ValueCard = ({
           </Text>
         </View>
       </View>
-      
+
       {/* Progress bar */}
-      <View className="mt-3 h-2 rounded-full overflow-hidden" style={{ backgroundColor: `${color}20` }}>
-        <View 
-          className="h-full rounded-full" 
-          style={{ width: `${score * 100}%`, backgroundColor: color }} 
+      <View
+        className="mt-3 h-2 rounded-full overflow-hidden"
+        style={{ backgroundColor: `${color}20` }}
+      >
+        <View
+          className="h-full rounded-full"
+          style={{ width: `${score * 100}%`, backgroundColor: color }}
         />
       </View>
     </View>
@@ -200,35 +213,38 @@ const CATEGORY_ICONS: Record<string, typeof Heart> = {
 
 export const DemoOverviewValues = () => {
   const insets = useSafeAreaInsets();
-  const categories = useIdealDayStore((state) => state.categoriesByType.weekdays);
-  
+  const categories = useIdealDayStore(
+    (state) => state.categoriesByType.weekdays,
+  );
+
   // Map categories to value data
   const valueData = categories.map((cat, index) => ({
     name: cat.name,
     icon: CATEGORY_ICONS[cat.id] || CATEGORY_ICONS.default,
     score: [0.85, 0.72, 0.68, 0.92, 0.78][index % 5],
-    trend: (['up', 'stable', 'up', 'up', 'stable'] as const)[index % 5],
+    trend: (["up", "stable", "up", "up", "stable"] as const)[index % 5],
     hours: cat.hours * 7, // Weekly hours
     color: cat.color,
     bgColor: `${cat.color}10`,
   }));
 
   // Radar chart data
-  const radarData = valueData.slice(0, 5).map(v => ({
+  const radarData = valueData.slice(0, 5).map((v) => ({
     name: v.name,
     score: v.score,
     color: v.color,
   }));
 
   // Overall alignment score
-  const overallScore = valueData.reduce((sum, v) => sum + v.score, 0) / valueData.length;
+  const overallScore =
+    valueData.reduce((sum, v) => sum + v.score, 0) / valueData.length;
 
   return (
     <View
       className="flex-1 bg-[#F7FAFF]"
       style={{ paddingTop: insets.top + 20, paddingBottom: insets.bottom + 72 }}
     >
-      <ScrollView 
+      <ScrollView
         className="flex-1 px-6"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
@@ -295,7 +311,8 @@ export const DemoOverviewValues = () => {
                 AI Insight
               </Text>
               <Text className="text-[14px] leading-[20px] text-[#3B82F6]">
-                Your Prayer time has been exceptionally consistent. Family time dipped mid-week — consider a dedicated family evening tomorrow.
+                Your Prayer time has been exceptionally consistent. Family time
+                dipped mid-week — consider a dedicated family evening tomorrow.
               </Text>
             </View>
           </View>
@@ -350,9 +367,3 @@ export const DemoOverviewValues = () => {
     </View>
   );
 };
-
-
-
-
-
-

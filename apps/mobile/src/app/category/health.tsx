@@ -1,18 +1,18 @@
-import { Stack } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
-import { CategoryHealthTemplate } from '@/components/templates';
+import { Stack } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
+import { CategoryHealthTemplate } from "@/components/templates";
 import {
   getHealthSummarySafeAsync,
   requestHealthAuthorizationSafeAsync,
   type HealthRangeKey,
   type HealthSummary,
-} from '@/lib/insights';
-import { getIosInsightsSupportStatus } from '@/lib/ios-insights';
-import { getAndroidInsightsSupportStatus } from '@/lib/android-insights';
+} from "@/lib/insights";
+import { getIosInsightsSupportStatus } from "@/lib/ios-insights";
+import { getAndroidInsightsSupportStatus } from "@/lib/android-insights";
 
 export default function HealthHealthScreen() {
-  const [range, setRange] = useState<HealthRangeKey>('today');
+  const [range, setRange] = useState<HealthRangeKey>("today");
   const [summary, setSummary] = useState<HealthSummary | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -20,7 +20,8 @@ export default function HealthHealthScreen() {
   const iosSupport = useMemo(() => getIosInsightsSupportStatus(), []);
   const androidSupport = useMemo(() => getAndroidInsightsSupportStatus(), []);
   const canUseNative =
-    (Platform.OS === 'ios' && iosSupport === 'available') || (Platform.OS === 'android' && androidSupport === 'available');
+    (Platform.OS === "ios" && iosSupport === "available") ||
+    (Platform.OS === "android" && androidSupport === "available");
 
   const refresh = useCallback(async () => {
     if (!canUseNative) return;
@@ -66,4 +67,3 @@ export default function HealthHealthScreen() {
     </>
   );
 }
-

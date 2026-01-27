@@ -9,8 +9,9 @@ export default function PrivacyPage() {
       <div className="rounded-3xl border border-gray-100 bg-[#fafafa] p-6">
         <h2 className="text-lg font-bold text-[#0a0a0a]">What we collect</h2>
         <p className="mt-2 text-sm text-[#52525b] leading-relaxed">
-          We collect only what we need to run the app and improve it (account details, usage analytics, and any info you
-          explicitly enter to plan and reflect).
+          We collect only what we need to run the app and improve it (account
+          details, usage analytics, and any info you explicitly enter to plan
+          and reflect).
         </p>
       </div>
 
@@ -25,5 +26,3 @@ export default function PrivacyPage() {
     </PageLayout>
   );
 }
-
-

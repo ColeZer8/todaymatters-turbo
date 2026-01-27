@@ -18,17 +18,20 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ### ✅ **1. Profile Values** - READY TO INTEGRATE
 
 **Database Table**: `profile_values`
+
 - ✅ `user_id` (uuid, required)
-- ✅ `value_label` (text, required) 
+- ✅ `value_label` (text, required)
 - ✅ `rank` (integer, nullable)
 - ✅ `id`, `created_at` (auto-generated)
 
 **App Structure**: `profile.tsx` → `CORE_VALUES` array
+
 ```typescript
-['Family', 'Integrity', 'Creativity']
+["Family", "Integrity", "Creativity"];
 ```
 
 **Integration Status**: ✅ **READY** - Direct mapping possible
+
 - Map array index to `rank`
 - Store each value as separate row
 
@@ -37,15 +40,17 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ### ⚠️ **2. Ideal Day Categories** - NEEDS SCHEMA ENHANCEMENT
 
 **Database Table**: `ideal_day`
+
 - ✅ `user_id` (uuid, required)
 - ✅ `category_id` (integer, nullable) - **Unclear**: Is this FK or just identifier?
 - ✅ `day_type` (text, nullable) - Can store "weekdays" | "weekends" | "custom"
 - ✅ `minutes` (integer, nullable) - Can store hours as minutes
 - ❌ **MISSING**: `category_name` (text)
-- ❌ **MISSING**: `color` (text) 
+- ❌ **MISSING**: `color` (text)
 - ❌ **MISSING**: `max_minutes` or `max_hours` (integer)
 
 **App Structure**: `ideal-day-store.ts` → `IdealDayCategory[]`
+
 ```typescript
 {
   id: 'sleep',
@@ -58,14 +63,16 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ```
 
 **Current Schema Issues**:
+
 1. No way to store category name, color, or max hours
 2. `category_id` is just a number - no reference table exists
 3. Selected days for "custom" day type not stored anywhere
 
 **Recommendations**:
+
 - **Option A**: Add columns to `ideal_day`:
   ```sql
-  ALTER TABLE ideal_day 
+  ALTER TABLE ideal_day
   ADD COLUMN category_name TEXT,
   ADD COLUMN color TEXT,
   ADD COLUMN max_minutes INTEGER;
@@ -90,6 +97,7 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ### ✅ **3. Profiles Table** - MOSTLY READY
 
 **Database Table**: `profiles`
+
 - ✅ `user_id` (uuid, nullable)
 - ✅ `full_name` (text, nullable) - Maps to Profile screen name
 - ✅ `ideal_work_day` (text, nullable) - Can store wake time "06:30"
@@ -98,6 +106,7 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 - ❌ **MISSING**: `role` (text) - For setup questions selection
 
 **App Data**:
+
 - Profile name: `"Paul"` → `full_name`
 - Daily Rhythm wake: `"06:30"` → `ideal_work_day`
 - Daily Rhythm sleep: `"22:30"` → `ideal_sabbath`
@@ -111,6 +120,7 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ### ✅ **4. Events Table (Goals & Initiatives)** - READY
 
 **Database Table**: `events`
+
 - ✅ `user_id` (uuid, required)
 - ✅ `type` (enum, required) - Includes `"goal"` ✅
 - ✅ `title` (text, nullable) - Perfect for goal/initiative names
@@ -118,12 +128,14 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 - ✅ `created_at`, `updated_at` (timestamps)
 
 **App Data**:
+
 - Goals: `["Launch MVP", "Run 5k"]` → `events` with `type='goal'`
 - Initiatives: `["Q4 Strategy", "Team Hiring"]` → `events` with `type='goal'`
 
 **Integration Status**: ✅ **READY** - Can use `type='goal'` for both
 
 **Note**: Consider using `meta` JSON to distinguish goals vs initiatives:
+
 ```json
 {"category": "goal"} vs {"category": "initiative"}
 ```
@@ -133,12 +145,14 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ### ⚠️ **5. Events Table (Routine Items)** - NEEDS CLARIFICATION
 
 **Database Table**: `events`
+
 - ✅ `type` enum includes `"task"` ✅
 - ✅ `title` for routine item name
 - ✅ `meta` JSON for icon_key, minutes, order
 - ❓ `scheduled_start` - Should this store wake time reference?
 
 **App Structure**: `routine-builder-store.ts`
+
 ```typescript
 {
   id: 'hydrate',
@@ -150,6 +164,7 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ```
 
 **Questions**:
+
 1. Should routine items use `type='task'` or request new `type='routine_item'`?
 2. How to store wake time? In `profiles.ideal_work_day` or first routine item's `scheduled_start`?
 3. Should `order` be in `meta` JSON or separate column?
@@ -161,20 +176,24 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ## Missing Schema Elements
 
 ### 1. **Ideal Day Category Metadata**
+
 - Category names, colors, max hours not stored
 - No way to query "all categories for a user"
 
 ### 2. **Selected Days Storage**
+
 - App stores: `selectedDaysByType: { weekdays: [0,1,2,3,4], weekends: [5,6], custom: [] }`
 - Database: No table/column for this
 - **Solution**: Could store in `ideal_day` table as JSON column or separate `ideal_day_selected_days` table
 
 ### 3. **Role Field**
+
 - Setup Questions screen collects role selection
 - No `role` column in `profiles` table
 - **Solution**: Add `role TEXT` column to `profiles`
 
 ### 4. **Routine Wake Time**
+
 - Currently in `routine-builder-store.ts` as `wakeTime: '06:30'`
 - Could use `profiles.ideal_work_day` but that's also used for Daily Rhythm
 - **Solution**: Either reuse `ideal_work_day` or create `routines` table
@@ -183,15 +202,15 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 
 ## Integration Readiness Score
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Profile Values | ✅ Ready | Direct mapping |
-| Goals/Initiatives | ✅ Ready | Use `events.type='goal'` |
-| Ideal Day Hours | ⚠️ Partial | Missing category metadata |
-| Daily Rhythm Times | ✅ Ready | Use `profiles.ideal_work_day/sabbath` |
-| Routine Items | ⚠️ Needs Decision | Type and wake time storage |
-| Profile Role | ❌ Missing Column | Need `profiles.role` |
-| Selected Days | ❌ Missing Storage | Need table/column |
+| Feature            | Status             | Notes                                 |
+| ------------------ | ------------------ | ------------------------------------- |
+| Profile Values     | ✅ Ready           | Direct mapping                        |
+| Goals/Initiatives  | ✅ Ready           | Use `events.type='goal'`              |
+| Ideal Day Hours    | ⚠️ Partial         | Missing category metadata             |
+| Daily Rhythm Times | ✅ Ready           | Use `profiles.ideal_work_day/sabbath` |
+| Routine Items      | ⚠️ Needs Decision  | Type and wake time storage            |
+| Profile Role       | ❌ Missing Column  | Need `profiles.role`                  |
+| Selected Days      | ❌ Missing Storage | Need table/column                     |
 
 **Overall**: **60% Ready** - Core tables exist but need schema enhancements
 
@@ -200,16 +219,19 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 ## Recommended Next Steps
 
 ### Phase 1: Quick Wins (Can Integrate Now)
+
 1. ✅ **Profile Values** - Integrate immediately
 2. ✅ **Goals/Initiatives** - Integrate using `events` table
 3. ✅ **Daily Rhythm** - Integrate using `profiles` table
 
 ### Phase 2: Schema Updates Needed
+
 1. ⚠️ **Add `role` column** to `profiles` table
 2. ⚠️ **Enhance `ideal_day` table** with category metadata columns OR create `ideal_day_categories` table
 3. ⚠️ **Decide on routine storage** - Use `events.type='task'` or create routines table
 
 ### Phase 3: Complex Features
+
 1. ⚠️ **Selected days storage** - Add JSON column or separate table
 2. ⚠️ **Routine wake time** - Clarify storage location
 
@@ -217,7 +239,7 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 
 ## Questions for Supabase Team
 
-1. **Ideal Day Categories**: 
+1. **Ideal Day Categories**:
    - Have you created an `ideal_day_categories` table, or should we add columns to `ideal_day`?
    - How should category metadata (name, color, max_hours) be stored?
 
@@ -238,12 +260,3 @@ The Supabase schema has the core tables needed, but there are **gaps** between w
 The schema is **foundational** but needs **enhancements** before full integration. We can start with Profile Values, Goals, and Daily Rhythm immediately, but Ideal Day and Routines need schema decisions first.
 
 **Recommendation**: Proceed with Phase 1 integrations while coordinating schema updates for Phase 2 features.
-
-
-
-
-
-
-
-
-

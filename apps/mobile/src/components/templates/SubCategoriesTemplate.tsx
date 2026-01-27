@@ -1,10 +1,19 @@
-import { useMemo, useState } from 'react';
-import { ArrowRight, Plus, X, ChevronDown, ChevronUp } from 'lucide-react-native';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import type { CoreCategory, SubCategory } from '@/stores/onboarding-store';
+import { useMemo, useState } from "react";
+import {
+  ArrowRight,
+  Plus,
+  X,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import type { CoreCategory, SubCategory } from "@/stores/onboarding-store";
 
 interface SubCategoriesTemplateProps {
   step?: number;
@@ -21,7 +30,7 @@ interface SubCategoriesTemplateProps {
 }
 
 const cardShadowStyle = {
-  shadowColor: '#0f172a',
+  shadowColor: "#0f172a",
   shadowOpacity: 0.05,
   shadowRadius: 12,
   shadowOffset: { width: 0, height: 3 },
@@ -42,15 +51,19 @@ export const SubCategoriesTemplate = ({
   onBack,
 }: SubCategoriesTemplateProps) => {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(categories.slice(0, 3).map((c) => c.id))
+    new Set(categories.slice(0, 3).map((c) => c.id)),
   );
-  const [addingForCategory, setAddingForCategory] = useState<string | null>(null);
-  const [newSubCategoryText, setNewSubCategoryText] = useState('');
+  const [addingForCategory, setAddingForCategory] = useState<string | null>(
+    null,
+  );
+  const [newSubCategoryText, setNewSubCategoryText] = useState("");
 
   const subCategoriesByCategory = useMemo(() => {
     const map: Record<string, SubCategory[]> = {};
     for (const category of categories) {
-      map[category.id] = subCategories.filter((s) => s.categoryId === category.id);
+      map[category.id] = subCategories.filter(
+        (s) => s.categoryId === category.id,
+      );
     }
     return map;
   }, [categories, subCategories]);
@@ -70,7 +83,7 @@ export const SubCategoriesTemplate = ({
   const handleAddSubCategory = (categoryId: string) => {
     if (newSubCategoryText.trim()) {
       onAddSubCategory(categoryId, newSubCategoryText.trim());
-      setNewSubCategoryText('');
+      setNewSubCategoryText("");
       setAddingForCategory(null);
     }
   };
@@ -84,7 +97,11 @@ export const SubCategoriesTemplate = ({
       onBack={onBack}
       footer={
         <View className="gap-3">
-          <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />
+          <GradientButton
+            label="Continue"
+            onPress={onContinue}
+            rightIcon={ArrowRight}
+          />
           {onSkip && (
             <Pressable
               accessibilityRole="button"
@@ -92,7 +109,9 @@ export const SubCategoriesTemplate = ({
               className="items-center py-2"
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
             >
-              <Text className="text-sm font-semibold text-[#94A3B8]">Skip for now</Text>
+              <Text className="text-sm font-semibold text-[#94A3B8]">
+                Skip for now
+              </Text>
             </Pressable>
           )}
         </View>
@@ -105,8 +124,9 @@ export const SubCategoriesTemplate = ({
           style={cardShadowStyle}
         >
           <Text className="text-sm leading-5 text-text-secondary">
-            Sub-categories let you track specific activities. For example, under "Quality Time"
-            you might add "Date Night", "Kids Activities", or "Family Dinner".
+            Sub-categories let you track specific activities. For example, under
+            "Quality Time" you might add "Date Night", "Kids Activities", or
+            "Family Dinner".
           </Text>
         </View>
 
@@ -115,9 +135,11 @@ export const SubCategoriesTemplate = ({
           const isExpanded = expandedCategories.has(category.id);
           const categorySubs = subCategoriesByCategory[category.id] || [];
           const rawSuggestions = suggestionsByCategoryId?.[category.id] ?? [];
-          const existingLabels = new Set(categorySubs.map((s) => s.label.trim().toLowerCase()));
+          const existingLabels = new Set(
+            categorySubs.map((s) => s.label.trim().toLowerCase()),
+          );
           const filteredSuggestions = rawSuggestions.filter(
-            (s) => !existingLabels.has(s.trim().toLowerCase())
+            (s) => !existingLabels.has(s.trim().toLowerCase()),
           );
 
           return (
@@ -144,7 +166,8 @@ export const SubCategoriesTemplate = ({
                     </Text>
                     {categorySubs.length > 0 && (
                       <Text className="text-xs text-[#94A3B8]">
-                        {categorySubs.length} sub-{categorySubs.length === 1 ? 'category' : 'categories'}
+                        {categorySubs.length} sub-
+                        {categorySubs.length === 1 ? "category" : "categories"}
                       </Text>
                     )}
                   </View>
@@ -175,7 +198,9 @@ export const SubCategoriesTemplate = ({
                             accessibilityLabel={`Remove ${sub.label}`}
                             onPress={() => onRemoveSubCategory(sub.id)}
                             className="h-5 w-5 items-center justify-center rounded-full bg-[#E2E8F0]"
-                            style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+                            style={({ pressed }) => [
+                              { opacity: pressed ? 0.8 : 1 },
+                            ]}
                           >
                             <X size={10} color="#64748B" />
                           </Pressable>
@@ -191,24 +216,32 @@ export const SubCategoriesTemplate = ({
                         Suggested
                       </Text>
                       {isLoadingSuggestions ? (
-                        <Text className="text-sm text-[#94A3B8]">Generating suggestions…</Text>
+                        <Text className="text-sm text-[#94A3B8]">
+                          Generating suggestions…
+                        </Text>
                       ) : (
                         <View className="flex-row flex-wrap gap-2">
-                          {filteredSuggestions.slice(0, 10).map((suggestion) => (
-                            <Pressable
-                              key={suggestion}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Add ${suggestion}`}
-                              onPress={() => onAddSubCategory(category.id, suggestion)}
-                              className="flex-row items-center gap-2 rounded-full bg-[#F8FAFF] px-3 py-2"
-                              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                            >
-                              <Plus size={14} color="#2563EB" />
-                              <Text className="text-sm font-semibold text-brand-primary">
-                                {suggestion}
-                              </Text>
-                            </Pressable>
-                          ))}
+                          {filteredSuggestions
+                            .slice(0, 10)
+                            .map((suggestion) => (
+                              <Pressable
+                                key={suggestion}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Add ${suggestion}`}
+                                onPress={() =>
+                                  onAddSubCategory(category.id, suggestion)
+                                }
+                                className="flex-row items-center gap-2 rounded-full bg-[#F8FAFF] px-3 py-2"
+                                style={({ pressed }) => [
+                                  { opacity: pressed ? 0.85 : 1 },
+                                ]}
+                              >
+                                <Plus size={14} color="#2563EB" />
+                                <Text className="text-sm font-semibold text-brand-primary">
+                                  {suggestion}
+                                </Text>
+                              </Pressable>
+                            ))}
                         </View>
                       )}
                     </View>
@@ -225,8 +258,10 @@ export const SubCategoriesTemplate = ({
                           placeholderTextColor="#94A3B8"
                           autoFocus
                           className="flex-1 rounded-xl bg-[#F8FAFC] px-4 py-2.5 text-sm text-text-primary"
-                          style={{ borderWidth: 1, borderColor: '#E2E8F0' }}
-                          onSubmitEditing={() => handleAddSubCategory(category.id)}
+                          style={{ borderWidth: 1, borderColor: "#E2E8F0" }}
+                          onSubmitEditing={() =>
+                            handleAddSubCategory(category.id)
+                          }
                         />
                         <Pressable
                           accessibilityRole="button"
@@ -238,23 +273,27 @@ export const SubCategoriesTemplate = ({
                               opacity: !newSubCategoryText.trim()
                                 ? 0.5
                                 : pressed
-                                ? 0.9
-                                : 1,
+                                  ? 0.9
+                                  : 1,
                             },
                           ]}
                         >
-                          <Text className="text-sm font-semibold text-white">Add</Text>
+                          <Text className="text-sm font-semibold text-white">
+                            Add
+                          </Text>
                         </Pressable>
                       </View>
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => {
                           setAddingForCategory(null);
-                          setNewSubCategoryText('');
+                          setNewSubCategoryText("");
                         }}
                         className="items-center py-1"
                       >
-                        <Text className="text-xs font-semibold text-[#94A3B8]">Cancel</Text>
+                        <Text className="text-xs font-semibold text-[#94A3B8]">
+                          Cancel
+                        </Text>
                       </Pressable>
                     </View>
                   ) : (

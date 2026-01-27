@@ -1,5 +1,5 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
 
 /**
  * Evidence data services for fetching location, screen time, and health data
@@ -111,7 +111,15 @@ function ymdToDayRange(ymd: string): { startIso: string; endIso: string } {
   const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const start = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
     return { startIso: start.toISOString(), endIso: end.toISOString() };
@@ -129,7 +137,7 @@ function ymdToDayRange(ymd: string): { startIso: string; endIso: string } {
 // Helper to get the tm schema client (bypass strict typing since schema may not be in types)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tmSchema(): any {
-  return supabase.schema('tm');
+  return supabase.schema("tm");
 }
 
 // ============================================================================
@@ -142,22 +150,22 @@ function tmSchema(): any {
  */
 export async function fetchLocationHourlyForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<LocationHourlyRow[]> {
   const { startIso, endIso } = ymdToDayRange(ymd);
 
   try {
     const { data, error } = await tmSchema()
-      .from('location_hourly')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('hour_start', startIso)
-      .lt('hour_start', endIso)
-      .order('hour_start', { ascending: true });
+      .from("location_hourly")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("hour_start", startIso)
+      .lt("hour_start", endIso)
+      .order("hour_start", { ascending: true });
 
     if (error) {
       // View might not exist yet or no data - return empty array
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return [];
       }
       throw handleSupabaseError(error);
@@ -165,7 +173,7 @@ export async function fetchLocationHourlyForDay(
     return (data ?? []) as LocationHourlyRow[];
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch location hourly:', error);
+      console.warn("[Evidence] Failed to fetch location hourly:", error);
     }
     return [];
   }
@@ -176,21 +184,21 @@ export async function fetchLocationHourlyForDay(
  */
 export async function fetchScreenTimeSessionsForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<ScreenTimeSessionRow[]> {
   const { startIso, endIso } = ymdToDayRange(ymd);
 
   try {
     const { data, error } = await tmSchema()
-      .from('screen_time_app_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('started_at', startIso)
-      .lt('started_at', endIso)
-      .order('started_at', { ascending: true });
+      .from("screen_time_app_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("started_at", startIso)
+      .lt("started_at", endIso)
+      .order("started_at", { ascending: true });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return [];
       }
       throw handleSupabaseError(error);
@@ -198,7 +206,7 @@ export async function fetchScreenTimeSessionsForDay(
     return (data ?? []) as ScreenTimeSessionRow[];
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch screen time sessions:', error);
+      console.warn("[Evidence] Failed to fetch screen time sessions:", error);
     }
     return [];
   }
@@ -209,21 +217,21 @@ export async function fetchScreenTimeSessionsForDay(
  */
 export async function fetchHealthWorkoutsForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<HealthWorkoutRow[]> {
   const { startIso, endIso } = ymdToDayRange(ymd);
 
   try {
     const { data, error } = await tmSchema()
-      .from('health_workouts')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('started_at', startIso)
-      .lt('started_at', endIso)
-      .order('started_at', { ascending: true });
+      .from("health_workouts")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("started_at", startIso)
+      .lt("started_at", endIso)
+      .order("started_at", { ascending: true });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return [];
       }
       throw handleSupabaseError(error);
@@ -231,7 +239,7 @@ export async function fetchHealthWorkoutsForDay(
     return (data ?? []) as HealthWorkoutRow[];
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch health workouts:', error);
+      console.warn("[Evidence] Failed to fetch health workouts:", error);
     }
     return [];
   }
@@ -242,18 +250,18 @@ export async function fetchHealthWorkoutsForDay(
  */
 export async function fetchHealthDailyForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<HealthDailyRow | null> {
   try {
     const { data, error } = await tmSchema()
-      .from('health_daily_metrics')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('local_date', ymd)
+      .from("health_daily_metrics")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("local_date", ymd)
       .limit(1);
 
     if (error) {
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return null;
       }
       throw handleSupabaseError(error);
@@ -262,7 +270,7 @@ export async function fetchHealthDailyForDay(
     return rows?.[0] ?? null;
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch health daily:', error);
+      console.warn("[Evidence] Failed to fetch health daily:", error);
     }
     return null;
   }
@@ -275,13 +283,13 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
   try {
     // Select lat/lng from center geography using PostGIS ST_Y/ST_X for haversine matching
     const { data, error } = await tmSchema()
-      .from('user_places')
-      .select('id, user_id, label, category, category_id, radius_m, center')
-      .eq('user_id', userId)
-      .order('label', { ascending: true });
+      .from("user_places")
+      .select("id, user_id, label, category, category_id, radius_m, center")
+      .eq("user_id", userId)
+      .order("label", { ascending: true });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return [];
       }
       throw handleSupabaseError(error);
@@ -298,7 +306,7 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
     }));
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch user places:', error);
+      console.warn("[Evidence] Failed to fetch user places:", error);
     }
     return [];
   }
@@ -308,10 +316,18 @@ export async function fetchUserPlaces(userId: string): Promise<UserPlaceRow[]> {
  * Extract latitude/longitude from a PostGIS geography center field.
  * PostGIS returns geography as GeoJSON: { type: "Point", coordinates: [lng, lat] }
  */
-function extractLatLngFromCenter(center: unknown): { latitude: number | null; longitude: number | null } {
-  if (!center || typeof center !== 'object') return { latitude: null, longitude: null };
+function extractLatLngFromCenter(center: unknown): {
+  latitude: number | null;
+  longitude: number | null;
+} {
+  if (!center || typeof center !== "object")
+    return { latitude: null, longitude: null };
   const geo = center as { type?: string; coordinates?: number[] };
-  if (geo.type === 'Point' && Array.isArray(geo.coordinates) && geo.coordinates.length >= 2) {
+  if (
+    geo.type === "Point" &&
+    Array.isArray(geo.coordinates) &&
+    geo.coordinates.length >= 2
+  ) {
     return { latitude: geo.coordinates[1], longitude: geo.coordinates[0] };
   }
   return { latitude: null, longitude: null };
@@ -323,33 +339,39 @@ function extractLatLngFromCenter(center: unknown): { latitude: number | null; lo
  */
 export async function fetchLocationSamplesForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<EvidenceLocationSample[]> {
   const { startIso, endIso } = ymdToDayRange(ymd);
 
   try {
     const { data, error } = await tmSchema()
-      .from('location_samples')
-      .select('recorded_at, latitude, longitude')
-      .eq('user_id', userId)
-      .gte('recorded_at', startIso)
-      .lt('recorded_at', endIso)
-      .order('recorded_at', { ascending: true });
+      .from("location_samples")
+      .select("recorded_at, latitude, longitude")
+      .eq("user_id", userId)
+      .gte("recorded_at", startIso)
+      .lt("recorded_at", endIso)
+      .order("recorded_at", { ascending: true });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.code === '42P01') {
+      if (error.code === "PGRST204" || error.code === "42P01") {
         return [];
       }
       throw handleSupabaseError(error);
     }
-    return (data ?? []).map((row: { recorded_at: string; latitude: number | null; longitude: number | null }) => ({
-      recorded_at: row.recorded_at,
-      latitude: row.latitude ?? null,
-      longitude: row.longitude ?? null,
-    }));
+    return (data ?? []).map(
+      (row: {
+        recorded_at: string;
+        latitude: number | null;
+        longitude: number | null;
+      }) => ({
+        recorded_at: row.recorded_at,
+        latitude: row.latitude ?? null,
+        longitude: row.longitude ?? null,
+      }),
+    );
   } catch (error) {
     if (__DEV__) {
-      console.warn('[Evidence] Failed to fetch location samples:', error);
+      console.warn("[Evidence] Failed to fetch location samples:", error);
     }
     return [];
   }
@@ -360,17 +382,23 @@ export async function fetchLocationSamplesForDay(
  */
 export async function fetchAllEvidenceForDay(
   userId: string,
-  ymd: string
+  ymd: string,
 ): Promise<EvidenceBundle> {
-  const [locationHourly, locationSamples, screenTimeSessions, healthWorkouts, healthDaily, userPlaces] =
-    await Promise.all([
-      fetchLocationHourlyForDay(userId, ymd),
-      fetchLocationSamplesForDay(userId, ymd),
-      fetchScreenTimeSessionsForDay(userId, ymd),
-      fetchHealthWorkoutsForDay(userId, ymd),
-      fetchHealthDailyForDay(userId, ymd),
-      fetchUserPlaces(userId),
-    ]);
+  const [
+    locationHourly,
+    locationSamples,
+    screenTimeSessions,
+    healthWorkouts,
+    healthDaily,
+    userPlaces,
+  ] = await Promise.all([
+    fetchLocationHourlyForDay(userId, ymd),
+    fetchLocationSamplesForDay(userId, ymd),
+    fetchScreenTimeSessionsForDay(userId, ymd),
+    fetchHealthWorkoutsForDay(userId, ymd),
+    fetchHealthDailyForDay(userId, ymd),
+    fetchUserPlaces(userId),
+  ]);
 
   return {
     locationHourly,
@@ -392,7 +420,7 @@ export async function fetchAllEvidenceForDay(
 export function findOverlappingLocations(
   eventStartMinutes: number,
   eventEndMinutes: number,
-  locationHourly: LocationHourlyRow[]
+  locationHourly: LocationHourlyRow[],
 ): LocationHourlyRow[] {
   return locationHourly.filter((loc) => {
     const hourStart = new Date(loc.hour_start);
@@ -400,7 +428,9 @@ export function findOverlappingLocations(
     const hourEndMinutes = hourStartMinutes + 60;
 
     // Check overlap
-    return hourStartMinutes < eventEndMinutes && hourEndMinutes > eventStartMinutes;
+    return (
+      hourStartMinutes < eventEndMinutes && hourEndMinutes > eventStartMinutes
+    );
   });
 }
 
@@ -411,7 +441,7 @@ export function findOverlappingSessions(
   eventStartMinutes: number,
   eventEndMinutes: number,
   ymd: string,
-  screenTimeSessions: ScreenTimeSessionRow[]
+  screenTimeSessions: ScreenTimeSessionRow[],
 ): ScreenTimeSessionRow[] {
   const dayStart = ymdToDate(ymd);
 
@@ -426,7 +456,10 @@ export function findOverlappingSessions(
       (sessionEnd.getTime() - dayStart.getTime()) / (60 * 1000);
 
     // Check overlap
-    return sessionStartMinutes < eventEndMinutes && sessionEndMinutes > eventStartMinutes;
+    return (
+      sessionStartMinutes < eventEndMinutes &&
+      sessionEndMinutes > eventStartMinutes
+    );
   });
 }
 
@@ -437,7 +470,7 @@ export function findOverlappingWorkouts(
   eventStartMinutes: number,
   eventEndMinutes: number,
   ymd: string,
-  healthWorkouts: HealthWorkoutRow[]
+  healthWorkouts: HealthWorkoutRow[],
 ): HealthWorkoutRow[] {
   const dayStart = ymdToDate(ymd);
 
@@ -452,7 +485,10 @@ export function findOverlappingWorkouts(
       (workoutEnd.getTime() - dayStart.getTime()) / (60 * 1000);
 
     // Check overlap
-    return workoutStartMinutes < eventEndMinutes && workoutEndMinutes > eventStartMinutes;
+    return (
+      workoutStartMinutes < eventEndMinutes &&
+      workoutEndMinutes > eventStartMinutes
+    );
   });
 }
 
@@ -463,7 +499,7 @@ export function calculateOverlapMinutes(
   eventStartMinutes: number,
   eventEndMinutes: number,
   itemStartMinutes: number,
-  itemEndMinutes: number
+  itemEndMinutes: number,
 ): number {
   const overlapStart = Math.max(eventStartMinutes, itemStartMinutes);
   const overlapEnd = Math.min(eventEndMinutes, itemEndMinutes);

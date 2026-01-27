@@ -19,6 +19,7 @@ SUPABASE_ACCESS_TOKEN=YOUR_TOKEN npx supabase gen types typescript --project-id 
 ```
 
 Or use the script:
+
 ```bash
 cd apps/mobile
 SUPABASE_ACCESS_TOKEN=YOUR_TOKEN node scripts/generate-types.mjs
@@ -27,6 +28,7 @@ SUPABASE_ACCESS_TOKEN=YOUR_TOKEN node scripts/generate-types.mjs
 ## Method 2: Alternative - Use SQL Editor
 
 If the above doesn't work, you can query your schema directly and I can help you create the types manually. Just share:
+
 - What tables you have
 - The columns in each table
 
@@ -35,7 +37,7 @@ If the above doesn't work, you can query your schema directly and I can help you
 Update `apps/mobile/src/lib/supabase/client.ts`:
 
 ```typescript
-import { Database } from './database.types';
+import { Database } from "./database.types";
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   // ... existing config

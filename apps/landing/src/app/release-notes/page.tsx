@@ -21,7 +21,10 @@ export default function ReleaseNotesPage() {
     >
       <div className="space-y-6">
         {notes.map((n) => (
-          <div key={n.version} className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div
+            key={n.version}
+            className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
+          >
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="text-lg font-bold text-[#0a0a0a]">v{n.version}</h2>
               <span className="text-xs text-[#71717a]">{n.date}</span>
@@ -37,5 +40,3 @@ export default function ReleaseNotesPage() {
     </PageLayout>
   );
 }
-
-

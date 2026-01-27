@@ -8,6 +8,7 @@
 ## Executive Summary
 
 **Good News**: The system IS already hooked up! Phone data (location, screen time) is being:
+
 1. ✅ Collected from device
 2. ✅ Stored in database (`tm.location_samples`, `tm.screen_time_app_sessions`)
 3. ✅ Processed into actual blocks (`generateActualBlocks()`)
@@ -21,6 +22,7 @@
 ## How It Works (Already Implemented)
 
 ### 1. Data Collection
+
 - **Location**: iOS background task → `tm.location_samples`
 - **Screen Time**: iOS Screen Time API → `tm.screen_time_app_sessions`
 - **Health**: HealthKit → `tm.health_workouts`
@@ -31,11 +33,12 @@
 // In comprehensive-calendar.tsx
 const { actualBlocks, evidence, verificationResults } = useVerification(
   plannedEvents,
-  selectedDateYmd
+  selectedDateYmd,
 );
 ```
 
 **Flow**:
+
 1. `useVerification()` hook calls `fetchAllEvidenceForDay()` to get location, screen time, health data
 2. Calls `generateActualBlocks()` to create blocks from evidence
 3. Returns `actualBlocks` array containing location/screen time/workout blocks
@@ -48,10 +51,10 @@ const { actualBlocks, evidence, verificationResults } = useVerification(
 // Location blocks
 for (const loc of locationBlocks) {
   const isPlanned = plannedEvents.some(
-    (e) => e.startMinutes < loc.endMinutes && 
+    (e) => e.startMinutes < loc.endMinutes &&
            (e.startMinutes + e.duration) > loc.startMinutes
   );
-  
+
   if (!isPlanned && loc.placeLabel) {
     blocks.push({
       id: `loc_${loc.startMinutes}_${loc.endMinutes}`,
@@ -83,16 +86,17 @@ for (const block of screenTimeBlocks) {
 // In comprehensive-calendar.tsx (lines 471-496)
 useEffect(() => {
   if (!userId || !actualBlocks || actualBlocks.length === 0) return;
-  
-  await syncActualEvidenceBlocks({ 
-    userId, 
-    ymd: selectedDateYmd, 
-    blocks: actualBlocks 
+
+  await syncActualEvidenceBlocks({
+    userId,
+    ymd: selectedDateYmd,
+    blocks: actualBlocks,
   });
 }, [actualBlocks, selectedDateYmd, userId]);
 ```
 
 **What gets saved**:
+
 ```typescript
 {
   user_id: userId,
@@ -116,24 +120,27 @@ useEffect(() => {
 ## Recent Changes Review (ChatGPT's Work)
 
 ### ✅ Change 1: Fixed `minutesToIso()` function
+
 **File**: `actual-evidence-events.ts`
 
 **Before**:
+
 ```typescript
 function minutesToIso(ymd: string, minutes: number): string {
   const base = ymdToDate(ymd);
-  base.setMinutes(minutes);  // ❌ Wrong - sets only minutes, not hours
+  base.setMinutes(minutes); // ❌ Wrong - sets only minutes, not hours
   return base.toISOString();
 }
 ```
 
 **After**:
+
 ```typescript
 function minutesToIso(ymd: string, minutes: number): string {
   const base = ymdToDate(ymd);
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  base.setHours(hours, mins, 0, 0);  // ✅ Correct - converts minutes from midnight
+  base.setHours(hours, mins, 0, 0); // ✅ Correct - converts minutes from midnight
   return base.toISOString();
 }
 ```
@@ -141,31 +148,36 @@ function minutesToIso(ymd: string, minutes: number): string {
 **Verdict**: ✅ **CORRECT** - This fixes a critical bug where times would be wrong. Good catch!
 
 ### ✅ Change 2: Added `parseDbTimestamp()` function
+
 **File**: `actual-display-events.ts`
 
 **Added**:
+
 ```typescript
 function parseDbTimestamp(timestamp: string): Date {
   if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
     return new Date(timestamp);
   }
-  return new Date(timestamp + 'Z');  // Assume UTC if no timezone
+  return new Date(timestamp + "Z"); // Assume UTC if no timezone
 }
 ```
 
 **Verdict**: ✅ **CORRECT** - Handles database timestamps properly, prevents timezone issues.
 
 ### ✅ Change 3: Used `parseDbTimestamp()` for location blocks
+
 **File**: `actual-display-events.ts`
 
 **Before**:
+
 ```typescript
-const hourStart = new Date(row.hour_start);  // ❌ Might parse incorrectly
+const hourStart = new Date(row.hour_start); // ❌ Might parse incorrectly
 ```
 
 **After**:
+
 ```typescript
-const hourStart = parseDbTimestamp(row.hour_start);  // ✅ Consistent parsing
+const hourStart = parseDbTimestamp(row.hour_start); // ✅ Consistent parsing
 ```
 
 **Verdict**: ✅ **CORRECT** - Ensures consistent timestamp parsing.
@@ -175,25 +187,29 @@ const hourStart = parseDbTimestamp(row.hour_start);  // ✅ Consistent parsing
 ## Verification of Functionality
 
 ### ✅ Location Blocks
+
 - **Creation**: `generateActualBlocks()` creates blocks when location changes
 - **Check**: Only creates if NOT covered by a planned event
 - **Title**: Uses place label from `tm.user_places` or location data
 - **Example**: "Home", "Coffee Shop", "Office"
 
-### ✅ Screen Time Blocks  
+### ✅ Screen Time Blocks
+
 - **Creation**: Groups consecutive screen time into 10+ minute blocks
-- **Classification**: 
+- **Classification**:
   - "Productive" if work apps (10+ min)
   - "Distracted" if entertainment apps
   - Shows top app name
 - **Check**: Only creates if NOT during a planned event
 
 ### ✅ Workout Blocks
+
 - **Creation**: From `tm.health_workouts` table
 - **Check**: Only creates if NOT during a planned health event
 - **Title**: Workout type + duration
 
 ### ✅ Database Storage
+
 - **Deduplication**: Uses `source_id` to prevent duplicate inserts
 - **Query**: Checks existing `calendar_actual` events before inserting
 - **Metadata**: Stores all evidence in `meta` JSONB field
@@ -205,17 +221,19 @@ const hourStart = parseDbTimestamp(row.hour_start);  // ✅ Consistent parsing
 ### ✅ To verify it's working:
 
 1. **Check if location data exists**:
+
 ```sql
 select count(*), date(recorded_at) as date
-from tm.location_samples 
+from tm.location_samples
 where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and recorded_at::date = '2026-01-22'
 group by date;
 ```
 
 2. **Check if screen time data exists**:
+
 ```sql
-select count(*), date 
+select count(*), date
 from tm.screen_time_app_sessions
 where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and date = '2026-01-22'
@@ -223,15 +241,16 @@ group by date;
 ```
 
 3. **Check if actual events were created**:
+
 ```sql
-select 
+select
   id,
   title,
   scheduled_start,
   scheduled_end,
   meta->>'source' as source,
   meta->>'category' as category
-from tm.events 
+from tm.events
 where user_id = '62c02dff-42ef-4d0d-ae60-445adc464cc6'
   and type = 'calendar_actual'
   and scheduled_start::date = '2026-01-22'
@@ -239,6 +258,7 @@ order by scheduled_start;
 ```
 
 4. **Check the app logs**:
+
 ```javascript
 // Should see in console:
 // [Verification] actualBlocks: [...]
@@ -250,19 +270,23 @@ order by scheduled_start;
 ## Common Issues & Solutions
 
 ### Issue 1: No actual events created
+
 **Cause**: No evidence data (location/screen time) for that day
 **Solution**: Verify data collection is running
 
 ### Issue 2: Client can't see events
+
 **Cause**: Querying with wrong filter (`type = 'meeting'`)
 **Solution**: Use `type = 'calendar_actual'`
 
 ### Issue 3: Duplicate events
+
 **Cause**: Sync running multiple times
 **Solution**: Already handled - uses `source_id` deduplication
 
 ### Issue 4: Wrong times
-**Cause**: Was a bug in `minutesToIso()` 
+
+**Cause**: Was a bug in `minutesToIso()`
 **Solution**: ✅ Fixed in recent changes
 
 ---
@@ -270,11 +294,13 @@ order by scheduled_start;
 ## Next Steps
 
 ### For the Client:
+
 1. ✅ Use the correct query (see investigation doc)
 2. ✅ Verify evidence data exists for the date
 3. ✅ Check app logs for sync messages
 
 ### For Development:
+
 1. ⚠️ Fix remaining TypeScript errors (non-critical)
 2. ✅ Test on device with real location/screen time data
 3. ✅ Verify blocks appear in "actual" side of calendar
@@ -286,6 +312,7 @@ order by scheduled_start;
 **Status**: ✅ System is working as designed!
 
 The recent changes by ChatGPT are **correct** and fix important bugs:
+
 - ✅ Time conversion bug fixed
 - ✅ Timestamp parsing improved
 - ✅ Timezone handling consistent

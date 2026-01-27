@@ -7,6 +7,7 @@
 ## Test Results
 
 ### App Launch Status
+
 ✅ **App builds and installs successfully**  
 ✅ **App launches on device**  
 ⚠️ **App terminates after ~6-8 seconds**
@@ -14,12 +15,14 @@
 ### Logs Analysis
 
 The device logs show:
+
 1. App initializes successfully
 2. React Native bridge starts
 3. UIManagerBinding warnings (normal during initialization)
 4. App terminates with signal 15 (SIGTERM)
 
 **Key Log Entries:**
+
 ```
 LK setup
 _setUpFeatureFlags called with release level 2
@@ -30,6 +33,7 @@ App terminated due to signal 15.
 ### Issue Identified
 
 **Metro Server Configuration:**
+
 - Metro is running with `--host localhost`
 - Mac's network IP: `192.168.86.250`
 - Physical devices cannot connect to `localhost` - they need the network IP
@@ -37,12 +41,15 @@ App terminated due to signal 15.
 **Solution Options:**
 
 1. **Restart Metro with LAN access:**
+
    ```bash
    pnpm --filter mobile start --host lan
    ```
+
    This makes Metro accessible on the local network.
 
 2. **Use Expo tunnel (if on different networks):**
+
    ```bash
    pnpm --filter mobile start --host tunnel
    ```
@@ -64,4 +71,3 @@ App terminated due to signal 15.
 - React Native bridge starts successfully
 - Termination likely due to Metro connection failure or JavaScript error
 - Once Metro connection is established, the app should load the JavaScript bundle
-

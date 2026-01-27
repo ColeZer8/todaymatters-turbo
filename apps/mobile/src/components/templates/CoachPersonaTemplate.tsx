@@ -1,10 +1,13 @@
-import { ArrowRight } from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { PersonaCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { ArrowRight } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+import { View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { PersonaCard } from "@/components/molecules";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface CoachPersonaOption {
   id: string;
@@ -22,7 +25,7 @@ interface CoachPersonaTemplateProps {
   onContinue?: () => void;
   onBack?: () => void;
   /** When 'settings', hides progress bar and continue button */
-  mode?: 'onboarding' | 'settings';
+  mode?: "onboarding" | "settings";
 }
 
 export const CoachPersonaTemplate = ({
@@ -33,9 +36,9 @@ export const CoachPersonaTemplate = ({
   onSelect,
   onContinue,
   onBack,
-  mode = 'onboarding',
+  mode = "onboarding",
 }: CoachPersonaTemplateProps) => {
-  const isSettings = mode === 'settings';
+  const isSettings = mode === "settings";
 
   return (
     <SetupStepLayout
@@ -45,7 +48,15 @@ export const CoachPersonaTemplate = ({
       subtitle="Choose the voice of your AI agent."
       onBack={onBack}
       mode={mode}
-      footer={!isSettings && onContinue ? <GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} /> : undefined}
+      footer={
+        !isSettings && onContinue ? (
+          <GradientButton
+            label="Continue"
+            onPress={onContinue}
+            rightIcon={ArrowRight}
+          />
+        ) : undefined
+      }
     >
       <View className="mt-5 gap-3.5">
         {options.map((option) => (

@@ -39,5 +39,3 @@ Stop Goals and Work Initiatives from multiplying each time a user revisits onboa
 ## Follow-ups
 
 - Consider consolidating goals/initiatives storage (onboarding vs profile/events) if we see further drift.
-
-

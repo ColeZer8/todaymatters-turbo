@@ -10,7 +10,8 @@ export default function ReportABugPage() {
     >
       <div className="rounded-3xl border border-gray-100 bg-[#fafafa] p-6">
         <p className="text-sm text-[#52525b] leading-relaxed">
-          Please include: what you expected, what happened, and the device/browser you’re using.
+          Please include: what you expected, what happened, and the
+          device/browser you’re using.
         </p>
         <Link
           href="/contact"
@@ -22,5 +23,3 @@ export default function ReportABugPage() {
     </PageLayout>
   );
 }
-
-

@@ -5,10 +5,10 @@
  * Shows connection status and provides visual feedback during conversations.
  */
 
-import React, { useCallback, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, Easing } from 'react-native';
-import { Mic, MicOff, Phone, PhoneOff, Volume2 } from 'lucide-react-native';
-import type { ConversationStatus } from '@/lib/elevenlabs';
+import React, { useCallback, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, Animated, Easing } from "react-native";
+import { Mic, MicOff, Phone, PhoneOff, Volume2 } from "lucide-react-native";
+import type { ConversationStatus } from "@/lib/elevenlabs";
 
 interface VoiceCoachButtonProps {
   status: ConversationStatus;
@@ -19,7 +19,7 @@ interface VoiceCoachButtonProps {
   /** Custom style classes */
   className?: string;
   /** Position on screen */
-  position?: 'bottom-right' | 'bottom-left' | 'bottom-center';
+  position?: "bottom-right" | "bottom-left" | "bottom-center";
 }
 
 export function VoiceCoachButton({
@@ -28,8 +28,8 @@ export function VoiceCoachButton({
   isMicMuted,
   onPressMain,
   onPressMute,
-  className = '',
-  position = 'bottom-right',
+  className = "",
+  position = "bottom-right",
 }: VoiceCoachButtonProps) {
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -52,7 +52,7 @@ export function VoiceCoachButton({
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
     } else {
       pulseAnim.setValue(1);
@@ -61,14 +61,14 @@ export function VoiceCoachButton({
 
   // Loading animation when connecting
   useEffect(() => {
-    if (status === 'connecting') {
+    if (status === "connecting") {
       Animated.loop(
         Animated.timing(rotateAnim, {
           toValue: 1,
           duration: 1000,
           easing: Easing.linear,
           useNativeDriver: true,
-        })
+        }),
       ).start();
     } else {
       rotateAnim.setValue(0);
@@ -85,64 +85,68 @@ export function VoiceCoachButton({
 
   // Position classes
   const positionClasses = {
-    'bottom-right': 'right-4 bottom-24',
-    'bottom-left': 'left-4 bottom-24',
-    'bottom-center': 'left-1/2 -translate-x-1/2 bottom-24',
+    "bottom-right": "right-4 bottom-24",
+    "bottom-left": "left-4 bottom-24",
+    "bottom-center": "left-1/2 -translate-x-1/2 bottom-24",
   };
 
   // Status-based styling
   const getButtonStyle = () => {
     switch (status) {
-      case 'connected':
+      case "connected":
         return isSpeaking
-          ? 'bg-emerald-500 border-emerald-400'
-          : 'bg-emerald-600 border-emerald-500';
-      case 'connecting':
-        return 'bg-amber-500 border-amber-400';
-      case 'error':
-        return 'bg-red-500 border-red-400';
+          ? "bg-emerald-500 border-emerald-400"
+          : "bg-emerald-600 border-emerald-500";
+      case "connecting":
+        return "bg-amber-500 border-amber-400";
+      case "error":
+        return "bg-red-500 border-red-400";
       default:
-        return 'bg-blue-600 border-blue-500';
+        return "bg-blue-600 border-blue-500";
     }
   };
 
   const getStatusText = () => {
     switch (status) {
-      case 'connected':
-        return isSpeaking ? 'Coach is speaking...' : 'Listening...';
-      case 'connecting':
-        return 'Connecting...';
-      case 'error':
-        return 'Connection error';
+      case "connected":
+        return isSpeaking ? "Coach is speaking..." : "Listening...";
+      case "connecting":
+        return "Connecting...";
+      case "error":
+        return "Connection error";
       default:
-        return 'Talk to Coach';
+        return "Talk to Coach";
     }
   };
 
   const rotateInterpolate = rotateAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: ["0deg", "360deg"],
   });
 
   return (
     <View className={`absolute ${positionClasses[position]} ${className}`}>
       {/* Status label */}
-      {status !== 'disconnected' && (
+      {status !== "disconnected" && (
         <View className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
           <View className="bg-slate-900/90 px-3 py-1 rounded-full">
-            <Text className="text-white text-xs font-medium">{getStatusText()}</Text>
+            <Text className="text-white text-xs font-medium">
+              {getStatusText()}
+            </Text>
           </View>
         </View>
       )}
 
       {/* Mute button (shown when connected) */}
-      {status === 'connected' && (
+      {status === "connected" && (
         <TouchableOpacity
           onPress={handleMutePress}
           className={`absolute -left-14 bottom-0 w-10 h-10 rounded-full items-center justify-center ${
-            isMicMuted ? 'bg-red-500' : 'bg-slate-700'
+            isMicMuted ? "bg-red-500" : "bg-slate-700"
           }`}
-          accessibilityLabel={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+          accessibilityLabel={
+            isMicMuted ? "Unmute microphone" : "Mute microphone"
+          }
           accessibilityRole="button"
         >
           {isMicMuted ? (
@@ -158,19 +162,23 @@ export function VoiceCoachButton({
         style={{
           transform: [
             { scale: pulseAnim },
-            { rotate: status === 'connecting' ? rotateInterpolate : '0deg' },
+            { rotate: status === "connecting" ? rotateInterpolate : "0deg" },
           ],
         }}
       >
         <TouchableOpacity
           onPress={handlePress}
-          disabled={status === 'connecting'}
+          disabled={status === "connecting"}
           className={`w-16 h-16 rounded-full items-center justify-center border-2 shadow-lg ${getButtonStyle()}`}
-          accessibilityLabel={status === 'connected' ? 'End conversation' : 'Start conversation with AI coach'}
+          accessibilityLabel={
+            status === "connected"
+              ? "End conversation"
+              : "Start conversation with AI coach"
+          }
           accessibilityRole="button"
-          accessibilityState={{ disabled: status === 'connecting' }}
+          accessibilityState={{ disabled: status === "connecting" }}
         >
-          {status === 'connected' ? (
+          {status === "connected" ? (
             isSpeaking ? (
               <Volume2 size={28} color="#fff" />
             ) : (
@@ -183,15 +191,15 @@ export function VoiceCoachButton({
       </Animated.View>
 
       {/* Speaking indicator ring */}
-      {status === 'connected' && isSpeaking && (
+      {status === "connected" && isSpeaking && (
         <Animated.View
           style={{
-            position: 'absolute',
+            position: "absolute",
             width: 80,
             height: 80,
             borderRadius: 40,
             borderWidth: 2,
-            borderColor: '#10b981',
+            borderColor: "#10b981",
             opacity: 0.5,
             transform: [{ scale: pulseAnim }],
             top: -8,

@@ -1,4 +1,4 @@
-import type { HealthDailyRow } from '@/lib/supabase/services/evidence-data';
+import type { HealthDailyRow } from "@/lib/supabase/services/evidence-data";
 
 export interface SleepQualityMetrics {
   asleepMinutes?: number;
@@ -17,7 +17,9 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function buildSleepQualityMetrics(healthDaily: HealthDailyRow | null): SleepQualityMetrics | null {
+export function buildSleepQualityMetrics(
+  healthDaily: HealthDailyRow | null,
+): SleepQualityMetrics | null {
   if (!healthDaily) return null;
 
   const asleepMinutes = healthDaily.sleep_asleep_seconds
@@ -35,11 +37,17 @@ export function buildSleepQualityMetrics(healthDaily: HealthDailyRow | null): Sl
   const inBedMinutes = healthDaily.sleep_in_bed_seconds
     ? Math.round(healthDaily.sleep_in_bed_seconds / 60)
     : null;
-  const hrvMs = healthDaily.hrv_sdnn_seconds ? Math.round(healthDaily.hrv_sdnn_seconds * 1000) : null;
+  const hrvMs = healthDaily.hrv_sdnn_seconds
+    ? Math.round(healthDaily.hrv_sdnn_seconds * 1000)
+    : null;
   const restingHeartRateBpm = healthDaily.resting_heart_rate_avg_bpm ?? null;
   const heartRateAvgBpm = healthDaily.heart_rate_avg_bpm ?? null;
-  const wakeTime = healthDaily.window_end ? new Date(healthDaily.window_end) : null;
-  const wakeTimeMinutes = wakeTime ? wakeTime.getHours() * 60 + wakeTime.getMinutes() : null;
+  const wakeTime = healthDaily.window_end
+    ? new Date(healthDaily.window_end)
+    : null;
+  const wakeTimeMinutes = wakeTime
+    ? wakeTime.getHours() * 60 + wakeTime.getMinutes()
+    : null;
 
   if (
     asleepMinutes === undefined &&
@@ -55,7 +63,10 @@ export function buildSleepQualityMetrics(healthDaily: HealthDailyRow | null): Sl
     return null;
   }
 
-  let score = asleepMinutes !== undefined ? clamp((asleepMinutes / 480) * 60 + 40, 0, 100) : 50;
+  let score =
+    asleepMinutes !== undefined
+      ? clamp((asleepMinutes / 480) * 60 + 40, 0, 100)
+      : 50;
 
   if (hrvMs !== null) {
     score += clamp(((hrvMs - 20) / 40) * 15, 0, 15);

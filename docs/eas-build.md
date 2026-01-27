@@ -57,11 +57,13 @@ npx eas-cli@latest device:create
 ```
 
 This will prompt you to:
+
 - Connect your iPhone via USB or provide the UDID manually
 - If connected via USB, it will detect your device automatically
 - Give your device a name (e.g., "My iPhone")
 
 **To find your UDID manually:**
+
 - On Mac: Connect device, open Finder → Select device → See UDID
 - Or: Settings → General → About → Copy the Identifier (UDID)
 
@@ -96,18 +98,21 @@ npx eas-cli@latest build:dev --platform ios --profile development-device
 After the build completes, you have several options:
 
 **Option A: Direct Download & Install**
+
 1. The build command will provide a download URL
 2. Open the URL on your iPhone's Safari browser
 3. Download the `.ipa` file
 4. Install via Settings → General → VPN & Device Management → Trust the developer
 
 **Option B: Via EAS Dashboard**
+
 1. Visit [expo.dev](https://expo.dev) → Your Project → Builds
 2. Click on the completed build
 3. Click "Download" to get the `.ipa` file
 4. Transfer to your iPhone and install
 
 **Option C: Via TestFlight (Recommended for easier updates)**
+
 1. Submit the build to TestFlight (requires App Store Connect setup)
 2. Install TestFlight app on your iPhone
 3. Accept the invitation and install the app
@@ -126,6 +131,7 @@ npx eas-cli@latest build:dev --platform android --profile development-device
 After the build completes:
 
 **Option A: Direct Download**
+
 1. The build command will provide a download URL
 2. Open the URL on your Android phone's browser
 3. Download the `.apk` file
@@ -133,11 +139,13 @@ After the build completes:
 5. Tap the downloaded APK to install
 
 **Option B: Via ADB (Android Debug Bridge)**
+
 1. Download the `.apk` file to your computer
 2. Connect your Android phone via USB with USB debugging enabled
 3. Run: `adb install path/to/your-app.apk`
 
 **Option C: Via EAS Dashboard**
+
 1. Visit [expo.dev](https://expo.dev) → Your Project → Builds
 2. Click on the completed build
 3. Click "Download" to get the `.apk` file
@@ -154,6 +162,7 @@ npx eas-cli@latest login
 ## Credentials
 
 For development builds:
+
 - **iOS Simulator**: No credentials needed
 - **iOS Device**: Requires Apple Developer account credentials (configured via `eas credentials:configure-build`)
 - **Android**: No credentials needed for APK builds
@@ -161,8 +170,8 @@ For development builds:
 ## Configuration Reference
 
 The `eas.json` file supports:
+
 - `developmentClient: true` - Enables Expo Dev Client
 - `distribution: "internal"` - For internal testing
 - `ios.simulator: true` - Builds for iOS simulator
 - `android.buildType: "apk"` - Builds APK for Android
-

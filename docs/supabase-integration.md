@@ -24,6 +24,7 @@ This document outlines the Supabase integration setup for the TodayMatters mobil
 ### Native Code Requirements
 
 For Expo managed workflow:
+
 - **Deep Linking**: Uses `expo-linking` and `expo-auth-session` (no custom native code needed)
 - **OAuth**: Uses `expo-web-browser` for OAuth flows
 - **Storage**: Uses `@react-native-async-storage/async-storage` for session persistence
@@ -37,6 +38,7 @@ pnpm add -D @types/react-native-url-polyfill
 ```
 
 For OAuth flows (if needed):
+
 ```bash
 pnpm add expo-auth-session expo-web-browser expo-linking
 ```
@@ -70,21 +72,25 @@ See `docs/supabase-tm-schema-integration-plan.md` for detailed integration plan.
 Location: `apps/mobile/src/lib/supabase/client.ts`
 
 ```typescript
-import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
-import Constants from 'expo-constants';
+import "react-native-url-polyfill/auto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient } from "@supabase/supabase-js";
+import Constants from "expo-constants";
 
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl =
+  Constants.expoConfig?.extra?.supabaseUrl ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey =
+  Constants.expoConfig?.extra?.supabaseAnonKey ||
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error("Missing Supabase environment variables");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: {
-    schema: 'tm', // Use tm schema instead of public
+    schema: "tm", // Use tm schema instead of public
   },
   auth: {
     storage: AsyncStorage,
@@ -101,15 +107,10 @@ All queries should explicitly specify the schema:
 
 ```typescript
 // ✅ Correct - explicit schema
-const { data } = await supabase
-  .schema('tm')
-  .from('profiles')
-  .select('*');
+const { data } = await supabase.schema("tm").from("profiles").select("*");
 
 // ❌ Wrong - would query public schema
-const { data } = await supabase
-  .from('profiles')
-  .select('*');
+const { data } = await supabase.from("profiles").select("*");
 ```
 
 ## Authentication Flow
@@ -119,14 +120,14 @@ const { data } = await supabase
 ```typescript
 // Sign up
 const { data, error } = await supabase.auth.signUp({
-  email: 'user@example.com',
-  password: 'password123',
+  email: "user@example.com",
+  password: "password123",
 });
 
 // Sign in
 const { data, error } = await supabase.auth.signInWithPassword({
-  email: 'user@example.com',
-  password: 'password123',
+  email: "user@example.com",
+  password: "password123",
 });
 
 // Sign out
@@ -136,13 +137,13 @@ const { error } = await supabase.auth.signOut();
 ### Magic Link Authentication
 
 ```typescript
-import { makeRedirectUri } from 'expo-auth-session';
-import * as Linking from 'expo-linking';
+import { makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
 
 const redirectTo = makeRedirectUri();
 
 const { error } = await supabase.auth.signInWithOtp({
-  email: 'user@example.com',
+  email: "user@example.com",
   options: {
     emailRedirectTo: redirectTo,
   },
@@ -185,24 +186,24 @@ See `apps/mobile/src/lib/supabase/auth.ts` for OAuth implementation details.
 Location: `apps/mobile/src/lib/supabase/auth.ts`
 
 ```typescript
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
-import * as Linking from 'expo-linking';
-import { supabase } from './client';
+import * as QueryParams from "expo-auth-session/build/QueryParams";
+import * as Linking from "expo-linking";
+import { supabase } from "./client";
 
 export const createSessionFromUrl = async (url: string) => {
   const { params, errorCode } = QueryParams.getQueryParams(url);
-  
+
   if (errorCode) throw new Error(errorCode);
-  
+
   const { access_token, refresh_token } = params;
-  
+
   if (!access_token) return;
-  
+
   const { data, error } = await supabase.auth.setSession({
     access_token,
     refresh_token,
   });
-  
+
   if (error) throw error;
   return data.session;
 };
@@ -215,26 +216,23 @@ export const createSessionFromUrl = async (url: string) => {
 ```typescript
 // Fetch data
 const { data, error } = await supabase
-  .from('tasks')
-  .select('*')
-  .eq('user_id', userId);
+  .from("tasks")
+  .select("*")
+  .eq("user_id", userId);
 
 // Insert data
 const { data, error } = await supabase
-  .from('tasks')
-  .insert([{ title: 'New task', user_id: userId }]);
+  .from("tasks")
+  .insert([{ title: "New task", user_id: userId }]);
 
 // Update data
 const { data, error } = await supabase
-  .from('tasks')
+  .from("tasks")
   .update({ completed: true })
-  .eq('id', taskId);
+  .eq("id", taskId);
 
 // Delete data
-const { error } = await supabase
-  .from('tasks')
-  .delete()
-  .eq('id', taskId);
+const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 ```
 
 ### Real-time Subscriptions
@@ -242,19 +240,19 @@ const { error } = await supabase
 ```typescript
 useEffect(() => {
   const channel = supabase
-    .channel('tasks')
+    .channel("tasks")
     .on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'public',
-        table: 'tasks',
+        event: "*",
+        schema: "public",
+        table: "tasks",
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        console.log('Change received!', payload);
+        console.log("Change received!", payload);
         // Update local state
-      }
+      },
     )
     .subscribe();
 
@@ -275,8 +273,8 @@ npx supabase gen types typescript --project-id your-project-ref > apps/mobile/sr
 Then use typed client:
 
 ```typescript
-import { createClient } from '@supabase/supabase-js';
-import { Database } from './database.types';
+import { createClient } from "@supabase/supabase-js";
+import { Database } from "./database.types";
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   // ... config
@@ -320,4 +318,3 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 - Implement offline-first patterns with local caching
 - Add error boundaries for auth failures
 - Set up analytics tracking for auth events
-

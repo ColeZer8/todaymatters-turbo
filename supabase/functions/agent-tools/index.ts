@@ -15,12 +15,13 @@
  * - If `ELEVENLABS_TOOL_SECRET` is set, requests must include `Authorization: Bearer <secret>`.
  */
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface ToolRequest {
@@ -38,26 +39,29 @@ interface ToolResponse {
 
 serve(async (req: Request) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
-    const expectedSecret = Deno.env.get('ELEVENLABS_TOOL_SECRET');
+    const expectedSecret = Deno.env.get("ELEVENLABS_TOOL_SECRET");
     if (expectedSecret) {
-      const authHeader = req.headers.get('Authorization') ?? '';
+      const authHeader = req.headers.get("Authorization") ?? "";
       const expectedHeader = `Bearer ${expectedSecret}`;
       if (authHeader !== expectedHeader) {
         return new Response(
-          JSON.stringify({ success: false, error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
     }
@@ -65,48 +69,48 @@ serve(async (req: Request) => {
     const body: ToolRequest = await req.json();
     const { tool_name, parameters, user_id } = body;
 
-    console.log('Tool call received:', tool_name, parameters);
+    console.log("Tool call received:", tool_name, parameters);
 
     // Create Supabase client with service role for database operations
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     let result: ToolResponse;
 
     // Route to the appropriate tool handler
     switch (tool_name) {
-      case 'get_user_routine':
+      case "get_user_routine":
         result = await getUserRoutine(supabase, user_id);
         break;
 
-      case 'get_todays_tasks':
+      case "get_todays_tasks":
         result = await getTodaysTasks(supabase, user_id);
         break;
 
-      case 'mark_task_complete':
+      case "mark_task_complete":
         result = await markTaskComplete(
           supabase,
           user_id,
-          parameters.task_id as string
+          parameters.task_id as string,
         );
         break;
 
-      case 'get_user_goals':
+      case "get_user_goals":
         result = await getUserGoals(supabase, user_id);
         break;
 
-      case 'log_conversation_insight':
+      case "log_conversation_insight":
         result = await logConversationInsight(
           supabase,
           user_id,
           parameters.insight as string,
-          parameters.category as string
+          parameters.category as string,
         );
         break;
 
-      case 'get_weather':
+      case "get_weather":
         result = await getWeather(parameters.location as string);
         break;
 
@@ -117,21 +121,21 @@ serve(async (req: Request) => {
         };
     }
 
-    return new Response(
-      JSON.stringify(result),
-      {
-        status: result.success ? 200 : 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(JSON.stringify(result), {
+      status: result.success ? 200 : 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('Tool execution error:', error);
+    console.error("Tool execution error:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: 'Internal server error',
+        error: "Internal server error",
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });
@@ -141,38 +145,38 @@ serve(async (req: Request) => {
  */
 async function getUserRoutine(
   supabase: ReturnType<typeof createClient>,
-  userId?: string
+  userId?: string,
 ): Promise<ToolResponse> {
   if (!userId) {
-    return { success: false, error: 'User ID required' };
+    return { success: false, error: "User ID required" };
   }
 
   try {
     // Fetch from your routine tables
     // Adjust table/column names to match your schema
     const { data, error } = await supabase
-      .from('user_routines')
-      .select('*')
-      .eq('user_id', userId)
+      .from("user_routines")
+      .select("*")
+      .eq("user_id", userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== "PGRST116") {
       throw error;
     }
 
     return {
       success: true,
       data: data || {
-        message: 'No routine configured yet',
+        message: "No routine configured yet",
         has_routine: false,
       },
     };
   } catch (error) {
-    console.error('Error fetching routine:', error);
+    console.error("Error fetching routine:", error);
     return {
       success: true,
       data: {
-        message: 'Could not fetch routine data',
+        message: "Could not fetch routine data",
         has_routine: false,
       },
     };
@@ -184,29 +188,31 @@ async function getUserRoutine(
  */
 async function getTodaysTasks(
   supabase: ReturnType<typeof createClient>,
-  userId?: string
+  userId?: string,
 ): Promise<ToolResponse> {
   if (!userId) {
-    return { success: false, error: 'User ID required' };
+    return { success: false, error: "User ID required" };
   }
 
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
 
     // Fetch from your tasks table
     // Adjust table/column names to match your schema
     const { data, error } = await supabase
-      .from('daily_tasks')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('date', today);
+      .from("daily_tasks")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("date", today);
 
     if (error) {
       throw error;
     }
 
     const tasks = data || [];
-    const completed = tasks.filter((t: { completed: boolean }) => t.completed).length;
+    const completed = tasks.filter(
+      (t: { completed: boolean }) => t.completed,
+    ).length;
 
     return {
       success: true,
@@ -215,11 +221,12 @@ async function getTodaysTasks(
         total: tasks.length,
         completed,
         remaining: tasks.length - completed,
-        progress_percent: tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0,
+        progress_percent:
+          tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0,
       },
     };
   } catch (error) {
-    console.error('Error fetching tasks:', error);
+    console.error("Error fetching tasks:", error);
     return {
       success: true,
       data: {
@@ -228,7 +235,7 @@ async function getTodaysTasks(
         completed: 0,
         remaining: 0,
         progress_percent: 0,
-        message: 'Could not fetch task data',
+        message: "Could not fetch task data",
       },
     };
   }
@@ -240,18 +247,18 @@ async function getTodaysTasks(
 async function markTaskComplete(
   supabase: ReturnType<typeof createClient>,
   userId?: string,
-  taskId?: string
+  taskId?: string,
 ): Promise<ToolResponse> {
   if (!userId || !taskId) {
-    return { success: false, error: 'User ID and task ID required' };
+    return { success: false, error: "User ID and task ID required" };
   }
 
   try {
     const { error } = await supabase
-      .from('daily_tasks')
+      .from("daily_tasks")
       .update({ completed: true, completed_at: new Date().toISOString() })
-      .eq('id', taskId)
-      .eq('user_id', userId);
+      .eq("id", taskId)
+      .eq("user_id", userId);
 
     if (error) {
       throw error;
@@ -260,15 +267,15 @@ async function markTaskComplete(
     return {
       success: true,
       data: {
-        message: 'Task marked as complete',
+        message: "Task marked as complete",
         task_id: taskId,
       },
     };
   } catch (error) {
-    console.error('Error marking task complete:', error);
+    console.error("Error marking task complete:", error);
     return {
       success: false,
-      error: 'Could not mark task as complete',
+      error: "Could not mark task as complete",
     };
   }
 }
@@ -278,20 +285,20 @@ async function markTaskComplete(
  */
 async function getUserGoals(
   supabase: ReturnType<typeof createClient>,
-  userId?: string
+  userId?: string,
 ): Promise<ToolResponse> {
   if (!userId) {
-    return { success: false, error: 'User ID required' };
+    return { success: false, error: "User ID required" };
   }
 
   try {
     const { data, error } = await supabase
-      .from('user_goals')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .from("user_goals")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== "PGRST116") {
       throw error;
     }
 
@@ -303,13 +310,13 @@ async function getUserGoals(
       },
     };
   } catch (error) {
-    console.error('Error fetching goals:', error);
+    console.error("Error fetching goals:", error);
     return {
       success: true,
       data: {
         goals: [],
         count: 0,
-        message: 'Could not fetch goals data',
+        message: "Could not fetch goals data",
       },
     };
   }
@@ -322,17 +329,17 @@ async function logConversationInsight(
   supabase: ReturnType<typeof createClient>,
   userId?: string,
   insight?: string,
-  category?: string
+  category?: string,
 ): Promise<ToolResponse> {
   if (!userId || !insight) {
-    return { success: false, error: 'User ID and insight required' };
+    return { success: false, error: "User ID and insight required" };
   }
 
   try {
-    const { error } = await supabase.from('conversation_insights').insert({
+    const { error } = await supabase.from("conversation_insights").insert({
       user_id: userId,
       insight,
-      category: category || 'general',
+      category: category || "general",
       created_at: new Date().toISOString(),
     });
 
@@ -343,15 +350,15 @@ async function logConversationInsight(
     return {
       success: true,
       data: {
-        message: 'Insight logged successfully',
+        message: "Insight logged successfully",
       },
     };
   } catch (error) {
-    console.error('Error logging insight:', error);
+    console.error("Error logging insight:", error);
     return {
       success: true,
       data: {
-        message: 'Insight noted but could not be persisted',
+        message: "Insight noted but could not be persisted",
       },
     };
   }
@@ -362,7 +369,7 @@ async function logConversationInsight(
  */
 async function getWeather(location?: string): Promise<ToolResponse> {
   if (!location) {
-    return { success: false, error: 'Location required' };
+    return { success: false, error: "Location required" };
   }
 
   // This is a placeholder - you would integrate with a real weather API
@@ -371,9 +378,8 @@ async function getWeather(location?: string): Promise<ToolResponse> {
     success: true,
     data: {
       location,
-      message: 'Weather API not configured yet',
+      message: "Weather API not configured yet",
       // You would return actual weather data here
     },
   };
 }
-

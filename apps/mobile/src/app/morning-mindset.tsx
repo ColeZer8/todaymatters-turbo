@@ -1,36 +1,39 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { BookOpenCheck, Coffee, Smile, Zap } from 'lucide-react-native';
-import { MorningMindsetTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { BookOpenCheck, Coffee, Smile, Zap } from "lucide-react-native";
+import { MorningMindsetTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const MORNING_MINDSET_OPTIONS = [
   {
-    id: 'slow',
-    title: 'Slow & Intentional',
-    description: 'Ease into the day with quiet time.',
+    id: "slow",
+    title: "Slow & Intentional",
+    description: "Ease into the day with quiet time.",
     icon: Coffee,
   },
   {
-    id: 'energy',
-    title: 'High Energy',
-    description: 'Jumpstart with movement and action.',
+    id: "energy",
+    title: "High Energy",
+    description: "Jumpstart with movement and action.",
     icon: Zap,
   },
   {
-    id: 'deep-focus',
-    title: 'Deep Focus',
-    description: 'Tackle the biggest task first.',
+    id: "deep-focus",
+    title: "Deep Focus",
+    description: "Tackle the biggest task first.",
     icon: BookOpenCheck,
   },
   {
-    id: 'joy-family',
-    title: 'Joy & Family',
-    description: 'Connect with loved ones early.',
+    id: "joy-family",
+    title: "Joy & Family",
+    description: "Connect with loved ones early.",
     icon: Smile,
   },
 ] as const;
@@ -38,7 +41,8 @@ const MORNING_MINDSET_OPTIONS = [
 export default function MorningMindsetScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -46,7 +50,10 @@ export default function MorningMindsetScreen() {
   const setSelected = useOnboardingStore((state) => state.setMorningMindset);
 
   // Supabase sync
-  const { saveMorningMindset } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveMorningMindset } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   // Save to Supabase when morning mindset changes
   useEffect(() => {
@@ -59,7 +66,7 @@ export default function MorningMindsetScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -79,8 +86,8 @@ export default function MorningMindsetScreen() {
       options={MORNING_MINDSET_OPTIONS}
       selectedId={selected}
       onSelect={setSelected}
-      onContinue={() => router.replace('/build-routine')}
-      onBack={() => router.replace('/coach-persona')}
+      onContinue={() => router.replace("/build-routine")}
+      onBack={() => router.replace("/coach-persona")}
     />
   );
 }

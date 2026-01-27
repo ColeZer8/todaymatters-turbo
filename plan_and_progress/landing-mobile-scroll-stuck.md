@@ -48,4 +48,3 @@ Fix the landing page scroll getting “stuck” on iPhone (mobile Safari / iOS s
 
 - Compare against the reference site mobile behavior: [Bevel](https://www.bevel.health/).
 - If any remaining “sticky” sections still feel sticky on iOS, consider conditionally disabling scroll snap via `ScrollSnapController` based on input type (coarse pointer), not just width.
-

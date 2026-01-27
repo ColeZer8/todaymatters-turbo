@@ -40,15 +40,50 @@ export const ScrollShowcase = () => {
         description:
           "Your Big 3, schedule, and pending actions — so you always know what matters next.",
         screenshotPath: "/screenshots/home.png",
-        bgImagePath: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1920&q=80",
+        bgImagePath:
+          "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1920&q=80",
         calloutPlacement: "topLeft",
         accentColor: "#2563EB",
         floatingCards: [
-          { type: "metric", label: "Day", value: "13,653", status: "of your life", statusColor: "#2563EB", position: { x: -280, y: -100 }, rotate: -4, delay: 0.1, size: "md" },
-          { type: "icon", icon: "☀️", position: { x: -180, y: 140 }, rotate: 8, delay: 0.2, size: "sm" },
-          { type: "metric", label: "Big 3", value: "3", status: "priorities", statusColor: "#10B981", position: { x: 300, y: -80 }, rotate: 6, delay: 0.15, size: "md" },
-          { type: "icon", icon: "📅", position: { x: 260, y: 180 }, rotate: -6, delay: 0.25, size: "sm" },
-        ]
+          {
+            type: "metric",
+            label: "Day",
+            value: "13,653",
+            status: "of your life",
+            statusColor: "#2563EB",
+            position: { x: -280, y: -100 },
+            rotate: -4,
+            delay: 0.1,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "☀️",
+            position: { x: -180, y: 140 },
+            rotate: 8,
+            delay: 0.2,
+            size: "sm",
+          },
+          {
+            type: "metric",
+            label: "Big 3",
+            value: "3",
+            status: "priorities",
+            statusColor: "#10B981",
+            position: { x: 300, y: -80 },
+            rotate: 6,
+            delay: 0.15,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "📅",
+            position: { x: 260, y: 180 },
+            rotate: -6,
+            delay: 0.25,
+            size: "sm",
+          },
+        ],
       },
       {
         id: "calendar",
@@ -56,15 +91,50 @@ export const ScrollShowcase = () => {
         description:
           "Compare your ideal day against reality and see exactly where time drifted.",
         screenshotPath: "/screenshots/calendar.png",
-        bgImagePath: "https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=1920&q=80",
+        bgImagePath:
+          "https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=1920&q=80",
         calloutPlacement: "topRight",
         accentColor: "#8B5CF6",
         floatingCards: [
-          { type: "metric", label: "Planned", value: "8h", status: "scheduled", statusColor: "#8B5CF6", position: { x: -300, y: -90 }, rotate: -6, delay: 0.1, size: "md" },
-          { type: "metric", label: "Actual", value: "6.5h", status: "completed", statusColor: "#F59E0B", position: { x: 320, y: -60 }, rotate: 4, delay: 0.15, size: "md" },
-          { type: "icon", icon: "⏰", position: { x: -200, y: 160 }, rotate: 10, delay: 0.2, size: "sm" },
-          { type: "icon", icon: "✓", position: { x: 280, y: 200 }, rotate: -8, delay: 0.25, size: "sm" },
-        ]
+          {
+            type: "metric",
+            label: "Planned",
+            value: "8h",
+            status: "scheduled",
+            statusColor: "#8B5CF6",
+            position: { x: -300, y: -90 },
+            rotate: -6,
+            delay: 0.1,
+            size: "md",
+          },
+          {
+            type: "metric",
+            label: "Actual",
+            value: "6.5h",
+            status: "completed",
+            statusColor: "#F59E0B",
+            position: { x: 320, y: -60 },
+            rotate: 4,
+            delay: 0.15,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "⏰",
+            position: { x: -200, y: 160 },
+            rotate: 10,
+            delay: 0.2,
+            size: "sm",
+          },
+          {
+            type: "icon",
+            icon: "✓",
+            position: { x: 280, y: 200 },
+            rotate: -8,
+            delay: 0.25,
+            size: "sm",
+          },
+        ],
       },
       {
         id: "analytics",
@@ -72,15 +142,53 @@ export const ScrollShowcase = () => {
         description:
           "Track time spent vs. goals across Faith, Family, Work, and Health.",
         screenshotPath: "/screenshots/analytics.png",
-        bgImagePath: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1920&q=80",
+        bgImagePath:
+          "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1920&q=80",
         calloutPlacement: "bottomLeft",
         accentColor: "#10B981",
         floatingCards: [
-          { type: "mini-graph", label: "Faith", value: "45m", status: "+15m", statusColor: "#F97316", position: { x: -320, y: -60 }, rotate: -5, delay: 0.1, size: "lg" },
-          { type: "mini-graph", label: "Work", value: "6h", status: "on track", statusColor: "#2563EB", position: { x: 340, y: -100 }, rotate: 6, delay: 0.15, size: "lg" },
-          { type: "metric", label: "Score", value: "45", status: "Today", statusColor: "#EF4444", position: { x: -240, y: 180 }, rotate: 8, delay: 0.2, size: "md" },
-          { type: "icon", icon: "📊", position: { x: 300, y: 200 }, rotate: -4, delay: 0.25, size: "sm" },
-        ]
+          {
+            type: "mini-graph",
+            label: "Faith",
+            value: "45m",
+            status: "+15m",
+            statusColor: "#F97316",
+            position: { x: -320, y: -60 },
+            rotate: -5,
+            delay: 0.1,
+            size: "lg",
+          },
+          {
+            type: "mini-graph",
+            label: "Work",
+            value: "6h",
+            status: "on track",
+            statusColor: "#2563EB",
+            position: { x: 340, y: -100 },
+            rotate: 6,
+            delay: 0.15,
+            size: "lg",
+          },
+          {
+            type: "metric",
+            label: "Score",
+            value: "45",
+            status: "Today",
+            statusColor: "#EF4444",
+            position: { x: -240, y: 180 },
+            rotate: 8,
+            delay: 0.2,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "📊",
+            position: { x: 300, y: 200 },
+            rotate: -4,
+            delay: 0.25,
+            size: "sm",
+          },
+        ],
       },
       {
         id: "communications",
@@ -88,18 +196,53 @@ export const ScrollShowcase = () => {
         description:
           "Messages unified and prioritized so you can respond with intention.",
         screenshotPath: "/screenshots/communications.png",
-        bgImagePath: "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1920&q=80",
+        bgImagePath:
+          "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1920&q=80",
         calloutPlacement: "bottomRight",
         accentColor: "#EC4899",
         floatingCards: [
-          { type: "metric", label: "Pending", value: "4", status: "messages", statusColor: "#EC4899", position: { x: -300, y: -80 }, rotate: -6, delay: 0.1, size: "md" },
-          { type: "icon", icon: "💬", position: { x: -200, y: 140 }, rotate: 12, delay: 0.2, size: "sm" },
-          { type: "metric", label: "Priority", value: "2", status: "urgent", statusColor: "#EF4444", position: { x: 320, y: -60 }, rotate: 5, delay: 0.15, size: "md" },
-          { type: "icon", icon: "✉️", position: { x: 260, y: 180 }, rotate: -8, delay: 0.25, size: "sm" },
-        ]
+          {
+            type: "metric",
+            label: "Pending",
+            value: "4",
+            status: "messages",
+            statusColor: "#EC4899",
+            position: { x: -300, y: -80 },
+            rotate: -6,
+            delay: 0.1,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "💬",
+            position: { x: -200, y: 140 },
+            rotate: 12,
+            delay: 0.2,
+            size: "sm",
+          },
+          {
+            type: "metric",
+            label: "Priority",
+            value: "2",
+            status: "urgent",
+            statusColor: "#EF4444",
+            position: { x: 320, y: -60 },
+            rotate: 5,
+            delay: 0.15,
+            size: "md",
+          },
+          {
+            type: "icon",
+            icon: "✉️",
+            position: { x: 260, y: 180 },
+            rotate: -8,
+            delay: 0.25,
+            size: "sm",
+          },
+        ],
       },
     ],
-    []
+    [],
   );
 
   const { scrollYProgress } = useScroll({
@@ -114,13 +257,15 @@ export const ScrollShowcase = () => {
 
   // Ensure activeItem is always defined - items always has at least one element
   const activeItem: ShowcaseItem = items[activeIndex] ?? items[0]!;
-  const mobileFloatingCards = activeItem.floatingCards.filter((c) => c.type !== "icon").slice(0, 2);
+  const mobileFloatingCards = activeItem.floatingCards
+    .filter((c) => c.type !== "icon")
+    .slice(0, 2);
 
   return (
-    <section 
+    <section
       id="features"
-      ref={containerRef} 
-      className="relative bg-white z-20" 
+      ref={containerRef}
+      className="relative bg-white z-20"
       style={{ height: `${items.length * 100}vh` }}
     >
       <div className="sticky top-0 min-h-[100svh] md:h-screen overflow-x-hidden overflow-y-visible md:overflow-hidden flex items-center justify-center">
@@ -130,7 +275,7 @@ export const ScrollShowcase = () => {
             <motion.div
               key={`bg-${item.id}`}
               initial={false}
-              animate={{ 
+              animate={{
                 opacity: idx === activeIndex ? 0.45 : 0,
                 scale: idx === activeIndex ? 1 : 1.1,
               }}
@@ -150,23 +295,32 @@ export const ScrollShowcase = () => {
           {activeItem.floatingCards.map((card, i) => (
             <motion.div
               key={`${activeItem.id}-card-${i}`}
-              initial={{ opacity: 0, scale: 0.6, x: card.position.x * 1.3, y: card.position.y * 1.3, rotate: card.rotate * 1.5 }}
-              animate={{ 
+              initial={{
+                opacity: 0,
+                scale: 0.6,
+                x: card.position.x * 1.3,
+                y: card.position.y * 1.3,
+                rotate: card.rotate * 1.5,
+              }}
+              animate={{
                 opacity: 1,
                 scale: 1,
                 x: card.position.x,
                 y: card.position.y,
-                rotate: card.rotate
+                rotate: card.rotate,
               }}
               exit={{ opacity: 0, scale: 0.6 }}
-              transition={{ 
-                duration: 0.7, 
+              transition={{
+                duration: 0.7,
                 delay: card.delay,
-                ease: [0.23, 1, 0.32, 1]
+                ease: [0.23, 1, 0.32, 1],
               }}
               className="absolute hidden lg:block"
             >
-              <FloatingCardComponent card={card} accentColor={activeItem.accentColor} />
+              <FloatingCardComponent
+                card={card}
+                accentColor={activeItem.accentColor}
+              />
             </motion.div>
           ))}
 
@@ -176,13 +330,28 @@ export const ScrollShowcase = () => {
             return (
               <motion.div
                 key={`${activeItem.id}-mobile-card-${i}`}
-                initial={{ opacity: 0, scale: 0.9, x: pos.x, y: pos.y, rotate: card.rotate * 0.5 }}
-                animate={{ opacity: 1, scale: 0.92, x: pos.x, y: pos.y, rotate: card.rotate * 0.5 }}
+                initial={{
+                  opacity: 0,
+                  scale: 0.9,
+                  x: pos.x,
+                  y: pos.y,
+                  rotate: card.rotate * 0.5,
+                }}
+                animate={{
+                  opacity: 1,
+                  scale: 0.92,
+                  x: pos.x,
+                  y: pos.y,
+                  rotate: card.rotate * 0.5,
+                }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
                 className="absolute lg:hidden"
               >
-                <FloatingCardComponent card={card} accentColor={activeItem.accentColor} />
+                <FloatingCardComponent
+                  card={card}
+                  accentColor={activeItem.accentColor}
+                />
               </motion.div>
             );
           })}
@@ -246,13 +415,13 @@ export const ScrollShowcase = () => {
                 <div className="w-full h-full bg-[#F8FAFC] rounded-[3rem] overflow-hidden relative">
                   {/* Status bar mask - exact match to screenshot bg */}
                   <div className="absolute top-0 left-0 right-0 h-12 bg-[#F8FAFC] z-30" />
-                  
+
                   {items.map((item, idx) => (
                     <motion.div
                       key={item.id}
                       initial={false}
-                      animate={{ 
-                        opacity: idx === activeIndex ? 1 : 0, 
+                      animate={{
+                        opacity: idx === activeIndex ? 1 : 0,
                         scale: idx === activeIndex ? 1 : 0.98,
                       }}
                       transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
@@ -276,7 +445,8 @@ export const ScrollShowcase = () => {
                   <motion.div
                     key={item.id}
                     animate={{
-                      backgroundColor: idx === activeIndex ? item.accentColor : "#e5e7eb",
+                      backgroundColor:
+                        idx === activeIndex ? item.accentColor : "#e5e7eb",
                       width: idx === activeIndex ? 36 : 10,
                     }}
                     transition={{ duration: 0.3 }}
@@ -291,13 +461,18 @@ export const ScrollShowcase = () => {
         {/* Section Transition Fade */}
         <div className="absolute bottom-0 left-0 right-0 h-28 sm:h-32 bg-gradient-to-t from-white via-white/95 to-transparent md:h-48 md:from-white md:via-transparent md:to-transparent z-30 pointer-events-none" />
       </div>
-
     </section>
   );
 };
 
 /* Floating Card Component - Mimics Bevel's metric cards */
-function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; accentColor: string }) {
+function FloatingCardComponent({
+  card,
+  accentColor,
+}: {
+  card: FloatingCard;
+  accentColor: string;
+}) {
   const sizeClasses = {
     sm: "w-14 h-14",
     md: "w-40 h-auto",
@@ -306,7 +481,7 @@ function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; acce
 
   if (card.type === "icon") {
     return (
-      <motion.div 
+      <motion.div
         animate={{ y: [0, -6, 0] }}
         transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
         className={`${sizeClasses[card.size]} rounded-2xl bg-white/90 backdrop-blur-xl shadow-xl border border-white/50 flex items-center justify-center text-2xl`}
@@ -318,27 +493,41 @@ function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; acce
 
   if (card.type === "mini-graph") {
     return (
-      <motion.div 
+      <motion.div
         animate={{ y: [0, -8, 0] }}
         transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
         className={`${sizeClasses[card.size]} rounded-3xl bg-white/95 backdrop-blur-xl shadow-2xl border border-white/60 p-4`}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{card.label}</span>
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${card.statusColor}15`, color: card.statusColor }}>
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            {card.label}
+          </span>
+          <span
+            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            style={{
+              backgroundColor: `${card.statusColor}15`,
+              color: card.statusColor,
+            }}
+          >
             {card.status}
           </span>
         </div>
-        <div suppressHydrationWarning className="text-2xl font-bold text-gray-900">
+        <div
+          suppressHydrationWarning
+          className="text-2xl font-bold text-gray-900"
+        >
           {card.value}
         </div>
         {/* Mini bar graph */}
         <div className="flex items-end gap-1 mt-3 h-6">
           {[0.4, 0.7, 0.5, 0.9, 0.6, 0.8].map((h, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               className="flex-1 rounded-sm"
-              style={{ height: `${h * 100}%`, backgroundColor: i === 3 ? accentColor : `${accentColor}30` }}
+              style={{
+                height: `${h * 100}%`,
+                backgroundColor: i === 3 ? accentColor : `${accentColor}30`,
+              }}
             />
           ))}
         </div>
@@ -348,16 +537,24 @@ function FloatingCardComponent({ card, accentColor }: { card: FloatingCard; acce
 
   // Default metric card
   return (
-    <motion.div 
+    <motion.div
       animate={{ y: [0, -6, 0] }}
       transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
       className={`${sizeClasses[card.size]} rounded-2xl bg-white/95 backdrop-blur-xl shadow-2xl border border-white/60 p-4`}
     >
-      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{card.label}</div>
-      <div suppressHydrationWarning className="text-3xl font-bold text-gray-900">
+      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+        {card.label}
+      </div>
+      <div
+        suppressHydrationWarning
+        className="text-3xl font-bold text-gray-900"
+      >
         {card.value}
       </div>
-      <div className="text-xs font-medium mt-1" style={{ color: card.statusColor }}>
+      <div
+        className="text-xs font-medium mt-1"
+        style={{ color: card.statusColor }}
+      >
         {card.status}
       </div>
     </motion.div>
@@ -385,28 +582,34 @@ function Callout({
       animate={{
         opacity: isActive ? 1 : 0,
         scale: isActive ? 1 : 0.96,
-        x: isActive ? 0 : (item.calloutPlacement.includes("Left") ? -15 : 15),
+        x: isActive ? 0 : item.calloutPlacement.includes("Left") ? -15 : 15,
       }}
       transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
     >
       <div
         className={`rounded-[2rem] border bg-white/90 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.06)] p-7 transition-all duration-500 ${
-          isActive ? "border-gray-200/80 shadow-[0_30px_60px_rgba(0,0,0,0.1)]" : "border-transparent"
+          isActive
+            ? "border-gray-200/80 shadow-[0_30px_60px_rgba(0,0,0,0.1)]"
+            : "border-transparent"
         }`}
       >
         <div className="flex flex-col gap-3">
           <div
             className="h-3 w-3 rounded-full shrink-0 transition-all duration-500"
-            style={{ 
+            style={{
               backgroundColor: isActive ? item.accentColor : "#d1d5db",
-              boxShadow: isActive ? `0 0 20px ${item.accentColor}50` : "none"
+              boxShadow: isActive ? `0 0 20px ${item.accentColor}50` : "none",
             }}
           />
           <div>
-            <div className={`text-xl font-bold transition-colors duration-500 ${isActive ? "text-gray-900" : "text-gray-300"} leading-tight tracking-tight`}>
+            <div
+              className={`text-xl font-bold transition-colors duration-500 ${isActive ? "text-gray-900" : "text-gray-300"} leading-tight tracking-tight`}
+            >
               {item.title}
             </div>
-            <div className={`mt-2 text-[15px] transition-colors duration-500 ${isActive ? "text-gray-600" : "text-gray-300"} leading-relaxed`}>
+            <div
+              className={`mt-2 text-[15px] transition-colors duration-500 ${isActive ? "text-gray-600" : "text-gray-300"} leading-relaxed`}
+            >
               {item.description}
             </div>
           </div>
@@ -418,7 +621,7 @@ function Callout({
 
 function getMobileFloatingPosition(
   pos: { x: number; y: number },
-  index: number
+  index: number,
 ): { x: number; y: number } {
   // Desktop positions are large (±300px). Mobile needs gentler offsets.
   const baseX = clamp(pos.x * 0.35, -140, 140);

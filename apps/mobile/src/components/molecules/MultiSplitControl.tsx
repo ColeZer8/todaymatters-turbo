@@ -1,24 +1,30 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
-import { View, Text, Pressable, LayoutChangeEvent, ScrollView } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { X, Check, Plus } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
+import { useState, useCallback, useMemo, useRef } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  LayoutChangeEvent,
+  ScrollView,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { X, Check, Plus } from "lucide-react-native";
+import { Icon } from "@/components/atoms";
 
 const MIN_SEGMENT_MINUTES = 5;
 const MAX_SPLIT_POINTS = 9;
 
 // Segment colors cycle through these for visual distinction
 const SEGMENT_COLORS = [
-  { bg: '#E0F2FE', text: '#0369A1' }, // blue
-  { bg: '#FEF9C3', text: '#A16207' }, // yellow
-  { bg: '#DCFCE7', text: '#166534' }, // green
-  { bg: '#FCE7F3', text: '#9D174D' }, // pink
-  { bg: '#F3E8FF', text: '#6B21A8' }, // purple
-  { bg: '#FEF3C7', text: '#92400E' }, // amber
-  { bg: '#CCFBF1', text: '#115E59' }, // teal
-  { bg: '#FFE4E6', text: '#9F1239' }, // rose
-  { bg: '#E0E7FF', text: '#3730A3' }, // indigo
-  { bg: '#FED7AA', text: '#9A3412' }, // orange
+  { bg: "#E0F2FE", text: "#0369A1" }, // blue
+  { bg: "#FEF9C3", text: "#A16207" }, // yellow
+  { bg: "#DCFCE7", text: "#166534" }, // green
+  { bg: "#FCE7F3", text: "#9D174D" }, // pink
+  { bg: "#F3E8FF", text: "#6B21A8" }, // purple
+  { bg: "#FEF3C7", text: "#92400E" }, // amber
+  { bg: "#CCFBF1", text: "#115E59" }, // teal
+  { bg: "#FFE4E6", text: "#9F1239" }, // rose
+  { bg: "#E0E7FF", text: "#3730A3" }, // indigo
+  { bg: "#FED7AA", text: "#9A3412" }, // orange
 ];
 
 interface MultiSplitControlProps {
@@ -36,8 +42,8 @@ const parseTimeToMinutes = (timeStr: string): number => {
   let hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
   const period = match[3].toUpperCase();
-  if (period === 'PM' && hours !== 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
   return hours * 60 + minutes;
 };
 
@@ -45,9 +51,9 @@ const parseTimeToMinutes = (timeStr: string): number => {
 const formatMinutesToTime = (totalMinutes: number): string => {
   const hours24 = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
 };
 
 const formatDuration = (minutes: number): string => {
@@ -79,7 +85,8 @@ const wouldViolateMinSegment = (
   // Check first segment (0 → first split)
   if (allPoints[0] < MIN_SEGMENT_MINUTES) return true;
   // Check last segment (last split → end)
-  if (duration - allPoints[allPoints.length - 1] < MIN_SEGMENT_MINUTES) return true;
+  if (duration - allPoints[allPoints.length - 1] < MIN_SEGMENT_MINUTES)
+    return true;
   // Check interior segments
   for (let i = 1; i < allPoints.length; i++) {
     if (allPoints[i] - allPoints[i - 1] < MIN_SEGMENT_MINUTES) return true;
@@ -100,12 +107,16 @@ export const MultiSplitControl = ({
   const dragStartRef = useRef<number>(0);
 
   const startMinutes = parseTimeToMinutes(startTime);
-  const sortedSplits = useMemo(() => [...splitPoints].sort((a, b) => a - b), [splitPoints]);
+  const sortedSplits = useMemo(
+    () => [...splitPoints].sort((a, b) => a - b),
+    [splitPoints],
+  );
 
   // Compute segments from sorted split points
   const segments = useMemo(() => {
     const boundaries = [0, ...sortedSplits, duration];
-    const result: { startMin: number; endMin: number; durationMin: number }[] = [];
+    const result: { startMin: number; endMin: number; durationMin: number }[] =
+      [];
     for (let i = 0; i < boundaries.length - 1; i++) {
       const s = boundaries[i];
       const e = boundaries[i + 1];
@@ -125,7 +136,12 @@ export const MultiSplitControl = ({
       if (trackWidth.current === 0) return MIN_SEGMENT_MINUTES;
       const ratio = Math.max(0, Math.min(1, pixelX / trackWidth.current));
       const rawMinutes = ratio * duration;
-      return snapTo5(Math.max(MIN_SEGMENT_MINUTES, Math.min(rawMinutes, duration - MIN_SEGMENT_MINUTES)));
+      return snapTo5(
+        Math.max(
+          MIN_SEGMENT_MINUTES,
+          Math.min(rawMinutes, duration - MIN_SEGMENT_MINUTES),
+        ),
+      );
     },
     [duration],
   );
@@ -159,10 +175,18 @@ export const MultiSplitControl = ({
         })
         .onUpdate((e) => {
           if (trackWidth.current === 0) return;
-          const startPx = (dragStartRef.current / duration) * trackWidth.current;
+          const startPx =
+            (dragStartRef.current / duration) * trackWidth.current;
           const nextPx = startPx + e.translationX;
           const candidate = pixelToMinutes(nextPx);
-          if (!wouldViolateMinSegment(candidate, splitPoints, duration, pointIndex)) {
+          if (
+            !wouldViolateMinSegment(
+              candidate,
+              splitPoints,
+              duration,
+              pointIndex,
+            )
+          ) {
             setSplitPoints((prev) => {
               const next = [...prev];
               next[pointIndex] = candidate;
@@ -181,12 +205,14 @@ export const MultiSplitControl = ({
       <View className="mb-4 flex-row items-center justify-between">
         <View>
           <Text className="mb-0.5 text-[13px] font-medium text-[#6B7280]">
-            {splitPoints.length === 0 ? 'Tap the bar to add split points' : `${segments.length} segments`}
+            {splitPoints.length === 0
+              ? "Tap the bar to add split points"
+              : `${segments.length} segments`}
           </Text>
           <Text className="text-[16px] font-bold text-[#1F2937]">
             {splitPoints.length === 0
-              ? 'No splits yet'
-              : `${splitPoints.length} split ${splitPoints.length === 1 ? 'point' : 'points'}`}
+              ? "No splits yet"
+              : `${splitPoints.length} split ${splitPoints.length === 1 ? "point" : "points"}`}
           </Text>
         </View>
         <View className="flex-row items-center gap-3">
@@ -206,7 +232,7 @@ export const MultiSplitControl = ({
             className="h-10 w-10 items-center justify-center rounded-full"
             style={({ pressed }) => ({
               opacity: splitPoints.length === 0 ? 0.4 : pressed ? 0.7 : 1,
-              backgroundColor: splitPoints.length === 0 ? '#D1D5DB' : '#2563EB',
+              backgroundColor: splitPoints.length === 0 ? "#D1D5DB" : "#2563EB",
             })}
           >
             <Icon icon={Check} size={20} color="#FFFFFF" />
@@ -251,17 +277,20 @@ export const MultiSplitControl = ({
           const isDragging = draggingIndex === originalIndex;
 
           return (
-            <GestureDetector key={`handle-${i}`} gesture={makeGesture(originalIndex)}>
+            <GestureDetector
+              key={`handle-${i}`}
+              gesture={makeGesture(originalIndex)}
+            >
               <View
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   left: `${position}%`,
                   top: -6,
                   bottom: -6,
                   width: 44,
                   marginLeft: -22,
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  alignItems: "center",
+                  justifyContent: "center",
                   zIndex: 10,
                 }}
               >
@@ -269,22 +298,22 @@ export const MultiSplitControl = ({
                 <View
                   style={{
                     width: 3,
-                    height: '100%',
-                    backgroundColor: isDragging ? '#1D4ED8' : '#2563EB',
+                    height: "100%",
+                    backgroundColor: isDragging ? "#1D4ED8" : "#2563EB",
                     borderRadius: 1.5,
                   }}
                 />
                 {/* Knob */}
                 <View
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     width: 22,
                     height: 22,
                     borderRadius: 11,
-                    backgroundColor: '#FFFFFF',
+                    backgroundColor: "#FFFFFF",
                     borderWidth: 3,
-                    borderColor: isDragging ? '#1D4ED8' : '#2563EB',
-                    shadowColor: '#000',
+                    borderColor: isDragging ? "#1D4ED8" : "#2563EB",
+                    shadowColor: "#000",
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: 0.2,
                     shadowRadius: 2,
@@ -319,15 +348,22 @@ export const MultiSplitControl = ({
           <Text className="mb-2 text-[13px] font-semibold text-[#111827]">
             Segments ({segments.length})
           </Text>
-          <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ maxHeight: 260 }}
+            showsVerticalScrollIndicator={false}
+          >
             {segments.map((seg, i) => {
               const color = SEGMENT_COLORS[i % SEGMENT_COLORS.length];
-              const segStartTime = formatMinutesToTime(startMinutes + seg.startMin);
+              const segStartTime = formatMinutesToTime(
+                startMinutes + seg.startMin,
+              );
               const segEndTime = formatMinutesToTime(startMinutes + seg.endMin);
               // Find split point index that ends this segment (i.e., sortedSplits[i-1] started it if i>0)
               // The split point at the END of segment i is sortedSplits[i] (if i < splitPoints.length)
               const splitPointOriginalIndex =
-                i < sortedSplits.length ? splitPoints.indexOf(sortedSplits[i]) : -1;
+                i < sortedSplits.length
+                  ? splitPoints.indexOf(sortedSplits[i])
+                  : -1;
 
               return (
                 <View
@@ -344,7 +380,8 @@ export const MultiSplitControl = ({
                       Segment {i + 1}
                     </Text>
                     <Text className="text-[12px] text-[#6B7280]">
-                      {segStartTime} – {segEndTime} · {formatDuration(seg.durationMin)}
+                      {segStartTime} – {segEndTime} ·{" "}
+                      {formatDuration(seg.durationMin)}
                     </Text>
                   </View>
                   {/* Remove button for the split point that PRECEDES this segment (i.e., between seg i-1 and seg i) */}
@@ -353,7 +390,9 @@ export const MultiSplitControl = ({
                       onPress={() => {
                         // Remove the split point between segment i-1 and segment i
                         // That is sortedSplits[i-1], find its original index
-                        const precedingSplitOriginal = splitPoints.indexOf(sortedSplits[i - 1]);
+                        const precedingSplitOriginal = splitPoints.indexOf(
+                          sortedSplits[i - 1],
+                        );
                         if (precedingSplitOriginal !== -1) {
                           removeSplitPoint(precedingSplitOriginal);
                         }

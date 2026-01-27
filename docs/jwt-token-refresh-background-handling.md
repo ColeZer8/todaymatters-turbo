@@ -7,6 +7,7 @@ This document describes the AppState listener implementation that ensures tokens
 ## Problem
 
 When an app is in the background for an extended period:
+
 - Tokens may expire while the app is inactive
 - Auto-refresh may not trigger immediately when app returns to foreground
 - User may experience authentication errors after backgrounding
@@ -14,6 +15,7 @@ When an app is in the background for an extended period:
 ## Solution
 
 Added AppState listener in `apps/mobile/src/app/_layout.tsx` that:
+
 - Monitors app state changes (active, background, inactive)
 - Refreshes session when app returns to foreground
 - Ensures tokens are valid after background periods
@@ -23,23 +25,26 @@ Added AppState listener in `apps/mobile/src/app/_layout.tsx` that:
 ### AppState Listener
 
 ```typescript
-import { AppState, AppStateStatus } from 'react-native';
-import { refreshSession } from '@/lib/supabase/session';
+import { AppState, AppStateStatus } from "react-native";
+import { refreshSession } from "@/lib/supabase/session";
 
 useEffect(() => {
-  const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
-    if (nextAppState === 'active') {
-      // App came to foreground - refresh session if needed
-      const session = useAuthStore.getState().session;
-      if (session) {
-        try {
-          await refreshSession();
-        } catch (error) {
-          console.error('Failed to refresh session on foreground:', error);
+  const subscription = AppState.addEventListener(
+    "change",
+    async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        // App came to foreground - refresh session if needed
+        const session = useAuthStore.getState().session;
+        if (session) {
+          try {
+            await refreshSession();
+          } catch (error) {
+            console.error("Failed to refresh session on foreground:", error);
+          }
         }
       }
-    }
-  });
+    },
+  );
 
   return () => {
     subscription.remove();
@@ -76,6 +81,7 @@ useEffect(() => {
 ### Long Background Periods
 
 If app is backgrounded for >1 hour:
+
 - Token may have expired
 - Refresh will fail if refresh token also expired
 - User will be signed out automatically
@@ -84,6 +90,7 @@ If app is backgrounded for >1 hour:
 ### Network Issues
 
 If network is unavailable when app returns to foreground:
+
 - Refresh attempt will fail
 - Error is logged but doesn't crash app
 - Auto-refresh will retry when network is available
@@ -91,6 +98,7 @@ If network is unavailable when app returns to foreground:
 ### No Session
 
 If no session exists when app returns to foreground:
+
 - No refresh attempt is made
 - User remains signed out
 - Normal auth flow applies
@@ -137,4 +145,3 @@ If no session exists when app returns to foreground:
 - Refresh only happens when app becomes active (not on every state change)
 - Existing session is checked before attempting refresh
 - Errors are logged but don't crash the app
-

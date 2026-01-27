@@ -1,9 +1,12 @@
-import { ArrowRight } from 'lucide-react-native';
-import { View } from 'react-native';
-import { GradientButton } from '@/components/atoms';
-import { RadioOptionCard } from '@/components/molecules';
-import { SetupStepLayout } from '@/components/organisms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { ArrowRight } from "lucide-react-native";
+import { View } from "react-native";
+import { GradientButton } from "@/components/atoms";
+import { RadioOptionCard } from "@/components/molecules";
+import { SetupStepLayout } from "@/components/organisms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface FocusStyleOption {
   id: string;
@@ -38,7 +41,13 @@ export const FocusStyleTemplate = ({
       title="Focus Style"
       subtitle="How long do you like to work uninterrupted?"
       onBack={onBack}
-      footer={<GradientButton label="Continue" onPress={onContinue} rightIcon={ArrowRight} />}
+      footer={
+        <GradientButton
+          label="Continue"
+          onPress={onContinue}
+          rightIcon={ArrowRight}
+        />
+      }
     >
       <View className="mt-5 gap-3">
         {options.map((option) => (

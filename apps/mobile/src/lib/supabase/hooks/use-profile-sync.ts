@@ -3,8 +3,8 @@
  * Handles loading, saving, and syncing profile information
  */
 
-import { useEffect, useCallback } from 'react';
-import { useAuthStore } from '@/stores';
+import { useEffect, useCallback } from "react";
+import { useAuthStore } from "@/stores";
 import {
   fetchProfile,
   updateProfile,
@@ -12,8 +12,8 @@ import {
   updateDailyRhythm,
   updateMission,
   dateToTimeString,
-} from '../services/profiles';
-import type { ProfileData } from '../services/profiles';
+} from "../services/profiles";
+import type { ProfileData } from "../services/profiles";
 
 interface UseProfileSyncOptions {
   autoLoad?: boolean; // Automatically load profile on mount
@@ -35,8 +35,9 @@ export function useProfileSync(options: UseProfileSyncOptions = {}) {
       const profile = await fetchProfile(user.id);
       return profile;
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load profile');
-      console.error('Failed to load profile:', err);
+      const err =
+        error instanceof Error ? error : new Error("Failed to load profile");
+      console.error("Failed to load profile:", err);
       onError?.(err);
       return null;
     }
@@ -46,19 +47,20 @@ export function useProfileSync(options: UseProfileSyncOptions = {}) {
   const saveProfile = useCallback(
     async (updates: Partial<ProfileData>): Promise<void> => {
       if (!isAuthenticated || !user?.id) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
 
       try {
         await updateProfile(user.id, updates);
       } catch (error) {
-        const err = error instanceof Error ? error : new Error('Failed to save profile');
-        console.error('Failed to save profile:', err);
+        const err =
+          error instanceof Error ? error : new Error("Failed to save profile");
+        console.error("Failed to save profile:", err);
         onError?.(err);
         throw err;
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Auto-load on mount if enabled
@@ -77,21 +79,31 @@ export function useProfileSync(options: UseProfileSyncOptions = {}) {
         try {
           await updateFullName(user.id, name);
         } catch (error) {
-          onError?.(error instanceof Error ? error : new Error('Failed to update name'));
+          onError?.(
+            error instanceof Error ? error : new Error("Failed to update name"),
+          );
         }
       },
-      [isAuthenticated, user?.id, onError]
+      [isAuthenticated, user?.id, onError],
     ),
     updateDailyRhythm: useCallback(
       async (wakeTime: Date, sleepTime: Date) => {
         if (!isAuthenticated || !user?.id) return;
         try {
-          await updateDailyRhythm(user.id, dateToTimeString(wakeTime), dateToTimeString(sleepTime));
+          await updateDailyRhythm(
+            user.id,
+            dateToTimeString(wakeTime),
+            dateToTimeString(sleepTime),
+          );
         } catch (error) {
-          onError?.(error instanceof Error ? error : new Error('Failed to update daily rhythm'));
+          onError?.(
+            error instanceof Error
+              ? error
+              : new Error("Failed to update daily rhythm"),
+          );
         }
       },
-      [isAuthenticated, user?.id, onError]
+      [isAuthenticated, user?.id, onError],
     ),
     updateMission: useCallback(
       async (mission: string | null) => {
@@ -99,14 +111,14 @@ export function useProfileSync(options: UseProfileSyncOptions = {}) {
         try {
           await updateMission(user.id, mission);
         } catch (error) {
-          onError?.(error instanceof Error ? error : new Error('Failed to update mission'));
+          onError?.(
+            error instanceof Error
+              ? error
+              : new Error("Failed to update mission"),
+          );
         }
       },
-      [isAuthenticated, user?.id, onError]
+      [isAuthenticated, user?.id, onError],
     ),
   };
 }
-
-
-
-

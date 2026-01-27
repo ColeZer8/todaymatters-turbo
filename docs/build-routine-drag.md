@@ -28,37 +28,37 @@ Research + implementation plan to make the Build your routine page’s habit car
 
 ## Implementation checklist
 
-1) **Dependency + root wrapper**
+1. **Dependency + root wrapper**
    - Add Gesture Handler: `expo install react-native-gesture-handler@~2.20.2`.
    - Wrap app root in `GestureHandlerRootView` (e.g., in `app/_layout.tsx` around `SafeAreaProvider`).
    - Restart bundler with cache clear after adding: `pnpm --filter mobile start -c` (or `pnpm dev -- --filter=mobile` then press `r`).
 
-2) **Layout + measurement**
+2. **Layout + measurement**
    - Each card reports height via `onLayout`; store per-id height + cumulative offsets in a shared object (`useSharedValue<Record<string, number>>`) so the worklet can map translation to target index.
    - Keep `FlatList` (non-scroll today) but ensure layout container allows overflow; for many items, enable scrolling and optional auto-scroll on drag near edges.
 
-3) **Gesture + animation**
+3. **Gesture + animation**
    - Create a `Gesture.Pan()` per card; gate start with `.activateAfterLongPress(120)` or a dedicated handle `Gesture.Tap()` that sets `activeId`.
    - Worklet state: `positions` map (id → current order index) and `activeId` shared value.
    - On update: adjust `translateY` for active card; compute potential new index by comparing the dragged card’s mid-point to sibling centers; swap indices in `positions` when crossing thresholds to animate siblings.
    - Styles: `useAnimatedStyle` with `transform: [{ translateY }, { scale: active ? 1.02 : 1 }]` and elevated shadow (e.g., `shadowOpacity` bump and `zIndex`/`elevation` while active).
    - On end: snap card to its slot (`withSpring`), reset `activeId`, and call `runOnJS(onReorder)` once with the new ordered array derived from `positions`.
 
-4) **Visuals**
+4. **Visuals**
    - Card container: `className="rounded-2xl border border-[#E4E8F0] bg-white"` with existing shadow; while dragging, add `shadow-[0_8px_24px_rgba(15,23,42,0.12)]`.
    - Drag handle: small grip icon (e.g., `GripVertical` from Lucide) on the left or right; keep padding so it’s easy to grab.
    - Maintain current typography and spacing; keep delete/minutes controls functional and test that gestures don’t conflict with pressables (use `Gesture.Simultaneous` if needed).
 
-5) **State + reorder function**
+5. **State + reorder function**
    - Pure reorder helper: `reorder(list, fromIndex, toIndex)` without in-place mutation.
    - Persist to store: call `setItems(newOrder)` from page/template after drop; consider debouncing if later syncing to backend.
 
-6) **Accessibility + touch**
+6. **Accessibility + touch**
    - Handle gets `accessibilityRole="button"` and `accessibilityHint="Drag to reorder"`.
    - Larger touch targets (minimum 44x44) for handle and delete icons.
    - Optional: add haptic feedback on drag start/end (`expo-haptics`) if we decide to include the dependency later.
 
-7) **Testing plan**
+7. **Testing plan**
    - Simulators: iOS + Android—verify drag start, reorder, snap, delete tap still works, long-press gating prevents accidental drags.
    - Web: confirm Gesture Handler works (root wrapper) and Reanimated errors are absent; avoid `console.log` inside worklets.
    - Commands: `pnpm --filter mobile start -c` (for cache clear after adding gestures), then manual QA.

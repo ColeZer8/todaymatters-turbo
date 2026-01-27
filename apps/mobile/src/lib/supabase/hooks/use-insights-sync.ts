@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
-import { useAuthStore } from '@/stores';
+import { useEffect, useRef } from "react";
+import { AppState, AppStateStatus, Platform } from "react-native";
+import { useAuthStore } from "@/stores";
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -9,7 +9,7 @@ import {
   getHealthSummarySafeAsync,
   getTodayActivityRingsSummarySafeAsync,
   getLatestWorkoutSummarySafeAsync,
-} from '@/lib/ios-insights';
+} from "@/lib/ios-insights";
 import {
   getAndroidInsightsSupportStatus,
   getUsageAccessAuthorizationStatusSafeAsync,
@@ -18,22 +18,37 @@ import {
   getHealthSummarySafeAsync as getAndroidHealthSummarySafeAsync,
   getLatestWorkoutSummarySafeAsync as getAndroidLatestWorkoutSummarySafeAsync,
   type UsageSummary,
-} from '@/lib/android-insights';
-import { fetchDataSyncState, upsertDataSyncState } from '@/lib/supabase/services/data-sync-state';
-import { syncIosScreenTimeSummary, syncAndroidUsageSummary } from '@/lib/supabase/services/screen-time-sync';
-import { syncIosHealthSummary, syncAndroidHealthSummary } from '@/lib/supabase/services/health-sync';
+} from "@/lib/android-insights";
+import {
+  fetchDataSyncState,
+  upsertDataSyncState,
+} from "@/lib/supabase/services/data-sync-state";
+import {
+  syncIosScreenTimeSummary,
+  syncAndroidUsageSummary,
+} from "@/lib/supabase/services/screen-time-sync";
+import {
+  syncIosHealthSummary,
+  syncAndroidHealthSummary,
+} from "@/lib/supabase/services/health-sync";
 
 const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 function getDeviceTimezone(): string {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
   } catch {
-    return 'UTC';
+    return "UTC";
   }
 }
 
-async function shouldSyncDataset(userId: string, dataset: 'health' | 'screen_time', platform: 'ios' | 'android', provider: string, minIntervalMs: number): Promise<boolean> {
+async function shouldSyncDataset(
+  userId: string,
+  dataset: "health" | "screen_time",
+  platform: "ios" | "android",
+  provider: string,
+  minIntervalMs: number,
+): Promise<boolean> {
   const state = await fetchDataSyncState(userId, dataset, platform, provider);
   if (!state?.lastSyncFinishedAt) return true;
   const last = new Date(state.lastSyncFinishedAt).getTime();
@@ -49,7 +64,7 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
 
   useEffect(() => {
     if (!isAuthenticated || !userId) return;
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
+    if (Platform.OS !== "ios" && Platform.OS !== "android") return;
 
     let isCancelled = false;
     const timezone = getDeviceTimezone();
@@ -58,23 +73,31 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
       if (isCancelled || isSyncingRef.current) return;
       isSyncingRef.current = true;
       try {
-        if (Platform.OS === 'ios') {
+        if (Platform.OS === "ios") {
           const support = getIosInsightsSupportStatus();
-          if (support === 'available') {
-            const screenTimeStatus = await getScreenTimeAuthorizationStatusSafeAsync();
-            if (screenTimeStatus === 'approved') {
-              const canSync = await shouldSyncDataset(userId, 'screen_time', 'ios', 'ios_screentime', intervalMs);
+          if (support === "available") {
+            const screenTimeStatus =
+              await getScreenTimeAuthorizationStatusSafeAsync();
+            if (screenTimeStatus === "approved") {
+              const canSync = await shouldSyncDataset(
+                userId,
+                "screen_time",
+                "ios",
+                "ios_screentime",
+                intervalMs,
+              );
               if (canSync) {
                 await upsertDataSyncState({
                   userId,
-                  dataset: 'screen_time',
-                  platform: 'ios',
-                  provider: 'ios_screentime',
+                  dataset: "screen_time",
+                  platform: "ios",
+                  provider: "ios_screentime",
                   lastSyncStartedAt: new Date().toISOString(),
                   lastSyncStatus: null,
                   lastSyncError: null,
                 });
-                const summary = await getCachedScreenTimeSummarySafeAsync('today');
+                const summary =
+                  await getCachedScreenTimeSummarySafeAsync("today");
                 if (summary) {
                   await syncIosScreenTimeSummary(userId, summary, timezone);
                 }
@@ -82,82 +105,108 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
             }
 
             const healthStatus = await getHealthAuthorizationStatusSafeAsync();
-            if (healthStatus === 'authorized') {
-              const canSync = await shouldSyncDataset(userId, 'health', 'ios', 'apple_health', intervalMs);
+            if (healthStatus === "authorized") {
+              const canSync = await shouldSyncDataset(
+                userId,
+                "health",
+                "ios",
+                "apple_health",
+                intervalMs,
+              );
               if (canSync) {
                 await upsertDataSyncState({
                   userId,
-                  dataset: 'health',
-                  platform: 'ios',
-                  provider: 'apple_health',
+                  dataset: "health",
+                  platform: "ios",
+                  provider: "apple_health",
                   lastSyncStartedAt: new Date().toISOString(),
                   lastSyncStatus: null,
                   lastSyncError: null,
                 });
                 const [summary, rings, workout] = await Promise.all([
-                  getHealthSummarySafeAsync('today'),
+                  getHealthSummarySafeAsync("today"),
                   getTodayActivityRingsSummarySafeAsync(),
-                  getLatestWorkoutSummarySafeAsync('today'),
+                  getLatestWorkoutSummarySafeAsync("today"),
                 ]);
                 if (summary) {
-                  await syncIosHealthSummary(userId, summary, timezone, rings, workout);
+                  await syncIosHealthSummary(
+                    userId,
+                    summary,
+                    timezone,
+                    rings,
+                    workout,
+                  );
                 }
               }
             }
           }
         }
 
-        if (Platform.OS === 'android') {
+        if (Platform.OS === "android") {
           const support = getAndroidInsightsSupportStatus();
-          if (support === 'available') {
-            const usageStatus = await getUsageAccessAuthorizationStatusSafeAsync();
-            if (usageStatus === 'authorized') {
+          if (support === "available") {
+            const usageStatus =
+              await getUsageAccessAuthorizationStatusSafeAsync();
+            if (usageStatus === "authorized") {
               const canSync = await shouldSyncDataset(
                 userId,
-                'screen_time',
-                'android',
-                'android_digital_wellbeing',
-                intervalMs
+                "screen_time",
+                "android",
+                "android_digital_wellbeing",
+                intervalMs,
               );
               if (canSync) {
                 await upsertDataSyncState({
                   userId,
-                  dataset: 'screen_time',
-                  platform: 'android',
-                  provider: 'android_digital_wellbeing',
+                  dataset: "screen_time",
+                  platform: "android",
+                  provider: "android_digital_wellbeing",
                   lastSyncStartedAt: new Date().toISOString(),
                   lastSyncStatus: null,
                   lastSyncError: null,
                 });
-                const summary: UsageSummary | null = await getUsageSummarySafeAsync('today');
+                const summary: UsageSummary | null =
+                  await getUsageSummarySafeAsync("today");
                 if (summary) {
                   console.log(
-                    `[insights-sync] Android usage: totalSeconds=${summary.totalSeconds} topApps=${summary.topApps.length} sessions=${summary.sessions?.length ?? 0} hourlyByAppKeys=${summary.hourlyByApp ? Object.keys(summary.hourlyByApp).length : 0}`
+                    `[insights-sync] Android usage: totalSeconds=${summary.totalSeconds} topApps=${summary.topApps.length} sessions=${summary.sessions?.length ?? 0} hourlyByAppKeys=${summary.hourlyByApp ? Object.keys(summary.hourlyByApp).length : 0}`,
                   );
                   await syncAndroidUsageSummary(userId, summary, timezone);
                 }
               }
             }
 
-            const healthStatus = await getAndroidHealthAuthorizationStatusSafeAsync();
-            if (healthStatus === 'authorized') {
-              const canSync = await shouldSyncDataset(userId, 'health', 'android', 'health_connect', intervalMs);
+            const healthStatus =
+              await getAndroidHealthAuthorizationStatusSafeAsync();
+            if (healthStatus === "authorized") {
+              const canSync = await shouldSyncDataset(
+                userId,
+                "health",
+                "android",
+                "health_connect",
+                intervalMs,
+              );
               if (canSync) {
                 await upsertDataSyncState({
                   userId,
-                  dataset: 'health',
-                  platform: 'android',
-                  provider: 'health_connect',
+                  dataset: "health",
+                  platform: "android",
+                  provider: "health_connect",
                   lastSyncStartedAt: new Date().toISOString(),
                   lastSyncStatus: null,
                   lastSyncError: null,
                 });
                 const [summary, workout] = await Promise.all([
-                  getAndroidHealthSummarySafeAsync('today'),
-                  getAndroidLatestWorkoutSummarySafeAsync('today'),
+                  getAndroidHealthSummarySafeAsync("today"),
+                  getAndroidLatestWorkoutSummarySafeAsync("today"),
                 ]);
                 if (summary) {
-                  await syncAndroidHealthSummary(userId, summary, timezone, workout);
+                  await syncAndroidHealthSummary(
+                    userId,
+                    summary,
+                    timezone,
+                    workout,
+                  );
                 }
               }
             }
@@ -165,7 +214,7 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
         }
       } catch (error) {
         if (__DEV__) {
-          console.error('📊 Insights sync failed:', error);
+          console.error("📊 Insights sync failed:", error);
         }
       } finally {
         isSyncingRef.current = false;
@@ -174,10 +223,13 @@ export function useInsightsSync(options: { intervalMs?: number } = {}): void {
 
     tick();
     const id = setInterval(tick, intervalMs);
-    const appStateListener = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state !== 'active') return;
-      tick();
-    });
+    const appStateListener = AppState.addEventListener(
+      "change",
+      (state: AppStateStatus) => {
+        if (state !== "active") return;
+        tick();
+      },
+    );
     return () => {
       isCancelled = true;
       clearInterval(id);

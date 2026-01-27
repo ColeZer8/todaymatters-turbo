@@ -1,30 +1,34 @@
-import { View, Text, Pressable, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Clock, Navigation } from 'lucide-react-native';
-import Svg, { Path, Circle, G, Rect } from 'react-native-svg';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+import { View, Text, Pressable, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Clock, Navigation } from "lucide-react-native";
+import Svg, { Path, Circle, G, Rect } from "react-native-svg";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoTrafficAlert - Traffic/departure reminder screen for demo mode
- * 
+ *
  * Shows the proactive traffic alert when user needs to leave for an event.
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) => {
+export const DemoTrafficAlert = ({
+  userName = "Paul",
+}: {
+  userName?: string;
+}) => {
   const insets = useSafeAreaInsets();
 
   // Use monospace font with slashed zeros
   const timerFontFamily = Platform.select({
-    ios: 'Menlo-Bold',
-    android: 'monospace',
-    default: 'monospace',
+    ios: "Menlo-Bold",
+    android: "monospace",
+    default: "monospace",
   });
 
   const timerColonFontFamily = Platform.select({
-    ios: 'Menlo',
-    android: 'monospace', 
-    default: 'monospace',
+    ios: "Menlo",
+    android: "monospace",
+    default: "monospace",
   });
 
   return (
@@ -46,17 +50,18 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
         {/* Message - matches DailyBrief: mt-3.5 mb-5 */}
         <View className="mt-3.5 mb-5">
           <Text className="text-[17.5px] leading-[29px] font-bold text-[#4A5568]">
-            You need to leave the office in 5 minutes and take a different route home if you're going to be home in time for dinner with your family.
+            You need to leave the office in 5 minutes and take a different route
+            home if you're going to be home in time for dinner with your family.
           </Text>
         </View>
 
         {/* Map Card */}
         <View className="bg-[#E9F0E9] rounded-2xl overflow-hidden border border-[#D4DDD4] mb-4">
           {/* Accident Badge */}
-          <View 
+          <View
             className="absolute top-3 left-3 z-10 flex-row items-center gap-2 bg-white px-3 py-2 rounded-full"
             style={{
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.1,
               shadowRadius: 3,
@@ -74,15 +79,29 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
             <Svg width="100%" height="100%" viewBox="0 0 350 210">
               {/* Map background elements */}
               {/* Light blue water/river area */}
-              <Path 
-                d="M 0 180 Q 40 160 80 185 Q 120 210 160 190 L 160 210 L 0 210 Z" 
-                fill="#C5DCE8" 
-                opacity={0.5} 
+              <Path
+                d="M 0 180 Q 40 160 80 185 Q 120 210 160 190 L 160 210 L 0 210 Z"
+                fill="#C5DCE8"
+                opacity={0.5}
               />
-              
+
               {/* Green park areas */}
-              <Rect x="260" y="130" width="55" height="40" fill="#C8E6C9" rx="3" />
-              <Rect x="45" y="30" width="40" height="45" fill="#C8E6C9" rx="3" />
+              <Rect
+                x="260"
+                y="130"
+                width="55"
+                height="40"
+                fill="#C8E6C9"
+                rx="3"
+              />
+              <Rect
+                x="45"
+                y="30"
+                width="40"
+                height="45"
+                fill="#C8E6C9"
+                rx="3"
+              />
               <Circle cx="295" cy="85" r="18" fill="#C8E6C9" />
 
               {/* Street grid - main roads */}
@@ -91,14 +110,18 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
                 <Path d="M 0 60 L 350 60" stroke="#FFFFFF" strokeWidth="12" />
                 <Path d="M 0 115 L 350 115" stroke="#FFFFFF" strokeWidth="14" />
                 <Path d="M 0 165 L 200 165" stroke="#FFFFFF" strokeWidth="10" />
-                
+
                 {/* Major vertical roads */}
                 <Path d="M 55 0 L 55 210" stroke="#FFFFFF" strokeWidth="10" />
                 <Path d="M 125 0 L 125 210" stroke="#FFFFFF" strokeWidth="10" />
-                <Path d="M 200 60 L 200 210" stroke="#FFFFFF" strokeWidth="12" />
+                <Path
+                  d="M 200 60 L 200 210"
+                  stroke="#FFFFFF"
+                  strokeWidth="12"
+                />
                 <Path d="M 280 0 L 280 180" stroke="#FFFFFF" strokeWidth="10" />
               </G>
-              
+
               {/* Road outlines for depth */}
               <G opacity={0.15}>
                 <Path d="M 0 60 L 350 60" stroke="#666" strokeWidth="12" />
@@ -121,7 +144,7 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
                 strokeLinejoin="round"
                 opacity={0.3}
               />
-              
+
               {/* Blue route - start to before accident */}
               <Path
                 d="M 55 185 L 55 165 L 125 165 L 125 115 L 155 115"
@@ -131,7 +154,7 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              
+
               {/* RED - Traffic/accident section on I-40 */}
               <Path
                 d="M 155 115 L 200 115"
@@ -141,7 +164,7 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
-              
+
               {/* Blue route - after accident to destination */}
               <Path
                 d="M 200 115 L 200 60 L 310 60"
@@ -156,7 +179,7 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
               <Circle cx="55" cy="185" r="10" fill="#4285F4" />
               <Circle cx="55" cy="185" r="6" fill="#FFFFFF" />
               <Circle cx="55" cy="185" r="4" fill="#4285F4" />
-              
+
               {/* Destination marker - Google Maps style red pin */}
               {/* Pin body */}
               <Path
@@ -169,17 +192,17 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
             </Svg>
 
             {/* Accident warning icon - positioned on the red section */}
-            <View 
+            <View
               className="absolute items-center justify-center"
-              style={{ 
+              style={{
                 top: 94,
                 left: 160,
               }}
             >
-              <View 
+              <View
                 className="h-8 w-8 items-center justify-center rounded-full bg-[#EA4335]"
                 style={{
-                  shadowColor: '#000',
+                  shadowColor: "#000",
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.25,
                   shadowRadius: 4,
@@ -191,19 +214,21 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
             </View>
 
             {/* Route time badge - positioned along route near destination */}
-            <View 
+            <View
               className="absolute flex-row items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-md"
-              style={{ 
+              style={{
                 top: 68,
                 left: 215,
-                shadowColor: '#000',
+                shadowColor: "#000",
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.15,
                 shadowRadius: 4,
                 elevation: 3,
               }}
             >
-              <Text className="text-[#1F2937] font-bold text-[13px]">32 min</Text>
+              <Text className="text-[#1F2937] font-bold text-[13px]">
+                32 min
+              </Text>
               <View className="h-3 w-px bg-[#D1D5DB]" />
               <Text className="text-[#6B7280] text-[11px]">fastest</Text>
             </View>
@@ -232,31 +257,31 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
             <View>
               {/* Timer with slashed zeros using monospace font */}
               <View className="flex-row items-baseline">
-                <Text 
-                  style={{ 
+                <Text
+                  style={{
                     fontFamily: timerFontFamily,
-                    fontSize: 52, 
-                    color: '#0F172A',
+                    fontSize: 52,
+                    color: "#0F172A",
                     letterSpacing: -1,
                   }}
                 >
                   05
                 </Text>
-                <Text 
-                  style={{ 
+                <Text
+                  style={{
                     fontFamily: timerColonFontFamily,
-                    fontSize: 52, 
-                    color: '#0F172A',
+                    fontSize: 52,
+                    color: "#0F172A",
                     marginHorizontal: 1,
                   }}
                 >
                   :
                 </Text>
-                <Text 
-                  style={{ 
+                <Text
+                  style={{
                     fontFamily: timerFontFamily,
-                    fontSize: 52, 
-                    color: '#0F172A',
+                    fontSize: 52,
+                    color: "#0F172A",
                     letterSpacing: -1,
                   }}
                 >
@@ -271,9 +296,9 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
             {/* Start Button */}
             <Pressable
               className="flex-row items-center gap-2 bg-[#2563EB] px-5 py-3.5 rounded-xl"
-              style={({ pressed }) => ({ 
+              style={({ pressed }) => ({
                 opacity: pressed ? 0.9 : 1,
-                shadowColor: '#2563EB',
+                shadowColor: "#2563EB",
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.3,
                 shadowRadius: 8,
@@ -281,9 +306,7 @@ export const DemoTrafficAlert = ({ userName = 'Paul' }: { userName?: string }) =
               })}
             >
               <Icon icon={Navigation} size={18} color="#FFFFFF" />
-              <Text className="text-[16px] font-bold text-white">
-                Start
-              </Text>
+              <Text className="text-[16px] font-bold text-white">Start</Text>
             </Pressable>
           </View>
         </View>

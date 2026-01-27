@@ -8,6 +8,7 @@
 ## Objective
 
 Improve the onboarding flow by:
+
 1. Adding navigation (back button) to the Ideal Day page
 2. Splitting weekend options into separate Saturday/Sunday selections
 3. Persisting all onboarding data locally so users can navigate back and see their selections
@@ -51,16 +52,19 @@ Improve the onboarding flow by:
 ## Outcomes
 
 ### Files Created
+
 - `apps/mobile/src/stores/onboarding-store.ts` - Centralized store for onboarding data
 
 ### Files Modified
 
 **Stores:**
+
 - `apps/mobile/src/stores/ideal-day-store.ts` - Added persistence, split weekends to saturday/sunday
 - `apps/mobile/src/stores/routine-builder-store.ts` - Added AsyncStorage persistence
 - `apps/mobile/src/stores/index.ts` - Exported new stores
 
 **Pages (all updated to use stores with hydration):**
+
 - `apps/mobile/src/app/permissions.tsx`
 - `apps/mobile/src/app/setup-questions.tsx`
 - `apps/mobile/src/app/daily-rhythm.tsx`
@@ -75,6 +79,7 @@ Improve the onboarding flow by:
 - `apps/mobile/src/app/ideal-day.tsx`
 
 **Templates:**
+
 - `apps/mobile/src/components/templates/IdealDayTemplate.tsx` - Added onBack prop, updated day types, fixed slider
 - `apps/mobile/src/components/templates/TagSelectionTemplate.tsx` - Added top continue button
 
@@ -93,10 +98,3 @@ Improve the onboarding flow by:
 - Consider adding a "Reset Onboarding" option in settings
 - May want to sync onboarding data to backend once user completes flow
 - Debug console.logs can be removed from stores once confirmed stable
-
-
-
-
-
-
-

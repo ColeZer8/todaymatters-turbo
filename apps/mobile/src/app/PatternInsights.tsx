@@ -1,44 +1,54 @@
-import { Stack } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { PatternInsightsTemplate } from '@/components/templates/PatternInsightsTemplate';
-import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+import { Stack } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { PatternInsightsTemplate } from "@/components/templates/PatternInsightsTemplate";
+import { useCalendarEventsSync } from "@/lib/supabase/hooks/use-calendar-events-sync";
 import {
   buildPatternIndex,
   buildPatternIndexFromSlots,
   serializePatternIndex,
-} from '@/lib/calendar/pattern-recognition';
+} from "@/lib/calendar/pattern-recognition";
 import {
   buildDailyPatternAnomalies,
   buildPatternPredictions,
-} from '@/lib/calendar/pattern-recognition';
-import { useAuthStore, useEventsStore, useUserPreferencesStore } from '@/stores';
-import type { ScheduledEvent } from '@/stores';
-import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
+} from "@/lib/calendar/pattern-recognition";
+import {
+  useAuthStore,
+  useEventsStore,
+  useUserPreferencesStore,
+} from "@/stores";
+import type { ScheduledEvent } from "@/stores";
+import {
+  fetchActivityPatterns,
+  upsertActivityPatterns,
+} from "@/lib/supabase/services/activity-patterns";
 
 const formatMinutesToTime = (totalMinutes: number): string => {
   const minutes = Math.max(0, totalMinutes);
   const hours24 = Math.floor(minutes / 60) % 24;
   const mins = minutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${mins.toString().padStart(2, "0")} ${period}`;
 };
 
 const ymdToDate = (ymd: string): Date => {
-  const [year, month, day] = ymd.split('-').map(Number);
+  const [year, month, day] = ymd.split("-").map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1, 0, 0, 0, 0);
 };
 
 const dateToYmd = (date: Date): string => {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
 
 const formatDateLabel = (ymd: string): string => {
   const date = ymdToDate(ymd);
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
 };
 
 export default function PatternInsightsScreen() {
@@ -48,7 +58,9 @@ export default function PatternInsightsScreen() {
   const { loadActualForDay, loadActualForRange } = useCalendarEventsSync();
 
   const [actualEvents, setActualEvents] = useState<ScheduledEvent[]>([]);
-  const [patternIndex, setPatternIndex] = useState<ReturnType<typeof buildPatternIndex> | null>(null);
+  const [patternIndex, setPatternIndex] = useState<ReturnType<
+    typeof buildPatternIndex
+  > | null>(null);
 
   useEffect(() => {
     if (!userId) {
@@ -108,7 +120,12 @@ export default function PatternInsightsScreen() {
       ymd: selectedDateYmd,
       minConfidence: preferences.confidenceThreshold,
     });
-  }, [actualEvents, patternIndex, preferences.confidenceThreshold, selectedDateYmd]);
+  }, [
+    actualEvents,
+    patternIndex,
+    preferences.confidenceThreshold,
+    selectedDateYmd,
+  ]);
 
   const predictions = useMemo(() => {
     const tomorrow = new Date(ymdToDate(selectedDateYmd));
@@ -121,13 +138,15 @@ export default function PatternInsightsScreen() {
     });
   }, [patternIndex, preferences.confidenceThreshold, selectedDateYmd]);
 
-  const anomalyRows = (anomalyReport?.anomalies ?? []).map((anomaly, index) => ({
-    id: `${anomaly.startMinutes}-${index}`,
-    timeLabel: formatMinutesToTime(anomaly.startMinutes),
-    title: `Expected ${anomaly.expectedCategory}`,
-    detail: `Actual ${anomaly.actualCategory} • ${Math.round(anomaly.confidence * 100)}%`,
-    confidence: anomaly.confidence,
-  }));
+  const anomalyRows = (anomalyReport?.anomalies ?? []).map(
+    (anomaly, index) => ({
+      id: `${anomaly.startMinutes}-${index}`,
+      timeLabel: formatMinutesToTime(anomaly.startMinutes),
+      title: `Expected ${anomaly.expectedCategory}`,
+      detail: `Actual ${anomaly.actualCategory} • ${Math.round(anomaly.confidence * 100)}%`,
+      confidence: anomaly.confidence,
+    }),
+  );
 
   const predictionRows = predictions.map((prediction, index) => ({
     id: `${prediction.startMinutes}-${index}`,
@@ -139,7 +158,7 @@ export default function PatternInsightsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Pattern Insights' }} />
+      <Stack.Screen options={{ title: "Pattern Insights" }} />
       <PatternInsightsTemplate
         dateLabel={formatDateLabel(selectedDateYmd)}
         anomalyScore={anomalyReport?.anomalyScore ?? 0}

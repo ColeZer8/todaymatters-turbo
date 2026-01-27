@@ -54,9 +54,17 @@ const handleReorder = useCallback((from: number, to: number) => {
 // Template/organism (apps/mobile/src/components/organisms/drag-reorder-panels.tsx)
 const panGesture = Gesture.Pan()
   .activateAfterLongPress(120)
-  .onStart(() => { activeKey.value = id; })
-  .onUpdate((event) => { translateY.value = event.translationY; runReorderWorklet(); })
-  .onEnd(() => { runOnJS(onDrop)(fromIndex, toIndex); resetAnimatedValues(); });
+  .onStart(() => {
+    activeKey.value = id;
+  })
+  .onUpdate((event) => {
+    translateY.value = event.translationY;
+    runReorderWorklet();
+  })
+  .onEnd(() => {
+    runOnJS(onDrop)(fromIndex, toIndex);
+    resetAnimatedValues();
+  });
 ```
 
 ## Verification checklist (when implemented)

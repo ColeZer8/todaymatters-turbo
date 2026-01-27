@@ -13,27 +13,23 @@ export function stableHashJson(value: unknown): string {
 }
 
 function stableStringify(value: unknown): string {
-  if (value == null) return 'null';
-  if (typeof value !== 'object') return JSON.stringify(value);
+  if (value == null) return "null";
+  if (typeof value !== "object") return JSON.stringify(value);
 
   if (Array.isArray(value)) {
-    return '[' + value.map((v) => stableStringify(v)).join(',') + ']';
+    return "[" + value.map((v) => stableStringify(v)).join(",") + "]";
   }
 
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort();
   return (
-    '{' +
+    "{" +
     keys
       .map((k) => {
         const v = obj[k];
-        return JSON.stringify(k) + ':' + stableStringify(v);
+        return JSON.stringify(k) + ":" + stableStringify(v);
       })
-      .join(',') +
-    '}'
+      .join(",") +
+    "}"
   );
 }
-
-
-
-

@@ -6,7 +6,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Today Matters | Live Your Calling",
-  description: "A faith and data driven app to help you live up to your ideal life and step into your calling.",
+  description:
+    "A faith and data driven app to help you live up to your ideal life and step into your calling.",
 };
 
 export default function RootLayout({
@@ -20,4 +21,3 @@ export default function RootLayout({
     </html>
   );
 }
-

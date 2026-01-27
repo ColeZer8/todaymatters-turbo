@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Modal, View, Text, TextInput, Pressable } from 'react-native';
+import { useState } from "react";
+import { Modal, View, Text, TextInput, Pressable } from "react-native";
 
 interface Big3InputModalProps {
   visible: boolean;
@@ -7,26 +7,30 @@ interface Big3InputModalProps {
   onSave: (p1: string, p2: string, p3: string) => void;
 }
 
-export const Big3InputModal = ({ visible, onClose, onSave }: Big3InputModalProps) => {
-  const [p1, setP1] = useState('');
-  const [p2, setP2] = useState('');
-  const [p3, setP3] = useState('');
+export const Big3InputModal = ({
+  visible,
+  onClose,
+  onSave,
+}: Big3InputModalProps) => {
+  const [p1, setP1] = useState("");
+  const [p2, setP2] = useState("");
+  const [p3, setP3] = useState("");
 
   const handleSave = () => {
     if (p1.trim() || p2.trim() || p3.trim()) {
       onSave(p1.trim(), p2.trim(), p3.trim());
       // Clear inputs
-      setP1('');
-      setP2('');
-      setP3('');
+      setP1("");
+      setP2("");
+      setP3("");
       onClose();
     }
   };
 
   const handleCancel = () => {
-    setP1('');
-    setP2('');
-    setP3('');
+    setP1("");
+    setP2("");
+    setP3("");
     onClose();
   };
 
@@ -65,17 +69,14 @@ export const Big3InputModal = ({ visible, onClose, onSave }: Big3InputModalProps
                   placeholderTextColor="#94A3B8"
                   className="flex-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-[15px] text-[#111827]"
                   autoCapitalize="sentences"
-                  returnKeyType={item.num === 3 ? 'done' : 'next'}
+                  returnKeyType={item.num === 3 ? "done" : "next"}
                 />
               </View>
             ))}
           </View>
 
           <View className="mt-6 flex-row justify-end gap-3">
-            <Pressable
-              onPress={handleCancel}
-              className="rounded-lg px-5 py-3"
-            >
+            <Pressable onPress={handleCancel} className="rounded-lg px-5 py-3">
               <Text className="text-[15px] font-semibold text-[#6B7280]">
                 Cancel
               </Text>

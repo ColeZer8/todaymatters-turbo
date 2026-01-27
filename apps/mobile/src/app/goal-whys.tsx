@@ -1,28 +1,35 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { GoalWhysTemplate } from '@/components/templates/GoalWhysTemplate';
-import { useAuthStore } from '@/stores';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { SETUP_SCREENS_STEPS, SETUP_SCREENS_TOTAL_STEPS } from '@/constants/setup-screens';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { GoalWhysTemplate } from "@/components/templates/GoalWhysTemplate";
+import { useAuthStore } from "@/stores";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import {
+  SETUP_SCREENS_STEPS,
+  SETUP_SCREENS_TOTAL_STEPS,
+} from "@/constants/setup-screens";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 export default function GoalWhysScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const goals = useOnboardingStore((state) => state.goals);
   const goalWhys = useOnboardingStore((state) => state.goalWhys);
   const updateGoalWhy = useOnboardingStore((state) => state.updateGoalWhy);
-  const { saveGoalWhys } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveGoalWhys } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   useEffect(() => {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
-      router.replace('/');
+      router.replace("/");
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
@@ -36,11 +43,11 @@ export default function GoalWhysScreen() {
 
   const handleContinue = () => {
     saveGoalWhys(goalWhys);
-    router.replace('/ideal-day');
+    router.replace("/ideal-day");
   };
 
   const handleBack = () => {
-    router.replace('/goals');
+    router.replace("/goals");
   };
 
   if (!isNavigationReady || !hasHydrated) {

@@ -1,5 +1,5 @@
-import { LucideIcon } from 'lucide-react-native';
-import { View, StyleProp, ViewStyle } from 'react-native';
+import { LucideIcon } from "lucide-react-native";
+import { View, StyleProp, ViewStyle } from "react-native";
 
 export interface IconProps {
   icon: LucideIcon;
@@ -14,7 +14,7 @@ export interface IconProps {
 export const Icon = ({
   icon: IconComponent,
   size = 24,
-  color = 'black',
+  color = "black",
   fill,
   strokeWidth,
   className,

@@ -35,11 +35,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-026: Fix Android Location Data Collection
+
 **Description:** As an Android user, I want location data to actually collect in the background so the app can infer where I was throughout the day.
 
 **Context:** Diagnostics show all permissions granted, services enabled, background task registered — but `canStart: false` and `pendingSamples: 0`. The `SparseLocationFallback` is permanently active because no location data exists. Screen time shows "5 sessions, 0 min" which also appears incorrect.
 
 **Acceptance Criteria:**
+
 - [ ] Investigate why `canStart` returns `false` despite permissions granted and task started
 - [ ] Verify `expo-location` background task is actually registering and firing on Android
 - [ ] Confirm location samples are being written to `tm.location_samples` and `tm.location_hourly`
@@ -50,6 +52,7 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 - [ ] Typecheck/lint passes
 
 **Investigation Notes:**
+
 - Check `apps/mobile/src/lib/android-location/index.ts` — `canStart` logic
 - Check `apps/mobile/src/lib/android-location/location-task.ts` — task registration and execution
 - Check `apps/mobile/src/lib/android-location/queue.ts` — sample queuing
@@ -59,11 +62,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-027: Fix Event Edit Persistence
+
 **Description:** As a user, I want my edits to event titles, categories, and times to persist reliably after saving.
 
 **Context:** Some title edits save, some revert. Example: changed title to "Walking the boys" but it reverts. This could be a state update race condition, backend write failure, or optimistic UI rollback.
 
 **Acceptance Criteria:**
+
 - [ ] Diagnose the root cause: trace from UI save → store update → Supabase write → reload
 - [ ] Verify `updateActual()` in `calendar-events.ts` is called and succeeds (check response)
 - [ ] Verify the events store is updated after successful Supabase write (not before)
@@ -74,6 +79,7 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 - [ ] Typecheck/lint passes
 
 **Key Files:**
+
 - `apps/mobile/src/app/actual-adjust.tsx` — save handler
 - `apps/mobile/src/lib/supabase/services/calendar-events.ts` — `updateActual()`
 - `apps/mobile/src/stores/events-store.ts` — local state
@@ -82,11 +88,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-028: Make Unknown Events Editable
+
 **Description:** As a user, I want to be able to edit "Unknown" events (title, time, category) just like any other event.
 
 **Context:** At least one "Unknown" event blocks editing entirely — tapping it does nothing or the edit screen fails to load.
 
 **Acceptance Criteria:**
+
 - [ ] All events with `meta.kind === 'unknown_gap'` are tappable and open the edit screen
 - [ ] Unknown events support editing: title, start/end time, category, subcategory, Big 3 assignment
 - [ ] Edited unknown events are persisted as `source: 'user_input'` or `source: 'actual_adjust'`
@@ -96,11 +104,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-029: Fix Excessive Evidence Pipeline Re-Processing
+
 **Description:** As a developer, I need the evidence pipeline to run once per data change, not 8+ times in a loop.
 
 **Context:** Logs show SparseLocationFallback, EvidenceAvailability, and EvidenceFusion repeating 8+ times in a single cycle. This suggests a re-render loop or polling interval that re-triggers the entire pipeline.
 
 **Acceptance Criteria:**
+
 - [ ] Identify what triggers re-runs: React re-renders, polling intervals, state changes, or all three
 - [ ] Add memoization or caching so the pipeline skips if inputs haven't changed
 - [ ] Evidence pipeline runs at most once per user action or data sync event
@@ -111,11 +121,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-030: Fix Event Time Accuracy
+
 **Description:** As a user, I want event times to reflect reality — not rounded, bucketed, or offset incorrectly.
 
 **Context:** User left for church at ~9:30, app shows ~9:00. Times are systematically wrong.
 
 **Acceptance Criteria:**
+
 - [ ] Audit time sources for each event type: calendar start times vs location arrival/departure vs rounding logic
 - [ ] Identify and document where rounding/bucketing is applied (e.g., hourly location → startMinutes)
 - [ ] Ensure timezone offsets are handled correctly (UTC → local conversion)
@@ -125,6 +137,7 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 - [ ] Typecheck/lint passes
 
 **Key Files:**
+
 - `apps/mobile/src/lib/calendar/actual-display-events.ts` — time assignment logic
 - `apps/mobile/src/lib/calendar/evidence-fusion.ts` — time from evidence sources
 - `apps/mobile/src/lib/supabase/services/evidence-data.ts` — raw evidence times
@@ -132,11 +145,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-031: Improve Event Inference Accuracy
+
 **Description:** As a user, I want the app to correctly identify activities based on available evidence rather than mislabeling them.
 
 **Context:** Morning routine labeled "productive screen time" even though user wasn't on screens. Church mislabeled and mis-timed. Travel segments (home → church → restaurant) not recognized as travel.
 
 **Acceptance Criteria:**
+
 - [ ] When no screen time evidence exists for a time block, do not label it as screen time
 - [ ] Detect travel segments: when location changes between two known places, insert a "Travel" event
 - [ ] Use location type hints: church → "Faith/Worship", restaurant → "Meal/Eating", home → "Home/Family"
@@ -152,11 +167,13 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 ---
 
 ### US-032: Implement Hierarchical Category/Subcategory System
+
 **Description:** As a user, I want to organize my time into top-level categories with unlimited subcategories so I can track granular analytics (e.g., "How many Sundays did we attend church?").
 
 **Context:** Current system has 14 flat `EventCategory` values and 6 core values with limited subcategories. Need to allow many subcategories per category, and "Other" must be a top-level category.
 
 **Acceptance Criteria:**
+
 - [ ] Database schema: `tm.activity_categories` table with `id`, `user_id`, `parent_id` (null = top-level), `name`, `icon`, `color`, `sort_order`
 - [ ] Seed top-level categories: Faith, Family, Work, Health, Personal Growth, Finances, Other
 - [ ] Users can add unlimited subcategories under any top-level category
@@ -168,6 +185,7 @@ This PRD addresses a comprehensive set of critical bugs, timeline accuracy issue
 - [ ] Typecheck/lint passes
 
 **Examples:**
+
 ```
 Faith
   ├── Church
@@ -199,11 +217,13 @@ Health
 ---
 
 ### US-033: Implement "Big 3" Daily Priorities System
+
 **Description:** As a user, I want to optionally define 3 big priorities each day and assign time blocks to them so I can track what matters most.
 
 **Context:** `isBig3` flag already exists in `CalendarEventMeta` but the feature is not implemented in UI or onboarding.
 
 **Acceptance Criteria:**
+
 - [ ] Setup flow: add screen asking "Do you want to use the Big 3 concept?" (opt-in)
 - [ ] If opted in: daily prompt (morning or previous evening) to set 3 priorities for the day
 - [ ] Big 3 stored in `tm.daily_big3` table: `id`, `user_id`, `date`, `priority_1`, `priority_2`, `priority_3`, `category_id` (optional link to subcategory)
@@ -218,9 +238,11 @@ Health
 ---
 
 ### US-034: Update Core Categories Setup Screen
+
 **Description:** As a user, I want to add many subcategories to each major category during setup, and "Other" should always be available as a main category.
 
 **Acceptance Criteria:**
+
 - [ ] `core-categories.tsx` updated to use hierarchical category system (US-032)
 - [ ] Users can add unlimited subcategories per value/category during setup
 - [ ] "Other" always appears as a top-level category in setup
@@ -236,11 +258,13 @@ Health
 ---
 
 ### US-035: Place Labeling and Auto-Tagging
+
 **Description:** As a user, I want to label a location once (e.g., "This is my dog walking park") and have the app auto-tag future visits.
 
 **Context:** `tm.location_mappings` table already exists (US-022). This builds the user-facing feature on top.
 
 **Acceptance Criteria:**
+
 - [ ] When user edits an event with location evidence, offer "Label this place" option
 - [ ] Place label stored in `tm.location_mappings`: lat/lng, radius, label, category_id, subcategory_id
 - [ ] On future visits to labeled places, auto-fill: event title, category, subcategory
@@ -250,15 +274,18 @@ Health
 - [ ] Typecheck/lint passes
 
 **Acceptance Example:**
+
 > User labels a park as "Walking the boys" → Category: Family → Subcategory: Dog Walking.
 > Next time location matches that park, event auto-populates as "Walking the boys" / Family / Dog Walking.
 
 ---
 
 ### US-036: Location-Based Activity Inference
+
 **Description:** As a user, I want the app to use location context to make better guesses about what I was doing.
 
 **Acceptance Criteria:**
+
 - [ ] Home location (from setup or frequent overnight) → default to "Home / Family"
 - [ ] Work location (from setup or frequent weekday) → default to "Work"
 - [ ] Place-type hints from GPS data or reverse geocoding:
@@ -273,9 +300,11 @@ Health
 ---
 
 ### US-037: Travel Segment Detection
+
 **Description:** As a user, I want the app to detect when I'm traveling between locations and create travel events automatically.
 
 **Acceptance Criteria:**
+
 - [ ] When location data shows movement between two stationary points, insert "Travel" event
 - [ ] Travel event duration = time between leaving location A and arriving at location B
 - [ ] Travel events show origin → destination (e.g., "Travel: Home → Church")
@@ -291,9 +320,11 @@ Health
 ---
 
 ### US-038: Mine Historical Contacts During Setup
+
 **Description:** As a user, I want the app to organize my most frequent contacts into a categorized VIP list during setup so I can review and confirm them.
 
 **Acceptance Criteria:**
+
 - [ ] During setup, request contacts permission and mine last 30 days of communication history (calls, texts)
 - [ ] Rank contacts by frequency and recency
 - [ ] Auto-categorize contacts into groups: Family, Work, Friends, Other
@@ -306,9 +337,11 @@ Health
 ---
 
 ### US-039: Mine Historical Locations During Setup
+
 **Description:** As a user, I want the app to identify my most frequent locations during setup so I can label them.
 
 **Acceptance Criteria:**
+
 - [ ] During setup, mine last 30 days of location history (requires location permission already granted)
 - [ ] Cluster locations by proximity to identify distinct places
 - [ ] Rank places by visit frequency
@@ -322,9 +355,11 @@ Health
 ---
 
 ### US-040: Enhanced "Does This Look Right?" Setup Screen
+
 **Description:** As a user, I want the final setup screen to show me everything the app learned about me so I can confirm or correct it before starting.
 
 **Acceptance Criteria:**
+
 - [ ] Screen displays: core values, categories/subcategories, goals, Big 3 preference, VIP contacts, frequent locations
 - [ ] Each section is expandable/collapsible
 - [ ] User can tap any item to edit inline
@@ -339,9 +374,11 @@ Health
 ---
 
 ### US-041: Multi-Segment Event Splitting
+
 **Description:** As a user, I want to split an event into 2, 3, 4, or 5+ segments instead of just two.
 
 **Acceptance Criteria:**
+
 - [ ] Replace current slider with multi-point split interface
 - [ ] User taps to add split points on a time bar (like adding markers)
 - [ ] Can add up to N-1 split points to create N segments (practical limit: 10 segments)
@@ -353,9 +390,11 @@ Health
 ---
 
 ### US-042: Inline Sub-Event Editing After Split
+
 **Description:** As a user, I want to edit each sub-event's details (title, category, Big 3) right on the split screen without navigating away.
 
 **Acceptance Criteria:**
+
 - [ ] After setting split points, show compact sub-event cards below the time bar
 - [ ] Each sub-event card shows: time range, title (editable), category picker, Big 3 toggle
 - [ ] Tap a card to expand it for full editing (title, description, category, subcategory, Big 3)
@@ -372,11 +411,13 @@ Health
 ---
 
 ### US-043: Location-Based Reminders (Design & Data Model)
+
 **Description:** As a user, I want to set reminders triggered by proximity to a location (e.g., "Remind me to return the Amazon package when I'm near Whole Foods").
 
 **Context:** This is a major feature. This story covers only the data model and basic infrastructure — not the full implementation.
 
 **Acceptance Criteria:**
+
 - [ ] Database schema: `tm.location_reminders` table: `id`, `user_id`, `title`, `description`, `target_location` (lat/lng/radius), `trigger_type` ('on_arrival' | 'on_route' | 'nearby'), `linked_event_id` (optional), `items` (JSONB list), `active`, `created_at`
 - [ ] API types defined in TypeScript
 - [ ] Basic CRUD service for location reminders in Supabase services
@@ -384,16 +425,19 @@ Health
 - [ ] Typecheck/lint passes
 
 **Example Use Case:**
+
 > "Set a reminder next time I'm going to an event where Whole Foods is on the way — remind me to leave 10 minutes early and to take that Amazon package."
 
 ---
 
 ### US-044: Event-Based Contextual Lists (Design & Data Model)
+
 **Description:** As a user, I want the app to prompt me with relevant checklists based on upcoming events (e.g., packing list before a flight).
 
 **Context:** This is a major feature. This story covers only the data model and basic infrastructure.
 
 **Acceptance Criteria:**
+
 - [ ] Database schema: `tm.contextual_lists` table: `id`, `user_id`, `name`, `trigger_type` ('event_type' | 'calendar_keyword' | 'manual'), `trigger_value` (e.g., 'flight', 'business_trip'), `items` (JSONB array of checklist items), `advance_hours` (how far in advance to prompt), `created_at`
 - [ ] API types defined in TypeScript
 - [ ] Basic CRUD service for contextual lists in Supabase services
@@ -401,6 +445,7 @@ Health
 - [ ] Typecheck/lint passes
 
 **Example Use Cases:**
+
 > - Flight tomorrow → prompt with packing list the evening before
 > - Business trip vs vacation → different list templates
 > - Leaving for office → daily carry checklist
@@ -411,6 +456,7 @@ Health
 ## Functional Requirements
 
 ### Bug Fixes
+
 - **FR-16:** The Android location background task must actually collect and store location samples when permissions are granted
 - **FR-17:** Event edits (title, category, time) must persist to Supabase and survive app restart
 - **FR-18:** All events including "Unknown" must be editable via the adjust screen
@@ -419,21 +465,25 @@ Health
 - **FR-21:** Events must not be labeled as "screen time" when no screen usage evidence exists for that time block
 
 ### Categories & Big 3
+
 - **FR-22:** The category system must support hierarchical nesting: Category → Subcategory → Sub-subcategory (2 levels deep)
 - **FR-23:** "Other" must always exist as a permanent top-level category
 - **FR-24:** The "Big 3" feature must be entirely opt-in — when disabled, no Big 3 UI appears anywhere
 - **FR-25:** Big 3 daily priorities must be assignable to time blocks from the event editor
 
 ### Location Intelligence
+
 - **FR-26:** User-labeled places must auto-populate event details on future visits
 - **FR-27:** Travel segments must be detected and inserted when location data shows movement between stationary points
 - **FR-28:** Location-based inference must be lower priority than user labels and explicit edits
 
 ### Setup & Onboarding
+
 - **FR-29:** Setup flow must mine 30 days of contacts and locations in the background during setup
 - **FR-30:** The "Does this look right?" screen must display VIP contacts, frequent locations, values, categories, and goals
 
 ### Split Events
+
 - **FR-31:** Users must be able to split events into 2–10 segments
 - **FR-32:** All sub-events from a split must be saved in a single atomic transaction
 
@@ -455,17 +505,20 @@ Health
 ## Design Considerations
 
 ### Event Editing UX
+
 - Edit screen must load for ALL event types (including Unknown, derived, sleep)
 - Save must show loading indicator and confirmation — no silent failures
 - Category picker should show hierarchical tree with expand/collapse
 
 ### Split Event UX
+
 - Multi-point time bar with tap-to-add markers (not slider)
 - Compact sub-event cards below time bar
 - Expand/collapse for detailed editing
 - Single "Save All" action at bottom
 
 ### Setup Flow
+
 - Background mining should not block setup progression
 - "Does this look right?" screen uses card-based layout with expand/collapse sections
 - Place labeling uses map view with pins
@@ -475,6 +528,7 @@ Health
 ## Technical Considerations
 
 ### Key Files (Bugs)
+
 - **Android Location:** `apps/mobile/src/lib/android-location/index.ts`, `location-task.ts`, `queue.ts`
 - **Native Module:** `apps/mobile/modules/android-insights/android/src/main/java/expo/modules/androidinsights/AndroidInsightsModule.kt`
 - **Event Persistence:** `apps/mobile/src/lib/supabase/services/calendar-events.ts`
@@ -482,6 +536,7 @@ Health
 - **Event Editor:** `apps/mobile/src/app/actual-adjust.tsx`
 
 ### Key Files (Features)
+
 - **Categories:** `apps/mobile/src/app/core-categories.tsx`, `apps/mobile/src/stores/onboarding-store.ts`
 - **Big 3:** `apps/mobile/src/stores/events-store.ts` (existing `isBig3` flag)
 - **Split:** `apps/mobile/src/app/actual-split.tsx`, `apps/mobile/src/components/templates/ActualSplitTemplate.tsx`
@@ -489,6 +544,7 @@ Health
 - **Location Mappings:** `apps/mobile/src/lib/supabase/services/location-mappings.ts`
 
 ### Database Migrations Needed
+
 1. `tm.activity_categories` — hierarchical category system (US-032)
 2. `tm.daily_big3` — daily priorities (US-033)
 3. `tm.vip_contacts` — VIP contact list (US-038)
@@ -497,12 +553,14 @@ Health
 6. Possible migration: `tm.location_mappings` may need `category_id` and `subcategory_id` columns
 
 ### Architecture Notes
+
 - Evidence pipeline caching: use a hash of inputs (events + evidence + user edits) to skip re-processing
 - Category migration: map existing `EventCategory` enum values to new `activity_categories` rows, maintain backward compatibility during transition
 - Big 3 opt-in: store preference in `tm.user_preferences`, check before rendering any Big 3 UI
 - Split transaction: use Supabase RPC or batch insert for atomic multi-event creation
 
 ### Data Flow for Location Intelligence
+
 1. Background task collects location samples → `tm.location_samples`
 2. Hourly aggregation → `tm.location_hourly`
 3. Evidence pipeline reads hourly data → matches against `tm.location_mappings`
@@ -516,6 +574,7 @@ Health
 ## Success Metrics
 
 ### Bug Fixes
+
 - Android location samples collected every hour on physical device (verified over 24h)
 - 100% of event edits persist after save → navigate away → return (verified over 10 edits)
 - All "Unknown" events are tappable and editable
@@ -523,6 +582,7 @@ Health
 - Event times accurate to within 5 minutes of actual evidence timestamps
 
 ### Features
+
 - Users can create 3+ subcategories per top-level category during setup
 - Big 3 daily completion visible on home screen after opt-in
 - Place labeling: after labeling once, next visit auto-tags correctly

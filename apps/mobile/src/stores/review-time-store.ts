@@ -1,9 +1,13 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-export type ReviewCategoryId = 'faith' | 'family' | 'work' | 'health' | 'other';
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+export type ReviewCategoryId = "faith" | "family" | "work" | "health" | "other";
 
-export type ReviewBlockSource = 'screen_time' | 'location' | 'workout' | 'unknown';
+export type ReviewBlockSource =
+  | "screen_time"
+  | "location"
+  | "workout"
+  | "unknown";
 
 export interface AiSuggestion {
   category: ReviewCategoryId;
@@ -57,7 +61,10 @@ interface ReviewTimeState {
 
 const INITIAL_TIME_BLOCKS: TimeBlock[] = [];
 
-const computeUnassignedCount = (timeBlocks: TimeBlock[], assignments: Record<string, ReviewCategoryId>): number => {
+const computeUnassignedCount = (
+  timeBlocks: TimeBlock[],
+  assignments: Record<string, ReviewCategoryId>,
+): number => {
   return timeBlocks.filter((block) => !assignments[block.id]).length;
 };
 
@@ -65,9 +72,9 @@ const computeUnassignedCount = (timeBlocks: TimeBlock[], assignments: Record<str
 const formatMinutesToTime = (totalMinutes: number): string => {
   const hours24 = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
 };
 
 export const useReviewTimeStore = create<ReviewTimeState>()(
@@ -89,13 +96,15 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
         const filteredSuggestions: Record<string, AiSuggestion> = {};
 
         for (const [blockId, value] of Object.entries(get().assignments)) {
-          if (ids.has(blockId)) filteredAssignments[blockId] = value as ReviewCategoryId;
+          if (ids.has(blockId))
+            filteredAssignments[blockId] = value as ReviewCategoryId;
         }
         for (const [blockId, value] of Object.entries(get().notes)) {
           if (ids.has(blockId)) filteredNotes[blockId] = value;
         }
         for (const [blockId, value] of Object.entries(get().aiSuggestions)) {
-          if (ids.has(blockId)) filteredSuggestions[blockId] = value as AiSuggestion;
+          if (ids.has(blockId))
+            filteredSuggestions[blockId] = value as AiSuggestion;
         }
 
         set({
@@ -114,7 +123,10 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
         };
         set({
           assignments: newAssignments,
-          unassignedCount: computeUnassignedCount(get().timeBlocks, newAssignments),
+          unassignedCount: computeUnassignedCount(
+            get().timeBlocks,
+            newAssignments,
+          ),
         });
       },
 
@@ -123,7 +135,10 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
         delete newAssignments[blockId];
         set({
           assignments: newAssignments,
-          unassignedCount: computeUnassignedCount(get().timeBlocks, newAssignments),
+          unassignedCount: computeUnassignedCount(
+            get().timeBlocks,
+            newAssignments,
+          ),
         });
       },
 
@@ -219,7 +234,10 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
           assignments: newAssignments,
           notes: newNotes,
           aiSuggestions: newSuggestions,
-          unassignedCount: computeUnassignedCount(newTimeBlocks, newAssignments),
+          unassignedCount: computeUnassignedCount(
+            newTimeBlocks,
+            newAssignments,
+          ),
         });
       },
 
@@ -237,7 +255,7 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       },
     }),
     {
-      name: 'review-time-storage',
+      name: "review-time-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         assignments: state.assignments,
@@ -245,6 +263,6 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
         completedByDate: state.completedByDate,
         autoAssignRequestedAt: state.autoAssignRequestedAt,
       }),
-    }
-  )
+    },
+  ),
 );

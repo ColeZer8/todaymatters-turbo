@@ -1,6 +1,12 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
-export type TimeOfDay = 'devotional' | 'morning' | 'midday' | 'afternoon' | 'evening' | 'night';
+export type TimeOfDay =
+  | "devotional"
+  | "morning"
+  | "midday"
+  | "afternoon"
+  | "evening"
+  | "night";
 
 interface TimePreset {
   id: TimeOfDay;
@@ -12,46 +18,46 @@ interface TimePreset {
 
 export const TIME_PRESETS: Record<TimeOfDay, TimePreset> = {
   devotional: {
-    id: 'devotional',
-    label: 'Wake Up',
+    id: "devotional",
+    label: "Wake Up",
     hour: 6,
     minute: 0,
-    greeting: 'Good morning',
+    greeting: "Good morning",
   },
   morning: {
-    id: 'morning',
-    label: 'Morning',
+    id: "morning",
+    label: "Morning",
     hour: 8,
     minute: 30,
-    greeting: 'Good morning',
+    greeting: "Good morning",
   },
   midday: {
-    id: 'midday',
-    label: 'Midday',
+    id: "midday",
+    label: "Midday",
     hour: 12,
     minute: 0,
-    greeting: 'Good afternoon',
+    greeting: "Good afternoon",
   },
   afternoon: {
-    id: 'afternoon',
-    label: 'Afternoon',
+    id: "afternoon",
+    label: "Afternoon",
     hour: 15,
     minute: 30,
-    greeting: 'Good afternoon',
+    greeting: "Good afternoon",
   },
   evening: {
-    id: 'evening',
-    label: 'Evening',
+    id: "evening",
+    label: "Evening",
     hour: 18,
     minute: 30,
-    greeting: 'Good evening',
+    greeting: "Good evening",
   },
   night: {
-    id: 'night',
-    label: 'Night',
+    id: "night",
+    label: "Night",
     hour: 21,
     minute: 0,
-    greeting: 'Good evening',
+    greeting: "Good evening",
   },
 };
 
@@ -73,7 +79,7 @@ interface DemoState {
 
 export const useDemoStore = create<DemoState>()((set, get) => ({
   isActive: false,
-  timeOfDay: 'morning',
+  timeOfDay: "morning",
   simulatedHour: TIME_PRESETS.morning.hour,
   simulatedMinute: TIME_PRESETS.morning.minute,
   greeting: TIME_PRESETS.morning.greeting,
@@ -93,8 +99,8 @@ export const useDemoStore = create<DemoState>()((set, get) => ({
   getFormattedTime: () => {
     const { simulatedHour, simulatedMinute } = get();
     const hour12 = simulatedHour % 12 || 12;
-    const ampm = simulatedHour >= 12 ? 'PM' : 'AM';
-    const minStr = simulatedMinute.toString().padStart(2, '0');
+    const ampm = simulatedHour >= 12 ? "PM" : "AM";
+    const minStr = simulatedMinute.toString().padStart(2, "0");
     return `${hour12}:${minStr} ${ampm}`;
   },
 
@@ -121,9 +127,9 @@ export const useGreeting = (): string => {
 
   // Real time greeting
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 };
 
 /**
@@ -156,9 +162,3 @@ export const useCurrentMinutes = (): number => {
   const now = new Date();
   return now.getHours() * 60 + now.getMinutes();
 };
-
-
-
-
-
-

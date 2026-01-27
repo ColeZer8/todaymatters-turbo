@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,10 @@ import {
   Dimensions,
   type ViewToken,
   type ListRenderItem,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,21 +21,21 @@ import {
   Sunrise,
   Sunset,
   X,
-} from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
-import { useDemoStore, TIME_PRESETS, type TimeOfDay } from '@/stores';
-import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
-import { useUserFirstName } from '@/hooks/use-user-first-name';
+} from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
+import { Icon } from "@/components/atoms";
+import { useDemoStore, TIME_PRESETS, type TimeOfDay } from "@/stores";
+import { getMockPlannedEventsForDay } from "@/lib/calendar/mock-planned-events";
+import { useUserFirstName } from "@/hooks/use-user-first-name";
 
 // Import templates for the demo
-import { HomeTemplate } from './HomeTemplate';
-import { AnalyticsTemplate } from './AnalyticsTemplate';
-import { ReviewTimeTemplate } from './ReviewTimeTemplate';
-import { ComprehensiveCalendarTemplate } from './ComprehensiveCalendarTemplate';
-import { ProfileTemplate } from './ProfileTemplate';
+import { HomeTemplate } from "./HomeTemplate";
+import { AnalyticsTemplate } from "./AnalyticsTemplate";
+import { ReviewTimeTemplate } from "./ReviewTimeTemplate";
+import { ComprehensiveCalendarTemplate } from "./ComprehensiveCalendarTemplate";
+import { ProfileTemplate } from "./ProfileTemplate";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Time preset icons mapping
 const TIME_ICONS: Record<TimeOfDay, LucideIcon> = {
@@ -48,12 +48,12 @@ const TIME_ICONS: Record<TimeOfDay, LucideIcon> = {
 };
 
 const TIME_COLORS: Record<TimeOfDay, string> = {
-  devotional: '#F59E0B',
-  morning: '#F59E0B',
-  midday: '#3B82F6',
-  afternoon: '#F97316',
-  evening: '#8B5CF6',
-  night: '#6366F1',
+  devotional: "#F59E0B",
+  morning: "#F59E0B",
+  midday: "#3B82F6",
+  afternoon: "#F97316",
+  evening: "#8B5CF6",
+  night: "#6366F1",
 };
 
 interface DemoSlide {
@@ -65,7 +65,7 @@ interface DemoSlide {
 
 function DemoCalendarSlide() {
   const today = new Date();
-  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return (
     <ComprehensiveCalendarTemplate
       selectedDate={today}
@@ -84,23 +84,24 @@ function DemoCalendarSlide() {
 
 function buildDemoSlides(userFirstName: string): DemoSlide[] {
   const today = new Date();
-  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const demoSchedule = getMockPlannedEventsForDay(ymd);
 
   return [
     {
-      id: 'home',
-      title: 'Home Dashboard',
-      description: 'Daily brief with personalized greeting and schedule overview',
+      id: "home",
+      title: "Home Dashboard",
+      description:
+        "Daily brief with personalized greeting and schedule overview",
       component: (
         <HomeTemplate
           dailyBrief={{
             name: userFirstName,
-            date: 'Friday, Dec 19',
+            date: "Friday, Dec 19",
             unassignedCount: 3,
-            line1: 'This is your day.',
-            line2: 'What matters most right now?',
-            line3: 'You have time to move one thing forward.',
+            line1: "This is your day.",
+            line2: "What matters most right now?",
+            line3: "You have time to move one thing forward.",
           }}
           schedule={{
             events: demoSchedule,
@@ -108,39 +109,42 @@ function buildDemoSlides(userFirstName: string): DemoSlide[] {
           }}
           pendingActions={{
             communicationsCount: 4,
-            communicationsDescription: 'Connor, Grady, and 2 others need attention.',
+            communicationsDescription:
+              "Connor, Grady, and 2 others need attention.",
           }}
         />
       ),
     },
     {
-      id: 'calendar',
-      title: 'Planned vs Actual',
-      description: 'Side-by-side view comparing your plan to what actually happened',
+      id: "calendar",
+      title: "Planned vs Actual",
+      description:
+        "Side-by-side view comparing your plan to what actually happened",
       component: <DemoCalendarSlide />,
     },
     {
-      id: 'analytics',
-      title: 'Life Analytics',
-      description: 'Track time across Faith, Family, Work, and Health categories',
+      id: "analytics",
+      title: "Life Analytics",
+      description:
+        "Track time across Faith, Family, Work, and Health categories",
       component: <AnalyticsTemplate />,
     },
     {
-      id: 'review-time',
-      title: 'Review Time',
-      description: 'Categorize unassigned time blocks with AI suggestions',
+      id: "review-time",
+      title: "Review Time",
+      description: "Categorize unassigned time blocks with AI suggestions",
       component: <ReviewTimeTemplate />,
     },
     {
-      id: 'profile',
-      title: 'Profile & Goals',
-      description: 'Core values, goals, and work initiatives at a glance',
+      id: "profile",
+      title: "Profile & Goals",
+      description: "Core values, goals, and work initiatives at a glance",
       component: (
         <ProfileTemplate
           name={userFirstName}
           role="Professional"
           badgeLabel="Pro Member"
-          coreValues={['Family', 'Integrity', 'Creativity']}
+          coreValues={["Family", "Integrity", "Creativity"]}
           goals={[]}
           initiatives={[]}
           menuItems={[]}
@@ -177,18 +181,21 @@ export const DemoCarouselTemplate = () => {
         setCurrentIndex(viewableItems[0].index);
       }
     },
-    []
+    [],
   );
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
   }).current;
 
-  const goToSlide = useCallback((index: number) => {
-    if (index >= 0 && index < slides.length) {
-      flatListRef.current?.scrollToIndex({ index, animated: true });
-    }
-  }, [slides.length]);
+  const goToSlide = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < slides.length) {
+        flatListRef.current?.scrollToIndex({ index, animated: true });
+      }
+    },
+    [slides.length],
+  );
 
   const goToPrevious = useCallback(() => {
     goToSlide(currentIndex - 1);
@@ -210,7 +217,7 @@ export const DemoCarouselTemplate = () => {
     (time: TimeOfDay) => {
       setTimeOfDay(time);
     },
-    [setTimeOfDay]
+    [setTimeOfDay],
   );
 
   const renderSlide: ListRenderItem<DemoSlide> = useCallback(
@@ -227,7 +234,7 @@ export const DemoCarouselTemplate = () => {
         </View>
       </View>
     ),
-    []
+    [],
   );
 
   const currentSlide = slides[currentIndex];
@@ -265,7 +272,7 @@ export const DemoCarouselTemplate = () => {
           style={{
             top: insets.top + 8,
             right: 12,
-            backgroundColor: 'rgba(0,0,0,0.25)',
+            backgroundColor: "rgba(0,0,0,0.25)",
           }}
         >
           <Icon icon={Settings2} size={18} color="rgba(255,255,255,0.7)" />
@@ -287,8 +294,8 @@ export const DemoCarouselTemplate = () => {
               height: 6,
               backgroundColor:
                 index === currentIndex
-                  ? 'rgba(255,255,255,0.9)'
-                  : 'rgba(255,255,255,0.3)',
+                  ? "rgba(255,255,255,0.9)"
+                  : "rgba(255,255,255,0.3)",
             }}
           />
         ))}
@@ -336,7 +343,7 @@ export const DemoCarouselTemplate = () => {
             {/* Center - Slide Info */}
             <View className="flex-1 justify-center items-center px-8">
               <Text className="text-white/60 text-[13px] font-semibold uppercase tracking-wider mb-2">
-            {currentIndex + 1} of {slides.length}
+                {currentIndex + 1} of {slides.length}
               </Text>
               <Text className="text-white text-[28px] font-bold text-center mb-2">
                 {currentSlide?.title}
@@ -383,7 +390,10 @@ export const DemoCarouselTemplate = () => {
             </View>
 
             {/* Bottom - Time Controls */}
-            <View className="px-5" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View
+              className="px-5"
+              style={{ paddingBottom: insets.bottom + 20 }}
+            >
               <Text className="text-white/50 text-[11px] font-bold uppercase tracking-wider text-center mb-3">
                 Simulate Time of Day
               </Text>
@@ -404,22 +414,22 @@ export const DemoCarouselTemplate = () => {
                       className="items-center px-3 py-2 rounded-xl"
                       style={({ pressed }) => ({
                         backgroundColor: isSelected
-                          ? 'rgba(255,255,255,0.25)'
-                          : 'rgba(255,255,255,0.1)',
+                          ? "rgba(255,255,255,0.25)"
+                          : "rgba(255,255,255,0.1)",
                         opacity: pressed ? 0.7 : 1,
                         borderWidth: isSelected ? 2 : 0,
-                        borderColor: isSelected ? presetColor : 'transparent',
+                        borderColor: isSelected ? presetColor : "transparent",
                       })}
                     >
                       <Icon
                         icon={PresetIcon}
                         size={20}
-                        color={isSelected ? presetColor : '#FFFFFF'}
+                        color={isSelected ? presetColor : "#FFFFFF"}
                       />
                       <Text
                         className="text-[10px] font-semibold mt-1"
                         style={{
-                          color: isSelected ? presetColor : '#FFFFFF',
+                          color: isSelected ? presetColor : "#FFFFFF",
                         }}
                       >
                         {preset.label}
@@ -435,8 +445,3 @@ export const DemoCarouselTemplate = () => {
     </View>
   );
 };
-
-
-
-
-

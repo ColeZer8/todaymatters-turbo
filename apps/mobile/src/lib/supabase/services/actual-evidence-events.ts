@@ -1,7 +1,7 @@
-import { supabase } from '../client';
-import { handleSupabaseError } from '../utils/error-handler';
-import type { Json } from '../database.types';
-import type { ActualBlock } from '@/lib/calendar/verification-engine';
+import { supabase } from "../client";
+import { handleSupabaseError } from "../utils/error-handler";
+import type { Json } from "../database.types";
+import type { ActualBlock } from "@/lib/calendar/verification-engine";
 
 interface ActualEvidenceEventRow {
   id: string;
@@ -12,7 +12,7 @@ interface ActualEvidenceEventRow {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tmSchema(): any {
-  return supabase.schema('tm');
+  return supabase.schema("tm");
 }
 
 function ymdToDate(ymd: string): Date {
@@ -37,9 +37,9 @@ function buildSourceId(ymd: string, block: ActualBlock): string {
 }
 
 function hasSourceId(meta: Json | null | undefined, sourceId: string): boolean {
-  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
   const value = (meta as Record<string, Json>).source_id;
-  return typeof value === 'string' && value === sourceId;
+  return typeof value === "string" && value === sourceId;
 }
 
 export async function syncActualEvidenceBlocks({
@@ -60,12 +60,12 @@ export async function syncActualEvidenceBlocks({
 
   try {
     const { data, error } = await tmSchema()
-      .from('events')
-      .select('id, scheduled_start, scheduled_end, meta')
-      .eq('user_id', userId)
-      .eq('type', 'calendar_actual')
-      .lt('scheduled_start', endIso)
-      .gt('scheduled_end', startIso);
+      .from("events")
+      .select("id, scheduled_start, scheduled_end, meta")
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      .lt("scheduled_start", endIso)
+      .gt("scheduled_end", startIso);
 
     if (error) throw handleSupabaseError(error);
     const existing = (data ?? []) as ActualEvidenceEventRow[];
@@ -73,24 +73,26 @@ export async function syncActualEvidenceBlocks({
     const inserts: Array<Record<string, unknown>> = [];
     for (const block of blocks) {
       const sourceId = buildSourceId(ymd, block);
-      const alreadyExists = existing.some((row) => hasSourceId(row.meta, sourceId));
+      const alreadyExists = existing.some((row) =>
+        hasSourceId(row.meta, sourceId),
+      );
       if (alreadyExists) continue;
 
       const scheduledStartIso = minutesToIso(ymd, block.startMinutes);
       const scheduledEndIso = minutesToIso(ymd, block.endMinutes);
 
       const meta: Record<string, Json> = {
-        category: 'unknown',
+        category: "unknown",
         suggested_category: block.category,
-        source: 'evidence',
+        source: "evidence",
         source_id: sourceId,
         actual: true,
-        tags: ['actual'],
+        tags: ["actual"],
         confidence: block.confidence ?? null,
-        kind: 'evidence_block',
+        kind: "evidence_block",
       };
 
-      if (block.source === 'location') {
+      if (block.source === "location") {
         meta.location = block.title;
       }
 
@@ -99,20 +101,23 @@ export async function syncActualEvidenceBlocks({
       }
 
       if (block.evidence.screenTime) {
-        meta.screen_time_minutes = Math.round(block.evidence.screenTime.totalMinutes);
+        meta.screen_time_minutes = Math.round(
+          block.evidence.screenTime.totalMinutes,
+        );
         meta.top_app = block.evidence.screenTime.topApps[0]?.app ?? null;
       }
 
       if (block.evidence.health?.hasWorkout) {
         meta.workout_type = block.evidence.health.workoutType ?? null;
-        meta.workout_minutes = block.evidence.health.workoutDurationMinutes ?? null;
+        meta.workout_minutes =
+          block.evidence.health.workoutDurationMinutes ?? null;
       }
 
       inserts.push({
         user_id: userId,
-        type: 'calendar_actual',
-        title: block.title || 'Actual',
-        description: block.description || '',
+        type: "calendar_actual",
+        title: block.title || "Actual",
+        description: block.description || "",
         scheduled_start: scheduledStartIso,
         scheduled_end: scheduledEndIso,
         meta: meta as unknown as Json,
@@ -122,9 +127,9 @@ export async function syncActualEvidenceBlocks({
     if (inserts.length === 0) return;
 
     const { data: inserted, error: insertError } = await tmSchema()
-      .from('events')
+      .from("events")
       .insert(inserts)
-      .select('*');
+      .select("*");
 
     if (insertError) throw handleSupabaseError(insertError);
 

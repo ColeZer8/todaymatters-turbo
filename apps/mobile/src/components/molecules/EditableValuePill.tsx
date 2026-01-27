@@ -1,12 +1,15 @@
-import { Pressable, Text, View } from 'react-native';
-import { MinusCircle } from 'lucide-react-native';
+import { Pressable, Text, View } from "react-native";
+import { MinusCircle } from "lucide-react-native";
 
 interface EditableValuePillProps {
   label: string;
   onRemove: () => void;
 }
 
-export const EditableValuePill = ({ label, onRemove }: EditableValuePillProps) => {
+export const EditableValuePill = ({
+  label,
+  onRemove,
+}: EditableValuePillProps) => {
   return (
     <View className="relative">
       <View className="flex-row items-center self-start px-4 py-2 rounded-full border border-[#E5E7EB] bg-[#F2F4F7]">

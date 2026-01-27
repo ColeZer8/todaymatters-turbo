@@ -36,4 +36,3 @@ Make the landing page look great on **mobile viewport widths** (no cropping/over
 ## Follow-ups
 
 - None.
-

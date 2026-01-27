@@ -11,22 +11,25 @@ export const ELEVENLABS_CONFIG = {
    * Your ElevenLabs Agent ID - this can be exposed client-side for public agents.
    * For private agents, we use conversation tokens instead.
    */
-  agentId: process.env.EXPO_PUBLIC_ELEVENLABS_AGENT_ID ?? '',
+  agentId: process.env.EXPO_PUBLIC_ELEVENLABS_AGENT_ID ?? "",
 
   /**
    * Whether the agent is private (requires token) or public (can use agentId directly)
    */
-  isPrivateAgent: process.env.EXPO_PUBLIC_ELEVENLABS_PRIVATE_AGENT === 'true',
+  isPrivateAgent: process.env.EXPO_PUBLIC_ELEVENLABS_PRIVATE_AGENT === "true",
 } as const;
 
 /**
  * Validate that required environment variables are set
  */
-export function validateElevenLabsConfig(): { valid: boolean; missing: string[] } {
+export function validateElevenLabsConfig(): {
+  valid: boolean;
+  missing: string[];
+} {
   const missing: string[] = [];
 
   if (!ELEVENLABS_CONFIG.agentId) {
-    missing.push('EXPO_PUBLIC_ELEVENLABS_AGENT_ID');
+    missing.push("EXPO_PUBLIC_ELEVENLABS_AGENT_ID");
   }
 
   return {
@@ -34,11 +37,3 @@ export function validateElevenLabsConfig(): { valid: boolean; missing: string[] 
     missing,
   };
 }
-
-
-
-
-
-
-
-

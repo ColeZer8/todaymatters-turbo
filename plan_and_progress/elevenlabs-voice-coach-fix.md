@@ -40,5 +40,3 @@ Restore reliable ElevenLabs voice coach start/stop from the Home greeting tap, w
 ## Follow-ups
 
 - If ElevenLabs public token issuance changes, confirm whether server-side token minting (Supabase Edge Function) should be reinstated.
-
-

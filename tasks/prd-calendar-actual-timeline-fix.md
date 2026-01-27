@@ -19,9 +19,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 ## User Stories
 
 ### US-001: Enforce No-Overlap Invariant in Timeline Builder
+
 **Description:** As a user, I want the actual timeline to never show overlapping events so I can clearly see my day.
 
 **Acceptance Criteria:**
+
 - [ ] Create `ActualTimelineBuilder` that produces a single ordered list with no overlaps
 - [ ] When events overlap, split the lower-priority event around the higher-priority event
 - [ ] Priority order: (1) User-edited actual, (2) Supabase actual (non-derived), (3) Derived actual from evidence fusion, (4) Screen time inferred, (5) Unknown gaps
@@ -29,9 +31,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-002: Generate Unique Deterministic Event IDs
+
 **Description:** As a developer, I need every derived event to have a unique ID so React renders correctly without duplicate key warnings.
 
 **Acceptance Criteria:**
+
 - [ ] Derived event IDs use format: `derived:{type}:{startMinutes}:{endMinutes}:{source}`
 - [ ] Add uniqueness validation before rendering—log warning if duplicates found
 - [ ] Fix `derived_actual:sleep_interrupted_60_8` duplicate issue specifically
@@ -39,9 +43,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-003: Fix Actual Data Persistence for Prior Days
+
 **Description:** As a user, I want my actual data from previous days to persist and not be erased.
 
 **Acceptance Criteria:**
+
 - [ ] Investigate `syncDerivedActualEvents` and cleanup logic for erasure bug
 - [ ] Derived events synced to Supabase are not re-derived and duplicated on reload
 - [ ] Prior day actual events remain intact after app restart
@@ -49,9 +55,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-004: Implement Evidence Source Priority Resolution
+
 **Description:** As a user, I want my actual timeline to reflect reality using the best available evidence.
 
 **Acceptance Criteria:**
+
 - [ ] Resolution order: (1) User's ideal/planned event, (2) Location data, (3) Screen time as intentionality check
 - [ ] Screen time within expected context (e.g., calculator at work) doesn't override location
 - [ ] Screen time outside expected context (e.g., Instagram at work) adds "distracted" note
@@ -59,9 +67,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-005: Cross-Reference Planned Events with Actual Evidence
+
 **Description:** As a user, I want my planned events to be reconciled with what actually happened based on evidence.
 
 **Acceptance Criteria:**
+
 - [ ] For each planned event, check evidence to confirm, shift, shorten, or mark as skipped
 - [ ] If evidence shows late arrival: shift actual block start time, add "arrived X min late" in description
 - [ ] If evidence shows different activity: keep planned as-is, create actual block showing reality
@@ -70,9 +80,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-006: User-Defined Location and App Mappings for Cross-Reference
+
 **Description:** As a user, I want to define what locations and apps correspond to my activities so the system can infer correctly.
 
 **Acceptance Criteria:**
+
 - [ ] User can map locations to activities (e.g., "123 Main St" = "Work", "456 Gym Ave" = "Gym")
 - [ ] User can map apps to activity types (e.g., "Slack" = "Work", "MyFitnessPal" = "Gym")
 - [ ] Cross-reference logic uses these mappings to infer actual from evidence
@@ -81,18 +93,22 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-007: Handle Screen Time Inside Sleep Blocks
+
 **Description:** As a user, I want brief phone usage during sleep to be noted on the sleep block, but longer usage to be a separate event.
 
 **Acceptance Criteria:**
+
 - [ ] Screen time ≤10 min during sleep: embed in sleep block description (e.g., "Sleep (phone: 5 min)")
 - [ ] Screen time >10 min during sleep: create separate "Screen Time" block, split sleep around it
 - [ ] Sleep block shows total duration excluding screen time interruptions >10 min
 - [ ] Typecheck/lint passes
 
 ### US-008: Handle Distraction Detection
+
 **Description:** As a user, I want to see when I was distracted from my planned activity based on app usage.
 
 **Acceptance Criteria:**
+
 - [ ] If planned work + location is work but distraction app caused late start: shift actual to arrival, add "distracted" note
 - [ ] Distraction <10 min: note on same block
 - [ ] Distraction >10 min: separate distraction block
@@ -100,9 +116,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-009: Fill Unknown Gaps with Interactive Prompts
+
 **Description:** As a user, I want gaps in my actual timeline to prompt me for input while offering smart suggestions.
 
 **Acceptance Criteria:**
+
 - [ ] Unknown gaps show interactive "What were you doing?" prompt
 - [ ] Suggestions inferred from planned events for that time slot
 - [ ] User can select from suggestions or enter custom activity
@@ -111,9 +129,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-010: Show Evidence in Event Detail View
+
 **Description:** As a user, I want to see the evidence (location, screen time) that informed an actual event when I tap on it.
 
 **Acceptance Criteria:**
+
 - [ ] Event detail view shows source evidence (location data, screen time sessions)
 - [ ] Shows confidence score for derived events (visible on expand/tap only)
 - [ ] Evidence formatted clearly (e.g., "Location: 123 Main St from 9:00-10:30 AM")
@@ -121,9 +141,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-011: Consolidate Evidence Fusion Pipeline
+
 **Description:** As a developer, I need a single pipeline that fuses all evidence sources before rendering.
 
 **Acceptance Criteria:**
+
 - [ ] Create unified evidence fusion in `actual-display-events.ts`
 - [ ] Pipeline: merge evidence blocks + screen time + planned cross-ref → single ordered list
 - [ ] Each event has unique ID and attached metadata for description rendering
@@ -132,9 +154,11 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - [ ] Typecheck/lint passes
 
 ### US-012: Android-Specific Evidence Pipeline
+
 **Description:** As an Android user, I need the pipeline to work with Usage Access and location data.
 
 **Acceptance Criteria:**
+
 - [ ] Use Usage Access sessions + location hourly to build fused blocks
 - [ ] When location is sparse, fallback to screen time + unknown with confidence tags
 - [ ] Handle Android-specific data formats and timing
@@ -172,6 +196,7 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 ## Technical Considerations
 
 ### Key Files
+
 - **Orchestration:** `apps/mobile/src/app/comprehensive-calendar.tsx`
 - **Merge/Derivation:** `apps/mobile/src/lib/calendar/actual-display-events.ts`
 - **Screen Time Derivation:** `apps/mobile/src/lib/calendar/derive-screen-time-actual-events.ts`
@@ -179,12 +204,14 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 - **Render:** `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx`
 
 ### Architecture
+
 - `ActualTimelineBuilder` class to consolidate all fusion logic
 - Split algorithm for overlap resolution (split lower-priority around higher-priority)
 - Deterministic ID generation: `derived:{type}:{startMinutes}:{endMinutes}:{source}`
 - Evidence metadata attached to events for detail view rendering
 
 ### Data Flow
+
 1. Load planned events, evidence (location, screen time), existing actuals from Supabase
 2. Cross-reference planned with evidence
 3. Derive actual events from evidence
@@ -194,6 +221,7 @@ Fix the calendar's "Actual" timeline to be accurate, non-overlapping, and reliab
 7. Persist derived/unknown to Supabase (idempotently, no duplicates)
 
 ### Known Issues to Fix
+
 - `ComprehensiveCalendarTemplate.tsx` lines 552-559: duplicate key error
 - `buildActualDisplayEvents` producing overlaps despite dedup logic
 - `syncDerivedActualEvents` possibly erasing prior day data

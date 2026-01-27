@@ -30,7 +30,8 @@ const features = [
     icon: Target,
     label: "Goals",
     title: "Track what matters",
-    description: "Set and monitor goals across faith, family, work, and health.",
+    description:
+      "Set and monitor goals across faith, family, work, and health.",
     color: "#F59E0B",
   },
 ];
@@ -61,7 +62,8 @@ export const DailyLifeGrid = () => {
         <motion.div
           className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full"
           style={{
-            background: "radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)",
+            background:
+              "radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, transparent 70%)",
           }}
           animate={{
             scale: [1, 1.2, 1],
@@ -76,7 +78,8 @@ export const DailyLifeGrid = () => {
         <motion.div
           className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full"
           style={{
-            background: "radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)",
+            background:
+              "radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%)",
           }}
           animate={{
             scale: [1.2, 1, 1.2],
@@ -114,7 +117,7 @@ export const DailyLifeGrid = () => {
         ))}
 
         {/* Grid Pattern Overlay */}
-        <div 
+        <div
           className="absolute inset-0 opacity-[0.015]"
           style={{
             backgroundImage: `
@@ -143,7 +146,8 @@ export const DailyLifeGrid = () => {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-lg text-[#52525b] max-w-2xl mx-auto"
           >
-            From planning and tracking to coaching and reflection, Today Matters helps you stay aligned with your calling every single day.
+            From planning and tracking to coaching and reflection, Today Matters
+            helps you stay aligned with your calling every single day.
           </motion.p>
         </div>
 
@@ -155,27 +159,37 @@ export const DailyLifeGrid = () => {
               initial={{ opacity: 0, y: 30 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, delay: 0.2 + index * 0.1 }}
-              whileHover={!isAnimating ? { 
-                y: -8,
-                transition: { duration: 0.3 }
-              } : {}}
+              whileHover={
+                !isAnimating
+                  ? {
+                      y: -8,
+                      transition: { duration: 0.3 },
+                    }
+                  : {}
+              }
               className={`group relative bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-gray-100/50 transition-all duration-500 overflow-hidden ${
-                !isAnimating ? 'hover:border-gray-200 hover:shadow-2xl hover:shadow-black/10' : ''
+                !isAnimating
+                  ? "hover:border-gray-200 hover:shadow-2xl hover:shadow-black/10"
+                  : ""
               }`}
             >
               {/* Highlight Flash Animation - Slower and more intentional */}
               <motion.div
                 className="absolute inset-0 rounded-3xl pointer-events-none"
                 initial={{ opacity: 0 }}
-                animate={isInView ? {
-                  opacity: [0, 0.7, 0.7, 0],
-                  scale: [0.92, 1.02, 1, 1],
-                } : {}}
+                animate={
+                  isInView
+                    ? {
+                        opacity: [0, 0.7, 0.7, 0],
+                        scale: [0.92, 1.02, 1, 1],
+                      }
+                    : {}
+                }
                 transition={{
                   duration: 1.2,
                   delay: 0.6 + index * 0.2,
                   ease: [0.25, 0.1, 0.25, 1],
-                  times: [0, 0.3, 0.7, 1]
+                  times: [0, 0.3, 0.7, 1],
                 }}
                 style={{
                   background: `radial-gradient(circle at center, ${feature.color}35, transparent 70%)`,
@@ -196,9 +210,9 @@ export const DailyLifeGrid = () => {
                     {feature.label}
                   </span>
                 </div>
-                
+
                 {/* Icon with animated background */}
-                <motion.div 
+                <motion.div
                   className="relative w-14 h-14 bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-md flex items-center justify-center mb-6 group-hover:shadow-xl transition-shadow duration-500"
                   whileHover={!isAnimating ? { scale: 1.1, rotate: 5 } : {}}
                   transition={{ duration: 0.3 }}
@@ -209,18 +223,17 @@ export const DailyLifeGrid = () => {
                       background: `linear-gradient(135deg, ${feature.color}20, transparent)`,
                     }}
                   />
-                  <feature.icon 
-                    className="relative z-10 w-7 h-7 text-brand-primary group-hover:scale-110 transition-transform duration-300" 
-                  />
+                  <feature.icon className="relative z-10 w-7 h-7 text-brand-primary group-hover:scale-110 transition-transform duration-300" />
                 </motion.div>
 
                 <h3 className="text-xl font-bold text-[#0a0a0a] mb-3 tracking-tight leading-tight group-hover:text-brand-primary transition-colors duration-300">
-                  {feature.title.split(" ").slice(0, -1).join(" ")}<br />
+                  {feature.title.split(" ").slice(0, -1).join(" ")}
+                  <br />
                   <span className="inline-block group-hover:translate-x-1 transition-transform duration-300">
                     {feature.title.split(" ").slice(-1)}
                   </span>
                 </h3>
-                
+
                 <p className="text-sm text-[#52525b] leading-relaxed group-hover:text-[#0a0a0a] transition-colors duration-300">
                   {feature.description}
                 </p>

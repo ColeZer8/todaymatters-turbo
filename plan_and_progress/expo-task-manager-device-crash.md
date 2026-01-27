@@ -37,4 +37,3 @@ Prevent the app from hard-crashing on physical iOS devices when the installed de
 ## Follow-ups
 
 - If physical device is running an older dev client, rebuild/reinstall dev client so background location can be enabled there too.
-

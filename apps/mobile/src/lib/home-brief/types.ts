@@ -1,15 +1,20 @@
 export type HomeBriefReason =
-  | 'morningWake'
-  | 'inProgress'
-  | 'nextEventSoon'
-  | 'eventStarting'
-  | 'eventEnded'
-  | 'goalNudge'
-  | 'reviewTimeNudge'
-  | 'dayWrap'
-  | 'default';
+  | "morningWake"
+  | "inProgress"
+  | "nextEventSoon"
+  | "eventStarting"
+  | "eventEnded"
+  | "goalNudge"
+  | "reviewTimeNudge"
+  | "dayWrap"
+  | "default";
 
-export type TimeOfDayBucket = 'morning' | 'midday' | 'afternoon' | 'evening' | 'night';
+export type TimeOfDayBucket =
+  | "morning"
+  | "midday"
+  | "afternoon"
+  | "evening"
+  | "night";
 
 export interface HomeBriefEventSummary {
   id: string;
@@ -48,7 +53,7 @@ export interface HomeBriefContext {
   rhythm: {
     wakeMinutesFromMidnight: number | null;
     sleepMinutesFromMidnight: number | null;
-    /** True when we consider the user “just woke up” and should start with “This is the …” */ 
+    /** True when we consider the user “just woke up” and should start with “This is the …” */
     isWakeWindowActive: boolean;
   };
 
@@ -88,9 +93,5 @@ export interface HomeBriefDraft {
 
 export interface HomeBriefResult extends HomeBriefDraft {
   /** 'rules' = local rules, 'llm' = OpenAI polished */
-  source: 'rules' | 'llm';
+  source: "rules" | "llm";
 }
-
-
-
-

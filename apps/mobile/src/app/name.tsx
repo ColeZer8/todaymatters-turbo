@@ -1,17 +1,21 @@
-import { useEffect, useMemo } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { NameTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
-import { deriveFullNameFromEmail } from '@/lib/user-name';
+import { useEffect, useMemo } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { NameTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
+import { deriveFullNameFromEmail } from "@/lib/user-name";
 
 export default function NameScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
 
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -20,12 +24,15 @@ export default function NameScreen() {
   const fullName = useOnboardingStore((s) => s.fullName);
   const setFullName = useOnboardingStore((s) => s.setFullName);
 
-  const suggestedName = useMemo(() => deriveFullNameFromEmail(user?.email), [user?.email]);
+  const suggestedName = useMemo(
+    () => deriveFullNameFromEmail(user?.email),
+    [user?.email],
+  );
 
   const { saveFullName } = useOnboardingSync({
     autoLoad: false,
     autoSave: false,
-    onError: (err) => console.error('Failed to save name:', err),
+    onError: (err) => console.error("Failed to save name:", err),
   });
 
   // Seed from email if empty (temporary until we fully pull from auth profile info).
@@ -50,7 +57,7 @@ export default function NameScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -72,10 +79,8 @@ export default function NameScreen() {
       fullName={fullName}
       onChangeFullName={setFullName}
       isContinueDisabled={isContinueDisabled}
-      onContinue={() => router.replace('/vip-contacts')}
-      onBack={() => router.replace('/ai-summary')}
+      onContinue={() => router.replace("/vip-contacts")}
+      onBack={() => router.replace("/ai-summary")}
     />
   );
 }
-
-

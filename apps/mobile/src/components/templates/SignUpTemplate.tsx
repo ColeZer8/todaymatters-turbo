@@ -1,8 +1,8 @@
-import { GradientButton, LogoBadge } from '@/components/atoms';
-import { AuthInput, SocialAuthButton } from '@/components/molecules';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
+import { GradientButton, LogoBadge } from "@/components/atoms";
+import { AuthInput, SocialAuthButton } from "@/components/molecules";
+import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react-native";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,8 +12,8 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface SignUpTemplateProps {
   email: string;
@@ -48,11 +48,11 @@ export const SignUpTemplate = ({
   onGooglePress,
   onNavigateToSignIn,
 }: SignUpTemplateProps) => {
-  const isIos = Platform.OS === 'ios';
+  const isIos = Platform.OS === "ios";
 
   return (
     <LinearGradient
-      colors={['#f5f9ff', '#eef5ff']}
+      colors={["#f5f9ff", "#eef5ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       className="flex-1"
@@ -62,7 +62,7 @@ export const SignUpTemplate = ({
       <SafeAreaView className="flex-1" style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={isIos ? 'padding' : undefined}
+          behavior={isIos ? "padding" : undefined}
           enabled={isIos}
           keyboardVerticalOffset={0}
         >
@@ -74,17 +74,30 @@ export const SignUpTemplate = ({
             <View className="flex-1 w-full items-center" style={styles.content}>
               <View className="items-center">
                 <LogoBadge />
-                <Text className="mt-6 text-3xl font-semibold text-text-primary">Today Matters</Text>
-                <Text className="mt-2 text-lg text-text-secondary">Design your ideal day.</Text>
+                <Text className="mt-6 text-3xl font-semibold text-text-primary">
+                  Today Matters
+                </Text>
+                <Text className="mt-2 text-lg text-text-secondary">
+                  Design your ideal day.
+                </Text>
               </View>
 
-              <View className="w-full mt-8" style={{ maxWidth: CARD_MAX_WIDTH }}>
+              <View
+                className="w-full mt-8"
+                style={{ maxWidth: CARD_MAX_WIDTH }}
+              >
                 <View style={[styles.card, styles.cardShadow]}>
-                  <Text className="text-2xl font-extrabold text-text-primary">Create your account</Text>
-                  <Text className="mt-2 text-base text-text-secondary">Let’s get you set up</Text>
+                  <Text className="text-2xl font-extrabold text-text-primary">
+                    Create your account
+                  </Text>
+                  <Text className="mt-2 text-base text-text-secondary">
+                    Let’s get you set up
+                  </Text>
 
                   {authError ? (
-                    <Text className="mt-4 text-sm font-semibold text-red-500">{authError}</Text>
+                    <Text className="mt-4 text-sm font-semibold text-red-500">
+                      {authError}
+                    </Text>
                   ) : null}
 
                   <View className="mt-6">
@@ -130,7 +143,9 @@ export const SignUpTemplate = ({
 
                   <View className="flex-row items-center mt-6">
                     <View className="flex-1 border-b border-slate-200" />
-                    <Text className="mx-3 text-sm font-semibold text-text-tertiary">OR</Text>
+                    <Text className="mx-3 text-sm font-semibold text-text-tertiary">
+                      OR
+                    </Text>
                     <View className="flex-1 border-b border-slate-200" />
                   </View>
 
@@ -156,13 +171,17 @@ export const SignUpTemplate = ({
               <View style={styles.flexSpacer} />
 
               <View className="flex-row items-center justify-center">
-                <Text className="text-base text-text-secondary">Already have an account?</Text>
+                <Text className="text-base text-text-secondary">
+                  Already have an account?
+                </Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={onNavigateToSignIn}
                   hitSlop={6}
                 >
-                  <Text className="ml-2 text-base font-semibold text-text-primary">Sign in</Text>
+                  <Text className="ml-2 text-base font-semibold text-text-primary">
+                    Sign in
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -196,18 +215,18 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   card: {
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 24,
     paddingVertical: 28,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     borderWidth: 1,
   },
   cardShadow: {
-    shadowColor: '#1D4ED8',
+    shadowColor: "#1D4ED8",
     shadowOpacity: 0.07,
     shadowRadius: 28,
     shadowOffset: { width: 0, height: 14 },

@@ -1,7 +1,7 @@
-import type { EvidenceBundle } from '@/lib/supabase/services/evidence-data';
-import type { ScheduledEvent } from '@/stores';
-import type { TimeBlock } from '@/stores/review-time-store';
-import { getReadableAppName } from '@/lib/app-names';
+import type { EvidenceBundle } from "@/lib/supabase/services/evidence-data";
+import type { ScheduledEvent } from "@/stores";
+import type { TimeBlock } from "@/stores/review-time-store";
+import { getReadableAppName } from "@/lib/app-names";
 
 interface BuildReviewTimeBlocksInput {
   ymd: string;
@@ -11,7 +11,11 @@ interface BuildReviewTimeBlocksInput {
 
 const MIN_SESSION_GAP_MINUTES = 15;
 
-export function buildReviewTimeBlocks({ ymd, evidence, actualEvents }: BuildReviewTimeBlocksInput): TimeBlock[] {
+export function buildReviewTimeBlocks({
+  ymd,
+  evidence,
+  actualEvents,
+}: BuildReviewTimeBlocksInput): TimeBlock[] {
   const blocks: TimeBlock[] = [];
   const dayStart = ymdToDate(ymd);
 
@@ -25,9 +29,13 @@ export function buildReviewTimeBlocks({ ymd, evidence, actualEvents }: BuildRevi
   const screenTimeBlocks = buildScreenTimeBlocks(dayStart, evidence);
   const workoutBlocks = buildWorkoutBlocks(dayStart, evidence);
 
-  const candidateBlocks = [...locationBlocks, ...screenTimeBlocks, ...workoutBlocks];
+  const candidateBlocks = [
+    ...locationBlocks,
+    ...screenTimeBlocks,
+    ...workoutBlocks,
+  ];
   const remainingUnknownEvents = new Map<string, ScheduledEvent>(
-    actualEvents.filter((e) => e.category === 'unknown').map((e) => [e.id, e])
+    actualEvents.filter((e) => e.category === "unknown").map((e) => [e.id, e]),
   );
 
   for (const block of candidateBlocks) {
@@ -37,7 +45,7 @@ export function buildReviewTimeBlocks({ ymd, evidence, actualEvents }: BuildRevi
       continue;
     }
 
-    if (overlap.category !== 'unknown') {
+    if (overlap.category !== "unknown") {
       continue;
     }
 
@@ -54,37 +62,49 @@ export function buildReviewTimeBlocks({ ymd, evidence, actualEvents }: BuildRevi
     blocks.push({
       id: `unknown_${event.id}`,
       sourceId: `unknown:${event.id}`,
-      source: 'unknown',
+      source: "unknown",
       eventId: event.id,
-      title: event.title || 'Unknown',
-      description: event.description || '',
+      title: event.title || "Unknown",
+      description: event.description || "",
       duration: event.duration,
       startMinutes: event.startMinutes,
       startTime: formatMinutesToTime(event.startMinutes),
       endTime: formatMinutesToTime(event.startMinutes + event.duration),
-      activityDetected: 'No activity detected',
+      activityDetected: "No activity detected",
     });
   }
 
   return blocks.sort((a, b) => a.startMinutes - b.startMinutes);
 }
 
-function buildLocationBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBlock[] {
+function buildLocationBlocks(
+  dayStart: Date,
+  evidence: EvidenceBundle,
+): TimeBlock[] {
   const blocks: TimeBlock[] = [];
-  const sorted = [...evidence.locationHourly].sort((a, b) => a.hour_start.localeCompare(b.hour_start));
+  const sorted = [...evidence.locationHourly].sort((a, b) =>
+    a.hour_start.localeCompare(b.hour_start),
+  );
 
   let current: TimeBlock | null = null;
   for (const loc of sorted) {
     const hourStart = new Date(loc.hour_start);
-    const startMinutes = Math.floor((hourStart.getTime() - dayStart.getTime()) / 60_000);
+    const startMinutes = Math.floor(
+      (hourStart.getTime() - dayStart.getTime()) / 60_000,
+    );
     if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
 
-    const locationLabel = loc.place_label || loc.place_category || 'Unknown location';
+    const locationLabel =
+      loc.place_label || loc.place_category || "Unknown location";
     const nextStart = startMinutes;
     const nextEnd = startMinutes + 60;
     const key = locationLabel.toLowerCase();
 
-    if (current && current.location?.toLowerCase() === key && current.startMinutes + current.duration === nextStart) {
+    if (
+      current &&
+      current.location?.toLowerCase() === key &&
+      current.startMinutes + current.duration === nextStart
+    ) {
       current.duration += 60;
       current.endTime = formatMinutesToTime(nextEnd);
       continue;
@@ -93,9 +113,9 @@ function buildLocationBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBloc
     current = {
       id: `loc_${loc.hour_start}`,
       sourceId: `location:${loc.hour_start}`,
-      source: 'location',
+      source: "location",
       title: locationLabel,
-      description: loc.place_category ?? '',
+      description: loc.place_category ?? "",
       duration: 60,
       startMinutes: nextStart,
       startTime: formatMinutesToTime(nextStart),
@@ -108,8 +128,13 @@ function buildLocationBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBloc
   return blocks;
 }
 
-function buildScreenTimeBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBlock[] {
-  const sessions = [...evidence.screenTimeSessions].sort((a, b) => a.started_at.localeCompare(b.started_at));
+function buildScreenTimeBlocks(
+  dayStart: Date,
+  evidence: EvidenceBundle,
+): TimeBlock[] {
+  const sessions = [...evidence.screenTimeSessions].sort((a, b) =>
+    a.started_at.localeCompare(b.started_at),
+  );
   if (sessions.length === 0) return [];
 
   const blocks: TimeBlock[] = [];
@@ -122,13 +147,16 @@ function buildScreenTimeBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBl
     if (currentEnd <= currentStart) return;
     const duration = currentEnd - currentStart;
     const topApp = getTopApp(appUsage);
-    const activityDetected = currentPickups > 0 ? `Phone unlocked ${currentPickups} times` : `Screen time${topApp ? `: ${topApp}` : ''}`;
+    const activityDetected =
+      currentPickups > 0
+        ? `Phone unlocked ${currentPickups} times`
+        : `Screen time${topApp ? `: ${topApp}` : ""}`;
     blocks.push({
       id: `screen_${currentStart}_${currentEnd}`,
       sourceId: `screen:${currentStart}:${currentEnd}`,
-      source: 'screen_time',
-      title: 'Screen Time',
-      description: topApp ? `Top app: ${topApp}` : '',
+      source: "screen_time",
+      title: "Screen Time",
+      description: topApp ? `Top app: ${topApp}` : "",
       duration,
       startMinutes: currentStart,
       startTime: formatMinutesToTime(currentStart),
@@ -140,8 +168,12 @@ function buildScreenTimeBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBl
   for (const session of sessions) {
     const startedAt = new Date(session.started_at);
     const endedAt = new Date(session.ended_at);
-    const startMinutes = Math.floor((startedAt.getTime() - dayStart.getTime()) / 60_000);
-    const endMinutes = Math.ceil((endedAt.getTime() - dayStart.getTime()) / 60_000);
+    const startMinutes = Math.floor(
+      (startedAt.getTime() - dayStart.getTime()) / 60_000,
+    );
+    const endMinutes = Math.ceil(
+      (endedAt.getTime() - dayStart.getTime()) / 60_000,
+    );
     if (endMinutes <= 0 || startMinutes >= 24 * 60) continue;
 
     const safeStart = Math.max(0, startMinutes);
@@ -161,27 +193,36 @@ function buildScreenTimeBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBl
     }
 
     currentPickups += session.pickups ?? 0;
-    const appName = getReadableAppName({ appId: session.app_id, displayName: session.display_name }) ?? session.app_id;
+    const appName =
+      getReadableAppName({
+        appId: session.app_id,
+        displayName: session.display_name,
+      }) ?? session.app_id;
     const currentUsage = appUsage.get(appName) ?? 0;
-    appUsage.set(appName, currentUsage + (session.duration_seconds / 60));
+    appUsage.set(appName, currentUsage + session.duration_seconds / 60);
   }
 
   flush();
   return blocks;
 }
 
-function buildWorkoutBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBlock[] {
+function buildWorkoutBlocks(
+  dayStart: Date,
+  evidence: EvidenceBundle,
+): TimeBlock[] {
   return evidence.healthWorkouts.map((workout) => {
     const start = new Date(workout.started_at);
     const end = new Date(workout.ended_at);
-    const startMinutes = Math.floor((start.getTime() - dayStart.getTime()) / 60_000);
+    const startMinutes = Math.floor(
+      (start.getTime() - dayStart.getTime()) / 60_000,
+    );
     const endMinutes = Math.ceil((end.getTime() - dayStart.getTime()) / 60_000);
     const duration = Math.max(1, endMinutes - startMinutes);
-    const activity = workout.activity_type || 'Workout';
+    const activity = workout.activity_type || "Workout";
     return {
       id: `workout_${workout.id}`,
       sourceId: `workout:${workout.id}`,
-      source: 'workout',
+      source: "workout",
       title: activity,
       description: `${Math.round(workout.duration_seconds / 60)} min`,
       duration,
@@ -195,7 +236,7 @@ function buildWorkoutBlocks(dayStart: Date, evidence: EvidenceBundle): TimeBlock
 
 function findOverlappingEvent(
   block: TimeBlock,
-  events: Array<{ event: ScheduledEvent; start: number; end: number }>
+  events: Array<{ event: ScheduledEvent; start: number; end: number }>,
 ): ScheduledEvent | null {
   const blockStart = block.startMinutes;
   const blockEnd = block.startMinutes + block.duration;
@@ -224,9 +265,9 @@ function getTopApp(appUsage: Map<string, number>): string | null {
 function formatMinutesToTime(totalMinutes: number): string {
   const hours24 = Math.floor(totalMinutes / 60) % 24;
   const minutes = totalMinutes % 60;
-  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
 }
 
 function ymdToDate(ymd: string): Date {

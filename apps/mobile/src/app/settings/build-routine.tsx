@@ -1,8 +1,16 @@
-import { useRouter } from 'expo-router';
-import { RoutineBuilderTemplate } from '@/components/templates/RoutineBuilderTemplate';
-import { useRoutineBuilderStore } from '@/stores/routine-builder-store';
+import { useRouter } from "expo-router";
+import { RoutineBuilderTemplate } from "@/components/templates/RoutineBuilderTemplate";
+import { useRoutineBuilderStore } from "@/stores/routine-builder-store";
 
-const QUICK_ADD = ['Brush Teeth', 'Shower', 'Make Bed', 'Read', 'Meditate', 'Walk Dog', 'Make Breakfast'];
+const QUICK_ADD = [
+  "Brush Teeth",
+  "Shower",
+  "Make Bed",
+  "Read",
+  "Meditate",
+  "Walk Dog",
+  "Make Breakfast",
+];
 
 export default function SettingsBuildRoutineScreen() {
   const router = useRouter();
@@ -28,9 +36,3 @@ export default function SettingsBuildRoutineScreen() {
     />
   );
 }
-
-
-
-
-
-

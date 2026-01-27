@@ -8,6 +8,7 @@
 ## Objective
 
 Bring Android onboarding UX in line with iOS for:
+
 - Primary CTA (Continue/Looks Good) rendering
 - Keyboard avoidance (inputs not covered by keyboard)
 - Routine Builder drag + animations
@@ -41,5 +42,3 @@ Bring Android onboarding UX in line with iOS for:
 ## Follow-ups
 
 - If needed, add a dedicated drag handle to reduce ScrollView gesture competition (Android only).
-
-

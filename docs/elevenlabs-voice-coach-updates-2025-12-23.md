@@ -5,16 +5,19 @@ This document captures the changes made to restore ElevenLabs Voice Coach reliab
 ## Context
 
 Symptoms reported:
+
 - Home screen flashes/white flicker when tapping the greeting to start/stop voice.
 - Agent no longer runs (connect attempt → immediate disconnect).
 
 ## Root cause(s)
 
 ### 1) Token endpoint `source` validation (causing 422)
+
 Our diagnostic “public token preflight” call was sending a custom `source=` query parameter.
 ElevenLabs appears to validate `source` against a fixed allowlist in some environments, so the custom value triggered a **422**, which made the situation look like the agent/token flow was broken.
 
 ### 2) SDK internal token exchange fragility
+
 Even for public agents, the SDK internally performs a token exchange (`agentId` → `conversationToken`) before starting the LiveKit/WebRTC session.
 When this step becomes unreliable (or fails without a clear surfaced error), the session can bounce between `connecting` → `disconnected`.
 
@@ -35,10 +38,12 @@ When this step becomes unreliable (or fails without a clear surfaced error), the
   - Fallback: `startSession({ agentId })` if token fetch fails or returns an unexpected body
 
 **Why this helps**
+
 - Removes false negatives from the diagnostics (no more 422 due to unrecognized `source`).
 - Avoids relying on the SDK’s internal token exchange as a single point of failure.
 
 **New logs to watch**
+
 - `[VoiceCoach] Public token fetch { ok, status, hasToken, ... }`
 
 ### B) Isolate voice hook updates so Home UI doesn’t rerender/flash
@@ -49,6 +54,7 @@ When this step becomes unreliable (or fails without a clear surfaced error), the
 - The controller only updates a ref (`voiceApiRef`) used by the stable greeting tap handler.
 
 **Why this helps**
+
 - Voice `status` changes no longer force `HomeTemplate` (and its subtree) to rerender, which is a common cause of the “white flash” during rapid connect/disconnect state changes.
 
 ## Files touched
@@ -60,10 +66,12 @@ When this step becomes unreliable (or fails without a clear surfaced error), the
 ## Verification
 
 Commands:
+
 - `pnpm --filter mobile check-types` ✅
 - `pnpm --filter mobile lint` ✅ (warnings only, no errors)
 
 Manual QA:
+
 - Tap greeting to start:
   - Expect `[VoiceCoach] Public token fetch ... hasToken: true` (ideal) and `Status: connected`
 - Tap greeting to stop:
@@ -74,12 +82,12 @@ Manual QA:
 ## If it still disconnects
 
 Paste these logs:
+
 - `[VoiceCoach] Public token fetch ...`
 - `[VoiceCoach] Status: ...` sequence
 - Any `[VoiceCoach] Error: ...`
 
 Interpretation:
+
 - **401/403 on token fetch**: ElevenLabs is not issuing public tokens → Option A cannot work; switch to server-minted `conversationToken` (Option B).
 - **Token fetch OK but still disconnects**: likely LiveKit/WebRTC connect failure; we’ll narrow it with the error logs.
-
-

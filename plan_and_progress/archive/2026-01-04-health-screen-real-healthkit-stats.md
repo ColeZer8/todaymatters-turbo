@@ -41,5 +41,3 @@ Keep the existing Category Health UI for the Health category, but populate the �
 ## Follow-ups
 
 - Consider deriving “score/breakdown” and chart from real metrics once goals are formalized.
-
-

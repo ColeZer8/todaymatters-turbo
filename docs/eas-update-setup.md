@@ -11,16 +11,19 @@ You're all set! Here's what I configured and how to use it:
 ## Your Workflow Now
 
 ### Step 1: Client Installs Current Build
+
 - Share your current build URL with client
 - Client installs the APK (one time, ~120 min wait)
 - Done! They have the app installed
 
 ### Step 2: Make Changes Locally
+
 - Edit your code as normal
 - Test locally if you want
 - No need to rebuild!
 
 ### Step 3: Push Update (30 seconds!)
+
 ```bash
 cd apps/mobile
 eas update --branch preview --message "Fixed login bug"
@@ -73,6 +76,7 @@ eas update --branch preview --message "Your changes"
 ## What Client Sees
 
 When you push an update:
+
 1. Client opens app (or app checks in background)
 2. App detects update available
 3. Downloads update silently

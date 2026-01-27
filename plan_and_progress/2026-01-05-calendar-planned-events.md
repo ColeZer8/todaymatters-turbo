@@ -49,4 +49,3 @@ Make the Planned calendar fully functional for daily use: add/edit/delete events
 
 - Add recurrence + multi-day events.
 - Expand actual-event capture (manual edits, writeback).
-

@@ -1,18 +1,22 @@
-import { View, Text, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen } from 'lucide-react-native';
-import { Icon } from '@/components/atoms';
-import { BottomToolbar } from './BottomToolbar';
+import { View, Text, Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BookOpen } from "lucide-react-native";
+import { Icon } from "@/components/atoms";
+import { BottomToolbar } from "./BottomToolbar";
 
 /**
  * DemoMorningRoutine - Special morning devotional screen for demo mode
- * 
+ *
  * Shows the spiritual growth / morning prayer flow that appears
  * when the user wakes up and opens the app.
- * 
+ *
  * Spacing matches HomeTemplate exactly.
  */
-export const DemoMorningRoutine = ({ userName = 'Paul' }: { userName?: string }) => {
+export const DemoMorningRoutine = ({
+  userName = "Paul",
+}: {
+  userName?: string;
+}) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -65,7 +69,8 @@ export const DemoMorningRoutine = ({ userName = 'Paul' }: { userName?: string })
 
           {/* Scripture Quote */}
           <Text className="text-[15px] leading-[24px] text-[#6B7280] text-center mb-6">
-            "Trust in the Lord with all your heart and lean not on your own understanding."
+            "Trust in the Lord with all your heart and lean not on your own
+            understanding."
           </Text>
 
           {/* Action Button */}
@@ -98,9 +103,3 @@ export const DemoMorningRoutine = ({ userName = 'Paul' }: { userName?: string })
     </View>
   );
 };
-
-
-
-
-
-

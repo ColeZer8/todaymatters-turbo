@@ -1,22 +1,26 @@
-import { useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { FocusStyleTemplate } from '@/components/templates';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useOnboardingStore } from '@/stores/onboarding-store';
-import { useOnboardingSync } from '@/lib/supabase/hooks';
+import { useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { FocusStyleTemplate } from "@/components/templates";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useOnboardingStore } from "@/stores/onboarding-store";
+import { useOnboardingSync } from "@/lib/supabase/hooks";
 
 const FOCUS_OPTIONS = [
-  { id: 'sprint', badge: '25m', label: 'Sprint', description: 'Short bursts.' },
-  { id: 'flow', badge: '50m', label: 'Flow', description: 'Balanced rhythm.' },
-  { id: 'deep', badge: '90m', label: 'Deep', description: 'Intense focus.' },
+  { id: "sprint", badge: "25m", label: "Sprint", description: "Short bursts." },
+  { id: "flow", badge: "50m", label: "Flow", description: "Balanced rhythm." },
+  { id: "deep", badge: "90m", label: "Deep", description: "Intense focus." },
 ];
 
 export default function FocusStyleScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
@@ -24,7 +28,10 @@ export default function FocusStyleScreen() {
   const setSelected = useOnboardingStore((state) => state.setFocusStyle);
 
   // Supabase sync
-  const { saveFocusStyle } = useOnboardingSync({ autoLoad: false, autoSave: false });
+  const { saveFocusStyle } = useOnboardingSync({
+    autoLoad: false,
+    autoSave: false,
+  });
 
   // Save to Supabase when focus style changes
   useEffect(() => {
@@ -37,7 +44,7 @@ export default function FocusStyleScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -57,8 +64,8 @@ export default function FocusStyleScreen() {
       options={FOCUS_OPTIONS}
       selectedId={selected}
       onSelect={setSelected}
-      onContinue={() => router.replace('/coach-persona')}
-      onBack={() => router.replace('/your-why')}
+      onContinue={() => router.replace("/coach-persona")}
+      onBack={() => router.replace("/your-why")}
     />
   );
 }

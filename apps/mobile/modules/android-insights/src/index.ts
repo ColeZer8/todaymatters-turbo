@@ -1,8 +1,13 @@
-import { requireOptionalNativeModule } from 'expo-modules-core';
+import { requireOptionalNativeModule } from "expo-modules-core";
 
-export type UsageAccessAuthorizationStatus = 'notDetermined' | 'denied' | 'authorized' | 'unknown' | 'unsupported';
+export type UsageAccessAuthorizationStatus =
+  | "notDetermined"
+  | "denied"
+  | "authorized"
+  | "unknown"
+  | "unsupported";
 
-export type UsageRangeKey = 'today' | 'week' | 'month' | 'year';
+export type UsageRangeKey = "today" | "week" | "month" | "year";
 
 export interface StepCountSumOptions {
   /**
@@ -68,7 +73,10 @@ export interface WorkoutSummary {
   errors?: string[] | null;
 }
 
-export type HealthAuthorizationStatus = 'notDetermined' | 'denied' | 'authorized';
+export type HealthAuthorizationStatus =
+  | "notDetermined"
+  | "denied"
+  | "authorized";
 
 interface AndroidInsightsNativeModule {
   // Health Connect (scaffolded; implemented in follow-up)
@@ -78,7 +86,9 @@ interface AndroidInsightsNativeModule {
   getHealthAuthorizationStatus(): Promise<HealthAuthorizationStatus>;
   getHealthSummaryJson(options: StepCountSumOptions): Promise<string | null>;
   getStepCountSum(options: StepCountSumOptions): Promise<number>;
-  getLatestWorkoutSummaryJson(options: StepCountSumOptions): Promise<string | null>;
+  getLatestWorkoutSummaryJson(
+    options: StepCountSumOptions,
+  ): Promise<string | null>;
 
   // Usage stats ("Screen Time"-ish)
   getUsageAccessAuthorizationStatus(): Promise<UsageAccessAuthorizationStatus>;
@@ -86,7 +96,8 @@ interface AndroidInsightsNativeModule {
   getUsageSummaryJson(range: UsageRangeKey): Promise<string | null>;
 }
 
-const NativeModule = requireOptionalNativeModule<AndroidInsightsNativeModule>('AndroidInsights');
+const NativeModule =
+  requireOptionalNativeModule<AndroidInsightsNativeModule>("AndroidInsights");
 
 export function isAndroidInsightsNativeModuleAvailable(): boolean {
   return Boolean(NativeModule);
@@ -94,15 +105,19 @@ export function isAndroidInsightsNativeModuleAvailable(): boolean {
 
 function requireAndroidInsights(): AndroidInsightsNativeModule {
   if (!NativeModule) {
-    throw new Error('AndroidInsights native module not available (are you running on Android dev build?)');
+    throw new Error(
+      "AndroidInsights native module not available (are you running on Android dev build?)",
+    );
   }
   return NativeModule;
 }
 
-function requireAndroidInsightsMethod<K extends keyof AndroidInsightsNativeModule>(key: K): AndroidInsightsNativeModule[K] {
+function requireAndroidInsightsMethod<
+  K extends keyof AndroidInsightsNativeModule,
+>(key: K): AndroidInsightsNativeModule[K] {
   const mod = requireAndroidInsights() as unknown as Record<string, unknown>;
   const value = mod[String(key)];
-  if (typeof value !== 'function') {
+  if (typeof value !== "function") {
     throw new Error(
       `AndroidInsights native module missing method "${String(key)}". This usually means your Android dev client is out of date—rebuild it (pnpm --filter mobile android) and reopen the app.`,
     );
@@ -112,58 +127,70 @@ function requireAndroidInsightsMethod<K extends keyof AndroidInsightsNativeModul
 
 export async function isHealthConnectAvailableAsync(): Promise<boolean> {
   if (!NativeModule) return false;
-  return await requireAndroidInsightsMethod('isHealthConnectAvailable')();
+  return await requireAndroidInsightsMethod("isHealthConnectAvailable")();
 }
 
 export async function openHealthConnectSettingsAsync(): Promise<void> {
   if (!NativeModule) return;
-  await requireAndroidInsightsMethod('openHealthConnectSettings')();
+  await requireAndroidInsightsMethod("openHealthConnectSettings")();
 }
 
 export async function requestHealthAuthorizationAsync(): Promise<boolean> {
   if (!NativeModule) return false;
-  return await requireAndroidInsightsMethod('requestHealthAuthorization')();
+  return await requireAndroidInsightsMethod("requestHealthAuthorization")();
 }
 
 export async function getHealthAuthorizationStatusAsync(): Promise<HealthAuthorizationStatus> {
-  if (!NativeModule) return 'denied';
-  return await requireAndroidInsightsMethod('getHealthAuthorizationStatus')();
+  if (!NativeModule) return "denied";
+  return await requireAndroidInsightsMethod("getHealthAuthorizationStatus")();
 }
 
-export async function getStepCountSumAsync(options: StepCountSumOptions): Promise<number> {
+export async function getStepCountSumAsync(
+  options: StepCountSumOptions,
+): Promise<number> {
   if (!NativeModule) return 0;
-  return await requireAndroidInsightsMethod('getStepCountSum')(options);
+  return await requireAndroidInsightsMethod("getStepCountSum")(options);
 }
 
-export async function getHealthSummaryAsync(options: StepCountSumOptions): Promise<HealthSummary | null> {
+export async function getHealthSummaryAsync(
+  options: StepCountSumOptions,
+): Promise<HealthSummary | null> {
   if (!NativeModule) return null;
-  const json = await requireAndroidInsightsMethod('getHealthSummaryJson')(options);
+  const json = await requireAndroidInsightsMethod("getHealthSummaryJson")(
+    options,
+  );
   if (!json) return null;
   return JSON.parse(json) as HealthSummary;
 }
 
-export async function getLatestWorkoutSummaryAsync(options: StepCountSumOptions): Promise<WorkoutSummary | null> {
+export async function getLatestWorkoutSummaryAsync(
+  options: StepCountSumOptions,
+): Promise<WorkoutSummary | null> {
   if (!NativeModule) return null;
-  const json = await requireAndroidInsightsMethod('getLatestWorkoutSummaryJson')(options);
+  const json = await requireAndroidInsightsMethod(
+    "getLatestWorkoutSummaryJson",
+  )(options);
   if (!json) return null;
   return JSON.parse(json) as WorkoutSummary;
 }
 
 export async function getUsageAccessAuthorizationStatusAsync(): Promise<UsageAccessAuthorizationStatus> {
-  if (!NativeModule) return 'unsupported';
-  return await requireAndroidInsightsMethod('getUsageAccessAuthorizationStatus')();
+  if (!NativeModule) return "unsupported";
+  return await requireAndroidInsightsMethod(
+    "getUsageAccessAuthorizationStatus",
+  )();
 }
 
 export async function openUsageAccessSettingsAsync(): Promise<void> {
   if (!NativeModule) return;
-  await requireAndroidInsightsMethod('openUsageAccessSettings')();
+  await requireAndroidInsightsMethod("openUsageAccessSettings")();
 }
 
-export async function getUsageSummaryAsync(range: UsageRangeKey): Promise<UsageSummary | null> {
+export async function getUsageSummaryAsync(
+  range: UsageRangeKey,
+): Promise<UsageSummary | null> {
   if (!NativeModule) return null;
-  const json = await requireAndroidInsightsMethod('getUsageSummaryJson')(range);
+  const json = await requireAndroidInsightsMethod("getUsageSummaryJson")(range);
   if (!json) return null;
   return JSON.parse(json) as UsageSummary;
 }
-
-

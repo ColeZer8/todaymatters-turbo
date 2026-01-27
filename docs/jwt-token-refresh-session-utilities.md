@@ -9,6 +9,7 @@ This document describes the session utility functions added to support manual to
 ### Purpose
 
 Provides utility functions for:
+
 1. Manual token refresh with error handling
 2. Pre-emptive session validation before API calls
 3. Token expiry checking
@@ -22,25 +23,28 @@ Manually refreshes the current session.
 **Returns:** `Promise<Session | null>`
 
 **Behavior:**
+
 - Attempts to refresh the current session
 - Handles refresh errors gracefully
 - Automatically signs out user if refresh fails
 - Returns new session or null
 
 **Error Handling:**
+
 - `refresh_token_not_found` → Signs out user
 - `invalid_refresh_token` → Signs out user
 - `refresh_token_already_used` → Signs out user
 
 **Example:**
+
 ```typescript
-import { refreshSession } from '@/lib/supabase/session';
+import { refreshSession } from "@/lib/supabase/session";
 
 const session = await refreshSession();
 if (session) {
-  console.log('Session refreshed');
+  console.log("Session refreshed");
 } else {
-  console.log('Refresh failed, user signed out');
+  console.log("Refresh failed, user signed out");
 }
 ```
 
@@ -51,21 +55,23 @@ Gets a valid session, refreshing if token is about to expire.
 **Returns:** `Promise<Session | null>`
 
 **Behavior:**
+
 - Checks if current session exists
 - Checks if token expires within 5 minutes
 - Automatically refreshes if needed
 - Returns valid session or null
 
 **Example:**
+
 ```typescript
-import { getValidSession } from '@/lib/supabase/session';
+import { getValidSession } from "@/lib/supabase/session";
 
 async function makeApiCall() {
   const session = await getValidSession();
   if (!session) {
-    throw new Error('Not authenticated');
+    throw new Error("Not authenticated");
   }
-  
+
   // Token is guaranteed to be valid for at least 5 minutes
   // Make your API call here
 }
@@ -76,14 +82,16 @@ async function makeApiCall() {
 Checks if a session's token is expiring soon.
 
 **Parameters:**
+
 - `session: Session` - The session to check
 - `thresholdMinutes: number` - Minutes before expiry to consider "soon" (default: 5)
 
 **Returns:** `boolean`
 
 **Example:**
+
 ```typescript
-import { isTokenExpiringSoon } from '@/lib/supabase/session';
+import { isTokenExpiringSoon } from "@/lib/supabase/session";
 
 const session = await supabase.auth.getSession();
 if (session.data.session && isTokenExpiringSoon(session.data.session)) {
@@ -98,22 +106,22 @@ if (session.data.session && isTokenExpiringSoon(session.data.session)) {
 Use `getValidSession()` before making authenticated API calls:
 
 ```typescript
-import { getValidSession } from '@/lib/supabase/session';
-import { supabase } from '@/lib/supabase';
+import { getValidSession } from "@/lib/supabase/session";
+import { supabase } from "@/lib/supabase";
 
 async function fetchUserProfile() {
   const session = await getValidSession();
   if (!session) {
-    throw new Error('Authentication required');
+    throw new Error("Authentication required");
   }
-  
+
   const { data, error } = await supabase
-    .schema('tm')
-    .from('profiles')
-    .select('*')
-    .eq('user_id', session.user.id)
+    .schema("tm")
+    .from("profiles")
+    .select("*")
+    .eq("user_id", session.user.id)
     .single();
-    
+
   return data;
 }
 ```
@@ -123,7 +131,7 @@ async function fetchUserProfile() {
 Use `refreshSession()` when you need to ensure a fresh token:
 
 ```typescript
-import { refreshSession } from '@/lib/supabase/session';
+import { refreshSession } from "@/lib/supabase/session";
 
 // Before a critical operation
 const session = await refreshSession();
@@ -141,9 +149,9 @@ The module exports error constants for refresh failures:
 
 ```typescript
 export const REFRESH_ERRORS = {
-  'refresh_token_not_found': 'Re-login required',
-  'invalid_refresh_token': 'Re-login required',
-  'refresh_token_already_used': 'Session expired',
+  refresh_token_not_found: "Re-login required",
+  invalid_refresh_token: "Re-login required",
+  refresh_token_already_used: "Session expired",
 };
 ```
 
@@ -152,7 +160,7 @@ export const REFRESH_ERRORS = {
 ### Test Manual Refresh
 
 ```typescript
-import { refreshSession } from '@/lib/supabase/session';
+import { refreshSession } from "@/lib/supabase/session";
 
 // Test successful refresh
 const session = await refreshSession();
@@ -163,7 +171,7 @@ expect(session?.access_token).toBeTruthy();
 ### Test Pre-emptive Refresh
 
 ```typescript
-import { getValidSession } from '@/lib/supabase/session';
+import { getValidSession } from "@/lib/supabase/session";
 
 // Mock session with expiring token
 const expiringSession = { expires_at: Date.now() / 1000 + 60 }; // Expires in 1 minute
@@ -172,4 +180,3 @@ const expiringSession = { expires_at: Date.now() / 1000 + 60 }; // Expires in 1 
 const session = await getValidSession();
 expect(session).toBeTruthy();
 ```
-

@@ -39,5 +39,3 @@ Make ElevenLabs voice agent activation **invisible** in the UI, and ensure the m
 ## Follow-ups
 
 - Add subtle UI affordance for active listening state (future).
-
-

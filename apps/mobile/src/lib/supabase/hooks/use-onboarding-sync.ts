@@ -3,10 +3,10 @@
  * Handles all onboarding fields: profile, preferences, goals, initiatives
  */
 
-import { useEffect, useCallback } from 'react';
-import { useAuthStore, useOnboardingStore } from '@/stores';
-import type { PermissionsData } from '@/stores/onboarding-store';
-import type { AiSetupResponses } from '@/lib/ai-setup';
+import { useEffect, useCallback } from "react";
+import { useAuthStore, useOnboardingStore } from "@/stores";
+import type { PermissionsData } from "@/stores/onboarding-store";
+import type { AiSetupResponses } from "@/lib/ai-setup";
 import {
   fetchProfile,
   updateProfile,
@@ -25,14 +25,14 @@ import {
   updateProfilePreferences,
   getProfilePreferences,
   dateToTimeString,
-} from '../services/profiles';
+} from "../services/profiles";
 import {
   fetchGoals,
   fetchInitiatives,
   bulkCreateGoals,
   bulkCreateInitiatives,
-} from '../services/events';
-import type { ProfileData } from '../services/profiles';
+} from "../services/events";
+import type { ProfileData } from "../services/profiles";
 
 interface UseOnboardingSyncOptions {
   autoLoad?: boolean; // Automatically load on mount
@@ -49,8 +49,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const permissions = useOnboardingStore((s) => s.permissions);
   const role = useOnboardingStore((s) => s.role);
   const fullName = useOnboardingStore((s) => s.fullName);
-  const hasWatchedExplainerVideo = useOnboardingStore((s) => s.hasWatchedExplainerVideo);
-  const hasCompletedOnboarding = useOnboardingStore((s) => s.hasCompletedOnboarding);
+  const hasWatchedExplainerVideo = useOnboardingStore(
+    (s) => s.hasWatchedExplainerVideo,
+  );
+  const hasCompletedOnboarding = useOnboardingStore(
+    (s) => s.hasCompletedOnboarding,
+  );
   const coreValues = useOnboardingStore((s) => s.coreValues);
   const coreCategories = useOnboardingStore((s) => s.coreCategories);
   const valuesScores = useOnboardingStore((s) => s.valuesScores);
@@ -79,8 +83,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setPurpose = useOnboardingStore((s) => s.setPurpose);
   const setRole = useOnboardingStore((s) => s.setRole);
   const setFullName = useOnboardingStore((s) => s.setFullName);
-  const setHasWatchedExplainerVideo = useOnboardingStore((s) => s.setHasWatchedExplainerVideo);
-  const setHasCompletedOnboarding = useOnboardingStore((s) => s.setHasCompletedOnboarding);
+  const setHasWatchedExplainerVideo = useOnboardingStore(
+    (s) => s.setHasWatchedExplainerVideo,
+  );
+  const setHasCompletedOnboarding = useOnboardingStore(
+    (s) => s.setHasCompletedOnboarding,
+  );
   const setCoreValues = useOnboardingStore((s) => s.setCoreValues);
   const setCoreCategories = useOnboardingStore((s) => s.setCoreCategories);
   const setValuesScores = useOnboardingStore((s) => s.setValuesScores);
@@ -88,7 +96,9 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   const setJoySelections = useOnboardingStore((s) => s.setJoySelections);
   const setJoyCustomOptions = useOnboardingStore((s) => s.setJoyCustomOptions);
   const setDrainSelections = useOnboardingStore((s) => s.setDrainSelections);
-  const setDrainCustomOptions = useOnboardingStore((s) => s.setDrainCustomOptions);
+  const setDrainCustomOptions = useOnboardingStore(
+    (s) => s.setDrainCustomOptions,
+  );
   const setFocusStyle = useOnboardingStore((s) => s.setFocusStyle);
   const setCoachPersona = useOnboardingStore((s) => s.setCoachPersona);
   const setMorningMindset = useOnboardingStore((s) => s.setMorningMindset);
@@ -109,7 +119,7 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     }
 
     try {
-      console.log('📥 Loading onboarding data from Supabase...');
+      console.log("📥 Loading onboarding data from Supabase...");
 
       // Load profile
       const profile = await fetchProfile(user.id);
@@ -120,49 +130,67 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         }
         if (profile.ideal_work_day) {
           const wakeDate = new Date();
-          const [hours, minutes] = profile.ideal_work_day.split(':').map(Number);
+          const [hours, minutes] = profile.ideal_work_day
+            .split(":")
+            .map(Number);
           wakeDate.setHours(hours, minutes, 0, 0);
           setWakeTime(wakeDate);
         }
         if (profile.ideal_sabbath) {
           const sleepDate = new Date();
-          const [hours, minutes] = profile.ideal_sabbath.split(':').map(Number);
+          const [hours, minutes] = profile.ideal_sabbath.split(":").map(Number);
           sleepDate.setHours(hours, minutes, 0, 0);
           setSleepTime(sleepDate);
         }
-      if (profile.mission) {
+        if (profile.mission) {
           setPurpose(profile.mission);
         }
         if (profile.role) {
           setRole(profile.role);
         }
-      if (typeof profile.has_watched_explainer_video === 'boolean') {
-        setHasWatchedExplainerVideo(profile.has_watched_explainer_video);
-      }
-      if (typeof profile.has_completed_onboarding === 'boolean') {
-        setHasCompletedOnboarding(profile.has_completed_onboarding);
-      }
-      if (Array.isArray(profile.core_values)) {
-        setCoreValues(profile.core_values as ProfileData['core_values'] as Parameters<typeof setCoreValues>[0]);
-      }
-      if (Array.isArray(profile.core_categories)) {
-        setCoreCategories(profile.core_categories as ProfileData['core_categories'] as Parameters<typeof setCoreCategories>[0]);
-      }
-      if (Array.isArray(profile.values_scores)) {
-        setValuesScores(profile.values_scores as ProfileData['values_scores'] as Parameters<typeof setValuesScores>[0]);
-      }
-      if (Array.isArray(profile.goal_whys)) {
-        setGoalWhys(profile.goal_whys as ProfileData['goal_whys'] as Parameters<typeof setGoalWhys>[0]);
-      }
-      if (profile.church_name) {
-        setChurchName(profile.church_name);
-      }
-      if (profile.church_address) {
-        setChurchAddress(profile.church_address);
-      }
-      if (profile.church_website) {
-        setChurchWebsite(profile.church_website);
-      }
+        if (typeof profile.has_watched_explainer_video === "boolean") {
+          setHasWatchedExplainerVideo(profile.has_watched_explainer_video);
+        }
+        if (typeof profile.has_completed_onboarding === "boolean") {
+          setHasCompletedOnboarding(profile.has_completed_onboarding);
+        }
+        if (Array.isArray(profile.core_values)) {
+          setCoreValues(
+            profile.core_values as ProfileData["core_values"] as Parameters<
+              typeof setCoreValues
+            >[0],
+          );
+        }
+        if (Array.isArray(profile.core_categories)) {
+          setCoreCategories(
+            profile.core_categories as ProfileData["core_categories"] as Parameters<
+              typeof setCoreCategories
+            >[0],
+          );
+        }
+        if (Array.isArray(profile.values_scores)) {
+          setValuesScores(
+            profile.values_scores as ProfileData["values_scores"] as Parameters<
+              typeof setValuesScores
+            >[0],
+          );
+        }
+        if (Array.isArray(profile.goal_whys)) {
+          setGoalWhys(
+            profile.goal_whys as ProfileData["goal_whys"] as Parameters<
+              typeof setGoalWhys
+            >[0],
+          );
+        }
+        if (profile.church_name) {
+          setChurchName(profile.church_name);
+        }
+        if (profile.church_address) {
+          setChurchAddress(profile.church_address);
+        }
+        if (profile.church_website) {
+          setChurchWebsite(profile.church_website);
+        }
 
         // Load preferences from meta
         const preferences = getProfilePreferences(profile);
@@ -221,14 +249,19 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         setGoals(goalTitles);
       }
       if (initiatives.length > 0) {
-        const initiativeTitles = initiatives.map((i) => i.title).filter(Boolean);
+        const initiativeTitles = initiatives
+          .map((i) => i.title)
+          .filter(Boolean);
         setInitiatives(initiativeTitles);
       }
 
-      console.log('✅ Onboarding data loaded successfully');
+      console.log("✅ Onboarding data loaded successfully");
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to load onboarding data');
-      console.error('Failed to load onboarding data:', err);
+      const err =
+        error instanceof Error
+          ? error
+          : new Error("Failed to load onboarding data");
+      console.error("Failed to load onboarding data:", err);
       onError?.(err);
     }
   }, [
@@ -265,18 +298,22 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
   // Save all onboarding data to Supabase
   const saveOnboardingData = useCallback(async (): Promise<void> => {
     if (!isAuthenticated || !user?.id) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     try {
-      console.log('💾 Saving onboarding data to Supabase...');
+      console.log("💾 Saving onboarding data to Supabase...");
 
       // Save profile data
       const wake = new Date(wakeTime);
       const sleep = new Date(sleepTime);
 
       await Promise.all([
-        updateDailyRhythm(user.id, dateToTimeString(wake), dateToTimeString(sleep)),
+        updateDailyRhythm(
+          user.id,
+          dateToTimeString(wake),
+          dateToTimeString(sleep),
+        ),
         purpose && updateMission(user.id, purpose),
         role && updateRole(user.id, role),
       ]);
@@ -316,10 +353,13 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
         await bulkCreateInitiatives(user.id, initiatives.filter(Boolean));
       }
 
-      console.log('✅ Onboarding data saved successfully');
+      console.log("✅ Onboarding data saved successfully");
     } catch (error) {
-      const err = error instanceof Error ? error : new Error('Failed to save onboarding data');
-      console.error('Failed to save onboarding data:', err);
+      const err =
+        error instanceof Error
+          ? error
+          : new Error("Failed to save onboarding data");
+      console.error("Failed to save onboarding data:", err);
       onError?.(err);
       throw err;
     }
@@ -360,10 +400,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateJoySelections(user.id, selections);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save joy selections'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save joy selections"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveJoyCustomOptions = useCallback(
@@ -372,10 +416,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateJoyCustomOptions(user.id, options);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save joy custom options'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save joy custom options"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveDrainSelections = useCallback(
@@ -384,10 +432,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateDrainSelections(user.id, selections);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save drain selections'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save drain selections"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveDrainCustomOptions = useCallback(
@@ -396,10 +448,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateDrainCustomOptions(user.id, options);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save drain custom options'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save drain custom options"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const savePermissions = useCallback(
@@ -408,10 +464,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updatePermissions(user.id, permissions);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save permissions'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save permissions"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveRole = useCallback(
@@ -420,10 +480,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateRole(user.id, role);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save role'));
+        onError?.(
+          error instanceof Error ? error : new Error("Failed to save role"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveFullName = useCallback(
@@ -432,10 +494,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateFullName(user.id, fullName);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save name'));
+        onError?.(
+          error instanceof Error ? error : new Error("Failed to save name"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveFocusStyle = useCallback(
@@ -444,10 +508,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateFocusStyle(user.id, focusStyle);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save focus style'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save focus style"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveCoachPersona = useCallback(
@@ -456,10 +524,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateCoachPersona(user.id, coachPersona);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save coach persona'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save coach persona"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveMorningMindset = useCallback(
@@ -468,22 +540,34 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateMorningMindset(user.id, morningMindset);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save morning mindset'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save morning mindset"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveDailyRhythm = useCallback(
     async (wakeTime: Date, sleepTime: Date) => {
       if (!isAuthenticated || !user?.id) return;
       try {
-        await updateDailyRhythm(user.id, dateToTimeString(wakeTime), dateToTimeString(sleepTime));
+        await updateDailyRhythm(
+          user.id,
+          dateToTimeString(wakeTime),
+          dateToTimeString(sleepTime),
+        );
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save daily rhythm'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save daily rhythm"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const savePurpose = useCallback(
@@ -492,10 +576,12 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateMission(user.id, purpose);
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save purpose'));
+        onError?.(
+          error instanceof Error ? error : new Error("Failed to save purpose"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveHomeAddress = useCallback(
@@ -504,10 +590,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateProfilePreferences(user.id, { home_address: address });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save home address'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save home address"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveWorkAddress = useCallback(
@@ -516,70 +606,96 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateProfilePreferences(user.id, { work_address: address });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save work address'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save work address"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveAiSetupResponses = useCallback(
     async (responses: AiSetupResponses) => {
       if (!isAuthenticated || !user?.id) return;
       try {
-        await updateProfilePreferences(user.id, { ai_setup_responses: responses });
+        await updateProfilePreferences(user.id, {
+          ai_setup_responses: responses,
+        });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save AI setup responses'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save AI setup responses"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveCoreValues = useCallback(
-    async (values: ProfileData['core_values']) => {
+    async (values: ProfileData["core_values"]) => {
       if (!isAuthenticated || !user?.id) return;
       try {
         await updateProfile(user.id, { core_values: values });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save core values'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save core values"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveCoreCategories = useCallback(
-    async (categories: ProfileData['core_categories']) => {
+    async (categories: ProfileData["core_categories"]) => {
       if (!isAuthenticated || !user?.id) return;
       try {
         await updateProfile(user.id, { core_categories: categories });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save core categories'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save core categories"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveValuesScores = useCallback(
-    async (scores: ProfileData['values_scores']) => {
+    async (scores: ProfileData["values_scores"]) => {
       if (!isAuthenticated || !user?.id) return;
       try {
         await updateProfile(user.id, { values_scores: scores });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save value scores'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save value scores"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveGoalWhys = useCallback(
-    async (whys: ProfileData['goal_whys']) => {
+    async (whys: ProfileData["goal_whys"]) => {
       if (!isAuthenticated || !user?.id) return;
       try {
         await updateProfile(user.id, { goal_whys: whys });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save goal whys'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save goal whys"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveChurchInfo = useCallback(
@@ -592,10 +708,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
           church_website: input.website.trim() || null,
         });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save church info'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save church info"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveExplainerVideoWatched = useCallback(
@@ -604,10 +724,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateProfile(user.id, { has_watched_explainer_video: watched });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save explainer video status'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save explainer video status"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   const saveOnboardingCompleted = useCallback(
@@ -616,10 +740,14 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
       try {
         await updateProfile(user.id, { has_completed_onboarding: completed });
       } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Failed to save onboarding completion'));
+        onError?.(
+          error instanceof Error
+            ? error
+            : new Error("Failed to save onboarding completion"),
+        );
       }
     },
-    [isAuthenticated, user?.id, onError]
+    [isAuthenticated, user?.id, onError],
   );
 
   // Auto-load on mount if enabled
@@ -657,7 +785,3 @@ export function useOnboardingSync(options: UseOnboardingSyncOptions = {}) {
     saveOnboardingCompleted,
   };
 }
-
-
-
-

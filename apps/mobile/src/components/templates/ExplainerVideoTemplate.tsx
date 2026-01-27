@@ -1,10 +1,23 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, Info, LockKeyhole, Play, SkipForward, Target } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GradientButton } from '@/components/atoms';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
+import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
+import {
+  ArrowRight,
+  Info,
+  LockKeyhole,
+  Play,
+  SkipForward,
+  Target,
+} from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { GradientButton } from "@/components/atoms";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
 
 interface ExplainerVideoTemplateProps {
   step?: number;
@@ -28,7 +41,7 @@ export const ExplainerVideoTemplate = ({
 
   return (
     <LinearGradient
-      colors={['#f5f9ff', '#eef5ff']}
+      colors={["#f5f9ff", "#eef5ff"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={styles.gradient}
@@ -40,7 +53,8 @@ export const ExplainerVideoTemplate = ({
           <View style={styles.header}>
             <View className="flex-row items-center gap-2">
               <Text className="text-sm font-semibold text-text-secondary">
-                <Text className="text-brand-primary">Step {step}</Text> of {totalSteps}
+                <Text className="text-brand-primary">Step {step}</Text> of{" "}
+                {totalSteps}
               </Text>
             </View>
             <Pressable
@@ -49,7 +63,9 @@ export const ExplainerVideoTemplate = ({
               className="flex-row items-center gap-1 rounded-full bg-white px-3 py-1.5 active:opacity-70"
             >
               <SkipForward size={14} color="#111827" />
-              <Text className="text-xs font-semibold text-text-primary">Skip</Text>
+              <Text className="text-xs font-semibold text-text-primary">
+                Skip
+              </Text>
             </Pressable>
           </View>
 
@@ -74,7 +90,7 @@ export const ExplainerVideoTemplate = ({
               {/* Video Placeholder */}
               <View style={styles.videoContainer}>
                 <LinearGradient
-                  colors={['#1E3A8A', '#1E293B']}
+                  colors={["#1E3A8A", "#1E293B"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.videoPlaceholder}
@@ -106,12 +122,12 @@ export const ExplainerVideoTemplate = ({
                 </View>
 
                 <Text className="mt-3 text-sm leading-5 text-text-secondary">
-                  Today Matters exists to help you replace lies with truth so you can live a better
-                  life.
+                  Today Matters exists to help you replace lies with truth so
+                  you can live a better life.
                 </Text>
                 <Text className="mt-2 text-sm leading-5 text-text-secondary">
-                  We only use your data to help you understand your patterns and make meaningful
-                  progress.
+                  We only use your data to help you understand your patterns and
+                  make meaningful progress.
                 </Text>
 
                 <View className="mt-4 gap-3">
@@ -136,14 +152,11 @@ export const ExplainerVideoTemplate = ({
 
           {/* Pinned CTA */}
           <View
-            style={[
-              styles.bottomCta,
-              { paddingBottom: 14 + insets.bottom },
-            ]}
+            style={[styles.bottomCta, { paddingBottom: 14 + insets.bottom }]}
           >
             <View style={styles.contentWidth}>
               <GradientButton
-                label={hasWatched ? 'Continue' : 'Get Started'}
+                label={hasWatched ? "Continue" : "Get Started"}
                 onPress={onContinue}
                 rightIcon={ArrowRight}
               />
@@ -170,7 +183,9 @@ const InfoRow = ({
     </View>
     <View className="flex-1">
       <Text className="text-sm font-semibold text-text-primary">{title}</Text>
-      <Text className="mt-0.5 text-xs leading-4 text-text-secondary">{description}</Text>
+      <Text className="mt-0.5 text-xs leading-4 text-text-secondary">
+        {description}
+      </Text>
     </View>
   </View>
 );
@@ -192,29 +207,29 @@ const styles = StyleSheet.create({
     paddingTop: 6,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 26,
     paddingTop: 20,
   },
   contentWidth: {
-    width: '100%',
+    width: "100%",
     maxWidth: 540,
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingHorizontal: 26,
   },
   videoContainer: {
     marginTop: 16,
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
     aspectRatio: 16 / 9,
     borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
+    overflow: "hidden",
+    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: '#E4E8F0',
-    shadowColor: '#0f172a',
+    borderColor: "#E4E8F0",
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
@@ -222,27 +237,27 @@ const styles = StyleSheet.create({
   },
   videoPlaceholder: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   playButton: {
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: "rgba(255,255,255,0.3)",
   },
   copyCard: {
-    shadowColor: '#0f172a',
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
   },
   bottomCta: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     paddingTop: 12,
-    backgroundColor: 'rgba(245, 249, 255, 0.92)',
+    backgroundColor: "rgba(245, 249, 255, 0.92)",
   },
 });
 

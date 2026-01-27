@@ -1,21 +1,35 @@
-import { useCallback, useEffect } from 'react';
-import { ActivityIndicator, InteractionManager, View } from 'react-native';
-import { useRouter, useRootNavigationState } from 'expo-router';
-import { RoutineBuilderTemplate } from '@/components/templates/RoutineBuilderTemplate';
-import { useAuthStore } from '@/stores';
-import { ONBOARDING_STEPS, ONBOARDING_TOTAL_STEPS } from '@/constants/onboarding';
-import { useRoutineBuilderStore } from '@/stores/routine-builder-store';
-import { useRoutineSync } from '@/lib/supabase/hooks';
-import { useOnboardingStore } from '@/stores/onboarding-store';
+import { useCallback, useEffect } from "react";
+import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
+import { RoutineBuilderTemplate } from "@/components/templates/RoutineBuilderTemplate";
+import { useAuthStore } from "@/stores";
+import {
+  ONBOARDING_STEPS,
+  ONBOARDING_TOTAL_STEPS,
+} from "@/constants/onboarding";
+import { useRoutineBuilderStore } from "@/stores/routine-builder-store";
+import { useRoutineSync } from "@/lib/supabase/hooks";
+import { useOnboardingStore } from "@/stores/onboarding-store";
 
-const QUICK_ADD = ['Brush Teeth', 'Shower', 'Make Bed', 'Read', 'Meditate', 'Walk Dog', 'Make Breakfast'];
+const QUICK_ADD = [
+  "Brush Teeth",
+  "Shower",
+  "Make Bed",
+  "Read",
+  "Meditate",
+  "Walk Dog",
+  "Make Breakfast",
+];
 
 export default function BuildRoutineScreen() {
   const router = useRouter();
   const navigationState = useRootNavigationState();
-  const isNavigationReady = navigationState?.key != null && navigationState?.routes?.length > 0;
+  const isNavigationReady =
+    navigationState?.key != null && navigationState?.routes?.length > 0;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const setHasCompletedOnboarding = useOnboardingStore((state) => state.setHasCompletedOnboarding);
+  const setHasCompletedOnboarding = useOnboardingStore(
+    (state) => state.setHasCompletedOnboarding,
+  );
 
   const hasHydrated = useRoutineBuilderStore((state) => state._hasHydrated);
   const items = useRoutineBuilderStore((state) => state.items);
@@ -26,10 +40,13 @@ export default function BuildRoutineScreen() {
   const deleteItem = useRoutineBuilderStore((state) => state.deleteItem);
 
   const handleSyncError = useCallback((err: Error) => {
-    console.error('Failed to sync routine:', err);
+    console.error("Failed to sync routine:", err);
   }, []);
 
-  const { saveRoutine } = useRoutineSync({ autoLoad: true, onError: handleSyncError });
+  const { saveRoutine } = useRoutineSync({
+    autoLoad: true,
+    onError: handleSyncError,
+  });
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) return;
@@ -43,7 +60,7 @@ export default function BuildRoutineScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace('/');
+        router.replace("/");
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);
@@ -70,9 +87,9 @@ export default function BuildRoutineScreen() {
       onContinue={() => {
         void saveRoutine();
         setHasCompletedOnboarding(true);
-        router.replace('/home');
+        router.replace("/home");
       }}
-      onBack={() => router.replace('/morning-mindset')}
+      onBack={() => router.replace("/morning-mindset")}
     />
   );
 }

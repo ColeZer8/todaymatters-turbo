@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, AppStateStatus, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ComprehensiveCalendarTemplate } from '../components/templates/ComprehensiveCalendarTemplate';
-import { USE_MOCK_CALENDAR } from '@/lib/config';
-import { getMockPlannedEventsForDay } from '@/lib/calendar/mock-planned-events';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, AppStateStatus, Platform } from "react-native";
+import { useRouter } from "expo-router";
+import { ComprehensiveCalendarTemplate } from "../components/templates/ComprehensiveCalendarTemplate";
+import { USE_MOCK_CALENDAR } from "@/lib/config";
+import { getMockPlannedEventsForDay } from "@/lib/calendar/mock-planned-events";
 import {
   getTodayYmd,
   useAppCategoryOverridesStore,
@@ -11,61 +11,80 @@ import {
   useAuthStore,
   useOnboardingStore,
   useUserPreferencesStore,
-} from '@/stores';
+} from "@/stores";
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
   type ScreenTimeAuthorizationStatus,
   type ScreenTimeSummary,
-} from '@/lib/ios-insights';
+} from "@/lib/ios-insights";
 import {
   getUsageAccessAuthorizationStatusSafeAsync,
   getUsageSummarySafeAsync,
   type UsageSummary,
-} from '@/lib/android-insights';
-import { deriveActualEventsFromScreenTime } from '@/lib/calendar/derive-screen-time-actual-events';
-import { buildActualDisplayEvents } from '@/lib/calendar/actual-display-events';
+} from "@/lib/android-insights";
+import { deriveActualEventsFromScreenTime } from "@/lib/calendar/derive-screen-time-actual-events";
+import { buildActualDisplayEvents } from "@/lib/calendar/actual-display-events";
 import {
   buildPatternIndex,
   buildPatternIndexFromSlots,
   serializePatternIndex,
   type PatternIndex,
-} from '@/lib/calendar/pattern-recognition';
-import { useCalendarEventsSync } from '@/lib/supabase/hooks/use-calendar-events-sync';
+} from "@/lib/calendar/pattern-recognition";
+import { useCalendarEventsSync } from "@/lib/supabase/hooks/use-calendar-events-sync";
 import {
   ensurePlannedSleepScheduleForDay,
   syncDerivedActualEvents,
   deleteActualCalendarEventsByIds,
-} from '@/lib/supabase/services/calendar-events';
-import { useVerification } from '@/lib/calendar/use-verification';
-import { syncActualEvidenceBlocks } from '@/lib/supabase/services/actual-evidence-events';
-import { DERIVED_ACTUAL_PREFIX, DERIVED_EVIDENCE_PREFIX } from '@/lib/calendar/actual-display-events';
-import { fetchActivityPatterns, upsertActivityPatterns } from '@/lib/supabase/services/activity-patterns';
-import { fetchUserAppCategoryOverrides } from '@/lib/supabase/services/user-app-categories';
-import { fetchUserDataPreferences } from '@/lib/supabase/services/user-preferences';
-import { DEFAULT_USER_PREFERENCES } from '@/stores/user-preferences-store';
-import { supabase } from '@/lib/supabase/client';
+} from "@/lib/supabase/services/calendar-events";
+import { useVerification } from "@/lib/calendar/use-verification";
+import { syncActualEvidenceBlocks } from "@/lib/supabase/services/actual-evidence-events";
+import {
+  DERIVED_ACTUAL_PREFIX,
+  DERIVED_EVIDENCE_PREFIX,
+} from "@/lib/calendar/actual-display-events";
+import {
+  fetchActivityPatterns,
+  upsertActivityPatterns,
+} from "@/lib/supabase/services/activity-patterns";
+import { fetchUserAppCategoryOverrides } from "@/lib/supabase/services/user-app-categories";
+import { fetchUserDataPreferences } from "@/lib/supabase/services/user-preferences";
+import { DEFAULT_USER_PREFERENCES } from "@/stores/user-preferences-store";
+import { supabase } from "@/lib/supabase/client";
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
-  const [status, setStatus] = useState<ScreenTimeAuthorizationStatus>('unsupported');
+  const [status, setStatus] =
+    useState<ScreenTimeAuthorizationStatus>("unsupported");
   const [summary, setSummary] = useState<ScreenTimeSummary | null>(null);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const isMountedRef = useRef(true);
 
   const supportStatus = useMemo(() => getIosInsightsSupportStatus(), []);
-  const setDerivedActualEvents = useEventsStore((state) => state.setDerivedActualEvents);
-  const appCategoryOverrides = useAppCategoryOverridesStore((state) => state.overrides);
-  const setAppCategoryOverrides = useAppCategoryOverridesStore((state) => state.setOverrides);
+  const setDerivedActualEvents = useEventsStore(
+    (state) => state.setDerivedActualEvents,
+  );
+  const appCategoryOverrides = useAppCategoryOverridesStore(
+    (state) => state.overrides,
+  );
+  const setAppCategoryOverrides = useAppCategoryOverridesStore(
+    (state) => state.setOverrides,
+  );
   const userPreferences = useUserPreferencesStore((state) => state.preferences);
-  const setUserPreferences = useUserPreferencesStore((state) => state.setPreferences);
+  const setUserPreferences = useUserPreferencesStore(
+    (state) => state.setPreferences,
+  );
 
   const selectedDateYmd = useEventsStore((s) => s.selectedDateYmd);
   const setSelectedDateYmd = useEventsStore((s) => s.setSelectedDateYmd);
   const plannedEvents = useEventsStore((s) => s.scheduledEvents);
-  const plannedCount = useEventsStore((s) => (s.plannedEventsByDate[s.selectedDateYmd] ?? []).length);
-  const setPlannedEventsForDate = useEventsStore((s) => s.setPlannedEventsForDate);
+  const plannedCount = useEventsStore(
+    (s) => (s.plannedEventsByDate[s.selectedDateYmd] ?? []).length,
+  );
+  const setPlannedEventsForDate = useEventsStore(
+    (s) => s.setPlannedEventsForDate,
+  );
 
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const wakeTimeIso = useOnboardingStore((s) => s.wakeTime);
@@ -75,7 +94,9 @@ export default function ComprehensiveCalendarScreen() {
   const setActualDateYmd = useEventsStore((s) => s.setActualDateYmd);
   const actualDateYmd = useEventsStore((s) => s.actualDateYmd);
   const actualEvents = useEventsStore((s) => s.actualEvents);
-  const setActualEventsForDate = useEventsStore((s) => s.setActualEventsForDate);
+  const setActualEventsForDate = useEventsStore(
+    (s) => s.setActualEventsForDate,
+  );
   const updateActualEvent = useEventsStore((s) => s.updateActualEvent);
   const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
   const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
@@ -83,52 +104,74 @@ export default function ComprehensiveCalendarScreen() {
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
-      console.error('[Calendar] Failed to load planned events:', error.message);
+      console.error("[Calendar] Failed to load planned events:", error.message);
     }
   }, []);
 
-  const { loadPlannedForDay, loadActualForDay, loadActualForRange, updatePlanned, updateActual, deletePlanned, deleteActual } =
-    useCalendarEventsSync({
-      onError: handleCalendarSyncError,
-    });
+  const {
+    loadPlannedForDay,
+    loadActualForDay,
+    loadActualForRange,
+    updatePlanned,
+    updateActual,
+    deletePlanned,
+    deleteActual,
+  } = useCalendarEventsSync({
+    onError: handleCalendarSyncError,
+  });
 
   // Verification: cross-reference planned events with evidence (location, screen time, health)
-  const { actualBlocks, evidence, verificationResults, refresh: refreshVerification } = useVerification(
-    plannedEvents,
-    selectedDateYmd,
-    {
+  const {
+    actualBlocks,
+    evidence,
+    verificationResults,
+    refresh: refreshVerification,
+  } = useVerification(plannedEvents, selectedDateYmd, {
     autoFetch: true,
     appCategoryOverrides,
     verificationStrictness: userPreferences.verificationStrictness,
     onError: (err) => {
       if (__DEV__) {
-        console.warn('[Calendar] Verification error:', err.message);
+        console.warn("[Calendar] Verification error:", err.message);
       }
     },
-    },
-  );
+  });
 
-  const selectedDate = useMemo(() => ymdToDate(selectedDateYmd), [selectedDateYmd]);
+  const selectedDate = useMemo(
+    () => ymdToDate(selectedDateYmd),
+    [selectedDateYmd],
+  );
 
   useEffect(() => {
     setSelectedDateYmd(getTodayYmd());
   }, [setSelectedDateYmd]);
 
-  const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
-  const derivedEventsSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(null);
+  const evidenceSyncRef = useRef<{ ymd: string; fingerprint: string } | null>(
+    null,
+  );
+  const derivedEventsSyncRef = useRef<{
+    ymd: string;
+    fingerprint: string;
+  } | null>(null);
   const cleanupRef = useRef<Set<string>>(new Set());
 
-  const isStale = useCallback((generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
-    if (!generatedAtIso) return true;
-    const parsed = new Date(generatedAtIso);
-    if (Number.isNaN(parsed.getTime())) return true;
-    return Date.now() - parsed.getTime() > maxAgeMinutes * 60_000;
-  }, []);
+  const isStale = useCallback(
+    (generatedAtIso: string | undefined, maxAgeMinutes: number): boolean => {
+      if (!generatedAtIso) return true;
+      const parsed = new Date(generatedAtIso);
+      if (Number.isNaN(parsed.getTime())) return true;
+      return Date.now() - parsed.getTime() > maxAgeMinutes * 60_000;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (USE_MOCK_CALENDAR) {
       if (plannedCount > 0) return;
-      setPlannedEventsForDate(selectedDateYmd, getMockPlannedEventsForDay(selectedDateYmd));
+      setPlannedEventsForDate(
+        selectedDateYmd,
+        getMockPlannedEventsForDay(selectedDateYmd),
+      );
       return;
     }
 
@@ -140,11 +183,21 @@ export default function ComprehensiveCalendarScreen() {
         const prev = new Date(selectedDate);
         prev.setDate(prev.getDate() - 1);
         const prevYmd = dateToYmd(prev);
-        await ensurePlannedSleepScheduleForDay({ userId, startYmd: prevYmd, wakeTimeIso, sleepTimeIso });
-        await ensurePlannedSleepScheduleForDay({ userId, startYmd: selectedDateYmd, wakeTimeIso, sleepTimeIso });
+        await ensurePlannedSleepScheduleForDay({
+          userId,
+          startYmd: prevYmd,
+          wakeTimeIso,
+          sleepTimeIso,
+        });
+        await ensurePlannedSleepScheduleForDay({
+          userId,
+          startYmd: selectedDateYmd,
+          wakeTimeIso,
+          sleepTimeIso,
+        });
       } catch (error) {
         if (__DEV__) {
-          console.warn('[Calendar] Failed to ensure sleep schedule:', error);
+          console.warn("[Calendar] Failed to ensure sleep schedule:", error);
         }
       }
 
@@ -155,7 +208,16 @@ export default function ComprehensiveCalendarScreen() {
     return () => {
       cancelled = true;
     };
-  }, [loadPlannedForDay, plannedCount, selectedDate, selectedDateYmd, setPlannedEventsForDate, sleepTimeIso, userId, wakeTimeIso]);
+  }, [
+    loadPlannedForDay,
+    plannedCount,
+    selectedDate,
+    selectedDateYmd,
+    setPlannedEventsForDate,
+    sleepTimeIso,
+    userId,
+    wakeTimeIso,
+  ]);
 
   useEffect(() => {
     if (actualDateYmd !== selectedDateYmd) {
@@ -172,18 +234,28 @@ export default function ComprehensiveCalendarScreen() {
       const toRemove: string[] = [];
       const overlaps = (a: ScheduledEvent, b: ScheduledEvent) => {
         const start = Math.max(a.startMinutes, b.startMinutes);
-        const end = Math.min(a.startMinutes + a.duration, b.startMinutes + b.duration);
+        const end = Math.min(
+          a.startMinutes + a.duration,
+          b.startMinutes + b.duration,
+        );
         return end > start;
       };
       for (const event of events) {
         const sourceId = event.meta?.source_id;
-        if (!sourceId || typeof sourceId !== 'string') continue;
-        if (!sourceId.startsWith('derived_actual:') && !sourceId.startsWith('derived_evidence:')) continue;
+        if (!sourceId || typeof sourceId !== "string") continue;
+        if (
+          !sourceId.startsWith("derived_actual:") &&
+          !sourceId.startsWith("derived_evidence:")
+        )
+          continue;
         const hasOverlap = events.some((other) => {
           if (other.id === event.id) return false;
           const otherSourceId = other.meta?.source_id;
-          if (!otherSourceId || typeof otherSourceId !== 'string') return false;
-          if (!otherSourceId.startsWith('derived_actual:') && !otherSourceId.startsWith('derived_evidence:')) {
+          if (!otherSourceId || typeof otherSourceId !== "string") return false;
+          if (
+            !otherSourceId.startsWith("derived_actual:") &&
+            !otherSourceId.startsWith("derived_evidence:")
+          ) {
             return false;
           }
           if (!overlaps(event, other)) return false;
@@ -201,11 +273,14 @@ export default function ComprehensiveCalendarScreen() {
           if (cancelled) return;
           setActualEventsForDate(
             selectedDateYmd,
-            events.filter((item) => !toRemove.includes(item.id))
+            events.filter((item) => !toRemove.includes(item.id)),
           );
         } catch (error) {
           if (__DEV__) {
-            console.warn('[Calendar] Failed cleanup of derived overlaps:', error);
+            console.warn(
+              "[Calendar] Failed cleanup of derived overlaps:",
+              error,
+            );
           }
         }
       }
@@ -213,7 +288,14 @@ export default function ComprehensiveCalendarScreen() {
     return () => {
       cancelled = true;
     };
-  }, [actualDateYmd, loadActualForDay, selectedDateYmd, setActualDateYmd, setActualEventsForDate, userId]);
+  }, [
+    actualDateYmd,
+    loadActualForDay,
+    selectedDateYmd,
+    setActualDateYmd,
+    setActualEventsForDate,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!userId) {
@@ -283,17 +365,17 @@ export default function ComprehensiveCalendarScreen() {
   }, [loadActualForRange, selectedDateYmd, userId]);
 
   const maybeAutoSync = useCallback(async (): Promise<void> => {
-    if (Platform.OS !== 'ios') return;
-    if (supportStatus !== 'available') return;
+    if (Platform.OS !== "ios") return;
+    if (supportStatus !== "available") return;
 
     const nextStatus = await getScreenTimeAuthorizationStatusSafeAsync();
     setStatus(nextStatus);
-    if (nextStatus !== 'approved') {
+    if (nextStatus !== "approved") {
       setSummary(null);
       return;
     }
 
-    const cached = await getCachedScreenTimeSummarySafeAsync('today');
+    const cached = await getCachedScreenTimeSummarySafeAsync("today");
     // Important UX choice: Do NOT automatically present the iOS Screen Time report UI when the user
     // opens the calendar. The system report view is intrusive and feels like a modal “pop up”.
     //
@@ -315,7 +397,7 @@ export default function ComprehensiveCalendarScreen() {
   }, [maybeAutoSync]);
 
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (Platform.OS !== "android") return;
     if (selectedDateYmd !== getTodayYmd()) {
       setUsageSummary(null);
       return;
@@ -324,11 +406,11 @@ export default function ComprehensiveCalendarScreen() {
     const run = async () => {
       const status = await getUsageAccessAuthorizationStatusSafeAsync();
       if (cancelled) return;
-      if (status !== 'authorized') {
+      if (status !== "authorized") {
         setUsageSummary(null);
         return;
       }
-      const usage = await getUsageSummarySafeAsync('today');
+      const usage = await getUsageSummarySafeAsync("today");
       if (cancelled) return;
       setUsageSummary(usage);
     };
@@ -338,22 +420,23 @@ export default function ComprehensiveCalendarScreen() {
     };
   }, [selectedDateYmd]);
 
-  const refreshActualEventsForSelectedDay = useCallback(async (): Promise<void> => {
-    if (!userId) return;
-    const events = await loadActualForDay(selectedDateYmd);
-    if (!isMountedRef.current) return;
-    setActualEventsForDate(selectedDateYmd, events);
-  }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, userId]);
+  const refreshActualEventsForSelectedDay =
+    useCallback(async (): Promise<void> => {
+      if (!userId) return;
+      const events = await loadActualForDay(selectedDateYmd);
+      if (!isMountedRef.current) return;
+      setActualEventsForDate(selectedDateYmd, events);
+    }, [loadActualForDay, selectedDateYmd, setActualEventsForDate, userId]);
 
   useEffect(() => {
     if (!userId || !userPreferences.realTimeUpdates) return;
     const channel = supabase.channel(`tm-events-${userId}`);
     channel.on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'tm',
-        table: 'events',
+        event: "*",
+        schema: "tm",
+        table: "events",
         filter: `user_id=eq.${userId}`,
       },
       () => {
@@ -364,11 +447,11 @@ export default function ComprehensiveCalendarScreen() {
       },
     );
     channel.on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'tm',
-        table: 'screen_time_app_sessions',
+        event: "*",
+        schema: "tm",
+        table: "screen_time_app_sessions",
         filter: `user_id=eq.${userId}`,
       },
       () => {
@@ -376,11 +459,11 @@ export default function ComprehensiveCalendarScreen() {
       },
     );
     channel.on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'tm',
-        table: 'health_workouts',
+        event: "*",
+        schema: "tm",
+        table: "health_workouts",
         filter: `user_id=eq.${userId}`,
       },
       () => {
@@ -388,11 +471,11 @@ export default function ComprehensiveCalendarScreen() {
       },
     );
     channel.on(
-      'postgres_changes',
+      "postgres_changes",
       {
-        event: '*',
-        schema: 'tm',
-        table: 'location_hourly',
+        event: "*",
+        schema: "tm",
+        table: "location_hourly",
         filter: `user_id=eq.${userId}`,
       },
       () => {
@@ -413,33 +496,43 @@ export default function ComprehensiveCalendarScreen() {
     userPreferences.realTimeUpdates,
   ]);
 
-  const lastAlertRef = useRef<string>('');
+  const lastAlertRef = useRef<string>("");
   useEffect(() => {
     if (!userPreferences.verificationAlerts) return;
     if (!verificationResults || verificationResults.size === 0) return;
     const flagged = plannedEvents.filter((event) => {
       const result = verificationResults.get(event.id);
-      return result?.status === 'contradicted' || result?.status === 'distracted';
+      return (
+        result?.status === "contradicted" || result?.status === "distracted"
+      );
     });
-    const actionable = flagged.filter((event) => event.category !== 'sleep');
+    const actionable = flagged.filter((event) => event.category !== "sleep");
     if (actionable.length === 0) return;
-    const alertKey = actionable.map((event) => event.id).join('|');
+    const alertKey = actionable.map((event) => event.id).join("|");
     if (alertKey === lastAlertRef.current) return;
     lastAlertRef.current = alertKey;
-    const preview = actionable.slice(0, 3).map((event) => event.title).join(', ');
-    const suffix = actionable.length > 3 ? '…' : '';
-    Alert.alert('Verification alert', `We found conflicts for: ${preview}${suffix}`);
+    const preview = actionable
+      .slice(0, 3)
+      .map((event) => event.title)
+      .join(", ");
+    const suffix = actionable.length > 3 ? "…" : "";
+    Alert.alert(
+      "Verification alert",
+      `We found conflicts for: ${preview}${suffix}`,
+    );
   }, [plannedEvents, userPreferences.verificationAlerts, verificationResults]);
 
   useEffect(() => {
     // Derive “display actual” events when Screen Time is present; otherwise clear derivation.
-    if (!(supportStatus === 'available' && status === 'approved' && summary)) {
+    if (!(supportStatus === "available" && status === "approved" && summary)) {
       setDerivedActualEvents(null);
       return;
     }
 
     // Remove the hardcoded demo Screen Time block when we have real Screen Time data.
-    const baseActualEvents = actualEvents.filter((e) => e.id !== 'a_screen_time');
+    const baseActualEvents = actualEvents.filter(
+      (e) => e.id !== "a_screen_time",
+    );
 
     const derived = deriveActualEventsFromScreenTime({
       existingActualEvents: baseActualEvents,
@@ -448,7 +541,14 @@ export default function ComprehensiveCalendarScreen() {
     });
 
     setDerivedActualEvents(derived);
-  }, [actualEvents, appCategoryOverrides, setDerivedActualEvents, status, summary, supportStatus]);
+  }, [
+    actualEvents,
+    appCategoryOverrides,
+    setDerivedActualEvents,
+    status,
+    summary,
+    supportStatus,
+  ]);
 
   // Actual events are Supabase-backed (no mock defaults). Screen Time derivation remains separate.
   const displayActualEvents = actualEvents;
@@ -456,10 +556,13 @@ export default function ComprehensiveCalendarScreen() {
   // Refresh actual events when the app returns to foreground while this screen is mounted.
   useEffect(() => {
     isMountedRef.current = true;
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (nextAppState !== 'active') return;
-      void refreshActualEventsForSelectedDay();
-    });
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextAppState: AppStateStatus) => {
+        if (nextAppState !== "active") return;
+        void refreshActualEventsForSelectedDay();
+      },
+    );
     return () => {
       isMountedRef.current = false;
       subscription.remove();
@@ -476,16 +579,20 @@ export default function ComprehensiveCalendarScreen() {
     return () => clearInterval(interval);
   }, [refreshActualEventsForSelectedDay, userId]);
 
-  const openAddEventPicker = useCallback((column?: 'planned' | 'actual', startMinutes?: number) => {
-    router.push({
-      pathname: '/add-event',
-      params: {
-        date: selectedDateYmd,
-        column: column ?? 'planned',
-        startMinutes: startMinutes !== undefined ? String(startMinutes) : undefined,
-      }
-    });
-  }, [router, selectedDateYmd]);
+  const openAddEventPicker = useCallback(
+    (column?: "planned" | "actual", startMinutes?: number) => {
+      router.push({
+        pathname: "/add-event",
+        params: {
+          date: selectedDateYmd,
+          column: column ?? "planned",
+          startMinutes:
+            startMinutes !== undefined ? String(startMinutes) : undefined,
+        },
+      });
+    },
+    [router, selectedDateYmd],
+  );
 
   // Combine Supabase actual events with verified/derived actual blocks
   const gapFillingPreference = userPreferences.gapFillingPreference;
@@ -528,28 +635,45 @@ export default function ComprehensiveCalendarScreen() {
     if (!userId) return;
     if (!actualBlocks || actualBlocks.length === 0) return;
     const fingerprint = actualBlocks
-      .map((block) => `${block.source}:${block.startMinutes}:${block.endMinutes}`)
-      .join('|');
-    if (evidenceSyncRef.current?.ymd === selectedDateYmd && evidenceSyncRef.current?.fingerprint === fingerprint) {
+      .map(
+        (block) => `${block.source}:${block.startMinutes}:${block.endMinutes}`,
+      )
+      .join("|");
+    if (
+      evidenceSyncRef.current?.ymd === selectedDateYmd &&
+      evidenceSyncRef.current?.fingerprint === fingerprint
+    ) {
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        await syncActualEvidenceBlocks({ userId, ymd: selectedDateYmd, blocks: actualBlocks });
+        await syncActualEvidenceBlocks({
+          userId,
+          ymd: selectedDateYmd,
+          blocks: actualBlocks,
+        });
         if (cancelled) return;
         evidenceSyncRef.current = { ymd: selectedDateYmd, fingerprint };
         await refreshActualEventsForSelectedDay();
       } catch (error) {
         if (__DEV__) {
-          console.warn('[Calendar] Failed to sync actual evidence blocks:', error);
+          console.warn(
+            "[Calendar] Failed to sync actual evidence blocks:",
+            error,
+          );
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [actualBlocks, refreshActualEventsForSelectedDay, selectedDateYmd, userId]);
+  }, [
+    actualBlocks,
+    refreshActualEventsForSelectedDay,
+    selectedDateYmd,
+    userId,
+  ]);
 
   // Automatically sync derived actual events to Supabase
   useEffect(() => {
@@ -558,7 +682,9 @@ export default function ComprehensiveCalendarScreen() {
 
     // Filter for derived events that need to be saved
     const derivedEvents = combinedActualEvents.filter(
-      (event) => event.id.startsWith(DERIVED_ACTUAL_PREFIX) || event.id.startsWith(DERIVED_EVIDENCE_PREFIX)
+      (event) =>
+        event.id.startsWith(DERIVED_ACTUAL_PREFIX) ||
+        event.id.startsWith(DERIVED_EVIDENCE_PREFIX),
     );
 
     if (derivedEvents.length === 0) return;
@@ -567,7 +693,7 @@ export default function ComprehensiveCalendarScreen() {
     const fingerprint = derivedEvents
       .map((event) => `${event.id}:${event.startMinutes}:${event.duration}`)
       .sort()
-      .join('|');
+      .join("|");
 
     if (
       derivedEventsSyncRef.current?.ymd === selectedDateYmd &&
@@ -592,14 +718,22 @@ export default function ComprehensiveCalendarScreen() {
         derivedEventsSyncRef.current = { ymd: selectedDateYmd, fingerprint };
       } catch (error) {
         if (__DEV__) {
-          console.warn('[Calendar] Failed to sync derived actual events:', error);
+          console.warn(
+            "[Calendar] Failed to sync derived actual events:",
+            error,
+          );
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [combinedActualEvents, refreshActualEventsForSelectedDay, selectedDateYmd, userId]);
+  }, [
+    combinedActualEvents,
+    refreshActualEventsForSelectedDay,
+    selectedDateYmd,
+    userId,
+  ]);
 
   return (
     <ComprehensiveCalendarTemplate
@@ -629,25 +763,36 @@ export default function ComprehensiveCalendarScreen() {
           updateScheduledEvent(
             {
               ...existing,
-              title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              title:
+                typeof updates.title === "string" && updates.title.trim()
+                  ? updates.title.trim()
+                  : existing.title,
               location,
               category: updates.category ?? existing.category,
               isBig3: updates.isBig3 ?? existing.isBig3,
               startMinutes,
               duration,
             },
-            selectedDateYmd
+            selectedDateYmd,
           );
           return;
         }
 
         const newStart = new Date(selectedDate);
-        newStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+        newStart.setHours(
+          Math.floor(startMinutes / 60),
+          startMinutes % 60,
+          0,
+          0,
+        );
         const newEnd = new Date(newStart);
         newEnd.setMinutes(newEnd.getMinutes() + duration);
 
         const updated = await updatePlanned(eventId, {
-          title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          title:
+            typeof updates.title === "string" && updates.title.trim()
+              ? updates.title.trim()
+              : undefined,
           description: existing.description,
           location,
           scheduledStartIso: newStart.toISOString(),
@@ -655,7 +800,7 @@ export default function ComprehensiveCalendarScreen() {
           meta: {
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
-            source: 'user',
+            source: "user",
           },
         });
 
@@ -681,25 +826,36 @@ export default function ComprehensiveCalendarScreen() {
           updateActualEvent(
             {
               ...existing,
-              title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : existing.title,
+              title:
+                typeof updates.title === "string" && updates.title.trim()
+                  ? updates.title.trim()
+                  : existing.title,
               location,
               category: updates.category ?? existing.category,
               isBig3: updates.isBig3 ?? existing.isBig3,
               startMinutes,
               duration,
             },
-            selectedDateYmd
+            selectedDateYmd,
           );
           return;
         }
 
         const newStart = new Date(selectedDate);
-        newStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+        newStart.setHours(
+          Math.floor(startMinutes / 60),
+          startMinutes % 60,
+          0,
+          0,
+        );
         const newEnd = new Date(newStart);
         newEnd.setMinutes(newEnd.getMinutes() + duration);
 
         const updated = await updateActual(eventId, {
-          title: typeof updates.title === 'string' && updates.title.trim() ? updates.title.trim() : undefined,
+          title:
+            typeof updates.title === "string" && updates.title.trim()
+              ? updates.title.trim()
+              : undefined,
           description: existing.description,
           location,
           scheduledStartIso: newStart.toISOString(),
@@ -707,7 +863,7 @@ export default function ComprehensiveCalendarScreen() {
           meta: {
             category: updates.category ?? existing.category,
             isBig3: updates.isBig3 ?? existing.isBig3,
-            source: 'user',
+            source: "user",
           },
         });
         updateActualEvent(updated, selectedDateYmd);
@@ -731,7 +887,7 @@ function ymdToDate(ymd: string): Date {
 
 function dateToYmd(date: Date): string {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }

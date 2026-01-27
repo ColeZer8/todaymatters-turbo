@@ -1,6 +1,6 @@
-import { Pressable, Text, View } from 'react-native';
-import { ChevronRight, LucideIcon } from 'lucide-react-native';
-import { Icon } from '../atoms';
+import { Pressable, Text, View } from "react-native";
+import { ChevronRight, LucideIcon } from "lucide-react-native";
+import { Icon } from "../atoms";
 
 interface ProfileMenuItemProps {
   label: string;
@@ -9,7 +9,12 @@ interface ProfileMenuItemProps {
   value?: string;
 }
 
-export const ProfileMenuItem = ({ label, icon, onPress, value }: ProfileMenuItemProps) => {
+export const ProfileMenuItem = ({
+  label,
+  icon,
+  onPress,
+  value,
+}: ProfileMenuItemProps) => {
   return (
     <Pressable
       accessibilityRole="button"
@@ -21,7 +26,9 @@ export const ProfileMenuItem = ({ label, icon, onPress, value }: ProfileMenuItem
         <View className="items-center justify-center h-11 w-11 rounded-2xl border border-[#E5E9F2] bg-[#F7F9FC]">
           <Icon icon={icon} size={18} color="#6B7280" />
         </View>
-        <Text className="ml-3 text-[#111827] text-[15px] font-semibold">{label}</Text>
+        <Text className="ml-3 text-[#111827] text-[15px] font-semibold">
+          {label}
+        </Text>
       </View>
       <View className="flex-row items-center gap-2">
         {value ? (
