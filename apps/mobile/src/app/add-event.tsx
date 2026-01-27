@@ -193,6 +193,8 @@ export default function AddEventScreen() {
               category: draft.category,
               isBig3: draft.isBig3,
               big3_priority: draft.big3Priority,
+              value_label: draft.coreValueLabel,
+              value_subcategory: draft.subcategoryLabel,
               source: "user" as const,
             },
           };
@@ -211,6 +213,8 @@ export default function AddEventScreen() {
               category: draft.category,
               isBig3: draft.isBig3,
               big3Priority: draft.big3Priority,
+              coreValue: draft.coreValueLabel,
+              subcategory: draft.subcategoryLabel,
             });
           }
 
@@ -233,6 +237,8 @@ export default function AddEventScreen() {
                     category: draft.category,
                     isBig3: draft.isBig3,
                     big3_priority: draft.big3Priority,
+                    value_label: draft.coreValueLabel,
+                    value_subcategory: draft.subcategoryLabel,
                     source: "user",
                   },
                 })
@@ -247,6 +253,8 @@ export default function AddEventScreen() {
                     isBig3: draft.isBig3,
                     big3_priority: draft.big3Priority,
                     source: "user",
+                    value_label: draft.coreValueLabel,
+                    value_subcategory: draft.subcategoryLabel,
                     ...suggestionMeta,
                   },
                 });

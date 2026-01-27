@@ -303,6 +303,8 @@ interface ComprehensiveCalendarTemplateProps {
       isBig3?: boolean;
       startMinutes?: number;
       duration?: number;
+      valueLabel?: string | null;
+      valueSubcategory?: string | null;
     },
   ) => void | Promise<void>;
   onDeletePlannedEvent: (eventId: string) => void | Promise<void>;
@@ -315,6 +317,8 @@ interface ComprehensiveCalendarTemplateProps {
       isBig3?: boolean;
       startMinutes?: number;
       duration?: number;
+      valueLabel?: string | null;
+      valueSubcategory?: string | null;
     },
   ) => void | Promise<void>;
   onDeleteActualEvent: (eventId: string) => void | Promise<void>;

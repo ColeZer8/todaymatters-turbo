@@ -53,8 +53,10 @@ export interface ActualAdjustTemplateProps {
   big3Enabled: boolean;
   /** Today's Big 3 priorities, or null if not yet set */
   big3Priorities: Big3Priorities | null;
-  values: string[];
-  selectedValue: string | null;
+  coreValues: Array<{ id: string; label: string }>;
+  selectedCoreValueId: string | null;
+  coreSubcategories: Array<{ id: string; label: string }>;
+  selectedSubcategoryId: string | null;
   linkedGoals: Array<{ id: string; label: string }>;
   selectedGoalId: string | null;
   goalContribution: number | null;
@@ -86,20 +88,11 @@ export interface ActualAdjustTemplateProps {
   /** Called when user sets Big 3 from inline input (no Big 3 set for today) */
   onSetBig3Inline: (p1: string, p2: string, p3: string) => void;
   onSelectCategory: (value: EventCategory) => void;
-  onSelectValue: (value: string | null) => void;
+  onSelectCoreValue: (valueId: string) => void;
+  onSelectSubcategory: (valueId: string | null) => void;
   onSelectGoal: (value: string | null) => void;
   onSelectGoalContribution: (value: number | null) => void;
 }
-
-const LIFE_AREA_OPTIONS: Array<{ id: EventCategory; label: string }> = [
-  { id: "routine", label: "Faith" },
-  { id: "family", label: "Family" },
-  { id: "work", label: "Work" },
-  { id: "health", label: "Health" },
-  { id: "sleep", label: "Sleep" },
-  { id: "digital", label: "Digital" },
-  { id: "unknown", label: "Other" },
-];
 
 // ---------------------------------------------------------------------------
 // Big 3 Section — shows priority buttons or inline input
@@ -368,8 +361,10 @@ export const ActualAdjustTemplate = ({
   big3Priority,
   big3Enabled,
   big3Priorities,
-  values,
-  selectedValue,
+  coreValues,
+  selectedCoreValueId,
+  coreSubcategories,
+  selectedSubcategoryId,
   linkedGoals,
   selectedGoalId,
   goalContribution,
@@ -394,7 +389,8 @@ export const ActualAdjustTemplate = ({
   onSelectBig3Priority,
   onSetBig3Inline,
   onSelectCategory,
-  onSelectValue,
+  onSelectCoreValue,
+  onSelectSubcategory,
   onSelectGoal,
   onSelectGoalContribution,
 }: ActualAdjustTemplateProps) => {
@@ -519,64 +515,21 @@ export const ActualAdjustTemplate = ({
         )}
 
         <View className="mt-6">
-          <Text className="text-[12px] font-semibold text-[#F97316]">
-            LIFE AREA
-          </Text>
-          {activityCategories &&
-          activityCategories.length > 0 &&
-          onSelectActivityCategory ? (
-            <View className="mt-3 max-h-[280px] rounded-2xl border border-[#E5E7EB] bg-white px-2 py-2">
-              <HierarchicalCategoryPicker
-                categories={activityCategories}
-                selectedCategoryId={selectedCategoryId}
-                onSelect={onSelectActivityCategory}
-              />
-            </View>
-          ) : (
-            <View className="mt-3 flex-row flex-wrap gap-2">
-              {LIFE_AREA_OPTIONS.map((option) => {
-                const isSelected = selectedCategory === option.id;
-                return (
-                  <Pressable
-                    key={option.id}
-                    onPress={() => onSelectCategory(option.id)}
-                    className={`rounded-full border px-4 py-2 ${
-                      isSelected
-                        ? "border-[#2563EB] bg-[#DBEAFE]"
-                        : "border-[#E2E8F0] bg-white"
-                    }`}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-                  >
-                    <Text
-                      className={`text-[12px] font-semibold ${
-                        isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
-                      }`}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-        </View>
-
-        <View className="mt-6">
           <Text className="text-[12px] font-semibold text-[#94A3B8]">
-            ALIGN WITH VALUES
+            CORE VALUES
           </Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
-            {values.length === 0 && (
+            {coreValues.length === 0 && (
               <Text className="text-[12px] text-[#94A3B8]">
-                No values found
+                No core values found
               </Text>
             )}
-            {values.map((value) => {
-              const isSelected = selectedValue === value;
+            {coreValues.map((value) => {
+              const isSelected = selectedCoreValueId === value.id;
               return (
                 <Pressable
-                  key={value}
-                  onPress={() => onSelectValue(isSelected ? null : value)}
+                  key={value.id}
+                  onPress={() => onSelectCoreValue(value.id)}
                   className={`rounded-full border px-4 py-2 ${
                     isSelected
                       ? "border-[#2563EB] bg-[#DBEAFE]"
@@ -589,7 +542,7 @@ export const ActualAdjustTemplate = ({
                       isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
                     }`}
                   >
-                    {value}
+                    {value.label}
                   </Text>
                 </Pressable>
               );
@@ -599,7 +552,45 @@ export const ActualAdjustTemplate = ({
 
         <View className="mt-6">
           <Text className="text-[12px] font-semibold text-[#94A3B8]">
-            LINKED GOAL
+            SUBCATEGORIES
+          </Text>
+          <View className="mt-3 flex-row flex-wrap gap-2">
+            {coreSubcategories.length === 0 && (
+              <Text className="text-[12px] text-[#94A3B8]">
+                No subcategories found
+              </Text>
+            )}
+            {coreSubcategories.map((subcategory) => {
+              const isSelected = selectedSubcategoryId === subcategory.id;
+              return (
+                <Pressable
+                  key={subcategory.id}
+                  onPress={() =>
+                    onSelectSubcategory(isSelected ? null : subcategory.id)
+                  }
+                  className={`rounded-full border px-4 py-2 ${
+                    isSelected
+                      ? "border-[#2563EB] bg-[#DBEAFE]"
+                      : "border-[#E2E8F0] bg-white"
+                  }`}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+                >
+                  <Text
+                    className={`text-[12px] font-semibold ${
+                      isSelected ? "text-[#1D4ED8]" : "text-[#64748B]"
+                    }`}
+                  >
+                    {subcategory.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View className="mt-6">
+          <Text className="text-[12px] font-semibold text-[#94A3B8]">
+            LINK TO GOAL
           </Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             <Pressable
