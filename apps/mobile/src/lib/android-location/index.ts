@@ -23,6 +23,8 @@ export { recordTaskHeartbeat, getLastTaskHeartbeat } from './task-heartbeat';
 export type { TaskHeartbeat } from './task-heartbeat';
 export { calculateDistance } from './distance';
 export type { Coordinate } from './distance';
+export { getMovementState, setMovementState } from './movement-state';
+export type { MovementState, MovementReason, MovementStateData } from './movement-state';
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== 'android') return 'notAndroid';
