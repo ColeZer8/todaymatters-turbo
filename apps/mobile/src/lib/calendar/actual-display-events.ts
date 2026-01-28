@@ -206,7 +206,7 @@ export function buildActualDisplayEvents({
   appCategoryOverrides,
   gapFillingPreference = "conservative",
   confidenceThreshold = 0.6,
-  allowAutoSuggestions = true,
+  allowAutoSuggestions: _allowAutoSuggestions = true,
 }: BuildActualDisplayEventsInput): ScheduledEvent[] {
   // Check fingerprint cache — skip full pipeline if inputs are unchanged
   const fingerprint = buildPipelineFingerprint({
@@ -222,7 +222,7 @@ export function buildActualDisplayEvents({
     appCategoryOverrides,
     gapFillingPreference,
     confidenceThreshold,
-    allowAutoSuggestions,
+    allowAutoSuggestions: _allowAutoSuggestions,
   });
   if (
     fingerprint === _lastPipelineFingerprint &&
@@ -252,9 +252,19 @@ export function buildActualDisplayEvents({
 
   const sleepOverrideIntervals = buildSleepScheduleIntervals(plannedSorted);
 
-  const filteredActualEvents = actualEvents.filter(
-    (event) => event.category !== "sleep",
-  );
+  const filteredActualEvents = actualEvents.filter((event) => {
+    if (event.category === "sleep") return false;
+    const sourceId = event.meta?.source_id;
+    const source = event.meta?.source;
+    const isDerivedSourceId =
+      typeof sourceId === "string" &&
+      (sourceId.startsWith(DERIVED_ACTUAL_PREFIX) ||
+        sourceId.startsWith(DERIVED_EVIDENCE_PREFIX));
+    if (source === "derived" || isDerivedSourceId) {
+      return false;
+    }
+    return true;
+  });
 
   const results: ScheduledEvent[] = [...filteredActualEvents];
   const occupied: Array<{ start: number; end: number }> = results.map(
@@ -346,6 +356,8 @@ export function buildActualDisplayEvents({
     }
   }
 
+  const hasScreenTimeSessions =
+    (evidence?.screenTimeSessions?.length ?? 0) > 0;
   if (usageSummary) {
     if (sleepOverrideIntervals.length > 0) {
       const sleepOverrideBlocks = buildSleepOverrideBlocksFromUsageSummary({
@@ -358,14 +370,18 @@ export function buildActualDisplayEvents({
       }
     }
 
-    const usageBlocks = deriveUsageSummaryBlocks({
-      usageSummary,
-      plannedEvents: plannedSorted,
-      minMinutes: minEvidenceBlockMinutes,
-      appCategoryOverrides,
-    });
-    for (const block of usageBlocks) {
-      addIfFree(block);
+    // Prefer server-provided screen time sessions for actual blocks;
+    // only fall back to device usage summary when sessions are missing.
+    if (!hasScreenTimeSessions) {
+      const usageBlocks = deriveUsageSummaryBlocks({
+        usageSummary,
+        plannedEvents: plannedSorted,
+        minMinutes: minEvidenceBlockMinutes,
+        appCategoryOverrides,
+      });
+      for (const block of usageBlocks) {
+        addIfFree(block);
+      }
     }
   }
 
@@ -492,6 +508,9 @@ export function buildActualDisplayEvents({
     }
 
     const verification = verificationResults?.get(planned.id) ?? null;
+    if (!verification || verification.status === "unverified") {
+      continue;
+    }
     const derived = buildPlannedActualEvent({
       planned: plannedForDerivation,
       verification,
@@ -554,7 +573,7 @@ export function buildActualDisplayEvents({
   const allowGapFilling = gapFillingPreference !== "manual";
   const allowProductiveFill = gapFillingPreference === "aggressive";
   const allowTransitions = gapFillingPreference === "aggressive";
-  const allowPatterns = allowGapFilling && allowAutoSuggestions;
+  const allowPatterns = false;
   const preferenceOffset =
     gapFillingPreference === "aggressive"
       ? -0.1
@@ -584,11 +603,7 @@ export function buildActualDisplayEvents({
   const withTransitions = replaceUnknownWithTransitions(withProductiveFilled, {
     locationBlocks,
   });
-  const withPrepWindDown = allowTransitions
-    ? replaceUnknownWithPrepWindDown(withTransitions, {
-        locationBlocks,
-      })
-    : withTransitions;
+  const withPrepWindDown = withTransitions;
   const withPatternFilled = allowPatterns
     ? applyPatternSuggestions(
         withPrepWindDown,

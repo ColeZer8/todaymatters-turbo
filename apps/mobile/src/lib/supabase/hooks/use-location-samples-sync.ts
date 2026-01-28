@@ -49,6 +49,7 @@ const MOVING_QUEUE_THRESHOLD = 20;
 /** Polling interval to check queue size on Android (60 seconds). */
 const QUEUE_CHECK_INTERVAL_MS = 60 * 1000;
 
+
 function getSyncIntervalForState(state: MovementState): number {
   return state === "stationary"
     ? STATIONARY_SYNC_INTERVAL_MS

@@ -23,7 +23,9 @@ Identify why actual events include "test" or wrong times and fix actual event de
 
 ## Progress
 
-- 2026-01-27: Created plan; started investigation.
+- 2026-01-27: Scoped actual derivation; gated planned-actuals to evidence only, filtered stored derived actuals, and reduced usage-summary fallbacks.
+- 2026-01-27: Removed Android foreground capture fallback after runtime EventEmitter crash.
+- 2026-01-27: Removed geohash-based location descriptions; keep labels or unknown only.
 
 ## Verification
 

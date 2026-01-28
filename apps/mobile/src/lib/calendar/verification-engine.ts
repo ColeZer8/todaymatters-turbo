@@ -674,11 +674,7 @@ export function generateActualBlocks(
         : inferredTravel
           ? "travel"
           : "unknown";
-      const baseDescription = hasLabel
-        ? loc.placeCategory || ""
-        : loc.geohash7
-          ? `geohash:${loc.geohash7}`
-          : "";
+      const baseDescription = hasLabel ? loc.placeCategory || "" : "";
       const description =
         loc.isTransition && !hasLabel
           ? [baseDescription, "transition"].filter(Boolean).join(" • ")
