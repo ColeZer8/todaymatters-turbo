@@ -1022,14 +1022,18 @@ export async function deleteActualCalendarEventsByIds(
 ): Promise<void> {
   if (eventIds.length === 0) return;
   try {
-    const { error } = await supabase
-      .schema("tm")
-      .from("events")
-      .delete()
-      .eq("user_id", userId)
-      .eq("type", ACTUAL_EVENT_TYPE)
-      .in("id", eventIds);
-    if (error) throw handleSupabaseError(error);
+    const batchSize = 200;
+    for (let start = 0; start < eventIds.length; start += batchSize) {
+      const batch = eventIds.slice(start, start + batchSize);
+      const { error } = await supabase
+        .schema("tm")
+        .from("events")
+        .delete()
+        .eq("user_id", userId)
+        .eq("type", ACTUAL_EVENT_TYPE)
+        .in("id", batch);
+      if (error) throw handleSupabaseError(error);
+    }
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }

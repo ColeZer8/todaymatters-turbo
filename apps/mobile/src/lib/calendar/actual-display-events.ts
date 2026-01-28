@@ -617,9 +617,8 @@ export function buildActualDisplayEvents({
 
 /**
  * Removes overlapping events, keeping the first event encountered for each time slot.
- * Only removes events if there's significant overlap (more than 10 minutes) to avoid
- * removing events that just touch at boundaries or have minor overlaps.
- * This ensures no visual overlaps in the calendar display while preserving events.
+ * Removes any overlapping events while allowing boundary touches.
+ * This ensures no visual overlaps in the calendar display.
  *
  * Priority: Keep events in this order:
  * 1. Events from Supabase (already saved)
@@ -669,12 +668,12 @@ function removeOverlappingEvents(events: ScheduledEvent[]): ScheduledEvent[] {
     const start = event.startMinutes;
     const end = event.startMinutes + event.duration;
 
-    // Check for significant overlap (more than 10 minutes) with any existing event
+    // Check for overlap with any existing event (touching boundaries is ok)
     const hasSignificantOverlap = occupied.some((interval) => {
       const overlapStart = Math.max(start, interval.start);
       const overlapEnd = Math.min(end, interval.end);
       const overlapMinutes = overlapEnd - overlapStart;
-      return overlapMinutes > 10; // Only consider it overlapping if more than 10 minutes
+      return overlapMinutes > 0;
     });
 
     if (!hasSignificantOverlap) {
