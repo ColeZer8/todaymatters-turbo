@@ -5,16 +5,14 @@ import { supabase } from "@/lib/supabase/client";
 import type { Json } from "@/lib/supabase/database.types";
 import { enqueueAndroidLocationSamplesForUserAsync } from "./queue";
 import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+import { recordTaskHeartbeat } from "./task-heartbeat";
+import { ANDROID_LOCATION_TASK_METADATA_KEYS } from "./task-metadata";
 import type { AndroidLocationSample } from "./types";
 
 const TASK_ERROR_LOG_THROTTLE_MS = 60_000;
 let lastTaskErrorLogAtMs = 0;
 
 const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
-const LAST_TASK_FIRED_AT_KEY = "tm:androidLocation:lastTaskFiredAt";
-const LAST_TASK_QUEUED_COUNT_KEY = "tm:androidLocation:lastTaskQueuedCount";
-const LAST_TASK_ERROR_KEY = "tm:androidLocation:lastTaskError";
-
 type RawLocationObject = {
   timestamp: number;
   coords: {
@@ -98,9 +96,10 @@ if (
     async ({ data, error }) => {
       try {
         const firedAtIso = new Date().toISOString();
-        AsyncStorage.setItem(LAST_TASK_FIRED_AT_KEY, firedAtIso).catch(
-          () => undefined,
-        );
+        AsyncStorage.setItem(
+          ANDROID_LOCATION_TASK_METADATA_KEYS.lastTaskFiredAt,
+          firedAtIso,
+        ).catch(() => undefined);
         if (__DEV__) {
           console.log(
             `📍 [task] Background location task fired at ${firedAtIso}`,
@@ -109,9 +108,10 @@ if (
 
         if (error) {
           AsyncStorage.setItem(
-            LAST_TASK_ERROR_KEY,
+            ANDROID_LOCATION_TASK_METADATA_KEYS.lastTaskError,
             JSON.stringify({ at: firedAtIso, error: String(error) }),
           ).catch(() => undefined);
+          recordTaskHeartbeat(0).catch(() => undefined);
           const now = Date.now();
           if (now - lastTaskErrorLogAtMs >= TASK_ERROR_LOG_THROTTLE_MS) {
             lastTaskErrorLogAtMs = now;
@@ -130,6 +130,7 @@ if (
               | null
               | undefined
           )?.locations ?? [];
+        recordTaskHeartbeat(locations.length).catch(() => undefined);
         if (__DEV__) {
           console.log(`📍 [task] Received ${locations.length} raw location(s)`);
         }
@@ -161,10 +162,12 @@ if (
         const { pendingCount } =
           await enqueueAndroidLocationSamplesForUserAsync(userId, samples);
         AsyncStorage.setItem(
-          LAST_TASK_QUEUED_COUNT_KEY,
+          ANDROID_LOCATION_TASK_METADATA_KEYS.lastTaskQueuedCount,
           String(samples.length),
         ).catch(() => undefined);
-        AsyncStorage.removeItem(LAST_TASK_ERROR_KEY).catch(() => undefined);
+        AsyncStorage.removeItem(
+          ANDROID_LOCATION_TASK_METADATA_KEYS.lastTaskError,
+        ).catch(() => undefined);
 
         if (__DEV__) {
           console.log(
@@ -173,12 +176,13 @@ if (
         }
       } catch (e) {
         AsyncStorage.setItem(
-          LAST_TASK_ERROR_KEY,
+          ANDROID_LOCATION_TASK_METADATA_KEYS.lastTaskError,
           JSON.stringify({
             at: new Date().toISOString(),
             error: e instanceof Error ? e.message : String(e),
           }),
         ).catch(() => undefined);
+        recordTaskHeartbeat(0).catch(() => undefined);
         console.error("📍 [task] Android background location task failed:", e);
       }
     },

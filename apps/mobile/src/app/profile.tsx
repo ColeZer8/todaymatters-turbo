@@ -61,6 +61,7 @@ import {
   captureAndroidLocationSampleNowAsync,
   flushPendingAndroidLocationSamplesToSupabaseAsync,
   getAndroidLocationDiagnostics,
+  openAndroidBatteryOptimizationSettingsAsync,
 } from "@/lib/android-location";
 import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
 import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
@@ -256,17 +257,26 @@ export default function ProfileScreen() {
     }
     try {
       const diagnostics = await getAndroidLocationDiagnostics();
+      const heartbeat = diagnostics.lastTaskHeartbeat
+        ? `${diagnostics.lastTaskHeartbeat.timestamp} (${diagnostics.lastTaskHeartbeat.sampleCount} samples)`
+        : "none";
       const summary = [
         `Support: ${diagnostics.support}`,
+        `API level: ${diagnostics.androidApiLevel ?? "unknown"}`,
         `Location module: ${diagnostics.locationModule ? "yes" : "no"}`,
         `Services enabled: ${diagnostics.servicesEnabled ? "yes" : "no"}`,
         `Foreground permission: ${diagnostics.foregroundPermission}`,
         `Background permission: ${diagnostics.backgroundPermission}`,
+        `Notifications permission: ${diagnostics.notificationsPermission} (required: ${diagnostics.notificationsRequired ? "yes" : "no"})`,
         `Task started: ${diagnostics.taskStarted ? "yes" : "no"}`,
         `Can start: ${diagnostics.canStart ? "yes" : "no"}`,
         `Pending samples: ${diagnostics.pendingSamples}`,
         `Last sample: ${diagnostics.lastSampleTimestamp ?? "none"}`,
         `Samples (24h): ${diagnostics.sampleCount24h}`,
+        `Last heartbeat: ${heartbeat}`,
+        `Last task fired: ${diagnostics.lastTaskFiredAt ?? "none"}`,
+        `Last task queued: ${diagnostics.lastTaskQueuedCount ?? "none"}`,
+        `Last task error: ${diagnostics.lastTaskError ?? "none"}`,
       ].join("\n");
       const errors =
         diagnostics.errors.length > 0
@@ -295,7 +305,7 @@ export default function ProfileScreen() {
         const result = await requestAndroidLocationPermissionsAsync();
         Alert.alert(
           "Location permission",
-          `Foreground: ${result.foreground}\nBackground: ${result.background}`,
+          `Foreground: ${result.foreground}\nBackground: ${result.background}\nNotifications: ${result.notifications} (required: ${result.notificationsRequired ? "yes" : "no"})`,
         );
       } else {
         Alert.alert("Location permission", "Unsupported platform.");
@@ -304,6 +314,24 @@ export default function ProfileScreen() {
       Alert.alert(
         "Location permission failed",
         error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }, []);
+
+  const handleDevBatteryOptimization = useCallback(async () => {
+    if (Platform.OS !== "android") {
+      Alert.alert(
+        "Battery optimization",
+        "This setting is only available on Android.",
+      );
+      return;
+    }
+    try {
+      await openAndroidBatteryOptimizationSettingsAsync();
+    } catch (error) {
+      Alert.alert(
+        "Battery optimization",
+        error instanceof Error ? error.message : "Unable to open settings.",
       );
     }
   }, []);
@@ -438,6 +466,12 @@ export default function ProfileScreen() {
             label: "🧪 Request Location (dev)",
             icon: Calendar,
             onPress: handleDevRequestLocation,
+          },
+          {
+            id: "dev-battery-optimization",
+            label: "🧪 Battery Optimization (Android)",
+            icon: Calendar,
+            onPress: handleDevBatteryOptimization,
           },
           {
             id: "dev-auto-assign-review",

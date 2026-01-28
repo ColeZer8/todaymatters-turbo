@@ -6,6 +6,7 @@ import {
   Platform,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { PermissionsTemplate } from "@/components/templates";
 import {
@@ -18,7 +19,10 @@ import {
 } from "@/stores/onboarding-store";
 import { useOnboardingSync } from "@/lib/supabase/hooks";
 import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
-import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
+import {
+  openAndroidBatteryOptimizationSettingsAsync,
+  requestAndroidLocationPermissionsAsync,
+} from "@/lib/android-location";
 import { startIosBackgroundLocationAsync } from "@/lib/ios-location";
 import { startAndroidBackgroundLocationAsync } from "@/lib/android-location";
 import { useAuthStore } from "@/stores";
@@ -64,8 +68,37 @@ export default function PermissionsScreen() {
           ? await requestIosLocationPermissionsAsync()
           : await requestAndroidLocationPermissionsAsync();
 
-      if (result.foreground === "granted" && result.background === "granted")
+      const notificationsOk =
+        !result.notificationsRequired || result.notifications === "granted";
+      if (
+        result.foreground === "granted" &&
+        result.background === "granted" &&
+        notificationsOk
+      ) {
+        if (Platform.OS === "android") {
+          const promptKey = "tm:androidLocation:promptedBatteryOptimization";
+          const prompted = await AsyncStorage.getItem(promptKey).catch(
+            () => null,
+          );
+          if (!prompted) {
+            AsyncStorage.setItem(promptKey, "true").catch(() => undefined);
+            Alert.alert(
+              "Improve background tracking reliability",
+              "Android can stop background work to save battery. For reliable background location, disable battery optimization for TodayMatters.",
+              [
+                { text: "Not now", style: "cancel" },
+                {
+                  text: "Open Settings",
+                  onPress: () => {
+                    void openAndroidBatteryOptimizationSettingsAsync();
+                  },
+                },
+              ],
+            );
+          }
+        }
         return true;
+      }
 
       if (!result.hasNativeModule) {
         Alert.alert(
@@ -78,12 +111,14 @@ export default function PermissionsScreen() {
       }
 
       const canAskAgain =
-        result.canAskAgainForeground || result.canAskAgainBackground;
+        result.canAskAgainForeground ||
+        result.canAskAgainBackground ||
+        result.canAskAgainNotifications;
 
       Alert.alert(
         "Location permission needed",
         Platform.OS === "android"
-          ? "To compare your planned day to your actual day, please allow Location (including background). On some Android versions you may need to enable background location in Settings after granting while-in-use."
+          ? "To compare your planned day to your actual day, please allow Location (including background). On Android 13+ you also need notification permission so the background tracker can run with a foreground service. You may need to enable background location in Settings after granting while-in-use."
           : "To compare your planned day to your actual day, please allow Location (Always). If iOS won’t re-prompt, open Settings and set Location to “Always”.",
         canAskAgain
           ? [{ text: "OK" }]

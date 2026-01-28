@@ -18,6 +18,7 @@ import {
   ErrorCategory,
   logError,
   getMovementState,
+  getLastTaskHeartbeat,
   recordLastSyncTime,
 } from "@/lib/android-location";
 import type { MovementState } from "@/lib/android-location";
@@ -27,6 +28,9 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 /** How often to check if the Android background task is still alive (ms). */
 const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+
+/** Consider the task stale if it hasn't fired in this window. */
+const TASK_HEARTBEAT_STALE_MS = 15 * 60 * 1000; // 15 min
 
 const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
 
@@ -173,14 +177,30 @@ export function useLocationSamplesSync(
         return;
       }
 
-      const running = await isAndroidBackgroundLocationRunningAsync();
-      if (running) {
+      const [running, heartbeat] = await Promise.all([
+        isAndroidBackgroundLocationRunningAsync(),
+        getLastTaskHeartbeat(),
+      ]);
+      const heartbeatAgeMs = heartbeat
+        ? Date.now() - new Date(heartbeat.timestamp).getTime()
+        : null;
+      const heartbeatStale =
+        heartbeatAgeMs != null && heartbeatAgeMs > TASK_HEARTBEAT_STALE_MS;
+
+      if (running && !heartbeatStale) {
         // Task is alive — reset retry counter.
         retryAttemptsRef.current = 0;
         return;
       }
 
-      // Task is not running — attempt restart.
+      if (running && heartbeatStale) {
+        console.warn(
+          `📍 [health] Task running but stale heartbeat (${Math.round(heartbeatAgeMs / 60000)}m) — restarting`,
+        );
+        await stopAndroidBackgroundLocationAsync();
+      }
+
+      // Task is not running (or stale) — attempt restart.
       retryAttemptsRef.current += 1;
       console.log(
         `📍 [health] Background task not running — restarting (attempt ${retryAttemptsRef.current}/${MAX_RETRY_ATTEMPTS})`,

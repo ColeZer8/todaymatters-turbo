@@ -103,6 +103,7 @@ export default {
         'android.permission.MODIFY_AUDIO_SETTINGS',
         'android.permission.WAKE_LOCK',
         'android.permission.BLUETOOTH',
+        'android.permission.POST_NOTIFICATIONS',
         // Location tracking (Android) for “planned day vs actual day” analysis.
         // Foreground + background location + foreground service (required for background reliability).
         'android.permission.ACCESS_COARSE_LOCATION',

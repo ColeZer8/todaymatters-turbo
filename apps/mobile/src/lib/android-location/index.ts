@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { Linking, PermissionsAndroid, Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import {
@@ -13,10 +13,15 @@ import {
   removePendingAndroidLocationSamplesByKeyAsync,
   enqueueAndroidLocationSamplesForUserAsync,
 } from "./queue";
+import { getLastTaskHeartbeat } from "./task-heartbeat";
+import type { TaskHeartbeat } from "./task-heartbeat";
+import { getAndroidLocationTaskMetadata } from "./task-metadata";
+import { getAndroidApiLevel } from "./android-version";
 import type {
   AndroidLocationSupportStatus,
   AndroidLocationSample,
 } from "./types";
+import { ErrorCategory, logError } from "./error-logger";
 
 /** Mirror of MAX_PENDING_SAMPLES_PER_USER in queue.ts — used for diagnostics peek. */
 const MAX_PENDING_SAMPLES_PER_USER = 10_000;
@@ -91,11 +96,89 @@ async function getBackgroundPermissionsSafeAsync(
   }
 }
 
+type AndroidPermissionStatus = "granted" | "denied" | "undetermined";
+
+const ANDROID_NOTIFICATION_PERMISSION_API_LEVEL = 33;
+
+async function getAndroidNotificationPermissionStatusAsync(
+  options: { requestIfNeeded?: boolean } = {},
+): Promise<{
+  status: AndroidPermissionStatus;
+  canAskAgain: boolean;
+  required: boolean;
+  apiLevel: number | null;
+}> {
+  const { requestIfNeeded = false } = options;
+  const apiLevel = getAndroidApiLevel();
+  const required =
+    Platform.OS === "android" &&
+    typeof apiLevel === "number" &&
+    apiLevel >= ANDROID_NOTIFICATION_PERMISSION_API_LEVEL;
+
+  if (!required) {
+    return {
+      status: "granted",
+      canAskAgain: true,
+      required: false,
+      apiLevel,
+    };
+  }
+
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  const hasPermission = await PermissionsAndroid.check(permission);
+  if (hasPermission) {
+    return {
+      status: "granted",
+      canAskAgain: true,
+      required: true,
+      apiLevel,
+    };
+  }
+
+  if (!requestIfNeeded) {
+    return {
+      status: "denied",
+      canAskAgain: true,
+      required: true,
+      apiLevel,
+    };
+  }
+
+  const result = await PermissionsAndroid.request(permission);
+  if (result === PermissionsAndroid.RESULTS.GRANTED) {
+    return {
+      status: "granted",
+      canAskAgain: true,
+      required: true,
+      apiLevel,
+    };
+  }
+  if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+    return {
+      status: "denied",
+      canAskAgain: false,
+      required: true,
+      apiLevel,
+    };
+  }
+
+  return {
+    status: "denied",
+    canAskAgain: true,
+    required: true,
+    apiLevel,
+  };
+}
+
 export async function requestAndroidLocationPermissionsAsync(): Promise<{
   foreground: "granted" | "denied" | "undetermined";
   background: "granted" | "denied" | "undetermined";
   canAskAgainForeground: boolean;
   canAskAgainBackground: boolean;
+  notifications: AndroidPermissionStatus;
+  canAskAgainNotifications: boolean;
+  notificationsRequired: boolean;
+  androidApiLevel: number | null;
   hasNativeModule: boolean;
 }> {
   if (Platform.OS !== "android") {
@@ -104,6 +187,10 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      notifications: "denied",
+      canAskAgainNotifications: false,
+      notificationsRequired: false,
+      androidApiLevel: null,
       hasNativeModule: false,
     };
   }
@@ -114,6 +201,10 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      notifications: "denied",
+      canAskAgainNotifications: false,
+      notificationsRequired: false,
+      androidApiLevel: getAndroidApiLevel(),
       hasNativeModule: false,
     };
   }
@@ -143,6 +234,10 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
     }
   }
 
+  const notificationsStatus = await getAndroidNotificationPermissionStatusAsync({
+    requestIfNeeded: true,
+  });
+
   return {
     foreground: foreground.status,
     background: background.status,
@@ -154,6 +249,10 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       typeof background.canAskAgain === "boolean"
         ? background.canAskAgain
         : true,
+    notifications: notificationsStatus.status,
+    canAskAgainNotifications: notificationsStatus.canAskAgain,
+    notificationsRequired: notificationsStatus.required,
+    androidApiLevel: notificationsStatus.apiLevel,
     hasNativeModule: true,
   };
 }
@@ -168,6 +267,7 @@ export type StartAndroidLocationResult =
         | "services_disabled"
         | "fg_denied"
         | "bg_denied"
+        | "notifications_denied"
         | "start_failed";
       detail?: string;
     };
@@ -188,6 +288,7 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
   const servicesEnabled = await Location.hasServicesEnabledAsync();
   if (!servicesEnabled) {
     console.log("📍 [start] Skipped: location services disabled");
+    logError(ErrorCategory.PERMISSION_DENIED, "Location services disabled");
     return { ok: false, reason: "services_disabled" };
   }
 
@@ -196,11 +297,33 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
   const bg = await getBackgroundPermissionsSafeAsync(Location);
   if (fg.status !== "granted") {
     console.log(`📍 [start] Skipped: foreground permission=${fg.status}`);
+    logError(ErrorCategory.PERMISSION_DENIED, "Foreground location denied", {
+      status: fg.status,
+    });
     return { ok: false, reason: "fg_denied" };
   }
   if (bg.status !== "granted") {
     console.log(`📍 [start] Skipped: background permission=${bg.status}`);
+    logError(ErrorCategory.PERMISSION_DENIED, "Background location denied", {
+      status: bg.status,
+    });
     return { ok: false, reason: "bg_denied" };
+  }
+
+  const notifications = await getAndroidNotificationPermissionStatusAsync();
+  if (notifications.required && notifications.status !== "granted") {
+    console.log(
+      "📍 [start] Skipped: notifications permission required for foreground service",
+    );
+    logError(
+      ErrorCategory.PERMISSION_DENIED,
+      "Notifications permission denied (Android 13+)",
+      {
+        apiLevel: notifications.apiLevel,
+        status: notifications.status,
+      },
+    );
+    return { ok: false, reason: "notifications_denied" };
   }
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(
@@ -235,6 +358,9 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
       "📍 [start] Failed to start background location task:",
       detail,
     );
+    logError(ErrorCategory.TASK_START_FAILED, "Failed to start location task", {
+      detail,
+    });
     return { ok: false, reason: "start_failed", detail };
   }
 }
@@ -411,28 +537,42 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(
  */
 export async function getAndroidLocationDiagnostics(): Promise<{
   support: AndroidLocationSupportStatus;
+  androidApiLevel: number | null;
   locationModule: boolean;
   servicesEnabled: boolean;
   foregroundPermission: string;
   backgroundPermission: string;
+  notificationsPermission: AndroidPermissionStatus;
+  notificationsRequired: boolean;
   taskStarted: boolean;
   pendingSamples: number;
   lastSampleTimestamp: string | null;
   sampleCount24h: number;
+  lastTaskHeartbeat: TaskHeartbeat | null;
+  lastTaskFiredAt: string | null;
+  lastTaskQueuedCount: number | null;
+  lastTaskError: string | null;
   errors: string[];
   canStart: boolean;
 }> {
   const errors: string[] = [];
   const diagnostics = {
     support: getAndroidLocationSupportStatus(),
+    androidApiLevel: getAndroidApiLevel(),
     locationModule: false,
     servicesEnabled: false,
     foregroundPermission: "unknown",
     backgroundPermission: "unknown",
+    notificationsPermission: "undetermined" as AndroidPermissionStatus,
+    notificationsRequired: false,
     taskStarted: false,
     pendingSamples: 0,
     lastSampleTimestamp: null as string | null,
     sampleCount24h: 0,
+    lastTaskHeartbeat: null as TaskHeartbeat | null,
+    lastTaskFiredAt: null as string | null,
+    lastTaskQueuedCount: null as number | null,
+    lastTaskError: null as string | null,
     errors,
     canStart: false,
   };
@@ -482,6 +622,15 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   if (bg.status !== "granted") {
     errors.push(
       `Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`,
+    );
+  }
+
+  const notifications = await getAndroidNotificationPermissionStatusAsync();
+  diagnostics.notificationsPermission = notifications.status;
+  diagnostics.notificationsRequired = notifications.required;
+  if (notifications.required && notifications.status !== "granted") {
+    errors.push(
+      `Notifications permission: ${notifications.status} (required for foreground service on Android 13+)`,
     );
   }
 
@@ -559,6 +708,21 @@ export async function getAndroidLocationDiagnostics(): Promise<{
     );
   }
 
+  try {
+    diagnostics.lastTaskHeartbeat = await getLastTaskHeartbeat();
+  } catch {
+    // ignore
+  }
+
+  try {
+    const metadata = await getAndroidLocationTaskMetadata();
+    diagnostics.lastTaskFiredAt = metadata.lastTaskFiredAt;
+    diagnostics.lastTaskQueuedCount = metadata.lastTaskQueuedCount;
+    diagnostics.lastTaskError = metadata.lastTaskError;
+  } catch {
+    // ignore
+  }
+
   // canStart = all prerequisites met AND task not already running
   diagnostics.canStart = errors.length === 0 && !diagnostics.taskStarted;
   if (__DEV__) {
@@ -571,4 +735,23 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   }
 
   return diagnostics;
+}
+
+export async function openAndroidBatteryOptimizationSettingsAsync(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const intentUrls = [
+    "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+    "android.settings.BATTERY_SAVER_SETTINGS",
+  ];
+
+  for (const url of intentUrls) {
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      await Linking.openURL(url);
+      return true;
+    }
+  }
+
+  await Linking.openSettings();
+  return false;
 }
