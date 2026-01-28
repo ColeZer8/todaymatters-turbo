@@ -37,4 +37,4 @@ Diagnose why Android background location samples stop when the app is not active
 
 ## Follow-ups
 
-- Pending.
+- When requesting rebuilds, increment build numbers (iOS `buildNumber`, Android `versionCode`).
