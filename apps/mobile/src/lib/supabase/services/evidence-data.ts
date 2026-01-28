@@ -1,5 +1,6 @@
 import { supabase } from "../client";
 import { handleSupabaseError } from "../utils/error-handler";
+import { ensureGooglePlaceNamesForDay } from "./location-place-lookup";
 
 /**
  * Evidence data services for fetching location, screen time, and health data
@@ -23,6 +24,16 @@ export interface LocationHourlyRow {
   place_id: string | null;
   place_label: string | null;
   place_category: string | null;
+  // Extra fields returned by tm.location_hourly
+  centroid?: unknown;
+  // Convenience values extracted client-side from centroid
+  centroid_latitude?: number | null;
+  centroid_longitude?: number | null;
+  // Google Places join fields (from tm.location_place_cache)
+  google_place_id?: string | null;
+  google_place_name?: string | null;
+  google_place_vicinity?: string | null;
+  google_place_types?: unknown;
 }
 
 export interface ScreenTimeSessionRow {
@@ -170,7 +181,8 @@ export async function fetchLocationHourlyForDay(
       }
       throw handleSupabaseError(error);
     }
-    return (data ?? []) as LocationHourlyRow[];
+    const rows = (data ?? []) as Record<string, unknown>[];
+    return rows.map(coerceLocationHourlyRow);
   } catch (error) {
     if (__DEV__) {
       console.warn("[Evidence] Failed to fetch location hourly:", error);
@@ -333,6 +345,35 @@ function extractLatLngFromCenter(center: unknown): {
   return { latitude: null, longitude: null };
 }
 
+function coerceLocationHourlyRow(row: Record<string, unknown>): LocationHourlyRow {
+  const latLng = extractLatLngFromCenter(row.centroid);
+  return {
+    user_id: String(row.user_id ?? ""),
+    hour_start: String(row.hour_start ?? ""),
+    sample_count: typeof row.sample_count === "number" ? row.sample_count : 0,
+    avg_accuracy_m:
+      typeof row.avg_accuracy_m === "number" ? row.avg_accuracy_m : null,
+    geohash7: typeof row.geohash7 === "string" ? row.geohash7 : null,
+    radius_m: typeof row.radius_m === "number" ? row.radius_m : null,
+    place_id: typeof row.place_id === "string" ? row.place_id : null,
+    place_label: typeof row.place_label === "string" ? row.place_label : null,
+    place_category:
+      typeof row.place_category === "string" ? row.place_category : null,
+    centroid: row.centroid ?? null,
+    centroid_latitude: latLng.latitude,
+    centroid_longitude: latLng.longitude,
+    google_place_id:
+      typeof row.google_place_id === "string" ? row.google_place_id : null,
+    google_place_name:
+      typeof row.google_place_name === "string" ? row.google_place_name : null,
+    google_place_vicinity:
+      typeof row.google_place_vicinity === "string"
+        ? row.google_place_vicinity
+        : null,
+    google_place_types: row.google_place_types ?? null,
+  };
+}
+
 /**
  * Fetch raw location samples for a day, ordered by recorded_at.
  * Used to refine hourly location block boundaries to precise minute-level timestamps.
@@ -384,21 +425,34 @@ export async function fetchAllEvidenceForDay(
   userId: string,
   ymd: string,
 ): Promise<EvidenceBundle> {
+  // Fetch location hourly first (so we can opportunistically resolve place names).
+  const initialLocationHourly = await fetchLocationHourlyForDay(userId, ymd);
+
   const [
-    locationHourly,
     locationSamples,
     screenTimeSessions,
     healthWorkouts,
     healthDaily,
     userPlaces,
+    didLookup,
   ] = await Promise.all([
-    fetchLocationHourlyForDay(userId, ymd),
     fetchLocationSamplesForDay(userId, ymd),
     fetchScreenTimeSessionsForDay(userId, ymd),
     fetchHealthWorkoutsForDay(userId, ymd),
     fetchHealthDailyForDay(userId, ymd),
     fetchUserPlaces(userId),
+    ensureGooglePlaceNamesForDay({
+      userId,
+      ymd,
+      locationHourly: initialLocationHourly,
+    }),
   ]);
+
+  // If we successfully populated the cache, re-fetch hourly rows so the joined
+  // google_place_name fields are present immediately.
+  const locationHourly = didLookup
+    ? await fetchLocationHourlyForDay(userId, ymd)
+    : initialLocationHourly;
 
   return {
     locationHourly,

@@ -9,6 +9,7 @@ import {
   LogOut,
   LucideIcon,
   MapPin,
+  Trash2,
   MessageCircle,
   MoonStar,
   Play,
@@ -39,6 +40,7 @@ import {
   syncAndroidUsageSummary,
   syncIosScreenTimeSummary,
   syncIosHealthSummary,
+  deleteUserAccount,
 } from "@/lib/supabase/services";
 import { deriveFullNameFromEmail } from "@/lib/user-name";
 import {
@@ -339,7 +341,75 @@ export default function ProfileScreen() {
   const handleDevAutoAssignReview = useCallback(() => {
     requestAutoAssignAll();
     router.push("/review-time");
-  }, [requestAutoAssignAll, router]);
+  }, [    requestAutoAssignAll, router]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to permanently delete your account? This will delete all your data including your profile, goals, initiatives, calendar events, and all other information. This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              "Final Confirmation",
+              "This is your final warning. Your account and ALL data will be permanently deleted. Are you absolutely sure?",
+              [
+                {
+                  text: "Cancel",
+                  style: "cancel",
+                },
+                {
+                  text: "Yes, Delete Everything",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      if (__DEV__) {
+                        console.log("🗑️ Delete account button pressed");
+                      }
+                      // Call the RPC function to delete the account
+                      await deleteUserAccount();
+
+                      if (__DEV__) {
+                        console.log(
+                          "✅ Account deleted, signing out and navigating...",
+                        );
+                      }
+
+                      // Sign out (this will clear local state)
+                      await signOut();
+
+                      // Navigate to sign-in screen
+                      setTimeout(() => {
+                        if (__DEV__) {
+                          console.log("🔴 Navigating to /");
+                        }
+                        router.replace("/");
+                      }, 100);
+                    } catch (error) {
+                      console.error("❌ Delete account error:", error);
+                      Alert.alert(
+                        "Error",
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to delete account. Please try again or contact support.",
+                      );
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [router, signOut]);
 
   // Personalization settings - edit onboarding preferences
   const personalizationItems = [
@@ -606,6 +676,13 @@ Update ID: ${diagnostics.updateId}`;
           );
         }
       },
+    },
+    {
+      id: "delete-account",
+      label: "Delete Account",
+      icon: Trash2,
+      onPress: handleDeleteAccount,
+      isDanger: true,
     },
   ];
   const [isEditing, setIsEditing] = useState(false);

@@ -20,7 +20,7 @@ export const DEFAULT_USER_PREFERENCES: UserDataPreferences = {
   verificationAlerts: true,
   realTimeUpdates: false,
   verificationStrictness: "balanced",
-  big3Enabled: true, // TEMPORARY: Set to true for testing without database tables
+  big3Enabled: false,
 };
 
 interface UserPreferencesState {

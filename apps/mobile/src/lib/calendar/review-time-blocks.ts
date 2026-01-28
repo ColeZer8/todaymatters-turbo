@@ -95,7 +95,10 @@ function buildLocationBlocks(
     if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
 
     const locationLabel =
-      loc.place_label || loc.place_category || "Unknown location";
+      loc.place_label ||
+      loc.google_place_name ||
+      loc.place_category ||
+      "Unknown location";
     const nextStart = startMinutes;
     const nextEnd = startMinutes + 60;
     const key = locationLabel.toLowerCase();

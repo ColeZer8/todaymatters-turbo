@@ -427,3 +427,25 @@ export function getProfilePreferences(
   }
   return profile.meta as ProfilePreferences;
 }
+
+/**
+ * Delete the user's account and all associated data
+ * Uses tm.delete_user() RPC function which requires valid JWT
+ * This will permanently delete the user's auth account and cascade all data
+ */
+export async function deleteUserAccount(): Promise<void> {
+  try {
+    console.log("🗑️ Deleting user account...");
+    const { error } = await supabase.schema("tm").rpc("delete_user");
+
+    if (error) {
+      console.error("❌ Error deleting account:", error);
+      throw handleSupabaseError(error);
+    }
+
+    console.log("✅ Account deleted successfully");
+  } catch (error) {
+    console.error("❌ Failed to delete account:", error);
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}

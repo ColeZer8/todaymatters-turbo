@@ -12,7 +12,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { handleAuthCallback, refreshSession } from "@/lib/supabase";
 import { handleGoogleServicesOAuthCallback } from "@/lib/google-services-oauth";
-import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
+import {
+  useAuthStore,
+  useGoogleServicesOAuthStore,
+  useUserPreferencesStore,
+} from "@/stores";
+import { fetchUserDataPreferences } from "@/lib/supabase/services/user-preferences";
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
 import {
@@ -98,6 +103,9 @@ export default function Layout() {
     (async () => {
       try {
         await loadOnboardingData();
+        // Hydrate user preferences (e.g. big3_enabled) from Supabase so the store reflects DB state
+        const preferences = await fetchUserDataPreferences(userId);
+        useUserPreferencesStore.getState().setPreferences(preferences);
       } catch (error) {
         if (__DEV__) {
           console.log(

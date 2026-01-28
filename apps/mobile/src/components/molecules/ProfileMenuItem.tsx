@@ -7,6 +7,7 @@ interface ProfileMenuItemProps {
   icon: LucideIcon;
   onPress?: () => void;
   value?: string;
+  isDanger?: boolean;
 }
 
 export const ProfileMenuItem = ({
@@ -14,6 +15,7 @@ export const ProfileMenuItem = ({
   icon,
   onPress,
   value,
+  isDanger = false,
 }: ProfileMenuItemProps) => {
   return (
     <Pressable
@@ -23,10 +25,20 @@ export const ProfileMenuItem = ({
       style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
     >
       <View className="flex-row items-center">
-        <View className="items-center justify-center h-11 w-11 rounded-2xl border border-[#E5E9F2] bg-[#F7F9FC]">
-          <Icon icon={icon} size={18} color="#6B7280" />
+        <View
+          className={`items-center justify-center h-11 w-11 rounded-2xl ${
+            isDanger
+              ? "border border-[#FEE2E2] bg-[#FEF2F2]"
+              : "border border-[#E5E9F2] bg-[#F7F9FC]"
+          }`}
+        >
+          <Icon icon={icon} size={18} color={isDanger ? "#DC2626" : "#6B7280"} />
         </View>
-        <Text className="ml-3 text-[#111827] text-[15px] font-semibold">
+        <Text
+          className={`ml-3 text-[15px] font-semibold ${
+            isDanger ? "text-[#DC2626]" : "text-[#111827]"
+          }`}
+        >
           {label}
         </Text>
       </View>
@@ -36,7 +48,11 @@ export const ProfileMenuItem = ({
             {value}
           </Text>
         ) : null}
-        <Icon icon={ChevronRight} size={18} color="#CBD5E1" />
+        <Icon
+          icon={ChevronRight}
+          size={18}
+          color={isDanger ? "#FCA5A5" : "#CBD5E1"}
+        />
       </View>
     </Pressable>
   );

@@ -212,7 +212,8 @@ export function verifyEvent(
     );
     const placeCategory =
       primaryLocation?.place_category?.toLowerCase() ?? null;
-    const placeLabel = primaryLocation?.place_label ?? null;
+    const placeLabel =
+      primaryLocation?.place_label ?? primaryLocation?.google_place_name ?? null;
 
     // Check if location matches expected
     const matchesExpected =

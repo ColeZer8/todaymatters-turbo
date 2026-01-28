@@ -1066,7 +1066,8 @@ function buildLocationBlocks(
     );
     if (hourStartMinutes < 0 || hourStartMinutes >= 24 * 60) continue;
 
-    const placeLabel = row.place_label || row.place_category || "";
+    const placeLabel =
+      row.place_label || row.google_place_name || row.place_category || "";
     const placeCategory = row.place_category ?? null;
     const placeId = row.place_id ?? null;
     const hourKey = Math.floor(hourStartMinutes / 60);
