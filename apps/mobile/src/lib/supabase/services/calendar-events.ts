@@ -1437,3 +1437,215 @@ export function isEventSoftDeleted(meta: Record<string, unknown> | null): boolea
   if (!meta) return false;
   return typeof meta.deleted_at === "string" && meta.deleted_at.length > 0;
 }
+
+// ============================================================================
+// Session Merge Operations
+// ============================================================================
+
+export interface MergeSessionInput {
+  /** User ID */
+  userId: string;
+  /** IDs of the original session events to merge */
+  originalEventIds: string[];
+  /** Merged session data */
+  mergedSession: {
+    title: string;
+    scheduledStartIso: string;
+    scheduledEndIso: string;
+    meta: PlannedCalendarMeta;
+  };
+}
+
+export interface MergeSessionResult {
+  /** The merged session event */
+  mergedEvent: ScheduledEvent;
+  /** Whether all originals were successfully soft-deleted */
+  originalsDeleted: boolean;
+}
+
+/**
+ * Merge multiple session events into a single new event.
+ *
+ * This function:
+ * 1. Soft-deletes all original events by setting meta.deleted_at and meta.deleted_reason
+ * 2. Creates a new merged session event with meta.source = 'user' (protected from future ingestion)
+ * 3. Links the new event to the originals via meta.merged_from
+ *
+ * @param input - Merge session input containing original event IDs and merged session data
+ * @returns Result containing the merged event
+ */
+export async function mergeSessionEvents(
+  input: MergeSessionInput,
+): Promise<MergeSessionResult> {
+  try {
+    const {
+      userId,
+      originalEventIds,
+      mergedSession,
+    } = input;
+
+    if (originalEventIds.length < 2) {
+      throw new Error("At least two events are required to merge");
+    }
+
+    if (__DEV__) {
+      console.log("[Supabase] Merging session events:", {
+        originalEventIds,
+        mergedTitle: mergedSession.title,
+      });
+    }
+
+    // Step 1: Soft-delete all original events
+    const deletionTimestamp = new Date().toISOString();
+    let allDeleted = true;
+
+    for (const eventId of originalEventIds) {
+      const { data: originalEvent, error: fetchError } = await supabase
+        .schema("tm")
+        .from("events")
+        .select("*")
+        .eq("id", eventId)
+        .eq("user_id", userId)
+        .single();
+
+      if (fetchError) {
+        if (__DEV__) {
+          console.error("[Supabase] ❌ Error fetching original event:", fetchError);
+        }
+        allDeleted = false;
+        continue;
+      }
+
+      const originalMeta = (originalEvent.meta ?? {}) as Record<string, Json>;
+      const updatedOriginalMeta: Record<string, Json> = {
+        ...originalMeta,
+        deleted_at: deletionTimestamp,
+        deleted_reason: "merged",
+      };
+
+      const { error: updateError } = await supabase
+        .schema("tm")
+        .from("events")
+        .update({ meta: updatedOriginalMeta as unknown as Json })
+        .eq("id", eventId)
+        .eq("user_id", userId);
+
+      if (updateError) {
+        if (__DEV__) {
+          console.error("[Supabase] ❌ Error soft-deleting original event:", updateError);
+        }
+        allDeleted = false;
+      }
+    }
+
+    // Step 2: Create the merged session event
+    const mergedMeta: PlannedCalendarMeta = {
+      ...mergedSession.meta,
+      source: "user",
+      merged_from: originalEventIds,
+    };
+
+    const mergedInsert: TmEventInsert = {
+      user_id: userId,
+      type: ACTUAL_EVENT_TYPE,
+      title: mergedSession.title,
+      description: "",
+      scheduled_start: mergedSession.scheduledStartIso,
+      scheduled_end: mergedSession.scheduledEndIso,
+      meta: mergedMeta as unknown as Json,
+    };
+
+    const { data: mergedData, error: mergedError } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(mergedInsert)
+      .select("*")
+      .single();
+
+    if (mergedError) {
+      if (__DEV__) {
+        console.error("[Supabase] ❌ Error creating merged event:", mergedError);
+      }
+      throw handleSupabaseError(mergedError);
+    }
+
+    // Map the result to ScheduledEvent format
+    const mergedEvent = rowToScheduledEvent(mergedData as TmEventRow);
+
+    if (!mergedEvent) {
+      throw new Error("Failed to map merged session event");
+    }
+
+    if (__DEV__) {
+      console.log("[Supabase] ✅ Successfully merged sessions:", {
+        originalEventIds,
+        mergedEventId: mergedEvent.id,
+      });
+    }
+
+    return {
+      mergedEvent,
+      originalsDeleted: allDeleted,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[Supabase] ❌ Error merging sessions:", error);
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Find adjacent session blocks that can be merged with the given event.
+ *
+ * Adjacent sessions are those that:
+ * 1. Are session blocks (meta.kind === 'session_block')
+ * 2. End where this session starts, or start where this session ends (within 5 min gap)
+ * 3. Are not soft-deleted
+ *
+ * @param userId - User ID
+ * @param event - The event to find neighbors for
+ * @param allEvents - All events for the day (to search for neighbors)
+ * @returns Array of adjacent session events
+ */
+export function findMergeableNeighbors(
+  event: ScheduledEvent,
+  allEvents: ScheduledEvent[],
+): ScheduledEvent[] {
+  const eventStart = event.startMinutes;
+  const eventEnd = event.startMinutes + event.duration;
+  const maxGapMinutes = 5; // Maximum gap between sessions to be considered adjacent
+
+  // Filter for session blocks that are not soft-deleted and not the same event
+  const sessionBlocks = allEvents.filter((e) => {
+    if (e.id === event.id) return false;
+    if (e.meta?.kind !== "session_block") return false;
+    if (e.meta && isEventSoftDeleted(e.meta as unknown as Record<string, unknown>)) return false;
+    return true;
+  });
+
+  // Find neighbors
+  const neighbors: ScheduledEvent[] = [];
+
+  for (const candidate of sessionBlocks) {
+    const candidateStart = candidate.startMinutes;
+    const candidateEnd = candidate.startMinutes + candidate.duration;
+
+    // Check if candidate ends where this event starts (or within gap)
+    const gapBefore = eventStart - candidateEnd;
+    if (gapBefore >= 0 && gapBefore <= maxGapMinutes) {
+      neighbors.push(candidate);
+      continue;
+    }
+
+    // Check if candidate starts where this event ends (or within gap)
+    const gapAfter = candidateStart - eventEnd;
+    if (gapAfter >= 0 && gapAfter <= maxGapMinutes) {
+      neighbors.push(candidate);
+      continue;
+    }
+  }
+
+  // Sort by start time
+  return neighbors.sort((a, b) => a.startMinutes - b.startMinutes);
+}

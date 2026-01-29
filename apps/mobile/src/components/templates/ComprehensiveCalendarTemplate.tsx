@@ -872,8 +872,15 @@ export const ComprehensiveCalendarTemplate = ({
           setSessionDetailEvent(null);
         }}
         dayStart={selectedDate}
+        allActualEvents={actualEvents}
         onSplit={(firstEvent, secondEvent) => {
           // Refresh the actual events after split
+          // The parent component should refetch events
+          setIsSessionDetailVisible(false);
+          setSessionDetailEvent(null);
+        }}
+        onMerge={(mergedEvent) => {
+          // Refresh the actual events after merge
           // The parent component should refetch events
           setIsSessionDetailVisible(false);
           setSessionDetailEvent(null);

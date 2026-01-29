@@ -2395,3 +2395,235 @@ export function splitScheduledEventSession(
 
   return splitSession(session, splitPoint, childEvents, userOverrides);
 }
+
+// ============================================================================
+// Session Merge
+// ============================================================================
+
+/**
+ * Result of a session merge operation.
+ */
+export interface SessionMergeResult {
+  /** The merged session block */
+  mergedSession: SessionBlock;
+  /** IDs of the original sessions that were merged (now soft-deleted) */
+  originalSessionIds: string[];
+}
+
+/**
+ * Merge two or more sessions into a single session block.
+ *
+ * This function:
+ * 1. Combines all child events from the source sessions
+ * 2. Recalculates intent based on combined app usage
+ * 3. Creates a new session block spanning all time ranges
+ * 4. Marks the new block with meta.source = 'user' (protected from future ingestion)
+ *
+ * @param sessions - Array of session blocks to merge (must be at least 2)
+ * @param userOverrides - Optional user app category overrides for intent classification
+ * @returns Result containing the merged session block
+ * @throws Error if fewer than 2 sessions are provided
+ */
+export function mergeSessions(
+  sessions: SessionBlock[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionMergeResult {
+  if (sessions.length < 2) {
+    throw new Error("At least two sessions are required to merge");
+  }
+
+  // Sort sessions by start time
+  const sortedSessions = [...sessions].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  // Determine merged session boundaries
+  const mergedStart = sortedSessions[0].start;
+  const mergedEnd = sortedSessions[sortedSessions.length - 1].end;
+
+  // Combine all child event IDs
+  const allChildEventIds: string[] = [];
+  for (const session of sortedSessions) {
+    allChildEventIds.push(...session.childEventIds);
+  }
+
+  // Combine all app summaries
+  const appDurations = new Map<string, number>();
+  for (const session of sortedSessions) {
+    if (session.meta.summary) {
+      for (const app of session.meta.summary) {
+        const existing = appDurations.get(app.label) ?? 0;
+        appDurations.set(app.label, existing + app.seconds);
+      }
+    }
+  }
+
+  // Convert to AppSummary array sorted by duration descending
+  const combinedAppSummary: AppSummary[] = Array.from(appDurations.entries())
+    .map(([appId, seconds]) => ({ appId, seconds }))
+    .sort((a, b) => b.seconds - a.seconds);
+
+  // Classify intent based on combined app usage
+  const intentClassification = classifyIntent(combinedAppSummary, userOverrides);
+  const intent = combinedAppSummary.length === 0 ? "offline" : intentClassification.intent;
+
+  // Calculate weighted average confidence
+  let totalConfidence = 0;
+  let totalDuration = 0;
+  for (const session of sortedSessions) {
+    const duration = session.end.getTime() - session.start.getTime();
+    totalConfidence += session.confidence * duration;
+    totalDuration += duration;
+  }
+  const mergedConfidence = totalDuration > 0 ? totalConfidence / totalDuration : 0.5;
+
+  // Use place info from the first session (or the dominant place if different)
+  // For merge, we typically merge adjacent sessions at the same place,
+  // so using the first session's place is appropriate
+  const placeId = sortedSessions[0].placeId;
+  const placeLabel = sortedSessions[0].placeLabel;
+
+  // Generate new source ID
+  const sourceId = generateUserSessionSourceId(placeId, mergedStart);
+
+  // Generate title
+  const title = generateSessionTitle(placeLabel, intent, false);
+
+  // Build top 3 app summary for display
+  const summary = combinedAppSummary.slice(0, 3).map((app) => ({
+    label: app.appId,
+    seconds: app.seconds,
+  }));
+
+  // Create merged session block
+  const mergedSession: SessionBlock = {
+    sourceId,
+    title,
+    start: mergedStart,
+    end: mergedEnd,
+    placeId,
+    placeLabel,
+    intent,
+    intentClassification,
+    childEventIds: allChildEventIds,
+    confidence: mergedConfidence,
+    meta: {
+      kind: "session_block",
+      place_id: placeId,
+      place_label: placeLabel,
+      intent,
+      children: allChildEventIds,
+      confidence: mergedConfidence,
+      summary: summary.length > 0 ? summary : undefined,
+      intent_reasoning: intentClassification.reasoning,
+    },
+  };
+
+  // Collect original session IDs
+  const originalSessionIds = sortedSessions.map((s) => s.sourceId);
+
+  return {
+    mergedSession,
+    originalSessionIds,
+  };
+}
+
+/**
+ * Merge two sessions from ScheduledEvent (calendar event format).
+ *
+ * This is a convenience function for merging sessions directly from
+ * the calendar view where events are in ScheduledEvent format.
+ *
+ * @param primaryEvent - The primary session event (the one the user initiated merge from)
+ * @param secondaryEvent - The session event to merge into the primary
+ * @param dayStart - The start of the day (for converting startMinutes to actual time)
+ * @param userOverrides - Optional user app category overrides
+ * @returns Result containing the merged session block
+ * @throws Error if events are not session blocks
+ */
+export function mergeScheduledEventSessions(
+  primaryEvent: {
+    id: string;
+    title: string;
+    startMinutes: number;
+    duration: number;
+    meta?: {
+      kind?: string;
+      place_id?: string | null;
+      place_label?: string | null;
+      intent?: Intent;
+      children?: string[];
+      confidence?: number;
+      summary?: Array<{ label: string; seconds: number }>;
+      intent_reasoning?: string;
+      [key: string]: unknown;
+    };
+  },
+  secondaryEvent: {
+    id: string;
+    title: string;
+    startMinutes: number;
+    duration: number;
+    meta?: {
+      kind?: string;
+      place_id?: string | null;
+      place_label?: string | null;
+      intent?: Intent;
+      children?: string[];
+      confidence?: number;
+      summary?: Array<{ label: string; seconds: number }>;
+      intent_reasoning?: string;
+      [key: string]: unknown;
+    };
+  },
+  dayStart: Date,
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionMergeResult {
+  if (primaryEvent.meta?.kind !== "session_block") {
+    throw new Error("Cannot merge: primary event is not a session block");
+  }
+  if (secondaryEvent.meta?.kind !== "session_block") {
+    throw new Error("Cannot merge: secondary event is not a session block");
+  }
+
+  // Helper function to convert ScheduledEvent to SessionBlock
+  const toSessionBlock = (
+    event: typeof primaryEvent,
+  ): SessionBlock => {
+    const sessionStart = new Date(dayStart.getTime() + event.startMinutes * 60 * 1000);
+    const sessionEnd = new Date(sessionStart.getTime() + event.duration * 60 * 1000);
+
+    return {
+      sourceId: event.id,
+      title: event.title,
+      start: sessionStart,
+      end: sessionEnd,
+      placeId: event.meta?.place_id ?? null,
+      placeLabel: event.meta?.place_label ?? null,
+      intent: event.meta?.intent ?? "mixed",
+      intentClassification: {
+        intent: event.meta?.intent ?? "mixed",
+        breakdown: { work: 0, social: 0, entertainment: 0, comms: 0, utility: 0, ignore: 0 },
+        totalSeconds: event.duration * 60,
+        reasoning: event.meta?.intent_reasoning ?? "",
+      },
+      childEventIds: event.meta?.children ?? [],
+      confidence: event.meta?.confidence ?? 0.5,
+      meta: {
+        kind: "session_block",
+        place_id: event.meta?.place_id ?? null,
+        place_label: event.meta?.place_label ?? null,
+        intent: event.meta?.intent ?? "mixed",
+        children: event.meta?.children ?? [],
+        confidence: event.meta?.confidence ?? 0.5,
+        summary: event.meta?.summary,
+        intent_reasoning: event.meta?.intent_reasoning,
+      },
+    };
+  };
+
+  const primarySession = toSessionBlock(primaryEvent);
+  const secondarySession = toSessionBlock(secondaryEvent);
+
+  return mergeSessions([primarySession, secondarySession], userOverrides);
+}

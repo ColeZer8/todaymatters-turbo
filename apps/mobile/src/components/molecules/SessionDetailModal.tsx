@@ -10,14 +10,15 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors } from "lucide-react-native";
+import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, ChevronRight } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import { TimePickerModal } from "../organisms/TimePickerModal";
 import type { ScheduledEvent } from "@/stores";
 import { useAuth } from "@/hooks/use-auth";
-import { splitSessionEvent } from "@/lib/supabase/services/calendar-events";
+import { splitSessionEvent, mergeSessionEvents, findMergeableNeighbors } from "@/lib/supabase/services/calendar-events";
 import {
   splitScheduledEventSession,
+  mergeScheduledEventSessions,
   sessionBlockToDerivedEvent,
 } from "@/lib/supabase/services/actual-ingestion";
 import type { Intent } from "@/lib/supabase/services/app-categories";
@@ -62,8 +63,12 @@ interface SessionDetailModalProps {
   onClose: () => void;
   /** Callback when session is successfully split - receives the two new events */
   onSplit?: (firstEvent: ScheduledEvent, secondEvent: ScheduledEvent) => void;
+  /** Callback when sessions are successfully merged - receives the merged event */
+  onMerge?: (mergedEvent: ScheduledEvent) => void;
   /** The start of the day for time calculations */
   dayStart?: Date;
+  /** All actual events for the day (used to find mergeable neighbors) */
+  allActualEvents?: ScheduledEvent[];
 }
 
 /**
@@ -108,7 +113,9 @@ export const SessionDetailModal = ({
   visible,
   onClose,
   onSplit,
+  onMerge,
   dayStart: dayStartProp,
+  allActualEvents = [],
 }: SessionDetailModalProps) => {
   const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -118,6 +125,11 @@ export const SessionDetailModal = ({
   // Split state
   const [showSplitPicker, setShowSplitPicker] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
+
+  // Merge state
+  const [showMergeOptions, setShowMergeOptions] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [selectedMergeTarget, setSelectedMergeTarget] = useState<ScheduledEvent | null>(null);
 
   const meta = event?.meta;
   const isSessionBlock = meta?.kind === "session_block";
@@ -180,6 +192,151 @@ export const SessionDetailModal = ({
     if (!event) return false;
     return event.duration >= 10;
   }, [event]);
+
+  // Find mergeable neighbors (adjacent session blocks)
+  const mergeableNeighbors = useMemo(() => {
+    if (!event || !allActualEvents.length) return [];
+    return findMergeableNeighbors(event, allActualEvents);
+  }, [event, allActualEvents]);
+
+  // Check if session can be merged (must have at least one adjacent session)
+  const canMerge = mergeableNeighbors.length > 0;
+
+  // Handle merge button press
+  const handleMergePress = useCallback(() => {
+    if (!canMerge) {
+      Alert.alert(
+        "Cannot Merge",
+        "No adjacent sessions found to merge with.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    setShowMergeOptions(true);
+  }, [canMerge]);
+
+  // Handle selecting a merge target
+  const handleSelectMergeTarget = useCallback(
+    (target: ScheduledEvent) => {
+      setSelectedMergeTarget(target);
+
+      // Confirm the merge
+      const targetTimeRange = `${formatTime(target.startMinutes)} - ${formatTime(target.startMinutes + target.duration)}`;
+      Alert.alert(
+        "Merge Sessions",
+        `Merge this session with "${target.title}" (${targetTimeRange})?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => setSelectedMergeTarget(null),
+          },
+          {
+            text: "Merge",
+            style: "destructive",
+            onPress: async () => {
+              await performMerge(target);
+            },
+          },
+        ]
+      );
+    },
+    []
+  );
+
+  // Perform the actual merge operation
+  const performMerge = useCallback(
+    async (target: ScheduledEvent) => {
+      if (!event || !user?.id) return;
+
+      setIsMerging(true);
+      try {
+        // Use the merge function to calculate the merged session
+        const mergeResult = mergeScheduledEventSessions(
+          {
+            id: event.id,
+            title: event.title,
+            startMinutes: event.startMinutes,
+            duration: event.duration,
+            meta: event.meta as {
+              kind?: string;
+              place_id?: string | null;
+              place_label?: string | null;
+              intent?: Intent;
+              children?: string[];
+              confidence?: number;
+              summary?: Array<{ label: string; seconds: number }>;
+              intent_reasoning?: string;
+            },
+          },
+          {
+            id: target.id,
+            title: target.title,
+            startMinutes: target.startMinutes,
+            duration: target.duration,
+            meta: target.meta as {
+              kind?: string;
+              place_id?: string | null;
+              place_label?: string | null;
+              intent?: Intent;
+              children?: string[];
+              confidence?: number;
+              summary?: Array<{ label: string; seconds: number }>;
+              intent_reasoning?: string;
+            },
+          },
+          dayStart,
+          undefined // userOverrides - not available in this context
+        );
+
+        // Convert merged session to the format needed for database operations
+        const mergedDerived = sessionBlockToDerivedEvent(mergeResult.mergedSession);
+
+        // Call the database function to persist the merge
+        const result = await mergeSessionEvents({
+          userId: user.id,
+          originalEventIds: [event.id, target.id],
+          mergedSession: {
+            title: mergedDerived.title,
+            scheduledStartIso: formatLocalIso(mergedDerived.scheduledStart),
+            scheduledEndIso: formatLocalIso(mergedDerived.scheduledEnd),
+            meta: {
+              ...mergeResult.mergedSession.meta,
+              category: event.category,
+            } as Parameters<typeof mergeSessionEvents>[0]["mergedSession"]["meta"],
+          },
+        });
+
+        // Notify parent component of successful merge
+        if (onMerge) {
+          onMerge(result.mergedEvent);
+        }
+
+        Alert.alert(
+          "Sessions Merged",
+          "The sessions have been merged into a single block.",
+          [
+            {
+              text: "OK",
+              onPress: onClose,
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Failed to merge sessions:", error);
+        Alert.alert(
+          "Merge Failed",
+          "Failed to merge the sessions. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsMerging(false);
+        setSelectedMergeTarget(null);
+        setShowMergeOptions(false);
+      }
+    },
+    [event, user?.id, dayStart, onMerge, onClose]
+  );
 
   // Handle split button press
   const handleSplitPress = useCallback(() => {
@@ -356,6 +513,9 @@ export const SessionDetailModal = ({
     if (!visible) {
       setShowSplitPicker(false);
       setIsSplitting(false);
+      setShowMergeOptions(false);
+      setIsMerging(false);
+      setSelectedMergeTarget(null);
     }
   }, [visible]);
 
@@ -462,8 +622,93 @@ export const SessionDetailModal = ({
                       </Text>
                     </View>
                   </Pressable>
+
+                  {/* Divider */}
+                  <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+
+                  {/* Merge Button */}
+                  <Pressable
+                    onPress={handleMergePress}
+                    disabled={!canMerge || isMerging}
+                    className={`flex-row items-center px-4 py-3 ${
+                      !canMerge || isMerging ? "opacity-50" : ""
+                    }`}
+                  >
+                    <View
+                      className="w-8 h-8 rounded-full items-center justify-center"
+                      style={{ backgroundColor: "#DBEAFE" }}
+                    >
+                      <Icon icon={Merge} size={16} color="#2563EB" />
+                    </View>
+                    <View className="ml-3 flex-1">
+                      <Text className="text-base text-[#111827] font-medium">
+                        {isMerging ? "Merging..." : "Merge Session"}
+                      </Text>
+                      <Text className="text-sm text-[#64748B]">
+                        {canMerge
+                          ? `${mergeableNeighbors.length} adjacent session${mergeableNeighbors.length > 1 ? "s" : ""} available`
+                          : "No adjacent sessions to merge"}
+                      </Text>
+                    </View>
+                    {canMerge && !isMerging && (
+                      <Icon icon={ChevronRight} size={20} color={COLORS.textMuted} />
+                    )}
+                  </Pressable>
                 </View>
               </View>
+
+              {/* Merge Options Section (shown when merge is pressed) */}
+              {showMergeOptions && mergeableNeighbors.length > 0 && (
+                <View className="mt-4 px-4">
+                  <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
+                    SELECT SESSION TO MERGE WITH
+                  </Text>
+                  <View className="overflow-hidden rounded-xl bg-white">
+                    {mergeableNeighbors.map((neighbor, index) => {
+                      const neighborTimeRange = `${formatTime(neighbor.startMinutes)} - ${formatTime(neighbor.startMinutes + neighbor.duration)}`;
+                      const neighborDuration = formatDuration(neighbor.duration * 60);
+                      const neighborIntent = (neighbor.meta?.intent as string) || "mixed";
+                      const neighborIntentStyle = INTENT_COLORS[neighborIntent] || INTENT_COLORS.mixed;
+
+                      return (
+                        <View key={neighbor.id}>
+                          {index > 0 && <View className="h-[1px] ml-4 bg-[#E5E5EA]" />}
+                          <Pressable
+                            onPress={() => handleSelectMergeTarget(neighbor)}
+                            disabled={isMerging}
+                            className="flex-row items-center px-4 py-3"
+                          >
+                            <View
+                              className="w-8 h-8 rounded-full items-center justify-center"
+                              style={{ backgroundColor: neighborIntentStyle.bg }}
+                            >
+                              <MapPin size={14} color={neighborIntentStyle.text} />
+                            </View>
+                            <View className="ml-3 flex-1">
+                              <Text className="text-base text-[#111827] font-medium">
+                                {neighbor.title}
+                              </Text>
+                              <Text className="text-sm text-[#64748B]">
+                                {neighborTimeRange} · {neighborDuration}
+                              </Text>
+                            </View>
+                            <Icon icon={ChevronRight} size={20} color={COLORS.textMuted} />
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {/* Cancel merge selection */}
+                  <Pressable
+                    onPress={() => setShowMergeOptions(false)}
+                    className="mt-3 py-2"
+                  >
+                    <Text className="text-center text-sm text-[#2563EB]">
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
               {/* Intent Classification Section */}
               <View className="mt-6 px-4">
