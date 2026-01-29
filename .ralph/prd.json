@@ -318,8 +318,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created SessionDetailModal component in apps/mobile/src/components/molecules/SessionDetailModal.tsx. Shows: title with place label, time range and duration, intent classification badge with reasoning, app usage breakdown with percentages and progress bars, location confidence indicator with percentage. Updated ComprehensiveCalendarTemplate.tsx to open SessionDetailModal when tapping session_block events in the Actual column."
     },
     {
       "id": "US-021",
@@ -336,8 +336,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added session split functionality. Service functions in actual-ingestion.ts (splitSession, splitScheduledEventSession) compute the new sessions with redistributed child events and recalculated intents. Database operations in calendar-events.ts (splitSessionEvent) soft-delete the original by setting meta.deleted_at/deleted_reason, and create two new events with meta.source='user' and meta.split_from linking to original. UI in SessionDetailModal shows Split button with time picker, validates split point is within session bounds, and refreshes view after split."
     },
     {
       "id": "US-022",
@@ -355,8 +355,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added session merge functionality. Service functions in actual-ingestion.ts (mergeSessions, mergeScheduledEventSessions) combine sessions with recalculated intent. Database operations in calendar-events.ts (mergeSessionEvents) soft-delete originals with meta.deleted_at/deleted_reason='merged', create new event with meta.source='user' and meta.merged_from linking to originals. UI in SessionDetailModal shows Merge button, displays list of mergeable neighbors (within 5 min gap), confirms merge action. findMergeableNeighbors helper finds adjacent session blocks."
     },
     {
       "id": "US-023",
@@ -371,8 +371,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created AddPlaceModal component in apps/mobile/src/components/molecules/AddPlaceModal.tsx. Added createUserPlace, PLACE_LABEL_SUGGESTIONS, and getSuggestedCategory to user-places.ts. SessionDetailModal shows 'Add Place' button for sessions at unknown locations with coordinates. Saves to tm.user_places with 150m default radius. Added latitude/longitude to CalendarEventMeta and SessionBlock.meta for coordinate storage."
     },
     {
       "id": "US-024",
@@ -387,8 +387,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Places management accessible from Profile > Place Labels. Updated PlaceLabelsTemplate with radius editing slider (HardenedSlider). Updated updateUserPlace service to accept radius_m parameter. Display mode shows label, category, and radius. Edit mode allows changing label, category (via HierarchicalCategoryPicker), and radius (50-500m slider). Delete with confirmation alert."
     },
     {
       "id": "US-025",

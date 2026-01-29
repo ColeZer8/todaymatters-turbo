@@ -109,7 +109,7 @@ export async function fetchAllUserPlaces(
 }
 
 /**
- * Update a user place's label and/or category.
+ * Update a user place's label, category, and/or radius.
  */
 export async function updateUserPlace(
   placeId: string,
@@ -117,6 +117,7 @@ export async function updateUserPlace(
     label?: string;
     category?: string | null;
     category_id?: string | null;
+    radius_m?: number;
   },
 ): Promise<UserPlaceRow> {
   try {

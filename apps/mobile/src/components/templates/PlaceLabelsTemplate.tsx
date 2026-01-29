@@ -17,7 +17,9 @@ import {
   X,
   Check,
   Tag,
+  Ruler,
 } from "lucide-react-native";
+import { HardenedSlider } from "@/components/atoms";
 import { HierarchicalCategoryPicker } from "@/components/molecules";
 import type { ActivityCategory } from "@/lib/supabase/services/activity-categories";
 
@@ -46,6 +48,7 @@ export interface PlaceLabelsTemplateProps {
     placeId: string,
     label: string,
     categoryId: string | null,
+    radiusM: number,
   ) => Promise<void>;
   onDeletePlace: (placeId: string, placeLabel: string) => void;
 }
@@ -66,34 +69,38 @@ export const PlaceLabelsTemplate = ({
   const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
   const [editCategoryId, setEditCategoryId] = useState<string | null>(null);
+  const [editRadiusM, setEditRadiusM] = useState(150);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleStartEdit = useCallback((place: PlaceLabelItem) => {
     setEditingPlaceId(place.id);
     setEditLabel(place.label);
     setEditCategoryId(place.category_id);
+    setEditRadiusM(place.radius_m);
   }, []);
 
   const handleCancelEdit = useCallback(() => {
     setEditingPlaceId(null);
     setEditLabel("");
     setEditCategoryId(null);
+    setEditRadiusM(150);
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingPlaceId || !editLabel.trim()) return;
     setIsSaving(true);
     try {
-      await onUpdatePlace(editingPlaceId, editLabel.trim(), editCategoryId);
+      await onUpdatePlace(editingPlaceId, editLabel.trim(), editCategoryId, editRadiusM);
       setEditingPlaceId(null);
       setEditLabel("");
       setEditCategoryId(null);
+      setEditRadiusM(150);
     } catch {
       Alert.alert("Error", "Failed to update place label. Please try again.");
     } finally {
       setIsSaving(false);
     }
-  }, [editingPlaceId, editLabel, editCategoryId, onUpdatePlace]);
+  }, [editingPlaceId, editLabel, editCategoryId, editRadiusM, onUpdatePlace]);
 
   const handleDelete = useCallback(
     (place: PlaceLabelItem) => {
@@ -218,6 +225,36 @@ export const PlaceLabelsTemplate = ({
                       />
                     </View>
 
+                    {/* Radius slider */}
+                    <View className="flex-row items-center mt-4 mb-2">
+                      <Ruler size={14} color="#94A3B8" />
+                      <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-[#94A3B8] ml-1.5">
+                        Detection Radius
+                      </Text>
+                    </View>
+                    <View className="rounded-xl border border-[#E2E8F0] bg-[#F7FAFF] px-4 py-3">
+                      <View className="flex-row items-center justify-between mb-2">
+                        <Text className="text-sm text-[#64748B]">
+                          {editRadiusM}m
+                        </Text>
+                        <Text className="text-xs text-[#94A3B8]">
+                          {editRadiusM < 100 ? "Small" : editRadiusM < 200 ? "Medium" : "Large"}
+                        </Text>
+                      </View>
+                      <HardenedSlider
+                        value={editRadiusM}
+                        onChange={(value) => setEditRadiusM(value)}
+                        min={50}
+                        max={500}
+                        step={10}
+                        fillColor="#2563EB"
+                        trackColor="#E2E8F0"
+                      />
+                      <Text className="text-xs text-[#94A3B8] mt-1">
+                        Area within which you'll be auto-tagged at this place
+                      </Text>
+                    </View>
+
                     {/* Save / Cancel buttons */}
                     <View className="flex-row gap-3 mt-4">
                       <Pressable
@@ -288,17 +325,25 @@ export const PlaceLabelsTemplate = ({
                           {place.label}
                         </Text>
 
-                        {place.categoryDisplayName ? (
-                          <View className="flex-row items-center mt-0.5">
-                            <Tag size={12} color="#64748B" />
-                            <Text
-                              className="ml-1 text-sm text-[#64748B]"
-                              numberOfLines={1}
-                            >
-                              {place.categoryDisplayName}
+                        <View className="flex-row items-center mt-0.5 flex-wrap gap-x-3">
+                          {place.categoryDisplayName ? (
+                            <View className="flex-row items-center">
+                              <Tag size={12} color="#64748B" />
+                              <Text
+                                className="ml-1 text-sm text-[#64748B]"
+                                numberOfLines={1}
+                              >
+                                {place.categoryDisplayName}
+                              </Text>
+                            </View>
+                          ) : null}
+                          <View className="flex-row items-center">
+                            <Ruler size={12} color="#94A3B8" />
+                            <Text className="ml-1 text-sm text-[#94A3B8]">
+                              {place.radius_m}m
                             </Text>
                           </View>
-                        ) : null}
+                        </View>
 
                         {place.autoTagCount > 0 ? (
                           <Text className="mt-0.5 text-xs text-[#94A3B8]">

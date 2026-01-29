@@ -96,10 +96,11 @@ export default function SettingsPlaceLabelsScreen() {
   }, [isAuthenticated, userId]);
 
   const handleUpdatePlace = useCallback(
-    async (placeId: string, label: string, categoryId: string | null) => {
+    async (placeId: string, label: string, categoryId: string | null, radiusM: number) => {
       const updated = await updateUserPlace(placeId, {
         label,
         category_id: categoryId,
+        radius_m: radiusM,
       });
 
       // Update local state
@@ -111,6 +112,7 @@ export default function SettingsPlaceLabelsScreen() {
                 label: updated.label,
                 category: updated.category,
                 category_id: updated.category_id,
+                radius_m: updated.radius_m,
                 categoryDisplayName: buildCategoryDisplayName(
                   updated.category_id,
                   activityCategories,
