@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Table already existed in 20260119_user_app_categories_learning.sql. Added CHECK constraint for category values: supabase/migrations/20260129_user_app_categories_check_constraint.sql"
     },
     {
       "id": "US-004",
@@ -62,8 +62,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Service created: apps/mobile/src/lib/supabase/services/actual-ingestion-window-locks.ts. Functions: isWindowLocked, lockWindow, processIngestionWindow (with lock check), getWindowLock, getLockedWindowsInRange, checkWindowLockBeforeProcessing."
     },
     {
       "id": "US-005",
@@ -77,8 +77,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Service created: apps/mobile/src/lib/supabase/services/event-reconciliation.ts. Functions: computeReconciliationOps (with locked event protection), lockEventsInWindow, fetchEventsInWindow, hasLockedEventsInWindow, getLockedEventsInRange. 12 unit tests pass in event-reconciliation.test.ts."
     },
     {
       "id": "US-006",
@@ -94,8 +94,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to event-reconciliation.ts: findExtendableEvent, computeReconciliationOpsWithExtension, canExtendEvent, fetchExtensionCandidates, extendEvent, executeExtensions. 17 new unit tests in event-reconciliation.test.ts (29 total)."
     },
     {
       "id": "US-007",

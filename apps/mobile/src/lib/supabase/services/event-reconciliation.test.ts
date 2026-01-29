@@ -1,5 +1,8 @@
 import {
   computeReconciliationOps,
+  computeReconciliationOpsWithExtension,
+  findExtendableEvent,
+  canExtendEvent,
   type ReconciliationEvent,
   type DerivedEvent,
 } from "./event-reconciliation";
@@ -288,6 +291,402 @@ describe("event-reconciliation", () => {
       expect(ops.deletes).toHaveLength(1);
       expect(ops.deletes[0].eventId).toBe("no-source-id");
       expect(ops.inserts).toHaveLength(1);
+    });
+  });
+
+  describe("findExtendableEvent", () => {
+    // Helper to create a ReconciliationEvent
+    const makeExisting = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `existing-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "Existing Event",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: { source: "derived", source_id: `src-${Math.random().toString(36).slice(2)}`, app_id: "com.example.app" },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    it("should find extendable event when same app_id and gap < 60s", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeExisting({
+        id: "slack-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"), // Ends exactly at window start
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const result = findExtendableEvent([existingEvent], windowStart, "com.slack.Slack");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("slack-event");
+    });
+
+    it("should find extendable event when gap is 30 seconds", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeExisting({
+        id: "slack-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:30Z"), // 30 seconds before window start
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const result = findExtendableEvent([existingEvent], windowStart, "com.slack.Slack");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("slack-event");
+    });
+
+    it("should return null when gap > 60s", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeExisting({
+        id: "slack-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:28:59Z"), // 61 seconds before window start
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const result = findExtendableEvent([existingEvent], windowStart, "com.slack.Slack");
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null when app_id differs", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeExisting({
+        id: "slack-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const result = findExtendableEvent([existingEvent], windowStart, "com.google.Gmail");
+
+      expect(result).toBeNull();
+    });
+
+    it("should return the most recent event when multiple candidates exist", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const olderEvent = makeExisting({
+        id: "older-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:00Z"), // 1 minute before window start
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+      const newerEvent = makeExisting({
+        id: "newer-event",
+        scheduledStart: new Date("2026-01-29T10:15:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:45Z"), // 15 seconds before window start
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const result = findExtendableEvent([olderEvent, newerEvent], windowStart, "com.slack.Slack");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("newer-event");
+    });
+
+    it("should return null when no events have app_id", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeExisting({
+        id: "no-app-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived" }, // No app_id
+      });
+
+      const result = findExtendableEvent([existingEvent], windowStart, "com.slack.Slack");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("canExtendEvent", () => {
+    // Helper to create a ReconciliationEvent
+    const makeExisting = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `existing-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "Existing Event",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: { source: "derived", source_id: `src-${Math.random().toString(36).slice(2)}`, app_id: "com.example.app" },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    // Helper to create a DerivedEvent
+    const makeDerived = (
+      overrides: Partial<DerivedEvent> = {},
+    ): DerivedEvent => ({
+      sourceId: `src-${Math.random().toString(36).slice(2)}`,
+      title: "Derived Event",
+      scheduledStart: new Date("2026-01-29T10:30:00Z"),
+      scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+      meta: { source: "derived", app_id: "com.example.app" },
+      ...overrides,
+    });
+
+    it("should return true when same app_id and gap is 0", () => {
+      const existing = makeExisting({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+      const derived = makeDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+
+      expect(canExtendEvent(derived, existing)).toBe(true);
+    });
+
+    it("should return true when same app_id and gap < 60s", () => {
+      const existing = makeExisting({
+        scheduledEnd: new Date("2026-01-29T10:29:30Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+      const derived = makeDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+
+      expect(canExtendEvent(derived, existing)).toBe(true);
+    });
+
+    it("should return false when gap > 60s", () => {
+      const existing = makeExisting({
+        scheduledEnd: new Date("2026-01-29T10:28:59Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+      const derived = makeDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+
+      expect(canExtendEvent(derived, existing)).toBe(false);
+    });
+
+    it("should return false when app_ids differ", () => {
+      const existing = makeExisting({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+      const derived = makeDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.google.Gmail" },
+      });
+
+      expect(canExtendEvent(derived, existing)).toBe(false);
+    });
+
+    it("should return false when derived has no app_id", () => {
+      const existing = makeExisting({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { app_id: "com.slack.Slack" },
+      });
+      const derived = makeDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived" }, // No app_id
+      });
+
+      expect(canExtendEvent(derived, existing)).toBe(false);
+    });
+  });
+
+  describe("computeReconciliationOpsWithExtension", () => {
+    // Helper to create a ReconciliationEvent
+    const makeExisting = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `existing-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "Existing Event",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: { source: "derived", source_id: `src-${Math.random().toString(36).slice(2)}`, app_id: "com.example.app" },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    // Helper to create a DerivedEvent
+    const makeDerived = (
+      overrides: Partial<DerivedEvent> = {},
+    ): DerivedEvent => ({
+      sourceId: `src-${Math.random().toString(36).slice(2)}`,
+      title: "Derived Event",
+      scheduledStart: new Date("2026-01-29T10:30:00Z"),
+      scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+      meta: { source: "derived", app_id: "com.example.app" },
+      ...overrides,
+    });
+
+    it("continuous session across windows creates extension instead of new event", () => {
+      // Window 1: 10:00-10:30 - Slack event ends at 10:30
+      const previousWindowEvent = makeExisting({
+        id: "slack-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived", source_id: "slack-session-1", app_id: "com.slack.Slack" },
+      });
+
+      // Window 2: 10:30-11:00 - Slack continues
+      const newSlackDerived = makeDerived({
+        sourceId: "slack-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [], // No existing events in current window
+        [newSlackDerived],
+        [previousWindowEvent], // Previous window events for extension
+      );
+
+      // Should have extension, not insert
+      expect(ops.extensions).toHaveLength(1);
+      expect(ops.extensions[0].eventId).toBe("slack-window-1");
+      expect(ops.extensions[0].newEnd).toEqual(new Date("2026-01-29T11:00:00Z"));
+      expect(ops.inserts).toHaveLength(0);
+    });
+
+    it("gap > 60s creates separate events", () => {
+      // Window 1: 10:00-10:30 - Slack event ends at 10:28:50
+      const previousWindowEvent = makeExisting({
+        id: "slack-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:28:50Z"), // 70 seconds gap
+        meta: { source: "derived", source_id: "slack-session-1", app_id: "com.slack.Slack" },
+      });
+
+      // Window 2: 10:30-11:00 - Slack starts again
+      const newSlackDerived = makeDerived({
+        sourceId: "slack-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [],
+        [newSlackDerived],
+        [previousWindowEvent],
+      );
+
+      // Should have insert, not extension (gap > 60s)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+      expect(ops.inserts[0].event.sourceId).toBe("slack-session-2");
+    });
+
+    it("different app creates separate event even with 0 gap", () => {
+      // Window 1: 10:00-10:30 - Slack event
+      const previousWindowEvent = makeExisting({
+        id: "slack-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived", source_id: "slack-session-1", app_id: "com.slack.Slack" },
+      });
+
+      // Window 2: 10:30-11:00 - Gmail starts (different app)
+      const newGmailDerived = makeDerived({
+        sourceId: "gmail-session-1",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.google.Gmail" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [],
+        [newGmailDerived],
+        [previousWindowEvent],
+      );
+
+      // Should have insert, not extension (different app)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+      expect(ops.inserts[0].event.sourceId).toBe("gmail-session-1");
+    });
+
+    it("should not extend locked events", () => {
+      // Window 1: Locked Slack event
+      const previousWindowEvent = makeExisting({
+        id: "locked-slack",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { source: "derived", source_id: "slack-session-1", app_id: "com.slack.Slack" },
+        lockedAt: new Date("2026-01-29T10:31:00Z"), // Locked
+      });
+
+      // Window 2: Slack continues
+      const newSlackDerived = makeDerived({
+        sourceId: "slack-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [],
+        [newSlackDerived],
+        [previousWindowEvent],
+      );
+
+      // Should create new event, not extend (locked)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+      expect(ops.protectedIds).toContain("locked-slack");
+    });
+
+    it("should handle empty previous window events", () => {
+      const newDerived = makeDerived({
+        sourceId: "new-event",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [],
+        [newDerived],
+        [], // No previous window events
+      );
+
+      // Should insert new event
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+    });
+
+    it("should still work with regular reconciliation logic for matched events", () => {
+      const sourceId = "matching-source";
+      const existingEvent = makeExisting({
+        id: "existing-1",
+        meta: { source: "derived", source_id: sourceId, app_id: "com.slack.Slack" },
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+      });
+
+      const derivedEvent = makeDerived({
+        sourceId,
+        scheduledStart: new Date("2026-01-29T10:35:00Z"), // Different time
+        scheduledEnd: new Date("2026-01-29T11:05:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" },
+      });
+
+      const ops = computeReconciliationOpsWithExtension(
+        [existingEvent],
+        [derivedEvent],
+        [],
+      );
+
+      // Should update existing event (matched by source_id)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(0);
+      expect(ops.updates).toHaveLength(1);
+      expect(ops.updates[0].eventId).toBe("existing-1");
     });
   });
 });

@@ -11,6 +11,97 @@
 - Triggers for updated_at use `public.update_updated_at_column()` function
 - Grants: `grant usage on schema tm to authenticated; grant select, insert, update, delete on tm.table to authenticated;`
 - TypeScript pre-existing errors in codebase - not blocking for SQL migrations
+- Services pattern: Use `tmSchema()` helper function for `supabase.schema("tm")` access
+- Error handling: Use `handleSupabaseError()` wrapper and graceful fallbacks for missing tables
+
+---
+
+## 2026-01-29 - US-006
+- **What was implemented:** Trailing edge extension for screen-time sessions
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.test.ts` (modified)
+- **Functions created:**
+  - `findExtendableEvent(existingEvents, windowStart, appId)` - Finds the most recent event ending near window start with matching app_id
+  - `computeReconciliationOpsWithExtension(existingEvents, derivedEvents, previousWindowEvents)` - Reconciliation with extension support
+  - `canExtendEvent(derived, existing)` - Check if derived event can extend an existing event
+  - `fetchExtensionCandidates(userId, windowStart)` - Database query for extension candidates
+  - `extendEvent(eventId, newEnd)` - Update event's scheduled_end
+  - `executeExtensions(extensions)` - Execute all extension operations from ReconciliationOps
+- **Key design decisions:**
+  - Extension gap threshold: 60 seconds (events ending within 60s of window start can be extended)
+  - Only the most recent event is extended (not multiple)
+  - Different app_id creates separate events
+  - Locked events cannot be extended (protected)
+  - Extension creates "extend" operation type in ReconciliationOps
+- **Tests added:** 17 new tests (29 total in file)
+  - findExtendableEvent: 6 tests for gap/app matching
+  - canExtendEvent: 5 tests for gap threshold and app matching
+  - computeReconciliationOpsWithExtension: 6 tests for continuous sessions, gaps, and locked events
+- **Learnings for future iterations:**
+  - Extension logic is separate from core reconciliation for clarity
+  - Use EXTENSION_GAP_THRESHOLD_MS constant (60s) for configurable threshold
+  - ExtendableEvent type added but not yet used (for future database operations)
+  - Extension candidates fetched from previous window, not current window
+
+---
+
+## 2026-01-29 - US-005
+- **What was implemented:** Event reconciliation service with locked event protection
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.ts` (new)
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.test.ts` (new)
+- **Functions created:**
+  - `computeReconciliationOps(existingEvents, derivedEvents)` - Computes inserts/updates/deletes while protecting locked events
+  - `fetchEventsInWindow(userId, windowStart, windowEnd)` - Fetch events with locked_at status
+  - `lockEventsInWindow(userId, windowStart, windowEnd)` - Set locked_at on all events in window
+  - `hasLockedEventsInWindow(userId, windowStart, windowEnd)` - Check if any events are locked
+  - `getLockedEventsInRange(userId, startTime, endTime)` - Get all locked events in range
+- **Key design decisions:**
+  - Locked events (locked_at IS NOT NULL) cannot be deleted or modified
+  - User-edited events (source = 'user' or 'actual_adjust') protected from deletion even if unlocked
+  - Derived events matched by source_id, can be updated if times change
+  - New inserts skipped if they would overlap with protected events
+- **Learnings for future iterations:**
+  - Handle missing locked_at column gracefully (for pre-migration compatibility)
+  - Use lockedAt: null vs undefined to distinguish "not locked" from "column doesn't exist"
+  - Tests cover all 6 acceptance criteria scenarios
+  - Pre-existing typecheck errors in codebase don't affect new service files
+  - Types: ReconciliationEvent, DerivedEvent, ReconciliationOp, ReconciliationOps
+
+---
+
+## 2026-01-29 - US-004
+- **What was implemented:** Window lock service for actual ingestion pipeline
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion-window-locks.ts` (new)
+- **Functions created:**
+  - `isWindowLocked(userId, windowStart)` - Check if window is already processed
+  - `lockWindow({ userId, windowStart, windowEnd, stats })` - Mark window as processed with stats
+  - `processIngestionWindow({ userId, windowStart, windowEnd, process })` - Wrapper that checks lock, runs callback, then locks
+  - `getWindowLock(userId, windowStart)` - Get lock record details
+  - `getLockedWindowsInRange(userId, startTime, endTime)` - Get all locked windows in range
+  - `checkWindowLockBeforeProcessing(userId, windowStart)` - Returns { skipped: true } if locked
+- **Learnings for future iterations:**
+  - Follow data-sync-state.ts pattern for service structure
+  - Use `maybeSingle()` for queries that may return 0 or 1 rows
+  - Handle missing table errors gracefully (for new tables not yet migrated)
+  - Use `__DEV__` guard for development-only console warnings
+  - Upsert with `onConflict` uses column names without prefix (e.g., `"user_id,window_start"`)
+  - Types: WindowLock, WindowLockStats, WindowLockInsert, ProcessIngestionWindowResult
+
+---
+
+## 2026-01-29 - US-003
+- **What was implemented:** Added CHECK constraint for category values to existing tm.user_app_categories table
+- **Files changed:**
+  - `supabase/migrations/20260129_user_app_categories_check_constraint.sql` (new)
+- **Learnings for future iterations:**
+  - The tm.user_app_categories table already existed (created in 20260119_user_app_categories_learning.sql)
+  - When a table already exists, add only what's missing (e.g., constraints, indexes)
+  - CHECK constraints for allowed category values: work, social, entertainment, comms, utility, ignore
+  - Use DO blocks with pg_constraint checks for idempotent constraint creation
+  - Column `app_key` in existing table serves same purpose as PRD's `app_id` - no need to rename
 
 ---
 
