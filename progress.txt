@@ -97,3 +97,15 @@
   - Pre-existing type errors in the codebase don't block new feature work
 ---
 
+## 2026-01-29 - US-006
+- What was implemented: Added TypeScript types for the tm.actual_ingestion_checkpoints table to database.types.ts
+- Files changed:
+  - apps/mobile/src/lib/supabase/database.types.ts (added Row, Insert, Update types for actual_ingestion_checkpoints)
+- **Learnings for future iterations:**
+  - Database types in this codebase are in apps/mobile/src/lib/supabase/database.types.ts
+  - The `tm` schema tables are defined under the `Database["tm"]["Tables"]` path
+  - Each table needs Row, Insert, and Update type definitions
+  - The service layer (actual-ingestion.ts) uses its own application-level types (IngestionCheckpoint) that transform DB rows (snake_case, string timestamps) to JS-friendly formats (camelCase, Date objects)
+  - The Tables helper type allows accessing row types like `Tables<{ schema: "tm" }, "actual_ingestion_checkpoints">`
+---
+

@@ -103,7 +103,7 @@
         "Types are properly exported and usable in the service"
       ],
       "priority": 6,
-      "passes": false
+      "passes": true
     }
   ],
   "scope": {
