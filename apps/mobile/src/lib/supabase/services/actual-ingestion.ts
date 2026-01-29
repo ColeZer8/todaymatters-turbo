@@ -114,6 +114,12 @@ const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
 /** Minimum total distance traveled to consider as movement */
 const MIN_COMMUTE_DISTANCE_M = 200; // 200 meters
 
+/** Maximum gap in milliseconds to merge into adjacent sessions (5 minutes) */
+const MAX_MICRO_GAP_MS = 5 * 60 * 1000;
+
+/** Minimum session duration in milliseconds (10 minutes) */
+const MIN_SESSION_DURATION_MS = 10 * 60 * 1000;
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -1328,12 +1334,269 @@ export function sessionBlockToDerivedEvent(session: SessionBlock): DerivedEvent 
 }
 
 /**
+ * Merge sessions that have small gaps (< 5 minutes) between them.
+ * The gap is absorbed into the preceding session block.
+ *
+ * @param sessions - Array of session blocks to merge
+ * @param windowStart - Window start time for sourceId regeneration
+ * @param userOverrides - User category overrides for re-classification
+ * @returns Array of sessions with micro-gaps merged
+ */
+export function mergeSessionMicroGaps(
+  sessions: SessionBlock[],
+  windowStart: Date,
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionBlock[] {
+  if (sessions.length <= 1) {
+    return sessions;
+  }
+
+  // Sort sessions by start time
+  const sortedSessions = [...sessions].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  const merged: SessionBlock[] = [];
+  let current = sortedSessions[0];
+
+  for (let i = 1; i < sortedSessions.length; i++) {
+    const next = sortedSessions[i];
+    const gap = next.start.getTime() - current.end.getTime();
+
+    // Check if gap is small enough to merge AND sessions are at the same place
+    const canMerge =
+      gap > 0 &&
+      gap <= MAX_MICRO_GAP_MS &&
+      current.placeId === next.placeId &&
+      !isSessionCommute(current) &&
+      !isSessionCommute(next);
+
+    if (canMerge) {
+      // Merge by extending current session to include next
+      current = mergeSessionBlocks(current, next, windowStart, userOverrides);
+    } else {
+      // Cannot merge - push current and move to next
+      merged.push(current);
+      current = next;
+    }
+  }
+
+  // Don't forget the last session
+  merged.push(current);
+
+  return merged;
+}
+
+/**
+ * Check if a session is a commute session.
+ */
+function isSessionCommute(session: SessionBlock): boolean {
+  return session.meta.kind === "session_block" && session.meta.intent === "offline" &&
+    session.title === "Commute";
+}
+
+/**
+ * Merge two session blocks into one.
+ * Combines child events and recalculates intent.
+ */
+function mergeSessionBlocks(
+  first: SessionBlock,
+  second: SessionBlock,
+  windowStart: Date,
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionBlock {
+  // Combine child event IDs
+  const combinedChildIds = [...first.childEventIds, ...second.childEventIds];
+
+  // Combine app summaries for re-classification
+  const combinedSummary = combineAppSummaries(first, second);
+
+  // Re-classify intent with combined data
+  const intentClassification = classifyIntent(combinedSummary, userOverrides);
+
+  // Calculate new confidence (average weighted by duration)
+  const firstDuration = first.end.getTime() - first.start.getTime();
+  const secondDuration = second.end.getTime() - second.start.getTime();
+  const totalDuration = firstDuration + secondDuration;
+  const newConfidence =
+    totalDuration > 0
+      ? (first.confidence * firstDuration + second.confidence * secondDuration) /
+        totalDuration
+      : first.confidence;
+
+  // Use place info from first session (they should be the same)
+  const placeId = first.placeId;
+  const placeLabel = first.placeLabel;
+
+  // Generate new source ID
+  const sourceId = generateSessionSourceId(windowStart, placeId, first.start);
+
+  // Generate new title
+  const title = generateSessionTitle(placeLabel, intentClassification.intent, false);
+
+  // Build top 3 app summary for display
+  const summary = combinedSummary.slice(0, 3).map((app) => ({
+    label: app.appId,
+    seconds: app.seconds,
+  }));
+
+  return {
+    sourceId,
+    title,
+    start: first.start,
+    end: second.end, // Extended to include gap and second session
+    placeId,
+    placeLabel,
+    intent: intentClassification.intent,
+    intentClassification,
+    childEventIds: combinedChildIds,
+    confidence: newConfidence,
+    meta: {
+      kind: "session_block",
+      place_id: placeId,
+      place_label: placeLabel,
+      intent: intentClassification.intent,
+      children: combinedChildIds,
+      confidence: newConfidence,
+      summary: summary.length > 0 ? summary : undefined,
+      intent_reasoning: intentClassification.reasoning,
+    },
+  };
+}
+
+/**
+ * Combine app summaries from two sessions for re-classification.
+ */
+function combineAppSummaries(
+  first: SessionBlock,
+  second: SessionBlock,
+): AppSummary[] {
+  const appDurations = new Map<string, number>();
+
+  // Add from first session's summary
+  if (first.meta.summary) {
+    for (const app of first.meta.summary) {
+      const existing = appDurations.get(app.label) ?? 0;
+      appDurations.set(app.label, existing + app.seconds);
+    }
+  }
+
+  // Add from second session's summary
+  if (second.meta.summary) {
+    for (const app of second.meta.summary) {
+      const existing = appDurations.get(app.label) ?? 0;
+      appDurations.set(app.label, existing + app.seconds);
+    }
+  }
+
+  // Convert to AppSummary array sorted by duration descending
+  return Array.from(appDurations.entries())
+    .map(([appId, seconds]) => ({ appId, seconds }))
+    .sort((a, b) => b.seconds - a.seconds);
+}
+
+/**
+ * Absorb short sessions (< 10 minutes) into adjacent longer sessions.
+ * Short sessions are merged into the preceding session if possible,
+ * otherwise into the following session.
+ *
+ * @param sessions - Array of session blocks to process
+ * @param windowStart - Window start time for sourceId regeneration
+ * @param userOverrides - User category overrides for re-classification
+ * @returns Array of sessions with short sessions absorbed
+ */
+export function absorbShortSessions(
+  sessions: SessionBlock[],
+  windowStart: Date,
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionBlock[] {
+  if (sessions.length <= 1) {
+    return sessions;
+  }
+
+  // Sort sessions by start time
+  let workingSessions = [...sessions].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  // Keep iterating until no more short sessions can be absorbed
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const result: SessionBlock[] = [];
+    let skipNext = false;
+
+    for (let i = 0; i < workingSessions.length; i++) {
+      if (skipNext) {
+        skipNext = false;
+        continue;
+      }
+
+      const current = workingSessions[i];
+      const duration = current.end.getTime() - current.start.getTime();
+      const isShort = duration < MIN_SESSION_DURATION_MS;
+
+      // Commutes are never absorbed regardless of duration
+      if (isSessionCommute(current)) {
+        result.push(current);
+        continue;
+      }
+
+      if (!isShort) {
+        result.push(current);
+        continue;
+      }
+
+      // Current session is short - try to absorb it
+      const prev = result.length > 0 ? result[result.length - 1] : null;
+      const next = i < workingSessions.length - 1 ? workingSessions[i + 1] : null;
+
+      // Can we merge into previous?
+      const canMergeIntoPrev =
+        prev !== null &&
+        prev.placeId === current.placeId &&
+        !isSessionCommute(prev);
+
+      // Can we merge into next?
+      const canMergeIntoNext =
+        next !== null &&
+        current.placeId === next.placeId &&
+        !isSessionCommute(next);
+
+      if (canMergeIntoPrev) {
+        // Merge into previous
+        const merged = mergeSessionBlocks(prev, current, windowStart, userOverrides);
+        result[result.length - 1] = merged;
+        changed = true;
+      } else if (canMergeIntoNext) {
+        // Merge into next
+        const merged = mergeSessionBlocks(current, next, windowStart, userOverrides);
+        result.push(merged);
+        skipNext = true;
+        changed = true;
+      } else {
+        // Cannot merge - keep the short session
+        result.push(current);
+      }
+    }
+
+    workingSessions = result;
+  }
+
+  return workingSessions;
+}
+
+/**
  * Sessionize events within a time window.
  *
  * This function groups granular events (screen-time, location blocks) into
  * place-anchored session blocks. Session boundaries are created when:
  * 1. The place changes (different place_id)
  * 2. A commute event occurs (commutes are their own sessions)
+ *
+ * After initial grouping, the function:
+ * 1. Merges sessions with small gaps (< 5 minutes) at the same place
+ * 2. Absorbs short sessions (< 10 minutes) into adjacent longer sessions
  *
  * Each session block:
  * - Has meta.kind = 'session_block'
@@ -1374,7 +1637,7 @@ export function sessionizeWindow(
   const eventGroups = groupEventsByLocation(windowEvents);
 
   // Create session blocks from groups
-  const sessions: SessionBlock[] = [];
+  let sessions: SessionBlock[] = [];
   for (const group of eventGroups) {
     const session = createSessionBlock(group, windowStart, userOverrides);
     if (session) {
@@ -1383,5 +1646,13 @@ export function sessionizeWindow(
   }
 
   // Sort sessions by start time
-  return sessions.sort((a, b) => a.start.getTime() - b.start.getTime());
+  sessions = sessions.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  // Merge sessions with small gaps (< 5 minutes) at the same place
+  sessions = mergeSessionMicroGaps(sessions, windowStart, userOverrides);
+
+  // Absorb short sessions (< 10 minutes) into adjacent longer sessions
+  sessions = absorbShortSessions(sessions, windowStart, userOverrides);
+
+  return sessions;
 }
