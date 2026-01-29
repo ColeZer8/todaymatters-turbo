@@ -1,0 +1,7 @@
+# Ralph Progress Log
+# Feature: Location-Informed Actual Ingestion with Sessionization
+# Branch: ralph/location-informed-actual-ingestion
+# Started: 2026-01-29
+
+---
+

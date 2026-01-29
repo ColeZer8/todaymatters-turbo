@@ -1,261 +1,458 @@
 {
-  "name": "Today Matters – Incremental Actual Ingestion (Android-first)",
-  "version": "0.1.0",
-  "owner": "Cole",
-  "status": "draft",
-  "problem": {
-    "summary": "The current Actual timeline is unstable: it rebuilds a full-day display pipeline frequently, auto-saves derived/evidence blocks, and can produce unknown blocks despite evidence, sleep not shifting, and overlapping/duplicated events.",
-    "root_causes": [
-      "Full-day recomputation + multiple auto-sync paths cause churn/duplicates.",
-      "Overlap prevention blocks insertion of evidence blocks.",
-      "Evidence thresholds (e.g., 10 min) + missing labels lead to Unknown.",
-      "Existing tm.screen_time_app_sessions data is not yet used for incremental ingestion reconciliation."
-    ]
-  },
-  "goal": {
-    "primary": "Create a stable, incremental ingestion pipeline that materializes Actual events as a deterministic ledger, processing the prior 30-minute window every 30 minutes and reconciling into Supabase without rewriting the whole day.",
-    "success_metrics": [
-      "Idempotency: re-running the same window produces 0 net changes.",
-      "Stability: events older than a configurable cutoff are not mutated automatically.",
-      "Coverage: Unknown blocks in a processed window are replaced/split when evidence exists.",
-      "No overlaps in persisted Actuals (1-minute granularity or better)."
-    ]
-  },
-  "non_goals": [
-    "iOS Screen Time ingestion (can be added later).",
-    "Health-based derivation (explicitly ignored for now).",
-    "Full pattern-based suggestions."
-  ],
-  "scope": {
-    "platforms": ["android"],
-    "data_sources": [
-      "tm.screen_time_app_sessions (ALREADY EXISTS - sessionized Android usage)",
-      "tm.location_samples + tm.location_hourly (ALREADY EXISTS)",
-      "tm.user_places (ALREADY EXISTS - labeled locations)"
-    ],
-    "write_targets": [
-      "tm.events (type=calendar_actual)",
-      "tm.actual_ingestion_checkpoints (NEW - watermarks)"
-    ]
-  },
-  "user_story": {
-    "as_a": "user",
-    "i_want": "my Actual timeline to reflect what happened without changing retroactively",
-    "so_that": "the day feels trustworthy and edits are minimal."
-  },
-  "principles": [
-    "Ledger-first: Persisted Actuals are the source of truth; UI should not constantly rewrite them.",
-    "Incremental: Only reconcile a small time window per run (+ small buffer).",
-    "Respect user edits: Never overwrite user/actual_adjust blocks automatically.",
-    "Split > relabel: When a short evidence segment exists inside a larger block, split and replace only the segment.",
-    "Deterministic + idempotent: Stable keys, stable merge rules, safe re-runs."
-  ],
-  "proposed_architecture": {
-    "overview": [
-      "Android usage is ALREADY persisted to tm.screen_time_app_sessions via existing useInsightsSync hook (every 5 min).",
-      "On app open (and optionally every 30 min while active), run ingestion for unprocessed windows since last checkpoint.",
-      "Reconcile evidence segments into tm.events (calendar_actual) via split/merge rules.",
-      "Store a watermark so windows are processed exactly-once or effectively-once (idempotent)."
-    ],
-    "where_it_runs": {
-      "approach": "App-triggered ingestion (client-side)",
-      "trigger_points": [
-        "On app foreground (resume from background)",
-        "Optionally: periodic check every 30 min while app is active"
+  "project": "TodayMatters",
+  "branchName": "ralph/location-informed-actual-ingestion",
+  "description": "Location-Informed Actual Ingestion with Sessionization - Fix the moving calendar problem, add location evidence, and create human-readable place-anchored session blocks",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create window locks table migration",
+      "description": "As a developer, I need a table to track which 30-min windows have been processed so they're never reprocessed.",
+      "acceptanceCriteria": [
+        "Create migration file for tm.actual_ingestion_window_locks table",
+        "Table has columns: id (uuid), user_id (uuid FK), window_start (timestamptz), window_end (timestamptz), locked_at (timestamptz), stats (jsonb)",
+        "Add UNIQUE constraint on (user_id, window_start)",
+        "Add index on (user_id, window_start) for fast lookups",
+        "Migration runs successfully",
+        "Typecheck passes"
       ],
-      "rationale": [
-        "Simpler architecture - no Edge Functions or cron setup needed.",
-        "Leverages existing useInsightsSync pattern (runs every 5 min for screen time upload).",
-        "User gets fresh timeline when they open the app (most common use case).",
-        "Can migrate to server-side cron later if needed for background processing."
-      ]
-    }
-  },
-  "data_model": {
-    "existing_tables": [
-      {
-        "name": "tm.screen_time_app_sessions",
-        "status": "ALREADY EXISTS",
-        "purpose": "Repeatable, queryable Android usage evidence with precise timestamps",
-        "fields": [
-          "id (uuid)",
-          "screen_time_daily_id (uuid, FK to screen_time_daily)",
-          "user_id (uuid)",
-          "local_date (date)",
-          "app_id (text = package_name)",
-          "display_name (text, nullable)",
-          "started_at (timestamptz)",
-          "ended_at (timestamptz)",
-          "duration_seconds (int)",
-          "created_at (timestamptz)"
-        ],
-        "notes": [
-          "This is the evidence source for usage segments.",
-          "Already populated via useInsightsSync hook every 5 min.",
-          "Query by user_id + time range for window processing."
-        ]
-      },
-      {
-        "name": "tm.location_samples",
-        "status": "ALREADY EXISTS",
-        "purpose": "Raw location samples for precise event timing"
-      },
-      {
-        "name": "tm.location_hourly",
-        "status": "ALREADY EXISTS",
-        "purpose": "Hourly aggregated location (SQL view)"
-      },
-      {
-        "name": "tm.user_places",
-        "status": "ALREADY EXISTS",
-        "purpose": "User-labeled locations with categories"
-      },
-      {
-        "name": "tm.events",
-        "notes": [
-          "Write calendar_actual events here.",
-          "Use meta.source and meta.source_id for idempotency and reconciliation provenance.",
-          "Avoid inserting overlapping calendar_actual events."
-        ]
-      }
-    ],
-    "new_tables": [
-      {
-        "name": "tm.actual_ingestion_checkpoints",
-        "status": "NEW - needs migration",
-        "purpose": "Per-user watermarks and run bookkeeping",
-        "fields": [
-          "user_id (uuid, pk)",
-          "timezone (text)",
-          "last_processed_at (timestamptz)",
-          "last_processed_window_start (timestamptz)",
-          "last_processed_window_end (timestamptz)",
-          "updated_at"
-        ]
-      }
-    ],
-    "event_meta_conventions": {
-      "required": [
-        "meta.source: 'evidence' | 'derived' | 'user' | 'actual_adjust'",
-        "meta.kind: 'usage' | 'location' | 'travel' | 'unknown' (extendable)",
-        "meta.source_id: stable deterministic id for this segment"
-      ],
-      "recommended": [
-        "meta.confidence (0..1)",
-        "meta.evidence: { topApp, screenTimeMinutes, locationLabel }",
-        "meta.window: { startIso, endIso }"
-      ]
-    }
-  },
-  "algorithm": {
-    "cadence": {
-      "interval_minutes": 30,
-      "window": "[now-30m, now)",
-      "buffer_minutes": 10,
-      "mutable_cutoff_minutes": 120
+      "priority": 1,
+      "passes": false,
+      "notes": ""
     },
-    "steps": [
-      {
-        "name": "Select window",
-        "details": [
-          "Compute windowStart, windowEnd based on user timezone and aligned to 30-min boundaries.",
-          "Optionally widen by +/- buffer_minutes for edge alignment."
-        ]
-      },
-      {
-        "name": "Fetch evidence for window",
-        "details": [
-          "Query tm.screen_time_app_sessions for [windowStart, windowEnd).",
-          "Query tm.location_samples for the window (or tm.location_hourly for fallback).",
-          "Query tm.user_places for auto-tagging.",
-          "Ignore health."
-        ]
-      },
-      {
-        "name": "Build candidate segments",
-        "details": [
-          "Create one or more candidate segments inside the window.",
-          "Example: usage sessions become segments; location stays as optional segments.",
-          "Each candidate has: start, end, category, title, meta.kind, meta.source_id."
-        ]
-      },
-      {
-        "name": "Reconcile into persisted Actual ledger",
-        "details": [
-          "Fetch existing tm.events calendar_actual that overlap [windowStart-buffer, windowEnd+buffer].",
-          "For each candidate segment:",
-          "- If it overlaps a user/actual_adjust event: do nothing for that overlap.",
-          "- Else: split existing event(s) around the candidate and replace the overlapped portion.",
-          "- Merge adjacent events if same (source, kind, category, title) and gap <= 1-2 min.",
-          "Guarantee no overlaps after reconciliation.",
-          "Guarantee idempotency via meta.source_id."
-        ]
-      },
-      {
-        "name": "Fill gaps (window-local)",
-        "details": [
-          "Only for the processed window, ensure uncovered minutes become Unknown blocks.",
-          "Do NOT fill the entire day every run."
-        ]
-      },
-      {
-        "name": "Commit + watermark",
-        "details": [
-          "Upsert tm.actual_ingestion_checkpoints with window bounds and last_processed_at.",
-          "Record run stats: inserted, updated, deleted, merged, skipped(user-lock), skipped(idempotent)."
-        ]
-      }
-    ],
-    "priority_rules": [
-      "Never modify meta.source in ['user','actual_adjust'] automatically.",
-      "Evidence segments replace Unknown and derived segments.",
-      "When conflict, keep higher priority + split lower priority around it.",
-      "Older than mutable_cutoff_minutes: do not modify (unless it is Unknown and fully covered by evidence within cutoff)."
-    ],
-    "idempotency": {
-      "strategy": "Every candidate segment gets a deterministic meta.source_id based on source + start/end (+ key attributes).",
-      "example": "screen_time_session:<session_id_from_db>",
-      "rule": "If a calendar_actual event with that meta.source_id already exists, skip insertion; if time boundaries changed slightly, reconcile by splitting/merging but preserve a stable identity mapping."
+    {
+      "id": "US-002",
+      "title": "Add locked_at column to events table",
+      "description": "As a developer, I need to mark events as immutable after their window is processed.",
+      "acceptanceCriteria": [
+        "Create migration to add locked_at timestamptz column to tm.events",
+        "Column is nullable (null = not yet locked)",
+        "Add partial index on (user_id, locked_at) WHERE locked_at IS NOT NULL",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Create user_app_categories table migration",
+      "description": "As a developer, I need a table to store user overrides for app categorization.",
+      "acceptanceCriteria": [
+        "Create migration for tm.user_app_categories table",
+        "Table has columns: id (uuid), user_id (uuid FK), app_id (text), category (text), created_at (timestamptz)",
+        "Category values: 'work', 'social', 'entertainment', 'comms', 'utility', 'ignore'",
+        "Add UNIQUE constraint on (user_id, app_id)",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add window lock check to ingestion pipeline",
+      "description": "As a developer, I need the ingestion pipeline to skip already-processed windows.",
+      "acceptanceCriteria": [
+        "Add function isWindowLocked(userId, windowStart) that queries tm.actual_ingestion_window_locks",
+        "Add function lockWindow(userId, windowStart, windowEnd, stats) that inserts lock record",
+        "Update processIngestionWindow to check lock before processing",
+        "If window is locked, return early with { skipped: true }",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Implement event immutability in reconciliation",
+      "description": "As a developer, I need the reconciliation logic to respect locked events.",
+      "acceptanceCriteria": [
+        "Update computeReconciliationOps to treat events with locked_at as protected",
+        "Locked events cannot be deleted or modified during reconciliation",
+        "After window processing, set locked_at on all new events in that window",
+        "Unit test: locked events are never included in delete operations",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Implement trailing edge extension for screen-time",
+      "description": "As a developer, I need continuous screen-time sessions to extend rather than create duplicates.",
+      "acceptanceCriteria": [
+        "Add function findExtendableEvent(userId, windowStart, appId) that finds the most recent event ending near window start",
+        "If same app_id and gap < 60s, extend scheduled_end instead of creating new event",
+        "Only extend the single most recent event (not multiple)",
+        "Update reconciliation to use extension logic",
+        "Unit test: continuous session across windows creates one event",
+        "Unit test: gap > 60s creates separate events",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Create fetchLocationEvidenceForWindow function",
+      "description": "As a developer, I need to retrieve location data for the ingestion window.",
+      "acceptanceCriteria": [
+        "New function fetchLocationEvidenceForWindow(userId, windowStart, windowEnd) in evidence-data.ts",
+        "Queries tm.location_samples for raw GPS points in the time window",
+        "Queries tm.location_hourly for aggregated place data",
+        "Queries tm.user_places to match coordinates to labeled places using ST_DWithin",
+        "Returns array of { start, end, place_id, place_label, latitude, longitude, confidence }",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement location segment generation",
+      "description": "As a developer, I need to convert raw location samples into contiguous place blocks.",
+      "acceptanceCriteria": [
+        "New function generateLocationSegments(locationSamples, userPlaces) in actual-ingestion.ts",
+        "Group samples by place using user_places radius matching (default 150m)",
+        "Create contiguous blocks where 70%+ of samples match a single place",
+        "Each segment has deterministic source_id: location:{windowStartMs}:{placeId}:{segmentStartMs}",
+        "Segments have meta.kind = 'location_block', meta.place_id, meta.place_label",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement commute detection",
+      "description": "As a developer, I need to detect when the user is traveling between places.",
+      "acceptanceCriteria": [
+        "Add function detectCommute(locationSamples, startTime, endTime) that identifies movement",
+        "Commute = location changing between places without stable position for duration",
+        "If commute >= 10 minutes, create Commute segment with meta.intent = 'commute'",
+        "If commute < 10 minutes, add meta.travel_annotation = 'Traveled X min to [Place]' on next segment",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement trailing edge extension for location",
+      "description": "As a developer, I need continuous location at the same place to extend rather than create duplicates.",
+      "acceptanceCriteria": [
+        "Add function findExtendableLocationEvent(userId, windowStart, placeId)",
+        "If same place_id continues from previous window, extend scheduled_end",
+        "Only extend the single most recent location event",
+        "Unit test: staying at office across windows creates one 'At Office' event",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Integrate location into reconciliation priority",
+      "description": "As a developer, I need location evidence to fill gaps between screen-time events.",
+      "acceptanceCriteria": [
+        "Update reconciliation priority order: Protected > Screen-time > Location > Unknown",
+        "Screen-time events take precedence over location blocks",
+        "Location blocks fill gaps where no screen-time exists",
+        "When screen-time occurs during commute, keep both (commute block with screen-time inside)",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Create default app category mapping",
+      "description": "As a developer, I need a hardcoded mapping of apps to categories for intent classification.",
+      "acceptanceCriteria": [
+        "Create constants file with DEFAULT_APP_CATEGORIES object",
+        "Work apps: Slack, Google Docs, Gmail, Google Meet, Zoom, Calendar, Figma, Notion, Linear, VS Code",
+        "Social apps: Instagram, TikTok, X/Twitter, Reddit, Facebook, Snapchat, LinkedIn",
+        "Entertainment apps: YouTube, Netflix, Spotify, Apple Music, Twitch, Disney+, Podcasts",
+        "Comms apps: Messages, WhatsApp, Telegram, Signal, Phone, FaceTime",
+        "Utility apps: Maps, Photos, Weather, Calculator, Settings, Files, Notes",
+        "Export function getAppCategory(appId, userOverrides) that checks user overrides first",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement intent classification algorithm",
+      "description": "As a developer, I need to classify sessions as Work, Leisure, or Distracted Work based on app usage.",
+      "acceptanceCriteria": [
+        "New function classifyIntent(screenTimeSummary: AppSummary[]) returns Intent",
+        "If Work >= 60% of screen-time, return 'work'",
+        "If Social + Entertainment >= 60%, return 'leisure'",
+        "If Work 40-60% AND Social >= 25%, return 'distracted_work'",
+        "If no screen-time, return 'offline'",
+        "Otherwise return 'mixed'",
+        "Unit tests cover all classification rules",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement sessionization pass - grouping by location",
+      "description": "As a developer, I need to group granular events into place-anchored session blocks.",
+      "acceptanceCriteria": [
+        "New function sessionizeWindow(userId, windowStart, windowEnd) in actual-ingestion.ts",
+        "Groups events by location (place changes = session boundary)",
+        "Creates session blocks with meta.kind = 'session_block'",
+        "Links child events via meta.children array of event IDs",
+        "Session title format: '[Place] - [Intent]' (e.g., 'Cafe - Work')",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement micro-gap merging in sessionization",
+      "description": "As a developer, I need small gaps (<5 min) merged into adjacent sessions.",
+      "acceptanceCriteria": [
+        "Update sessionizeWindow to merge gaps < 5 minutes into adjacent sessions",
+        "Absorb short gaps into the preceding session block",
+        "Only create session blocks >= 10 minutes duration",
+        "Shorter sessions absorbed into neighbors",
+        "Unit test: 3-minute gap between events at same place gets merged",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Add session summary generation",
+      "description": "As a developer, I need session blocks to include a summary of top apps used.",
+      "acceptanceCriteria": [
+        "Add meta.summary to session blocks: array of { label: string, seconds: number }",
+        "Summary contains top 3 apps by duration within the session",
+        "Calculate summary from child events' app usage",
+        "Store meta.intent based on classifyIntent() result",
+        "Store meta.confidence from location data confidence",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Implement sleep session detection",
+      "description": "As a developer, I need overnight gaps at home to become Sleep session blocks.",
+      "acceptanceCriteria": [
+        "Detect overnight gap at home (cross-reference with user's scheduled sleep time if available)",
+        "Create 'Home - Sleep' session block for sleep period",
+        "Session has meta.intent = 'sleep'",
+        "If screen-time detected during scheduled sleep: split into Sleep -> Screen-time -> Sleep",
+        "Screen-time block during sleep has meta.during_scheduled_sleep = true",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Update ingestion hook for new pipeline",
+      "description": "As a developer, I need the useActualIngestion hook to use the new immutable pipeline.",
+      "acceptanceCriteria": [
+        "Update useActualIngestion hook to: 1) Check if window is locked, 2) Fetch screen-time + location evidence, 3) Run reconciliation with new priority, 4) Run sessionization pass, 5) Lock the window, 6) Update checkpoint",
+        "Graceful error handling (non-fatal, retry on next trigger)",
+        "Log stats for debugging (events created, extended, sessionized)",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Update calendar display to show session blocks",
+      "description": "As a developer, I need the actual calendar to display session blocks by default.",
+      "acceptanceCriteria": [
+        "Update actual-display-events.ts to filter for meta.kind = 'session_block'",
+        "Hide child events (granular events) in default view",
+        "Session block display shows: title, subtitle with top 3 apps, location icon",
+        "Color coding based on intent: work=blue, leisure=green, distracted=orange, sleep=purple, commute=gray",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Add session detail view with classification reasoning",
+      "description": "As a user, I want to tap a session block and see why it was classified that way.",
+      "acceptanceCriteria": [
+        "Tapping session block opens detail view/modal",
+        "Shows classification reasoning: 'Classified as Work because: Slack 45%, Docs 30%, Gmail 15%'",
+        "Shows breakdown of app usage within session (all apps, not just top 3)",
+        "Shows location confidence indicator",
+        "Shows time range of session",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Implement session split functionality",
+      "description": "As a user, I want to split a session into two if it combined things I consider separate.",
+      "acceptanceCriteria": [
+        "'Split' action available in session detail view",
+        "User can select split point via time picker",
+        "Creates two new session blocks, original marked as soft-deleted",
+        "New blocks have meta.source = 'user' (protected from future ingestion)",
+        "Child events redistributed to appropriate new parent based on time",
+        "Recalculate intent for each new block",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Implement session merge functionality",
+      "description": "As a user, I want to merge adjacent sessions if they represent one activity.",
+      "acceptanceCriteria": [
+        "'Merge' action available in session detail view",
+        "Shows list of mergeable neighbors (adjacent sessions)",
+        "Creates single session block spanning both time ranges",
+        "Combined children from both original sessions",
+        "Recalculates intent based on combined app usage",
+        "New block has meta.source = 'user' (protected)",
+        "Original blocks soft-deleted",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Implement add place functionality",
+      "description": "As a user, I want to label places so future visits are recognized automatically.",
+      "acceptanceCriteria": [
+        "'Add Place' action when viewing session at unknown location",
+        "User provides label (Home, Office, Gym, or custom text)",
+        "Saves to tm.user_places with current coordinates and 150m default radius",
+        "Future location samples within radius auto-match to this place",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Add places management in settings",
+      "description": "As a user, I want to view, edit, and delete my saved places.",
+      "acceptanceCriteria": [
+        "Settings screen includes 'My Places' section",
+        "Lists all user places with label and optional category",
+        "Edit action allows changing label and radius",
+        "Delete action removes place (with confirmation)",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Implement Google Places auto-suggest",
+      "description": "As a user, I want the app to suggest place names when I'm somewhere new.",
+      "acceptanceCriteria": [
+        "When location doesn't match user_places, query Google Places API for nearby POIs",
+        "Show suggestion prompt: 'Are you at Starbucks?' with Accept/Reject buttons",
+        "If accepted, save to user_places with Google Place metadata",
+        "If rejected, prompt for manual label or use 'Near [Area]' as fallback",
+        "Cache Google Places responses (15-min TTL) to reduce API calls",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Add app category overrides settings",
+      "description": "As a user, I want to recategorize apps if the defaults don't match my usage.",
+      "acceptanceCriteria": [
+        "Settings screen includes 'App Categories' section",
+        "Shows apps used in last 30 days with current category",
+        "User can change category via dropdown: Work, Social, Entertainment, Comms, Utility, Ignore",
+        "Overrides saved to tm.user_app_categories table",
+        "getAppCategory() function checks user overrides before defaults",
+        "Typecheck passes",
+        "Verify in browser/simulator"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Handle location permission denied gracefully",
+      "description": "As a user, I want the app to work without location but remind me of the benefits.",
+      "acceptanceCriteria": [
+        "If location permission denied: fall back to screen-time only ingestion",
+        "Gaps filled with 'Unknown' instead of place blocks (existing behavior)",
+        "Show periodic prompt (max 1x per week): 'Enable location for better insights'",
+        "Prompt explains value and has buttons: 'Go to Settings', 'Not now'",
+        "Track last prompt date to enforce weekly limit",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Implement fuzzy location labels for low confidence",
+      "description": "As a developer, I need to show approximate location when confidence is low.",
+      "acceptanceCriteria": [
+        "When location confidence < 70%, use fuzzy label instead of place name",
+        "Fuzzy label format: 'Near [City/Area]' using reverse geocoding",
+        "Store meta.fuzzy_location = true on these blocks",
+        "UI shows different styling for fuzzy locations (e.g., dashed border or ? icon)",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
     }
-  },
-  "ui_impact": {
-    "short_term": [
-      "UI continues to render tm.events calendar_actual as Actual.",
-      "Stop (or heavily reduce) auto-sync of full-day derived display events.",
-      "Keep a lightweight display-only gap fill if needed, but do not persist display-only artifacts."
-    ],
-    "debugging": [
-      "Add a small diagnostics panel (dev-only) showing: last ingestion run, window, evidence counts, inserted/updated/merged/skipped."
-    ]
-  },
-  "acceptance_criteria": [
-    "At 3:00, processing 2:30–3:00 creates/reconciles only events in that window (+buffer).",
-    "Re-running 2:30–3:00 again produces no net changes.",
-    "User-edited Actual events are never overwritten.",
-    "If a 10-min evidence segment appears inside an Unknown block, the Unknown block is split and only that 10-min segment is replaced.",
-    "Persisted calendar_actual events have no overlaps."
-  ],
-  "edge_cases": [
-    "Cross-midnight windows and timezones (ensure ymd alignment is correct).",
-    "Daylight Saving Time transitions (missing or repeated hour).",
-    "Late-arriving evidence (allow limited backfill within mutable_cutoff_minutes).",
-    "Sparse location labels (fallback labeling strategy).",
-    "App killed / device offline (server ingestion continues if evidence is uploaded)."
-  ],
-  "rollout_plan": [
-    "Phase 0: ✅ COMPLETE - Evidence persistence already exists (tm.screen_time_app_sessions via useInsightsSync).",
-    "Phase 1: Create tm.actual_ingestion_checkpoints table + ingestion service.",
-    "Phase 2: Add useActualIngestion hook (similar to useInsightsSync) that runs on app open.",
-    "Phase 3: Ingestor writes calendar_actual but can be toggled off via feature flag.",
-    "Phase 4: Disable legacy buildActualDisplayEvents auto-sync paths that persist derived display events.",
-    "Phase 5: Remove feature flag + add user-facing 'Last ingestion' indicator."
-  ],
-  "open_questions": [
-    "✅ RESOLVED: Android usage sessions are uploaded via useInsightsSync hook every 5 min (already implemented).",
-    "✅ RESOLVED: We store raw sessions in tm.screen_time_app_sessions (started_at, ended_at, duration_seconds).",
-    "Should the ingestion hook run ONLY on app open, or also periodically every 30 min while app is active?",
-    "What is the minimal category mapping for usage evidence (e.g., productive apps = work)?",
-    "How do we handle sleep explicitly in this incremental model (separate rule set or just evidence replacement)?",
-    "Should we backfill historical windows on first run, or only process forward from 'now'?"
   ]
 }
