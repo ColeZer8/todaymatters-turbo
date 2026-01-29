@@ -121,6 +121,16 @@
 - 10:52–10:59 — Gmail (screen_time)
 - 10:59–11:00 — **At Office** (location)
 
+### 3.5 Sessionized view (collapsed blocks)
+**What the user sees by default:**
+- **09:00–09:40 — Cafe — Work**
+  - Summary: Chrome (8m), Docs (5m), Messages (5m)
+- **09:40–09:50 — Commute**
+- **09:50–11:00 — Office — Work**
+  - Summary: Slack (20m), Docs (5m), Meet (14m), Gmail (7m), X (5m)
+
+> Note: This view collapses the tiny gaps and app switching into a single **place‑anchored session**. The granular view remains accessible on tap.
+
 ---
 
 ## 4) Visual timeline (location‑aware)
@@ -147,6 +157,65 @@
 10:52-10:59  Gmail        (screen_time)
 10:59-11:00  At Office    (location)
 ```
+
+---
+
+## 4.5) **Sessionized output (new source of truth)**
+
+> **Key shift:** Instead of showing many tiny blocks (Messages → Chrome → Docs), the app should produce **location‑anchored session blocks** that summarize activity within the place. The granular timeline still exists, but it is revealed **only on tap**.
+
+### 4.5.1 Session rules (high level)
+- **Primary anchor = location block.**
+- **Screen‑time attaches as “activity summary”** within that location block.
+- **Commute stays its own block** (mobility category).
+- **Micro‑gaps (<5 min)** are merged into adjacent session blocks.
+- **Screen‑time does not break the session** unless it indicates a clearly different context (see “context split” rules below).
+
+### 4.5.2 Example — 09:00–09:40 Cafe session (collapsed)
+**Collapsed block:**
+- **Title:** `Cafe — Work`
+- **Subtitle:** `Chrome (8m), Docs (5m), Messages (5m)`
+- **Tags:** `productive`, `focused` *(optional, derived)*
+- **Category:** `place`
+- **Icon:** location
+
+**Expanded view (on tap):**
+```
+09:00-09:09  At Cafe      (location)
+09:09-09:14  Messages     (screen_time)
+09:14-09:20  At Cafe      (location)
+09:20-09:28  Chrome       (screen_time)
+09:28-09:34  Docs         (screen_time)
+09:34-09:40  At Cafe      (location)
+```
+
+### 4.5.3 Session classification (work / social / distracted work)
+Create a lightweight **app category mapping** and roll up durations into buckets:
+- **Work:** Docs, Slack, Gmail, Meet, Calendar, Figma
+- **Comms:** Messages, WhatsApp, SMS, Phone
+- **Social:** Instagram, TikTok, X, Reddit
+- **Entertainment:** YouTube, Netflix, Spotify
+- **Utility:** Maps, Photos, Weather
+
+Then compute **dominant intent** for the session:
+- If **Work ≥ 60%** of screen‑time during the session → label as **Work**
+- If **Social + Entertainment ≥ 60%** → label **Leisure**
+- If **Work 40–60%** and **Social/Entertainment ≥ 25%** → label **Distracted Work**
+- If no screen‑time (offline) → label **At [Place]**
+
+**Example:** Cafe session with Docs+Chrome+Messages → **Work**
+**Example:** Cafe session with Instagram+YouTube → **Cafe — Leisure**
+**Example:** Office session with Slack+Docs + Instagram → **Office — Distracted Work**
+
+### 4.5.4 Context split rules (when to break a session)
+Inside the same location, split into two sessions if:
+- **Category switches** and remains dominant for ≥ 15 minutes
+- **App mix** shifts from Work → Entertainment for ≥ 15 minutes
+- User explicitly edits the block (manual split)
+
+### 4.5.5 Why this matters
+- Humans remember **place‑anchored sessions**, not app‑by‑app switches.
+- The timeline becomes **readable**, while details remain **discoverable**.
 
 ---
 
@@ -197,13 +266,62 @@
 - If the window shows **rapid coordinate change** and no stable place → classify as Commute.
 - If a place is unrecognized, label “At [City/Area]” or “Unlabeled place.”
 
+### 6.4 Session block generation (new layer)
+**Concept:** After reconciliation, run a **sessionization pass** that collapses location + screen‑time into **place‑anchored sessions**.
+
+**Inputs:**
+- Location segments (place + commute)
+- Screen‑time segments (apps + durations)
+- User‑edited events (protected)
+
+**Outputs:**
+- Session blocks with summaries (Work / Leisure / Distracted Work)
+
+**Rules:**
+1. Start a new session at every **location change**.
+2. Attach overlapping screen‑time to the current session.
+3. Compute session label + summary using category weights.
+4. If a different intent becomes dominant for ≥ 15 minutes, **split** into a new session within the same location.
+
+### 6.5 Data model proposal (no code yet)
+**Option A (recommended):** Keep granular events in `tm.events` but add a **second layer** of “session blocks” that the UI reads by default.
+
+Session event example:
+```json
+{
+  "type": "calendar_actual",
+  "title": "Cafe — Work",
+  "scheduled_start": "2026-01-29T09:00:00Z",
+  "scheduled_end": "2026-01-29T09:40:00Z",
+  "meta": {
+    "source": "sessionizer",
+    "kind": "session_block",
+    "category": "place",
+    "place_id": "P_CAFE",
+    "place_label": "Cafe",
+    "intent": "work",
+    "summary": [
+      { "label": "Chrome", "seconds": 480 },
+      { "label": "Docs", "seconds": 300 },
+      { "label": "Messages", "seconds": 300 }
+    ],
+    "confidence": 0.86,
+    "children": ["event_id_1", "event_id_2", "event_id_3"]
+  }
+}
+```
+
+**Option B:** Store session blocks as **derived views** (not in DB), computed at query time. Less storage, more compute.
+
 ---
 
 ## 7) How this should look in the app (UX expectations)
 
-**Actual timeline view:**
-- Screen‑time segments appear as **digital** blocks with app icon.
-- Location segments appear as **place** blocks (Home/Office/Cafe) with location icon.
+**Actual timeline view (default = session blocks):**
+- **Session blocks** appear as the primary timeline units (e.g., *Cafe — Work*).
+- Tapping a session **expands** to reveal granular segments (apps + gaps).
+- Screen‑time segments appear as **digital** blocks with app icon (expanded view).
+- Location segments appear as **place** blocks (Home/Office/Cafe) with location icon (expanded view).
 - Commute appears as a **mobility** block (car/train/walk icon if inferred).
 - Unknown should be **rare** and visually distinct (greyed).
 
@@ -226,6 +344,9 @@
 5. **Category taxonomy:** Do we want `category=place` vs `category=mobility` vs `category=unknown` as the standard set?
 6. **Labels:** Should “At Office” be a **standardized label** or a **user‑editable title** tied to `user_places`?
 7. **Conflict resolution:** If location says **Office** but screen time says **Instagram**, do we need a combined label or keep screen time only?
+8. **Session storage:** Should session blocks be persisted (Option A) or computed on the fly (Option B)?
+9. **Distracted work rules:** Do we agree on thresholds (Work 40–60% + Social ≥ 25%) or should these be configurable per user?
+10. **Summary length:** How many top apps should we show in the session subtitle? (3? 5?)
 
 ---
 
@@ -233,6 +354,7 @@
 
 - **Much fewer Unknown blocks** — offline time becomes meaningful.
 - **Timeline feels coherent**: screen time + place = real life.
+- **Session blocks match human memory** (Cafe → Work, Office → Meeting).
 - **Deterministic, stable ingestion** maintained.
 
 ---
@@ -241,8 +363,9 @@
 
 - Confirm priority and thresholds (questions above).
 - Decide naming conventions for location‑based Actual events.
+- Agree on **session block** taxonomy (Work / Leisure / Distracted Work / Mixed).
 - Agree on UX representation (icons/colors).
-- Then implement: location evidence extraction + reconciliation order + gap rules.
+- Then implement: location evidence extraction + reconciliation order + gap rules + sessionization layer.
 
 ---
 
