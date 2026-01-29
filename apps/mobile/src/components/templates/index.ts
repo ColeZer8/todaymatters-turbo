@@ -40,3 +40,5 @@ export { HealthKitDashboardTemplate } from "./HealthKitDashboardTemplate";
 export { Big3OptInTemplate } from "./Big3OptInTemplate";
 export { PlaceLabelsTemplate } from "./PlaceLabelsTemplate";
 export type { PlaceLabelItem } from "./PlaceLabelsTemplate";
+export { AppCategorySettingsTemplate } from "./AppCategorySettingsTemplate";
+export type { AppCategoryItem } from "./AppCategorySettingsTemplate";

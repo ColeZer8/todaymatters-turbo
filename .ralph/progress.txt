@@ -40,6 +40,87 @@
 - Places settings: Profile > Place Labels navigates to /settings/place-labels
 - Radius editing: HardenedSlider for 50-500m range with step of 10m
 - PlaceLabelItem interface includes radius_m for display and editing
+- Google Places API: fetchNearbyPlaces with 15-min cache, getPlaceTypeLabel for display, mapPlaceTypeToCategory for user places
+- Google Places config: googlePlacesApiKey in app.config.js extra, env var EXPO_PUBLIC_GOOGLE_PLACES_API_KEY
+- Place suggestion: PlaceSuggestionPrompt component shows "Are you at X?" with Accept/Reject/alternatives
+- App category settings: Profile > App Categories navigates to /settings/app-categories
+- App category types: AppCategory (work/social/entertainment/comms/utility/ignore) for intent, distinct from EventCategory
+- Recently used apps: fetchRecentlyUsedApps queries screen_time_app_daily for 30-day aggregated usage
+- App category override: upsertAppCategoryOverride saves to tm.user_app_categories with AppCategory type
+
+---
+
+## 2026-01-29 - US-026
+- **What was implemented:** App category overrides settings for intent classification
+- **Files changed:**
+  - `apps/mobile/src/components/templates/AppCategorySettingsTemplate.tsx` (new)
+  - `apps/mobile/src/app/settings/app-categories.tsx` (new)
+  - `apps/mobile/src/lib/supabase/services/user-app-categories.ts` (modified)
+  - `apps/mobile/src/components/templates/index.ts` (modified)
+  - `apps/mobile/src/app/profile.tsx` (modified)
+- **AppCategorySettingsTemplate features:**
+  - Search bar to filter apps by name
+  - List of apps with display name, 30-day usage time, current category badge
+  - "Custom" indicator for user-overridden categories
+  - Category selection modal with 6 options: Work, Social, Entertainment, Communication, Utility, Ignore
+  - Color-coded category badges matching intent classification colors
+- **Service layer additions (user-app-categories.ts):**
+  - `RecentlyUsedApp` interface with appKey, displayName, totalSeconds, category, isOverride
+  - `fetchRecentlyUsedApps(userId)` - Queries screen_time_app_daily for 30-day aggregated app usage
+  - `upsertAppCategoryOverride({ userId, appKey, appName, category })` - Saves override with AppCategory type
+  - `fetchUserAppCategoryOverridesForIntent(userId)` - Fetches overrides as IntentAppCategoryOverrides for classification
+  - Imports AppCategory and getAppCategory from app-categories.ts for category lookup
+- **Profile.tsx changes:**
+  - Added Smartphone icon import from lucide-react-native
+  - Added "App Categories" item to personalizationItems array with router.push("/settings/app-categories")
+- **Learnings for future iterations:**
+  - AppCategory (work/social/entertainment/comms/utility/ignore) is for intent classification
+  - EventCategory (routine/work/meal/meeting/health/...) is for calendar events
+  - screen_time_app_daily table contains app usage aggregated by day with app_id, display_name, duration_seconds
+  - getAppCategory already checks user overrides before defaults (line 333-338 in app-categories.ts)
+
+---
+
+## 2026-01-29 - US-025
+- **What was implemented:** Google Places auto-suggest for unknown locations
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/google-places.ts` (new)
+  - `apps/mobile/src/components/molecules/PlaceSuggestionPrompt.tsx` (new)
+  - `apps/mobile/src/components/molecules/SessionDetailModal.tsx` (modified)
+  - `apps/mobile/app.config.js` (modified)
+- **google-places.ts service:**
+  - `fetchNearbyPlaces(lat, lon, radiusM?)` - Main API function with 15-min TTL in-memory cache
+  - `GooglePlaceSuggestion` interface with placeId, name, vicinity, types, distanceM, coordinates, rating, isOpen
+  - `getCacheKey(lat, lon)` - Rounds to 4 decimal places (~11m precision) for cache grouping
+  - `clearExpiredCache()` / `clearAllCache()` / `getCacheStats()` - Cache management
+  - `getPlaceTypeLabel(types)` - Maps Google types to friendly display names
+  - `mapPlaceTypeToCategory(types)` - Maps types to user place categories (home/work/gym/cafe/restaurant/other)
+  - `getBestSuggestion(suggestions)` - Returns top suggestion by priority and distance
+  - `isGooglePlacesAvailable()` - Checks if API key is configured
+  - Constants: CACHE_TTL_MS (15 min), SEARCH_RADIUS_M (100m), MAX_SUGGESTIONS (5), PRIORITY_TYPES list
+- **PlaceSuggestionPrompt component:**
+  - Shows "Are you at [Place]?" prompt with type label, distance, rating, vicinity
+  - Accept/Reject buttons with loading state
+  - "See N other suggestions" expandable list of alternatives
+  - "Use Near [Area]" fallback option
+  - Gracefully handles no suggestions or API unavailable
+- **SessionDetailModal changes:**
+  - Added suggestionDismissed state to track if user rejected suggestion
+  - showGooglePlacesSuggestion computed: canAddPlace AND !suggestionDismissed AND isGooglePlacesAvailable()
+  - handleAcceptPlaceSuggestion - Creates user place with suggestion's name and coordinates
+  - handleRejectPlaceSuggestion - Dismisses suggestion and opens AddPlaceModal for manual entry
+  - handleUseFallbackPlace - Creates place with "Near [Area]" label
+  - PlaceSuggestionPrompt shown between Time Range and Actions sections
+  - "Add Place" button only shown when suggestion not showing
+- **app.config.js changes:**
+  - Added googlePlacesApiKey to development/staging/production ENV configs
+  - Falls back to EXPO_PUBLIC_GOOGLE_PLACES_API_KEY if environment-specific not set
+- **Learnings for future iterations:**
+  - Google Places API requires Places API (not Maps JS) enabled in GCP console
+  - Cache TTL 15 min balances freshness with API cost savings
+  - 100m search radius works well for precise location matching
+  - Suggestion rejection should open manual entry modal (AddPlaceModal)
+  - Coordinates from suggestion can be more accurate than session coordinates for place center
 
 ---
 

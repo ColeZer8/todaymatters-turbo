@@ -403,8 +403,8 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created google-places.ts service with fetchNearbyPlaces, 15-min TTL cache, type labels/categories. PlaceSuggestionPrompt component shows 'Are you at X?' with Accept/Reject and alternatives. Integrated into SessionDetailModal for unknown locations. Added googlePlacesApiKey to app.config.js. Supports fallback 'Near [Area]' labels."
     },
     {
       "id": "US-026",
@@ -420,8 +420,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created AppCategorySettingsTemplate component with search, list view, and category selection modal. Added settings/app-categories.tsx screen. Service functions: fetchRecentlyUsedApps (queries screen_time_app_daily for 30-day usage), upsertAppCategoryOverride (saves with AppCategory type), fetchUserAppCategoryOverridesForIntent. Profile > App Categories navigation link added."
     },
     {
       "id": "US-027",
