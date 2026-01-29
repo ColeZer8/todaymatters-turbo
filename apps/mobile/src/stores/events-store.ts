@@ -157,6 +157,10 @@ export interface CalendarEventMeta {
   intent_reasoning?: string;
   /** True if this session occurred during scheduled sleep time */
   during_scheduled_sleep?: boolean;
+  /** Latitude for location-based events (used for adding new places) */
+  latitude?: number | null;
+  /** Longitude for location-based events (used for adding new places) */
+  longitude?: number | null;
 }
 
 export interface ScheduledEvent {

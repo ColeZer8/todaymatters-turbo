@@ -10,9 +10,10 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, ChevronRight } from "lucide-react-native";
+import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, ChevronRight, Plus } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import { TimePickerModal } from "../organisms/TimePickerModal";
+import { AddPlaceModal } from "./AddPlaceModal";
 import type { ScheduledEvent } from "@/stores";
 import { useAuth } from "@/hooks/use-auth";
 import { splitSessionEvent, mergeSessionEvents, findMergeableNeighbors } from "@/lib/supabase/services/calendar-events";
@@ -21,6 +22,7 @@ import {
   mergeScheduledEventSessions,
   sessionBlockToDerivedEvent,
 } from "@/lib/supabase/services/actual-ingestion";
+import { createUserPlace } from "@/lib/supabase/services/user-places";
 import type { Intent } from "@/lib/supabase/services/app-categories";
 import { formatLocalIso } from "@/lib/calendar/local-time";
 
@@ -65,6 +67,8 @@ interface SessionDetailModalProps {
   onSplit?: (firstEvent: ScheduledEvent, secondEvent: ScheduledEvent) => void;
   /** Callback when sessions are successfully merged - receives the merged event */
   onMerge?: (mergedEvent: ScheduledEvent) => void;
+  /** Callback when a new place is added - receives the place label */
+  onAddPlace?: (placeLabel: string) => void;
   /** The start of the day for time calculations */
   dayStart?: Date;
   /** All actual events for the day (used to find mergeable neighbors) */
@@ -114,6 +118,7 @@ export const SessionDetailModal = ({
   onClose,
   onSplit,
   onMerge,
+  onAddPlace,
   dayStart: dayStartProp,
   allActualEvents = [],
 }: SessionDetailModalProps) => {
@@ -130,6 +135,10 @@ export const SessionDetailModal = ({
   const [showMergeOptions, setShowMergeOptions] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
   const [selectedMergeTarget, setSelectedMergeTarget] = useState<ScheduledEvent | null>(null);
+
+  // Add place state
+  const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
+  const [isAddingPlace, setIsAddingPlace] = useState(false);
 
   const meta = event?.meta;
   const isSessionBlock = meta?.kind === "session_block";
@@ -201,6 +210,82 @@ export const SessionDetailModal = ({
 
   // Check if session can be merged (must have at least one adjacent session)
   const canMerge = mergeableNeighbors.length > 0;
+
+  // Check if we can add a place (must be at unknown location with coordinates)
+  const canAddPlace = useMemo(() => {
+    if (!meta) return false;
+    // Session must be at an unknown location (no place_id or "Unknown" label)
+    const isUnknownLocation =
+      !meta.place_id &&
+      (!meta.place_label ||
+        meta.place_label.toLowerCase() === "unknown" ||
+        meta.place_label.toLowerCase().startsWith("near "));
+    // Must have coordinates to create a place
+    const hasCoordinates =
+      typeof meta.latitude === "number" && typeof meta.longitude === "number";
+    return isUnknownLocation && hasCoordinates;
+  }, [meta]);
+
+  // Handle add place button press
+  const handleAddPlacePress = useCallback(() => {
+    if (!canAddPlace) {
+      Alert.alert(
+        "Cannot Add Place",
+        "This location already has a place label or is missing coordinates.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    setShowAddPlaceModal(true);
+  }, [canAddPlace]);
+
+  // Handle saving a new place
+  const handleSavePlace = useCallback(
+    async (label: string, category: string | null) => {
+      if (!user?.id || !meta?.latitude || !meta?.longitude) return;
+
+      setIsAddingPlace(true);
+      try {
+        await createUserPlace({
+          userId: user.id,
+          label,
+          latitude: meta.latitude,
+          longitude: meta.longitude,
+          category,
+          radiusMeters: 150, // Default 150m radius
+        });
+
+        // Notify parent component
+        if (onAddPlace) {
+          onAddPlace(label);
+        }
+
+        Alert.alert(
+          "Place Added",
+          `"${label}" has been saved. Future visits to this location will be recognized automatically.`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setShowAddPlaceModal(false);
+                onClose();
+              },
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Failed to add place:", error);
+        Alert.alert(
+          "Failed to Add Place",
+          "There was an error saving the place. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsAddingPlace(false);
+      }
+    },
+    [user?.id, meta?.latitude, meta?.longitude, onAddPlace, onClose]
+  );
 
   // Handle merge button press
   const handleMergePress = useCallback(() => {
@@ -516,6 +601,8 @@ export const SessionDetailModal = ({
       setShowMergeOptions(false);
       setIsMerging(false);
       setSelectedMergeTarget(null);
+      setShowAddPlaceModal(false);
+      setIsAddingPlace(false);
     }
   }, [visible]);
 
@@ -654,6 +741,35 @@ export const SessionDetailModal = ({
                       <Icon icon={ChevronRight} size={20} color={COLORS.textMuted} />
                     )}
                   </Pressable>
+
+                  {/* Add Place Button (only shown for unknown locations) */}
+                  {canAddPlace && (
+                    <>
+                      <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+                      <Pressable
+                        onPress={handleAddPlacePress}
+                        disabled={isAddingPlace}
+                        className={`flex-row items-center px-4 py-3 ${
+                          isAddingPlace ? "opacity-50" : ""
+                        }`}
+                      >
+                        <View
+                          className="w-8 h-8 rounded-full items-center justify-center"
+                          style={{ backgroundColor: "#F0FDF4" }}
+                        >
+                          <Icon icon={Plus} size={16} color="#16A34A" />
+                        </View>
+                        <View className="ml-3 flex-1">
+                          <Text className="text-base text-[#111827] font-medium">
+                            {isAddingPlace ? "Adding..." : "Add Place"}
+                          </Text>
+                          <Text className="text-sm text-[#64748B]">
+                            Label this location for future recognition
+                          </Text>
+                        </View>
+                      </Pressable>
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -848,6 +964,14 @@ export const SessionDetailModal = ({
           onClose={() => setShowSplitPicker(false)}
         />
       )}
+
+      {/* Add Place Modal */}
+      <AddPlaceModal
+        visible={showAddPlaceModal}
+        onClose={() => setShowAddPlaceModal(false)}
+        onSave={handleSavePlace}
+        isSaving={isAddingPlace}
+      />
     </>
   );
 };

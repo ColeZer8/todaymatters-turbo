@@ -1053,6 +1053,10 @@ export interface SessionBlock {
     intent_reasoning?: string;
     /** True if this session occurred during scheduled sleep time */
     during_scheduled_sleep?: boolean;
+    /** Latitude centroid for location (used for adding new places) */
+    latitude?: number | null;
+    /** Longitude centroid for location (used for adding new places) */
+    longitude?: number | null;
   };
 }
 
@@ -1299,12 +1303,16 @@ function createSessionBlock(
   let placeId: string | null = null;
   let placeLabel: string | null = null;
   let confidence = 0.5; // Default confidence
+  let latitude: number | null = null;
+  let longitude: number | null = null;
 
   // Find the first event with location info
   for (const event of sortedEvents) {
     const eventPlaceId = getEventPlaceId(event);
     const eventPlaceLabel = getEventPlaceLabel(event);
     const eventConfidence = event.meta?.confidence;
+    const eventLat = event.meta?.latitude;
+    const eventLon = event.meta?.longitude;
 
     if (eventPlaceId !== null || eventPlaceLabel !== null) {
       placeId = eventPlaceId;
@@ -1312,7 +1320,17 @@ function createSessionBlock(
       if (typeof eventConfidence === "number") {
         confidence = eventConfidence;
       }
+      // Extract coordinates for "Add Place" functionality
+      if (typeof eventLat === "number" && typeof eventLon === "number") {
+        latitude = eventLat;
+        longitude = eventLon;
+      }
       break;
+    }
+    // Also capture coordinates from events without place info (unknown location)
+    if (latitude === null && typeof eventLat === "number" && typeof eventLon === "number") {
+      latitude = eventLat;
+      longitude = eventLon;
     }
   }
 
@@ -1361,6 +1379,9 @@ function createSessionBlock(
       confidence,
       summary: summary.length > 0 ? summary : undefined,
       intent_reasoning: intentClassification.reasoning,
+      // Include coordinates for "Add Place" functionality at unknown locations
+      latitude: latitude ?? undefined,
+      longitude: longitude ?? undefined,
     },
   };
 }

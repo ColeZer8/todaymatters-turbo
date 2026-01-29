@@ -8,7 +8,7 @@ interface LocationSampleRow {
   accuracy_m: number | null;
 }
 
-interface UserPlaceRow {
+export interface UserPlaceRow {
   id: string;
   user_id: string;
   label: string;
@@ -241,4 +241,82 @@ export async function upsertUserPlaceFromSamples(input: {
   } catch (error) {
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
+}
+
+/**
+ * Create a user place from latitude/longitude coordinates.
+ * Used when user labels a session at an unknown location.
+ */
+export async function createUserPlace(input: {
+  userId: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  category?: string | null;
+  categoryId?: string | null;
+  radiusMeters?: number;
+}): Promise<UserPlaceRow> {
+  const centerGeoJson = {
+    type: "Point",
+    coordinates: [input.longitude, input.latitude],
+  } as unknown as Json;
+
+  try {
+    const payload: Record<string, unknown> = {
+      user_id: input.userId,
+      label: input.label,
+      category: input.category ?? null,
+      category_id: input.categoryId ?? null,
+      radius_m: input.radiusMeters ?? 150,
+      center: centerGeoJson,
+    };
+
+    const { data, error } = await tmSchema()
+      .from("user_places")
+      .insert(payload)
+      .select(USER_PLACE_SELECT)
+      .single();
+
+    if (error) throw handleSupabaseError(error);
+    return data as UserPlaceRow;
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/** Common place label suggestions */
+export const PLACE_LABEL_SUGGESTIONS = [
+  "Home",
+  "Office",
+  "Gym",
+  "Coffee Shop",
+  "Restaurant",
+  "Library",
+  "Park",
+] as const;
+
+/** Place category for location-based places */
+export type PlaceCategory = "home" | "work" | "gym" | "cafe" | "restaurant" | "other" | null;
+
+/**
+ * Get suggested category based on place label
+ */
+export function getSuggestedCategory(label: string): PlaceCategory {
+  const lowerLabel = label.toLowerCase();
+  if (lowerLabel.includes("home") || lowerLabel.includes("house") || lowerLabel.includes("apartment")) {
+    return "home";
+  }
+  if (lowerLabel.includes("office") || lowerLabel.includes("work") || lowerLabel.includes("company")) {
+    return "work";
+  }
+  if (lowerLabel.includes("gym") || lowerLabel.includes("fitness") || lowerLabel.includes("workout")) {
+    return "gym";
+  }
+  if (lowerLabel.includes("cafe") || lowerLabel.includes("coffee") || lowerLabel.includes("starbucks")) {
+    return "cafe";
+  }
+  if (lowerLabel.includes("restaurant") || lowerLabel.includes("dining") || lowerLabel.includes("food")) {
+    return "restaurant";
+  }
+  return "other";
 }
