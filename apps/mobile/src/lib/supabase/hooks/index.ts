@@ -5,3 +5,4 @@ export * from "./use-routine-sync";
 export * from "./use-ideal-day-sync";
 export * from "./use-location-samples-sync";
 export * from "./use-insights-sync";
+export * from "./use-actual-ingestion";
