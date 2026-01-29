@@ -223,8 +223,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Function added to apps/mobile/src/lib/supabase/services/actual-ingestion.ts. Exports: SessionBlock interface, SessionizableEvent interface, sessionizeWindow function, sessionBlockToDerivedEvent helper. Groups events by location with place_id changes creating session boundaries. Commute events form their own sessions. Session title format '[Place] - [Intent]' with intent from classifyIntent()."
     },
     {
       "id": "US-015",
@@ -239,8 +239,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to actual-ingestion.ts: mergeSessionMicroGaps (merges sessions with gaps < 5 min at same place), absorbShortSessions (absorbs sessions < 10 min into adjacent neighbors), mergeSessionBlocks (combines two sessions), combineAppSummaries (for re-classification), isSessionCommute (helper). Updated sessionizeWindow to apply micro-gap merging and short session absorption after initial grouping. Constants: MAX_MICRO_GAP_MS (5 min), MIN_SESSION_DURATION_MS (10 min). 19 unit tests in actual-ingestion.test.ts."
     },
     {
       "id": "US-016",
@@ -255,8 +255,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Already implemented in createSessionBlock (US-014). SessionBlock interface includes meta.summary (line 1006), meta.intent (line 1002), meta.confidence (line 1004). buildAppSummary (lines 1120-1139) aggregates screen-time by app_id from child events. createSessionBlock (lines 1281-1284) creates top 3 summary. Tests in actual-ingestion.test.ts verify summary combining when merging sessions."
     },
     {
       "id": "US-017",

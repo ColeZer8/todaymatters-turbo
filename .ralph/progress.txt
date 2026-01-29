@@ -19,6 +19,100 @@
 
 ---
 
+## 2026-01-29 - US-016
+- **What was implemented:** Session summary generation for session blocks (verified existing implementation)
+- **Files changed:**
+  - None - functionality was already implemented in US-014's createSessionBlock function
+- **Key verification:**
+  - `meta.summary` is an array of `{ label: string, seconds: number }` (line 1006 in SessionBlock interface)
+  - Summary contains top 3 apps by duration (`.slice(0, 3)` at line 1281)
+  - Summary calculated from child events via `buildAppSummary` (lines 1120-1139)
+  - `meta.intent` stored from `classifyIntent()` result (line 1310)
+  - `meta.confidence` stored from location data (lines 1252-1268, stored at line 1312)
+  - Tests in actual-ingestion.test.ts verify summary combining when merging sessions
+- **Learnings for future iterations:**
+  - Session summary generation was implemented as part of US-014's createSessionBlock function
+  - buildAppSummary aggregates screen-time by app_id from child events
+  - Summary format matches acceptance criteria: `{ label: string, seconds: number }`
+
+---
+
+## 2026-01-29 - US-015
+- **What was implemented:** Micro-gap merging and short session absorption in sessionization
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.test.ts` (new)
+- **Constants added:**
+  - `MAX_MICRO_GAP_MS` - 5 minutes (threshold for merging adjacent sessions)
+  - `MIN_SESSION_DURATION_MS` - 10 minutes (threshold for absorbing short sessions)
+- **Functions created:**
+  - `mergeSessionMicroGaps(sessions, windowStart, userOverrides)` - Merges sessions with gaps < 5 minutes at the same place into a single session
+  - `absorbShortSessions(sessions, windowStart, userOverrides)` - Absorbs sessions < 10 minutes into adjacent sessions at the same place
+  - `mergeSessionBlocks(first, second, windowStart, userOverrides)` - Combines two sessions by extending the first to include the second
+  - `combineAppSummaries(first, second)` - Combines app usage summaries from two sessions for re-classification
+  - `isSessionCommute(session)` - Helper to check if a session is a commute
+- **Key design decisions:**
+  - Micro-gap merging applies to gaps BETWEEN sessions at the same place
+  - Events at the same place already form a single session initially (not split by gaps)
+  - Short session absorption uses iterative approach - keeps absorbing until no changes
+  - Absorbs into preceding session first, then following if no preceding available
+  - Commute sessions are never merged or absorbed regardless of duration
+  - Combined sessions have re-calculated intent based on combined app summaries
+  - Confidence is weighted average based on duration of original sessions
+- **Updated `sessionizeWindow`:**
+  - Now applies `mergeSessionMicroGaps` after initial grouping
+  - Then applies `absorbShortSessions` to absorb short sessions
+- **Tests added:** 19 tests in actual-ingestion.test.ts:
+  - `mergeSessionMicroGaps`: 7 tests (single session, gap < 5 min, gap >= 5 min, different places, commutes, multiple gaps, summary combining)
+  - `absorbShortSessions`: 7 tests (single session, absorb into prev, absorb into next, different places, commutes, long sessions, iterative absorption)
+  - `sessionizeWindow with micro-gap merging`: 5 tests (3-min gap, 6-min gap different places, short absorption, different places, commutes)
+- **Learnings for future iterations:**
+  - Events at the same place form one session regardless of gaps - micro-gap merging is for session-level gaps
+  - Use `isSessionCommute` helper to identify commute sessions (checks intent and title)
+  - Absorption is iterative - may require multiple passes if multiple short sessions
+
+---
+
+## 2026-01-29 - US-014
+- **What was implemented:** Sessionization pass for grouping granular events by location into place-anchored session blocks
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (modified)
+- **Types created:**
+  - `SessionBlock` - Interface for session blocks with meta.kind = 'session_block', title, placeId, intent, childEventIds, confidence
+  - `SessionizableEvent` - Interface for input events that can be sessionized (ReconciliationEvent, DerivedEvent, or generic)
+- **Functions created:**
+  - `sessionizeWindow(userId, windowStart, windowEnd, events, userOverrides)` - Main entry point that groups events by location and creates session blocks
+  - `sessionBlockToDerivedEvent(session)` - Converts SessionBlock to DerivedEvent for reconciliation
+  - `groupEventsByLocation(events)` - Groups events into arrays by location context (place changes = boundary)
+  - `createSessionBlock(events, windowStart, userOverrides)` - Creates a single SessionBlock from grouped events
+  - `buildAppSummary(events)` - Aggregates screen-time by app_id for intent classification
+  - `generateSessionTitle(placeLabel, intent, isCommute)` - Creates title in format '[Place] - [Intent]'
+  - `generateSessionSourceId(windowStart, placeId, sessionStart)` - Creates deterministic source_id: session:{windowStartMs}:{placeId}:{sessionStartMs}
+- **Helper functions:**
+  - `getEventPlaceId(event)` - Extract place_id from event meta
+  - `getEventPlaceLabel(event)` - Extract place_label from event meta
+  - `getEventIdentifier(event)` - Get id or sourceId for child linking
+  - `isScreenTimeEvent(event)` - Check if event has app_id
+  - `isEventCommute(event)` - Check if event is a commute
+  - `haveSameLocationContext(event1, event2)` - Check if two events share location context
+  - `formatIntentForTitle(intent)` - Capitalize intent for title display
+- **Key design decisions:**
+  - Session boundaries created when place_id changes or commute event occurs
+  - Commute events form their own sessions with intent = 'offline'
+  - Session title format: '[Place] - [Intent]' (e.g., 'Cafe - Work', 'Home - Leisure')
+  - Child events linked via meta.children array of event identifiers
+  - Intent classification uses classifyIntent from app-categories.ts
+  - meta.kind = 'session_block' for easy filtering in UI
+  - Top 3 apps stored in meta.summary for display
+  - Confidence inherited from location evidence
+- **Learnings for future iterations:**
+  - SessionBlock structure ready for US-016 (session summary generation)
+  - sessionizeWindow filters events to window boundaries before processing
+  - Child events can be either database IDs or derived event sourceIds
+  - Use sessionBlockToDerivedEvent to convert for reconciliation pipeline
+
+---
+
 ## 2026-01-29 - US-013
 - **What was implemented:** Intent classification algorithm for session categorization
 - **Files changed:**
