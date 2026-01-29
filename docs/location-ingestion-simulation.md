@@ -369,4 +369,78 @@ Session event example:
 
 ---
 
-*If you want, I can extend this doc with a second simulation (e.g., weekend day, gym + errands) and add a more formal rules table.*
+---
+
+## 11) Second simulation — Weekend (gym + errands + home)
+
+### 11.1 Human‑level activity (13:00–15:00)
+- 13:00–13:10: Drive to gym
+- 13:10–13:55: Workout
+- 13:55–14:05: Drive to grocery store
+- 14:05–14:35: Grocery shopping
+- 14:35–14:50: Drive home
+- 14:50–15:00: Chill on couch, scroll social
+
+### 11.2 Location evidence (conceptual)
+- 13:00–13:10: **Commute** (Home → Gym)
+- 13:10–13:55: **Gym** (place id: P_GYM)
+- 13:55–14:05: **Commute** (Gym → Grocery)
+- 14:05–14:35: **Grocery Store** (place id: P_GROCERY)
+- 14:35–14:50: **Commute** (Grocery → Home)
+- 14:50–15:00: **Home** (place id: P_HOME)
+
+### 11.3 Screen‑time evidence (sample)
+| session_id | started_at | ended_at | duration_seconds | app_id | display_name |
+|---|---|---|---:|---|---|
+| w1 | 13:12:00 | 13:14:00 | 120 | com.spotify | Spotify |
+| w2 | 13:25:00 | 13:27:00 | 120 | com.spotify | Spotify |
+| w3 | 14:08:00 | 14:11:00 | 180 | com.target.app | Target |
+| w4 | 14:12:00 | 14:14:00 | 120 | com.apple.imessage | Messages |
+| w5 | 14:52:00 | 14:59:00 | 420 | com.instagram.android | Instagram |
+
+### 11.4 Sessionized output (collapsed view)
+- **13:00–13:10 — Commute**
+- **13:10–13:55 — Gym — Fitness**
+  - Summary: Spotify (4m)
+- **13:55–14:05 — Commute**
+- **14:05–14:35 — Grocery — Errands**
+  - Summary: Target (3m), Messages (2m)
+- **14:35–14:50 — Commute**
+- **14:50–15:00 — Home — Leisure**
+  - Summary: Instagram (7m)
+
+### 11.5 Expanded view (on tap)
+```
+13:00-13:10  Commute       (location)
+13:10-13:55  At Gym        (location)
+13:12-13:14  Spotify       (screen_time)
+13:25-13:27  Spotify       (screen_time)
+13:55-14:05  Commute       (location)
+14:05-14:35  At Grocery    (location)
+14:08-14:11  Target        (screen_time)
+14:12-14:14  Messages      (screen_time)
+14:35-14:50  Commute       (location)
+14:50-15:00  At Home       (location)
+14:52-14:59  Instagram     (screen_time)
+```
+
+---
+
+## 12) Formal rules table (sessionization + labeling)
+
+| Rule | Description | Default Threshold | Example |
+|---|---|---:|---|
+| Location anchoring | Session blocks begin/end at location changes | N/A | Cafe → Office → Home |
+| Commute detection | Movement without stable place | ≥ 10 min moving | 09:40–09:50 commute |
+| Screen‑time dominance | If screen‑time exists, it informs intent | Work ≥ 60% | “Cafe — Work” |
+| Distracted work | Mixed work + social | Work 40–60% + Social ≥ 25% | “Office — Distracted Work” |
+| Leisure | Social + entertainment dominates | ≥ 60% | “Home — Leisure” |
+| Offline place | No screen evidence | N/A | “At Office” |
+| Intent split | Shift in dominant intent within same location | ≥ 15 min | Work → Leisure split |
+| Micro‑gap merge | Small gaps merged | < 5 min | 2–3 min gaps removed |
+| Unknown fallback | No screen and no confident place | Confidence < threshold | “Unknown” |
+| Summary size | Number of apps in subtitle | 3 (configurable) | Chrome, Docs, Slack |
+
+---
+
+*This document is the working source of truth for the pipeline. When we implement, we should track deviations explicitly.*
