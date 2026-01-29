@@ -1234,3 +1234,206 @@ export async function syncDerivedActualEvents(
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
+
+// ============================================================================
+// Session Split Operations
+// ============================================================================
+
+export interface SplitSessionInput {
+  /** User ID */
+  userId: string;
+  /** ID of the original session event to split */
+  originalEventId: string;
+  /** Split point time in ISO format */
+  splitPointIso: string;
+  /** First session data (before split point) */
+  firstSession: {
+    title: string;
+    scheduledStartIso: string;
+    scheduledEndIso: string;
+    meta: PlannedCalendarMeta;
+  };
+  /** Second session data (after split point) */
+  secondSession: {
+    title: string;
+    scheduledStartIso: string;
+    scheduledEndIso: string;
+    meta: PlannedCalendarMeta;
+  };
+}
+
+export interface SplitSessionResult {
+  /** The first (earlier) session event after split */
+  firstEvent: ScheduledEvent;
+  /** The second (later) session event after split */
+  secondEvent: ScheduledEvent;
+  /** Whether the original was successfully soft-deleted */
+  originalDeleted: boolean;
+}
+
+/**
+ * Split a session event into two new events at the specified split point.
+ *
+ * This function:
+ * 1. Soft-deletes the original event by setting meta.deleted_at and meta.deleted_reason
+ * 2. Creates two new session events with meta.source = 'user' (protected from future ingestion)
+ * 3. Links the new events to the original via meta.split_from
+ *
+ * @param input - Split session input containing original event ID and new session data
+ * @returns Result containing the two new events
+ */
+export async function splitSessionEvent(
+  input: SplitSessionInput,
+): Promise<SplitSessionResult> {
+  try {
+    const {
+      userId,
+      originalEventId,
+      splitPointIso,
+      firstSession,
+      secondSession,
+    } = input;
+
+    if (__DEV__) {
+      console.log("[Supabase] Splitting session event:", {
+        originalEventId,
+        splitPoint: splitPointIso,
+      });
+    }
+
+    // Step 1: Soft-delete the original event by updating its meta
+    const { data: originalEvent, error: fetchError } = await supabase
+      .schema("tm")
+      .from("events")
+      .select("*")
+      .eq("id", originalEventId)
+      .eq("user_id", userId)
+      .single();
+
+    if (fetchError) {
+      if (__DEV__) {
+        console.error("[Supabase] ❌ Error fetching original event:", fetchError);
+      }
+      throw handleSupabaseError(fetchError);
+    }
+
+    const originalMeta = (originalEvent.meta ?? {}) as Record<string, Json>;
+    const updatedOriginalMeta: Record<string, Json> = {
+      ...originalMeta,
+      deleted_at: new Date().toISOString(),
+      deleted_reason: "split",
+      split_at: splitPointIso,
+    };
+
+    const { error: updateError } = await supabase
+      .schema("tm")
+      .from("events")
+      .update({ meta: updatedOriginalMeta as unknown as Json })
+      .eq("id", originalEventId)
+      .eq("user_id", userId);
+
+    if (updateError) {
+      if (__DEV__) {
+        console.error("[Supabase] ❌ Error soft-deleting original event:", updateError);
+      }
+      throw handleSupabaseError(updateError);
+    }
+
+    // Step 2: Create the first session event
+    const firstMeta: PlannedCalendarMeta = {
+      ...firstSession.meta,
+      source: "user",
+      split_from: originalEventId,
+    };
+
+    const firstInsert: TmEventInsert = {
+      user_id: userId,
+      type: ACTUAL_EVENT_TYPE,
+      title: firstSession.title,
+      description: "",
+      scheduled_start: firstSession.scheduledStartIso,
+      scheduled_end: firstSession.scheduledEndIso,
+      meta: firstMeta as unknown as Json,
+    };
+
+    const { data: firstData, error: firstError } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(firstInsert)
+      .select("*")
+      .single();
+
+    if (firstError) {
+      if (__DEV__) {
+        console.error("[Supabase] ❌ Error creating first split event:", firstError);
+      }
+      throw handleSupabaseError(firstError);
+    }
+
+    // Step 3: Create the second session event
+    const secondMeta: PlannedCalendarMeta = {
+      ...secondSession.meta,
+      source: "user",
+      split_from: originalEventId,
+    };
+
+    const secondInsert: TmEventInsert = {
+      user_id: userId,
+      type: ACTUAL_EVENT_TYPE,
+      title: secondSession.title,
+      description: "",
+      scheduled_start: secondSession.scheduledStartIso,
+      scheduled_end: secondSession.scheduledEndIso,
+      meta: secondMeta as unknown as Json,
+    };
+
+    const { data: secondData, error: secondError } = await supabase
+      .schema("tm")
+      .from("events")
+      .insert(secondInsert)
+      .select("*")
+      .single();
+
+    if (secondError) {
+      if (__DEV__) {
+        console.error("[Supabase] ❌ Error creating second split event:", secondError);
+      }
+      throw handleSupabaseError(secondError);
+    }
+
+    // Map the results to ScheduledEvent format
+    const firstEvent = rowToScheduledEvent(firstData as TmEventRow);
+    const secondEvent = rowToScheduledEvent(secondData as TmEventRow);
+
+    if (!firstEvent || !secondEvent) {
+      throw new Error("Failed to map split session events");
+    }
+
+    if (__DEV__) {
+      console.log("[Supabase] ✅ Successfully split session:", {
+        originalEventId,
+        firstEventId: firstEvent.id,
+        secondEventId: secondEvent.id,
+      });
+    }
+
+    return {
+      firstEvent,
+      secondEvent,
+      originalDeleted: true,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[Supabase] ❌ Error splitting session:", error);
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Check if an event has been soft-deleted (split or merged).
+ */
+export function isEventSoftDeleted(meta: Record<string, unknown> | null): boolean {
+  if (!meta) return false;
+  return typeof meta.deleted_at === "string" && meta.deleted_at.length > 0;
+}

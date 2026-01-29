@@ -871,6 +871,13 @@ export const ComprehensiveCalendarTemplate = ({
           setIsSessionDetailVisible(false);
           setSessionDetailEvent(null);
         }}
+        dayStart={selectedDate}
+        onSplit={(firstEvent, secondEvent) => {
+          // Refresh the actual events after split
+          // The parent component should refetch events
+          setIsSessionDetailVisible(false);
+          setSessionDetailEvent(null);
+        }}
       />
 
       <FloatingActionButton

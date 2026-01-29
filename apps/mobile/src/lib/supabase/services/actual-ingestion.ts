@@ -2138,3 +2138,260 @@ export function findHomePlace(
 
   return null;
 }
+
+// ============================================================================
+// Session Split
+// ============================================================================
+
+/**
+ * Result of a session split operation.
+ */
+export interface SessionSplitResult {
+  /** The first (earlier) session block after split */
+  firstSession: SessionBlock;
+  /** The second (later) session block after split */
+  secondSession: SessionBlock;
+  /** ID of the original session that was split (now soft-deleted) */
+  originalSessionId: string;
+}
+
+/**
+ * Generate a deterministic source ID for a user-created session block.
+ * Format: user_session:{timestamp}:{placeId}:{sessionStartMs}
+ */
+function generateUserSessionSourceId(
+  placeId: string | null,
+  sessionStart: Date,
+): string {
+  const timestamp = Date.now();
+  const sessionStartMs = sessionStart.getTime();
+  const placeIdPart = placeId ?? "unknown";
+  return `user_session:${timestamp}:${placeIdPart}:${sessionStartMs}`;
+}
+
+/**
+ * Split a session block at the specified split point.
+ *
+ * This function:
+ * 1. Creates two new session blocks from the original
+ * 2. Redistributes child events to the appropriate new parent based on time
+ * 3. Recalculates intent for each new block based on its child events
+ * 4. Marks new blocks with meta.source = 'user' (protected from future ingestion)
+ *
+ * @param session - The session block to split (can be SessionBlock or ScheduledEvent with session meta)
+ * @param splitPoint - The time point at which to split (must be between session start and end)
+ * @param childEvents - Optional array of child events for redistributing (if not provided, uses session.childEventIds)
+ * @param userOverrides - Optional user app category overrides for intent classification
+ * @returns Result containing the two new session blocks
+ * @throws Error if split point is outside session bounds
+ */
+export function splitSession(
+  session: SessionBlock,
+  splitPoint: Date,
+  childEvents?: SessionizableEvent[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionSplitResult {
+  const sessionStart = session.start;
+  const sessionEnd = session.end;
+  const splitTime = splitPoint.getTime();
+
+  // Validate split point is within session bounds
+  if (splitTime <= sessionStart.getTime()) {
+    throw new Error("Split point must be after session start");
+  }
+  if (splitTime >= sessionEnd.getTime()) {
+    throw new Error("Split point must be before session end");
+  }
+
+  // Redistribute child events based on their time relative to split point
+  const firstChildIds: string[] = [];
+  const secondChildIds: string[] = [];
+  const firstChildEvents: SessionizableEvent[] = [];
+  const secondChildEvents: SessionizableEvent[] = [];
+
+  if (childEvents && childEvents.length > 0) {
+    for (const event of childEvents) {
+      const eventMidpoint =
+        (event.scheduledStart.getTime() + event.scheduledEnd.getTime()) / 2;
+      const eventId = getEventIdentifier(event);
+
+      if (eventMidpoint < splitTime) {
+        firstChildIds.push(eventId);
+        firstChildEvents.push(event);
+      } else {
+        secondChildIds.push(eventId);
+        secondChildEvents.push(event);
+      }
+    }
+  } else {
+    // If no child events provided, split the childEventIds list
+    // Events before split point go to first session, after go to second
+    // Since we don't have actual event times, we can't redistribute properly
+    // In this case, all children go to first session
+    firstChildIds.push(...session.childEventIds);
+  }
+
+  // Build app summaries for each new session
+  const firstAppSummary = buildAppSummary(firstChildEvents);
+  const secondAppSummary = buildAppSummary(secondChildEvents);
+
+  // Classify intent for each new session
+  const firstIntentClassification = classifyIntent(firstAppSummary, userOverrides);
+  const secondIntentClassification = classifyIntent(secondAppSummary, userOverrides);
+
+  // Use offline intent if no screen-time in the session
+  const firstIntent = firstChildEvents.length === 0 || firstAppSummary.length === 0
+    ? "offline"
+    : firstIntentClassification.intent;
+  const secondIntent = secondChildEvents.length === 0 || secondAppSummary.length === 0
+    ? "offline"
+    : secondIntentClassification.intent;
+
+  // Build top 3 app summaries for display
+  const firstSummary = firstAppSummary.slice(0, 3).map((app) => ({
+    label: app.appId,
+    seconds: app.seconds,
+  }));
+  const secondSummary = secondAppSummary.slice(0, 3).map((app) => ({
+    label: app.appId,
+    seconds: app.seconds,
+  }));
+
+  // Generate new source IDs
+  const firstSourceId = generateUserSessionSourceId(session.placeId, sessionStart);
+  const secondSourceId = generateUserSessionSourceId(session.placeId, splitPoint);
+
+  // Generate titles
+  const firstTitle = generateSessionTitle(session.placeLabel, firstIntent, false);
+  const secondTitle = generateSessionTitle(session.placeLabel, secondIntent, false);
+
+  // Create first session block
+  const firstSession: SessionBlock = {
+    sourceId: firstSourceId,
+    title: firstTitle,
+    start: sessionStart,
+    end: splitPoint,
+    placeId: session.placeId,
+    placeLabel: session.placeLabel,
+    intent: firstIntent,
+    intentClassification: firstIntentClassification,
+    childEventIds: firstChildIds,
+    confidence: session.confidence,
+    meta: {
+      kind: "session_block",
+      place_id: session.placeId,
+      place_label: session.placeLabel,
+      intent: firstIntent,
+      children: firstChildIds,
+      confidence: session.confidence,
+      summary: firstSummary.length > 0 ? firstSummary : undefined,
+      intent_reasoning: firstIntentClassification.reasoning,
+    },
+  };
+
+  // Create second session block
+  const secondSession: SessionBlock = {
+    sourceId: secondSourceId,
+    title: secondTitle,
+    start: splitPoint,
+    end: sessionEnd,
+    placeId: session.placeId,
+    placeLabel: session.placeLabel,
+    intent: secondIntent,
+    intentClassification: secondIntentClassification,
+    childEventIds: secondChildIds,
+    confidence: session.confidence,
+    meta: {
+      kind: "session_block",
+      place_id: session.placeId,
+      place_label: session.placeLabel,
+      intent: secondIntent,
+      children: secondChildIds,
+      confidence: session.confidence,
+      summary: secondSummary.length > 0 ? secondSummary : undefined,
+      intent_reasoning: secondIntentClassification.reasoning,
+    },
+  };
+
+  return {
+    firstSession,
+    secondSession,
+    originalSessionId: session.sourceId,
+  };
+}
+
+/**
+ * Split a session from a ScheduledEvent (calendar event format).
+ *
+ * This is a convenience function for splitting sessions directly from
+ * the calendar view where events are in ScheduledEvent format.
+ *
+ * @param event - The scheduled event to split (must have meta.kind === 'session_block')
+ * @param splitPoint - The time point at which to split
+ * @param dayStart - The start of the day (for converting startMinutes to actual time)
+ * @param childEvents - Optional array of child events
+ * @param userOverrides - Optional user app category overrides
+ * @returns Result containing the two new session blocks
+ * @throws Error if event is not a session block or split point is invalid
+ */
+export function splitScheduledEventSession(
+  event: {
+    id: string;
+    title: string;
+    startMinutes: number;
+    duration: number;
+    meta?: {
+      kind?: string;
+      place_id?: string | null;
+      place_label?: string | null;
+      intent?: Intent;
+      children?: string[];
+      confidence?: number;
+      summary?: Array<{ label: string; seconds: number }>;
+      intent_reasoning?: string;
+      [key: string]: unknown;
+    };
+  },
+  splitPoint: Date,
+  dayStart: Date,
+  childEvents?: SessionizableEvent[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionSplitResult {
+  if (event.meta?.kind !== "session_block") {
+    throw new Error("Cannot split: event is not a session block");
+  }
+
+  // Convert ScheduledEvent to SessionBlock
+  const sessionStart = new Date(dayStart.getTime() + event.startMinutes * 60 * 1000);
+  const sessionEnd = new Date(sessionStart.getTime() + event.duration * 60 * 1000);
+
+  const session: SessionBlock = {
+    sourceId: event.id,
+    title: event.title,
+    start: sessionStart,
+    end: sessionEnd,
+    placeId: event.meta.place_id ?? null,
+    placeLabel: event.meta.place_label ?? null,
+    intent: event.meta.intent ?? "mixed",
+    intentClassification: {
+      intent: event.meta.intent ?? "mixed",
+      breakdown: { work: 0, social: 0, entertainment: 0, comms: 0, utility: 0, ignore: 0 },
+      totalSeconds: event.duration * 60,
+      reasoning: event.meta.intent_reasoning ?? "",
+    },
+    childEventIds: event.meta.children ?? [],
+    confidence: event.meta.confidence ?? 0.5,
+    meta: {
+      kind: "session_block",
+      place_id: event.meta.place_id ?? null,
+      place_label: event.meta.place_label ?? null,
+      intent: event.meta.intent ?? "mixed",
+      children: event.meta.children ?? [],
+      confidence: event.meta.confidence ?? 0.5,
+      summary: event.meta.summary,
+      intent_reasoning: event.meta.intent_reasoning,
+    },
+  };
+
+  return splitSession(session, splitPoint, childEvents, userOverrides);
+}

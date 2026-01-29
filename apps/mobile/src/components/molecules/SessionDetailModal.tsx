@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,21 @@ import {
   ScrollView,
   Animated,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, MapPin, Clock, Info, AlertCircle, CheckCircle } from "lucide-react-native";
+import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
+import { TimePickerModal } from "../organisms/TimePickerModal";
 import type { ScheduledEvent } from "@/stores";
+import { useAuth } from "@/hooks/use-auth";
+import { splitSessionEvent } from "@/lib/supabase/services/calendar-events";
+import {
+  splitScheduledEventSession,
+  sessionBlockToDerivedEvent,
+} from "@/lib/supabase/services/actual-ingestion";
+import type { Intent } from "@/lib/supabase/services/app-categories";
+import { formatLocalIso } from "@/lib/calendar/local-time";
 
 // Theme colors matching ComprehensiveCalendarTemplate
 const COLORS = {
@@ -50,6 +60,10 @@ interface SessionDetailModalProps {
   event: ScheduledEvent | null;
   visible: boolean;
   onClose: () => void;
+  /** Callback when session is successfully split - receives the two new events */
+  onSplit?: (firstEvent: ScheduledEvent, secondEvent: ScheduledEvent) => void;
+  /** The start of the day for time calculations */
+  dayStart?: Date;
 }
 
 /**
@@ -93,10 +107,17 @@ export const SessionDetailModal = ({
   event,
   visible,
   onClose,
+  onSplit,
+  dayStart: dayStartProp,
 }: SessionDetailModalProps) => {
   const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const panelTranslateY = useRef(new Animated.Value(1000)).current;
+  const { user } = useAuth();
+
+  // Split state
+  const [showSplitPicker, setShowSplitPicker] = useState(false);
+  const [isSplitting, setIsSplitting] = useState(false);
 
   const meta = event?.meta;
   const isSessionBlock = meta?.kind === "session_block";
@@ -105,6 +126,26 @@ export const SessionDetailModal = ({
   const intent = meta?.intent || "mixed";
   const intentStyle = INTENT_COLORS[intent] || INTENT_COLORS.mixed;
   const intentLabel = INTENT_LABELS[intent] || "Mixed";
+
+  // Calculate the day start
+  const dayStart = useMemo(() => {
+    if (dayStartProp) return dayStartProp;
+    // Default to today's start
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, [dayStartProp]);
+
+  // Calculate session start and end times
+  const sessionTimes = useMemo(() => {
+    if (!event) return null;
+    const startMs = dayStart.getTime() + event.startMinutes * 60 * 1000;
+    const endMs = startMs + event.duration * 60 * 1000;
+    return {
+      start: new Date(startMs),
+      end: new Date(endMs),
+      midpoint: new Date(startMs + (endMs - startMs) / 2),
+    };
+  }, [event, dayStart]);
 
   // Calculate percentages for app breakdown
   const appBreakdown = useMemo(() => {
@@ -134,6 +175,161 @@ export const SessionDetailModal = ({
     return formatDuration(event.duration * 60);
   }, [event]);
 
+  // Check if session can be split (must be at least 10 minutes long)
+  const canSplit = useMemo(() => {
+    if (!event) return false;
+    return event.duration >= 10;
+  }, [event]);
+
+  // Handle split button press
+  const handleSplitPress = useCallback(() => {
+    if (!canSplit) {
+      Alert.alert(
+        "Cannot Split",
+        "Sessions must be at least 10 minutes long to split.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    setShowSplitPicker(true);
+  }, [canSplit]);
+
+  // Handle split time selection
+  const handleSplitTimeConfirm = useCallback(
+    async (splitTime: Date) => {
+      setShowSplitPicker(false);
+
+      if (!event || !sessionTimes || !user?.id) {
+        return;
+      }
+
+      // Validate split time is within session bounds
+      const splitMs = splitTime.getTime();
+      const startMs = sessionTimes.start.getTime();
+      const endMs = sessionTimes.end.getTime();
+
+      // The time picker returns time for today, adjust to session's day
+      const adjustedSplitTime = new Date(dayStart);
+      adjustedSplitTime.setHours(splitTime.getHours(), splitTime.getMinutes(), 0, 0);
+      const adjustedSplitMs = adjustedSplitTime.getTime();
+
+      if (adjustedSplitMs <= startMs || adjustedSplitMs >= endMs) {
+        Alert.alert(
+          "Invalid Split Point",
+          "The split point must be between the session start and end times.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
+      // Confirm the split
+      Alert.alert(
+        "Split Session",
+        `Split this session at ${formatTime(adjustedSplitTime.getHours() * 60 + adjustedSplitTime.getMinutes())}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Split",
+            style: "destructive",
+            onPress: async () => {
+              await performSplit(adjustedSplitTime);
+            },
+          },
+        ]
+      );
+    },
+    [event, sessionTimes, user?.id, dayStart]
+  );
+
+  // Perform the actual split operation
+  const performSplit = useCallback(
+    async (splitPoint: Date) => {
+      if (!event || !user?.id) return;
+
+      setIsSplitting(true);
+      try {
+        // Use the split function to calculate the new sessions
+        const splitResult = splitScheduledEventSession(
+          {
+            id: event.id,
+            title: event.title,
+            startMinutes: event.startMinutes,
+            duration: event.duration,
+            meta: event.meta as {
+              kind?: string;
+              place_id?: string | null;
+              place_label?: string | null;
+              intent?: Intent;
+              children?: string[];
+              confidence?: number;
+              summary?: Array<{ label: string; seconds: number }>;
+              intent_reasoning?: string;
+            },
+          },
+          splitPoint,
+          dayStart,
+          undefined, // childEvents - not available in this context
+          undefined  // userOverrides - not available in this context
+        );
+
+        // Convert session blocks to the format needed for database operations
+        const firstDerived = sessionBlockToDerivedEvent(splitResult.firstSession);
+        const secondDerived = sessionBlockToDerivedEvent(splitResult.secondSession);
+
+        // Call the database function to persist the split
+        const result = await splitSessionEvent({
+          userId: user.id,
+          originalEventId: event.id,
+          splitPointIso: formatLocalIso(splitPoint),
+          firstSession: {
+            title: firstDerived.title,
+            scheduledStartIso: formatLocalIso(firstDerived.scheduledStart),
+            scheduledEndIso: formatLocalIso(firstDerived.scheduledEnd),
+            meta: {
+              ...splitResult.firstSession.meta,
+              category: event.category,
+            } as Parameters<typeof splitSessionEvent>[0]["firstSession"]["meta"],
+          },
+          secondSession: {
+            title: secondDerived.title,
+            scheduledStartIso: formatLocalIso(secondDerived.scheduledStart),
+            scheduledEndIso: formatLocalIso(secondDerived.scheduledEnd),
+            meta: {
+              ...splitResult.secondSession.meta,
+              category: event.category,
+            } as Parameters<typeof splitSessionEvent>[0]["secondSession"]["meta"],
+          },
+        });
+
+        // Notify parent component of successful split
+        if (onSplit) {
+          onSplit(result.firstEvent, result.secondEvent);
+        }
+
+        Alert.alert(
+          "Session Split",
+          "The session has been split into two separate blocks.",
+          [
+            {
+              text: "OK",
+              onPress: onClose,
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Failed to split session:", error);
+        Alert.alert(
+          "Split Failed",
+          "Failed to split the session. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsSplitting(false);
+      }
+    },
+    [event, user?.id, dayStart, onSplit, onClose]
+  );
+
   useEffect(() => {
     if (visible && event) {
       Animated.parallel([
@@ -155,6 +351,14 @@ export const SessionDetailModal = ({
     }
   }, [visible, event, backdropOpacity, panelTranslateY]);
 
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setShowSplitPicker(false);
+      setIsSplitting(false);
+    }
+  }, [visible]);
+
   if (!event || !isSessionBlock) return null;
 
   const confidence = meta?.confidence ?? 0;
@@ -162,196 +366,243 @@ export const SessionDetailModal = ({
   const reasoning = meta?.intent_reasoning || `Classified as ${intentLabel}`;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end">
-        {/* Backdrop */}
-        <Animated.View
-          className="absolute inset-0 bg-black/40"
-          style={{ opacity: backdropOpacity }}
-        />
-        <Pressable className="absolute inset-0" onPress={onClose} />
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="none"
+        onRequestClose={onClose}
+      >
+        <View className="flex-1 justify-end">
+          {/* Backdrop */}
+          <Animated.View
+            className="absolute inset-0 bg-black/40"
+            style={{ opacity: backdropOpacity }}
+          />
+          <Pressable className="absolute inset-0" onPress={onClose} />
 
-        {/* Panel */}
-        <Animated.View
-          className="bg-[#F2F2F7] rounded-t-3xl"
-          style={{
-            maxHeight: "85%",
-            transform: [{ translateY: panelTranslateY }],
-            paddingTop: Platform.OS === "android" ? insets.top : 0,
-          }}
-        >
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-            <View className="w-10" />
-            <Text className="text-lg font-bold text-[#111827]">Session Details</Text>
-            <Pressable onPress={onClose} className="w-10 items-end">
-              <Icon icon={X} size={24} color={COLORS.textMuted} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          {/* Panel */}
+          <Animated.View
+            className="bg-[#F2F2F7] rounded-t-3xl"
+            style={{
+              maxHeight: "85%",
+              transform: [{ translateY: panelTranslateY }],
+              paddingTop: Platform.OS === "android" ? insets.top : 0,
+            }}
           >
-            {/* Title Section */}
-            <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
-              <View className="px-4 py-4">
-                <Text className="text-xl font-bold text-[#111827]">
-                  {event.title}
-                </Text>
-                {meta?.place_label && (
-                  <View className="flex-row items-center mt-2">
-                    <Icon icon={MapPin} size={14} color={COLORS.textMuted} />
-                    <Text className="ml-1 text-sm text-[#64748B]">
-                      {meta.place_label}
-                    </Text>
-                  </View>
-                )}
-              </View>
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
+              <View className="w-10" />
+              <Text className="text-lg font-bold text-[#111827]">Session Details</Text>
+              <Pressable onPress={onClose} className="w-10 items-end">
+                <Icon icon={X} size={24} color={COLORS.textMuted} />
+              </Pressable>
             </View>
 
-            {/* Time Range Section */}
-            <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
-              <View className="flex-row items-center px-4 py-3">
-                <Icon icon={Clock} size={18} color={COLORS.textMuted} />
-                <View className="ml-3 flex-1">
-                  <Text className="text-base text-[#111827]">{timeRange}</Text>
-                  <Text className="text-sm text-[#64748B]">{totalDuration}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Intent Classification Section */}
-            <View className="mt-6 px-4">
-              <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
-                CLASSIFICATION
-              </Text>
-              <View className="overflow-hidden rounded-xl bg-white">
-                {/* Intent Badge */}
-                <View className="px-4 py-3 flex-row items-center">
-                  <View
-                    className="px-3 py-1.5 rounded-full"
-                    style={{ backgroundColor: intentStyle.bg }}
-                  >
-                    <Text
-                      className="text-sm font-semibold"
-                      style={{ color: intentStyle.text }}
-                    >
-                      {intentLabel}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Reasoning */}
-                <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
-                <View className="px-4 py-3 flex-row">
-                  <Icon icon={Info} size={16} color={COLORS.textSubtle} />
-                  <Text className="ml-2 flex-1 text-sm text-[#64748B] leading-5">
-                    {reasoning}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            >
+              {/* Title Section */}
+              <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
+                <View className="px-4 py-4">
+                  <Text className="text-xl font-bold text-[#111827]">
+                    {event.title}
                   </Text>
+                  {meta?.place_label && (
+                    <View className="flex-row items-center mt-2">
+                      <Icon icon={MapPin} size={14} color={COLORS.textMuted} />
+                      <Text className="ml-1 text-sm text-[#64748B]">
+                        {meta.place_label}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
-            </View>
 
-            {/* App Usage Breakdown Section */}
-            {appBreakdown.length > 0 && (
+              {/* Time Range Section */}
+              <View className="mt-4 mx-4 overflow-hidden rounded-xl bg-white">
+                <View className="flex-row items-center px-4 py-3">
+                  <Icon icon={Clock} size={18} color={COLORS.textMuted} />
+                  <View className="ml-3 flex-1">
+                    <Text className="text-base text-[#111827]">{timeRange}</Text>
+                    <Text className="text-sm text-[#64748B]">{totalDuration}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Actions Section */}
               <View className="mt-6 px-4">
                 <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
-                  APP USAGE
+                  ACTIONS
                 </Text>
                 <View className="overflow-hidden rounded-xl bg-white">
-                  {appBreakdown.map((app, index) => (
-                    <View key={app.label}>
-                      {index > 0 && <View className="h-[1px] ml-4 bg-[#E5E5EA]" />}
-                      <View className="px-4 py-3">
-                        <View className="flex-row items-center justify-between mb-2">
-                          <Text className="text-base text-[#111827] font-medium">
-                            {app.label}
-                          </Text>
-                          <View className="flex-row items-center">
-                            <Text className="text-sm text-[#64748B] mr-2">
-                              {formatDuration(app.seconds)}
-                            </Text>
-                            <Text className="text-sm font-semibold text-[#111827]">
-                              {app.percentage}%
-                            </Text>
-                          </View>
-                        </View>
-                        {/* Progress bar */}
-                        <View className="h-2 bg-[#E5E7EB] rounded-full overflow-hidden">
-                          <View
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${app.percentage}%`,
-                              backgroundColor: intentStyle.accent,
-                            }}
-                          />
-                        </View>
-                      </View>
+                  {/* Split Button */}
+                  <Pressable
+                    onPress={handleSplitPress}
+                    disabled={!canSplit || isSplitting}
+                    className={`flex-row items-center px-4 py-3 ${
+                      !canSplit || isSplitting ? "opacity-50" : ""
+                    }`}
+                  >
+                    <View
+                      className="w-8 h-8 rounded-full items-center justify-center"
+                      style={{ backgroundColor: "#FEF3C7" }}
+                    >
+                      <Icon icon={Scissors} size={16} color="#D97706" />
                     </View>
-                  ))}
+                    <View className="ml-3 flex-1">
+                      <Text className="text-base text-[#111827] font-medium">
+                        {isSplitting ? "Splitting..." : "Split Session"}
+                      </Text>
+                      <Text className="text-sm text-[#64748B]">
+                        {canSplit
+                          ? "Divide this session into two blocks"
+                          : "Session too short to split"}
+                      </Text>
+                    </View>
+                  </Pressable>
                 </View>
               </View>
-            )}
 
-            {/* Location Confidence Section */}
-            <View className="mt-6 px-4">
-              <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
-                LOCATION CONFIDENCE
-              </Text>
-              <View className="overflow-hidden rounded-xl bg-white">
-                <View className="px-4 py-3 flex-row items-center">
-                  <Icon
-                    icon={confidence >= 0.5 ? CheckCircle : AlertCircle}
-                    size={18}
-                    color={confidenceInfo.color}
-                  />
-                  <View className="ml-3 flex-1">
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-base text-[#111827]">
-                        {confidenceInfo.label} Confidence
-                      </Text>
+              {/* Intent Classification Section */}
+              <View className="mt-6 px-4">
+                <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
+                  CLASSIFICATION
+                </Text>
+                <View className="overflow-hidden rounded-xl bg-white">
+                  {/* Intent Badge */}
+                  <View className="px-4 py-3 flex-row items-center">
+                    <View
+                      className="px-3 py-1.5 rounded-full"
+                      style={{ backgroundColor: intentStyle.bg }}
+                    >
                       <Text
                         className="text-sm font-semibold"
-                        style={{ color: confidenceInfo.color }}
+                        style={{ color: intentStyle.text }}
                       >
-                        {Math.round(confidence * 100)}%
+                        {intentLabel}
                       </Text>
                     </View>
-                    {/* Confidence bar */}
-                    <View className="mt-2 h-2 bg-[#E5E7EB] rounded-full overflow-hidden">
-                      <View
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${Math.round(confidence * 100)}%`,
-                          backgroundColor: confidenceInfo.color,
-                        }}
-                      />
+                  </View>
+
+                  {/* Reasoning */}
+                  <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
+                  <View className="px-4 py-3 flex-row">
+                    <Icon icon={Info} size={16} color={COLORS.textSubtle} />
+                    <Text className="ml-2 flex-1 text-sm text-[#64748B] leading-5">
+                      {reasoning}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* App Usage Breakdown Section */}
+              {appBreakdown.length > 0 && (
+                <View className="mt-6 px-4">
+                  <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
+                    APP USAGE
+                  </Text>
+                  <View className="overflow-hidden rounded-xl bg-white">
+                    {appBreakdown.map((app, index) => (
+                      <View key={app.label}>
+                        {index > 0 && <View className="h-[1px] ml-4 bg-[#E5E5EA]" />}
+                        <View className="px-4 py-3">
+                          <View className="flex-row items-center justify-between mb-2">
+                            <Text className="text-base text-[#111827] font-medium">
+                              {app.label}
+                            </Text>
+                            <View className="flex-row items-center">
+                              <Text className="text-sm text-[#64748B] mr-2">
+                                {formatDuration(app.seconds)}
+                              </Text>
+                              <Text className="text-sm font-semibold text-[#111827]">
+                                {app.percentage}%
+                              </Text>
+                            </View>
+                          </View>
+                          {/* Progress bar */}
+                          <View className="h-2 bg-[#E5E7EB] rounded-full overflow-hidden">
+                            <View
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${app.percentage}%`,
+                                backgroundColor: intentStyle.accent,
+                              }}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Location Confidence Section */}
+              <View className="mt-6 px-4">
+                <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
+                  LOCATION CONFIDENCE
+                </Text>
+                <View className="overflow-hidden rounded-xl bg-white">
+                  <View className="px-4 py-3 flex-row items-center">
+                    <Icon
+                      icon={confidence >= 0.5 ? CheckCircle : AlertCircle}
+                      size={18}
+                      color={confidenceInfo.color}
+                    />
+                    <View className="ml-3 flex-1">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-base text-[#111827]">
+                          {confidenceInfo.label} Confidence
+                        </Text>
+                        <Text
+                          className="text-sm font-semibold"
+                          style={{ color: confidenceInfo.color }}
+                        >
+                          {Math.round(confidence * 100)}%
+                        </Text>
+                      </View>
+                      {/* Confidence bar */}
+                      <View className="mt-2 h-2 bg-[#E5E7EB] rounded-full overflow-hidden">
+                        <View
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.round(confidence * 100)}%`,
+                            backgroundColor: confidenceInfo.color,
+                          }}
+                        />
+                      </View>
                     </View>
                   </View>
                 </View>
               </View>
-            </View>
 
-            {/* During Sleep Warning */}
-            {meta?.during_scheduled_sleep && (
-              <View className="mt-6 mx-4 overflow-hidden rounded-xl bg-[#FFF7ED] border border-[#FDBA74]">
-                <View className="px-4 py-3 flex-row items-center">
-                  <Icon icon={AlertCircle} size={18} color="#F97316" />
-                  <Text className="ml-2 flex-1 text-sm text-[#C2410C]">
-                    This session occurred during your scheduled sleep time
-                  </Text>
+              {/* During Sleep Warning */}
+              {meta?.during_scheduled_sleep && (
+                <View className="mt-6 mx-4 overflow-hidden rounded-xl bg-[#FFF7ED] border border-[#FDBA74]">
+                  <View className="px-4 py-3 flex-row items-center">
+                    <Icon icon={AlertCircle} size={18} color="#F97316" />
+                    <Text className="ml-2 flex-1 text-sm text-[#C2410C]">
+                      This session occurred during your scheduled sleep time
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            )}
-          </ScrollView>
-        </Animated.View>
-      </View>
-    </Modal>
+              )}
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Time Picker for Split Point */}
+      {sessionTimes && (
+        <TimePickerModal
+          visible={showSplitPicker}
+          label="Choose Split Time"
+          initialTime={sessionTimes.midpoint}
+          onConfirm={handleSplitTimeConfirm}
+          onClose={() => setShowSplitPicker(false)}
+        />
+      )}
+    </>
   );
 };
