@@ -3,5 +3,40 @@
 # Branch: ralph/location-informed-actual-ingestion
 # Started: 2026-01-29
 
+## Codebase Patterns
+- Migration naming: `YYYYMMDD_description_of_migration.sql` in `supabase/migrations/`
+- All tm schema tables use `user_id uuid NOT NULL references auth.users(id) on delete cascade`
+- Idempotent SQL: Use `create table if not exists`, `create index if not exists`
+- RLS policy creation uses DO blocks with pg_policies checks for idempotency
+- Triggers for updated_at use `public.update_updated_at_column()` function
+- Grants: `grant usage on schema tm to authenticated; grant select, insert, update, delete on tm.table to authenticated;`
+- TypeScript pre-existing errors in codebase - not blocking for SQL migrations
+
+---
+
+## 2026-01-29 - US-002
+- **What was implemented:** Added locked_at column to tm.events table
+- **Files changed:**
+  - `supabase/migrations/20260129_add_locked_at_to_tm_events.sql` (new)
+- **Learnings for future iterations:**
+  - ALTER TABLE with ADD COLUMN IF NOT EXISTS is idempotent
+  - Partial indexes use WHERE clause to only index non-null rows - more efficient for sparse columns
+  - Column comments are useful for documentation in database schema
+  - Existing typecheck errors in mobile app don't affect SQL migrations
+
+---
+
+## 2026-01-29 - US-001
+- **What was implemented:** Created tm.actual_ingestion_window_locks table migration
+- **Files changed:**
+  - `supabase/migrations/20260129_create_tm_actual_ingestion_window_locks.sql` (new)
+- **Learnings for future iterations:**
+  - Migration follows established pattern with idempotent DDL
+  - Table uses same FK pattern to auth.users(id) as other tm tables
+  - UNIQUE constraint on (user_id, window_start) ensures idempotent lock operations
+  - Index on (user_id, window_start) for fast lock lookups
+  - RLS policies for select/insert allow users to manage their own locks
+  - Pre-existing typecheck errors in mobile app are unrelated to migrations
+
 ---
 
