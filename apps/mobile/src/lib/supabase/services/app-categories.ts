@@ -376,3 +376,201 @@ export function getAppsByCategory(category: AppCategory): string[] {
     .filter(([, cat]) => cat === category)
     .map(([app]) => app);
 }
+
+// ============================================================================
+// Intent Classification
+// ============================================================================
+
+/**
+ * Intent types for session classification.
+ */
+export type Intent =
+  | "work"
+  | "leisure"
+  | "distracted_work"
+  | "offline"
+  | "mixed";
+
+/**
+ * Summary of app usage within a session.
+ */
+export interface AppSummary {
+  /** App identifier (bundle id or app name) */
+  appId: string;
+  /** Duration in seconds */
+  seconds: number;
+  /** Optional: pre-computed category (if not provided, will be computed) */
+  category?: AppCategory;
+}
+
+/**
+ * Result of intent classification with reasoning.
+ */
+export interface IntentClassificationResult {
+  /** The classified intent */
+  intent: Intent;
+  /** Percentage breakdown by category */
+  breakdown: {
+    work: number;
+    social: number;
+    entertainment: number;
+    comms: number;
+    utility: number;
+    ignore: number;
+  };
+  /** Total seconds of screen-time (excluding ignored apps) */
+  totalSeconds: number;
+  /** Human-readable reasoning for the classification */
+  reasoning: string;
+}
+
+/**
+ * Threshold constants for intent classification.
+ */
+export const INTENT_THRESHOLDS = {
+  /** Minimum work percentage to classify as "work" */
+  WORK_HIGH: 0.6,
+  /** Minimum work percentage for "distracted_work" */
+  WORK_MEDIUM_MIN: 0.4,
+  /** Maximum work percentage for "distracted_work" (exclusive) */
+  WORK_MEDIUM_MAX: 0.6,
+  /** Minimum leisure (social + entertainment) percentage to classify as "leisure" */
+  LEISURE_HIGH: 0.6,
+  /** Minimum social percentage (with work 40-60%) to classify as "distracted_work" */
+  SOCIAL_DISTRACTION: 0.25,
+} as const;
+
+/**
+ * Classify the intent of a session based on app usage.
+ *
+ * Classification rules:
+ * 1. If Work >= 60% → 'work'
+ * 2. If Social + Entertainment >= 60% → 'leisure'
+ * 3. If Work 40-60% AND Social >= 25% → 'distracted_work'
+ * 4. If no screen-time → 'offline'
+ * 5. Otherwise → 'mixed'
+ *
+ * @param screenTimeSummary - Array of app usage summaries
+ * @param userOverrides - Optional user category overrides
+ * @returns Intent classification with reasoning
+ *
+ * @example
+ * ```ts
+ * const summary = [
+ *   { appId: "slack", seconds: 1800 },      // 30 min work
+ *   { appId: "google docs", seconds: 1200 }, // 20 min work
+ *   { appId: "instagram", seconds: 600 },    // 10 min social
+ * ];
+ * const result = classifyIntent(summary);
+ * // result.intent === "work" (83% work)
+ * ```
+ */
+export function classifyIntent(
+  screenTimeSummary: AppSummary[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): IntentClassificationResult {
+  // Initialize breakdown
+  const breakdown = {
+    work: 0,
+    social: 0,
+    entertainment: 0,
+    comms: 0,
+    utility: 0,
+    ignore: 0,
+  };
+
+  // Calculate total time per category
+  for (const app of screenTimeSummary) {
+    const category = app.category ?? getAppCategory(app.appId, userOverrides);
+    breakdown[category] += app.seconds;
+  }
+
+  // Calculate total screen-time (excluding ignored apps)
+  const totalSeconds =
+    breakdown.work +
+    breakdown.social +
+    breakdown.entertainment +
+    breakdown.comms +
+    breakdown.utility;
+
+  // Handle no screen-time case
+  if (totalSeconds === 0) {
+    return {
+      intent: "offline",
+      breakdown,
+      totalSeconds: 0,
+      reasoning: "No screen-time recorded",
+    };
+  }
+
+  // Calculate percentages (excluding ignored apps)
+  const workPercent = breakdown.work / totalSeconds;
+  const socialPercent = breakdown.social / totalSeconds;
+  const entertainmentPercent = breakdown.entertainment / totalSeconds;
+  const leisurePercent = socialPercent + entertainmentPercent;
+
+  // Apply classification rules in priority order
+
+  // Rule 1: Work >= 60% → work
+  if (workPercent >= INTENT_THRESHOLDS.WORK_HIGH) {
+    const workPct = Math.round(workPercent * 100);
+    return {
+      intent: "work",
+      breakdown,
+      totalSeconds,
+      reasoning: `Classified as Work: ${workPct}% work apps`,
+    };
+  }
+
+  // Rule 2: Social + Entertainment >= 60% → leisure
+  if (leisurePercent >= INTENT_THRESHOLDS.LEISURE_HIGH) {
+    const leisurePct = Math.round(leisurePercent * 100);
+    const socialPct = Math.round(socialPercent * 100);
+    const entPct = Math.round(entertainmentPercent * 100);
+    return {
+      intent: "leisure",
+      breakdown,
+      totalSeconds,
+      reasoning: `Classified as Leisure: ${leisurePct}% leisure (${socialPct}% social, ${entPct}% entertainment)`,
+    };
+  }
+
+  // Rule 3: Work 40-60% AND Social >= 25% → distracted_work
+  if (
+    workPercent >= INTENT_THRESHOLDS.WORK_MEDIUM_MIN &&
+    workPercent < INTENT_THRESHOLDS.WORK_MEDIUM_MAX &&
+    socialPercent >= INTENT_THRESHOLDS.SOCIAL_DISTRACTION
+  ) {
+    const workPct = Math.round(workPercent * 100);
+    const socialPct = Math.round(socialPercent * 100);
+    return {
+      intent: "distracted_work",
+      breakdown,
+      totalSeconds,
+      reasoning: `Classified as Distracted Work: ${workPct}% work with ${socialPct}% social media`,
+    };
+  }
+
+  // Rule 5: Otherwise → mixed
+  const workPct = Math.round(workPercent * 100);
+  const leisurePct = Math.round(leisurePercent * 100);
+  const commsPct = Math.round((breakdown.comms / totalSeconds) * 100);
+  const utilityPct = Math.round((breakdown.utility / totalSeconds) * 100);
+  return {
+    intent: "mixed",
+    breakdown,
+    totalSeconds,
+    reasoning: `Classified as Mixed: ${workPct}% work, ${leisurePct}% leisure, ${commsPct}% comms, ${utilityPct}% utility`,
+  };
+}
+
+/**
+ * Simple version of classifyIntent that just returns the intent string.
+ * Useful when you don't need the full breakdown and reasoning.
+ */
+export function classifyIntentSimple(
+  screenTimeSummary: AppSummary[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): Intent {
+  return classifyIntent(screenTimeSummary, userOverrides).intent;
+}

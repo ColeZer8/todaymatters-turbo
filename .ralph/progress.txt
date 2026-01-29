@@ -15,6 +15,112 @@
 - Error handling: Use `handleSupabaseError()` wrapper and graceful fallbacks for missing tables
 - Location segments: Use haversineDistance for coordinate matching, LocationSegment interface for event creation
 - Commute detection: Movement = 2+ unique places OR >200m total distance; 10min threshold for separate segment
+- Reconciliation priority: protected (4) > screen_time (3) > location (2) > unknown (1); use computeReconciliationOpsWithPriority for final reconciliation
+
+---
+
+## 2026-01-29 - US-013
+- **What was implemented:** Intent classification algorithm for session categorization
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/app-categories.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/app-categories.test.ts` (new)
+- **Types created:**
+  - `Intent` - Type for session intents: "work" | "leisure" | "distracted_work" | "offline" | "mixed"
+  - `AppSummary` - Interface for app usage summary with appId, seconds, and optional category
+  - `IntentClassificationResult` - Interface with intent, breakdown by category, totalSeconds, and reasoning
+- **Constants created:**
+  - `INTENT_THRESHOLDS` - Configuration for classification thresholds:
+    - WORK_HIGH: 0.6 (60% for work classification)
+    - WORK_MEDIUM_MIN: 0.4 (40% min for distracted_work)
+    - WORK_MEDIUM_MAX: 0.6 (60% max for distracted_work)
+    - LEISURE_HIGH: 0.6 (60% for leisure classification)
+    - SOCIAL_DISTRACTION: 0.25 (25% social threshold for distracted_work)
+- **Functions created:**
+  - `classifyIntent(screenTimeSummary, userOverrides)` - Main function that classifies session intent based on app usage percentages
+  - `classifyIntentSimple(screenTimeSummary, userOverrides)` - Simplified version that returns just the intent string
+- **Key design decisions:**
+  - Classification rules applied in priority order: work → leisure → distracted_work → mixed
+  - Ignored apps (system processes) excluded from percentage calculations
+  - Pre-computed categories supported via optional category field in AppSummary
+  - Returns full breakdown with human-readable reasoning for UI display
+  - Integrates with existing getAppCategory for category lookup
+- **Tests added:** 31 tests in app-categories.test.ts covering:
+  - getAppCategory: 6 tests (existing behavior verification)
+  - isWorkCategory/isLeisureCategory: 4 tests
+  - classifyIntent: 17 tests for all classification rules
+  - classifyIntentSimple: 2 tests
+  - INTENT_THRESHOLDS: 1 test
+- **Learnings for future iterations:**
+  - Use classifyIntent for sessionization pass (US-014) to determine session intent
+  - IntentClassificationResult.reasoning can be shown to users to explain why their session was classified a certain way
+  - INTENT_THRESHOLDS are exported for potential UI configuration in the future
+
+---
+
+## 2026-01-29 - US-012
+- **What was implemented:** Default app category mapping for intent classification
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/app-categories.ts` (new)
+- **Types created:**
+  - `AppCategory` - Type for app categories: "work" | "social" | "entertainment" | "comms" | "utility" | "ignore"
+  - `UserAppCategoryOverride` - Interface for user overrides with category and optional confidence
+  - `UserAppCategoryOverrides` - Map type for user overrides keyed by normalized app name
+- **Constants created:**
+  - `DEFAULT_APP_CATEGORIES` - Record<string, AppCategory> mapping 100+ apps to their categories:
+    - Work (50+ apps): Slack, Gmail, Zoom, VS Code, Figma, Notion, Linear, Teams, GitHub, etc.
+    - Social (20+ apps): Instagram, TikTok, X/Twitter, Reddit, Facebook, LinkedIn, Discord, etc.
+    - Entertainment (40+ apps): YouTube, Netflix, Spotify, Apple Music, Podcasts, Disney+, games, etc.
+    - Comms (20+ apps): Messages, WhatsApp, Telegram, Signal, Phone, FaceTime, etc.
+    - Utility (40+ apps): Maps, Photos, Weather, Calculator, Settings, browsers, etc.
+    - Ignore (15+ apps): System processes like SpringBoard, Siri, Control Center
+- **Functions created:**
+  - `getAppCategory(appId, userOverrides)` - Main function that returns app category, checking user overrides first, then defaults with exact + partial matching
+  - `isWorkCategory(category)` - Check if category is "work"
+  - `isLeisureCategory(category)` - Check if category is "social" or "entertainment"
+  - `getAppsByCategory(category)` - Get all default apps in a specific category
+- **Key design decisions:**
+  - Reuses `normalizeAppKey` from existing app-classification.ts for consistency
+  - User overrides have highest priority
+  - Partial matching as fallback (app name contains or is contained by known key)
+  - Unknown apps default to "utility" (better for intent calculation than "unknown")
+  - Separate from EventCategory - this is specifically for intent classification
+- **Learnings for future iterations:**
+  - Use getAppCategory for intent classification (US-013)
+  - User override integration works with existing user-app-categories.ts service
+  - Categories align with those in tm.user_app_categories table CHECK constraint
+
+---
+
+## 2026-01-29 - US-011
+- **What was implemented:** Priority-based reconciliation for location and screen-time events
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.test.ts` (modified)
+- **Functions created:**
+  - `getEventPriority(event)` - Get the priority level of a reconciliation event (protected > screen_time > location > unknown)
+  - `getDerivedEventPriority(event)` - Get the priority level of a derived event
+  - `trimEventToGaps(event, higherPriorityEvents)` - Trim a derived event to fill only gaps not covered by higher-priority events
+  - `computeReconciliationOpsWithPriority(existingEvents, screenTimeEvents, locationEvents, previousWindowEvents)` - Main reconciliation function with priority handling
+- **Types created:**
+  - `EventPriority` - Type for priority levels: "protected" | "screen_time" | "location" | "unknown"
+- **Key design decisions:**
+  - Priority order: protected (4) > screen_time (3) > location (2) > unknown (1)
+  - Screen-time events processed first, then location events fill remaining gaps
+  - Location blocks are trimmed/split around screen-time events
+  - Commute blocks are NOT trimmed - they act as containers that can have screen-time inside
+  - Protected events block both screen-time and location from inserting
+  - Short location gaps (< 1 min) are filtered out to avoid fragmentation
+  - Extension logic still works for both screen-time and location events from previous windows
+- **Tests added:** 25 new tests (73 total in file)
+  - getEventPriority: 6 tests for all priority levels
+  - getDerivedEventPriority: 2 tests
+  - trimEventToGaps: 6 tests for gap detection and event splitting
+  - computeReconciliationOpsWithPriority: 11 tests covering priority scenarios, extensions, and edge cases
+- **Learnings for future iterations:**
+  - computeReconciliationOpsWithPriority is the main entry point for reconciliation in the actual ingestion pipeline
+  - Screen-time events are passed separately from location events for clear priority handling
+  - Commute events need special handling - they should coexist with screen-time events (not be trimmed)
+  - The trimEventToGaps function handles splitting events into multiple parts around higher-priority events
 
 ---
 

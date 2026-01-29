@@ -171,8 +171,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to event-reconciliation.ts: getEventPriority, getDerivedEventPriority, trimEventToGaps, computeReconciliationOpsWithPriority. Priority order: protected (4) > screen_time (3) > location (2) > unknown (1). Commute blocks not trimmed (kept alongside screen-time). Location blocks trimmed to fill gaps. 25 new unit tests (73 total)."
     },
     {
       "id": "US-012",
@@ -189,8 +189,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/mobile/src/lib/supabase/services/app-categories.ts. Exports: AppCategory type (work/social/entertainment/comms/utility/ignore), DEFAULT_APP_CATEGORIES (100+ apps mapped), getAppCategory(appId, userOverrides) with exact + partial matching and user override priority. Helpers: isWorkCategory, isLeisureCategory, getAppsByCategory."
     },
     {
       "id": "US-013",
@@ -207,8 +207,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Function added to apps/mobile/src/lib/supabase/services/app-categories.ts. Exports: Intent type, AppSummary interface, IntentClassificationResult interface, INTENT_THRESHOLDS constants, classifyIntent(screenTimeSummary, userOverrides), classifyIntentSimple(screenTimeSummary, userOverrides). 31 unit tests in app-categories.test.ts covering all classification rules."
     },
     {
       "id": "US-014",
