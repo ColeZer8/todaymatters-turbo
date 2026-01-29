@@ -8,7 +8,11 @@ Started: Thu Jan 29 00:10:10 CST 2026
 - The tm schema is used for all Today Matters-specific tables
 - Always use `public.update_updated_at_column()` trigger function for `updated_at` columns
 - Grant `select, insert, update` (no delete unless needed) to `authenticated` role
-- Pre-existing TypeScript type errors exist in the codebase - migration-only changes don't affect them
+- Pre-existing TypeScript type errors exist in the codebase - they are unrelated to new code
+- Supabase services: use `supabase.schema("tm")` with eslint-disable for tm schema access
+- Evidence data types are in `evidence-data.ts`: ScreenTimeSessionRow, LocationHourlyRow, etc.
+- Screen time sessions have `app_id` (package name), `display_name`, `started_at`, `ended_at` (ISO), `duration_seconds`
+- Use `getReadableAppName` from `@/lib/app-names` to convert package names to human-readable labels
 
 ---
 
@@ -22,4 +26,19 @@ Started: Thu Jan 29 00:10:10 CST 2026
   - Existing tables like `tm.screen_time_app_sessions` already have the evidence data needed for ingestion
   - The `public.update_updated_at_column()` function already exists and is used across all tm tables for updated_at triggers
   - RLS policy naming convention: `"tm.<table_name>: <action> own"` (e.g., `"tm.actual_ingestion_checkpoints: select own"`)
+---
+
+## 2026-01-29 - US-002
+- **What was implemented:** Created the ActualIngestionService with core logic for incremental ingestion
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (new)
+  - `apps/mobile/src/lib/supabase/services/index.ts` (added export)
+- **Learnings for future iterations:**
+  - Supabase services follow pattern: use `supabase.schema("tm")` for tm schema access with `// eslint-disable-next-line @typescript-eslint/no-explicit-any` cast
+  - `ScreenTimeSessionRow` type from `evidence-data.ts` has `started_at`, `ended_at` as ISO strings, `app_id`, `display_name`, `duration_seconds`
+  - Window alignment: Use `Math.floor(minutes / 30) * 30` to snap to 30-minute boundaries
+  - Deterministic source_id format: `ingestion:{windowStartMs}:{appId}:{sessionStartMs}` for idempotent upserts
+  - Merge adjacent segments when same app and gap < 60 seconds
+  - Use `getReadableAppName` from `@/lib/app-names` to convert package names to human-readable names
+  - Parse database timestamps carefully: append "Z" if no timezone suffix to treat as UTC
 ---

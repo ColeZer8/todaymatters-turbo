@@ -53,7 +53,7 @@
         "TypeScript types are properly defined"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-003",
