@@ -37,12 +37,43 @@ export interface LocationSegment {
   confidence: number;
   /** Metadata for event creation */
   meta: {
-    kind: "location_block";
+    kind: "location_block" | "commute";
     place_id: string | null;
     place_label: string | null;
     sample_count: number;
     confidence: number;
+    /** Intent type for commute segments */
+    intent?: "commute";
+    /** Travel annotation for short commutes < 10 min (added to next segment) */
+    travel_annotation?: string;
+    /** Destination place for commute segments */
+    destination_place_id?: string | null;
+    destination_place_label?: string | null;
+    /** Distance traveled in meters (approximate) */
+    distance_m?: number;
   };
+}
+
+/**
+ * Result of commute detection for a segment of movement.
+ */
+export interface CommuteDetectionResult {
+  /** Whether a commute was detected */
+  isCommute: boolean;
+  /** Duration of the commute in milliseconds */
+  durationMs: number;
+  /** Whether this is a "long" commute (>= 10 min) that should be its own segment */
+  isLongCommute: boolean;
+  /** Travel annotation for short commutes (< 10 min) */
+  travelAnnotation: string | null;
+  /** Start place (where the commute started from) */
+  fromPlace: { id: string | null; label: string | null } | null;
+  /** End place (where the commute ended at) */
+  toPlace: { id: string | null; label: string | null } | null;
+  /** Approximate distance traveled in meters */
+  distanceM: number;
+  /** Samples that are part of the commute */
+  samples: EvidenceLocationSample[];
 }
 
 /**
@@ -63,6 +94,15 @@ const DEFAULT_PLACE_RADIUS_M = 150;
 
 /** Minimum percentage of samples that must match a place for the segment to be labeled as that place */
 const PLACE_MATCH_THRESHOLD = 0.7;
+
+/** Minimum commute duration in milliseconds to create a separate commute segment */
+const MIN_COMMUTE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Maximum movement speed in m/s to be considered stationary (walking pace ~1.4 m/s) */
+const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
+
+/** Minimum total distance traveled to consider as movement */
+const MIN_COMMUTE_DISTANCE_M = 200; // 200 meters
 
 // ============================================================================
 // Helpers
@@ -483,9 +523,11 @@ export function segmentsToDerivedEvents(
 }> {
   return segments.map((segment) => ({
     sourceId: segment.sourceId,
-    title: segment.placeLabel
-      ? `At ${segment.placeLabel}`
-      : "Unknown Location",
+    title: segment.meta.kind === "commute"
+      ? "Commute"
+      : segment.placeLabel
+        ? `At ${segment.placeLabel}`
+        : "Unknown Location",
     scheduledStart: segment.start,
     scheduledEnd: segment.end,
     meta: {
@@ -496,4 +538,413 @@ export function segmentsToDerivedEvents(
       longitude: segment.longitude,
     },
   }));
+}
+
+// ============================================================================
+// Commute Detection
+// ============================================================================
+
+/**
+ * Calculate the total path distance traveled across a series of samples.
+ * Uses haversine distance for each consecutive pair.
+ */
+function calculatePathDistance(samples: EvidenceLocationSample[]): number {
+  if (samples.length < 2) return 0;
+
+  let totalDistance = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const prev = samples[i - 1];
+    const curr = samples[i];
+
+    if (
+      prev.latitude !== null &&
+      prev.longitude !== null &&
+      curr.latitude !== null &&
+      curr.longitude !== null
+    ) {
+      totalDistance += haversineDistance(
+        prev.latitude,
+        prev.longitude,
+        curr.latitude,
+        curr.longitude,
+      );
+    }
+  }
+
+  return totalDistance;
+}
+
+/**
+ * Check if a group of samples represents movement (unstable position).
+ * Movement is detected when samples don't match any single place consistently.
+ */
+function isMovementGroup(
+  samples: EvidenceLocationSample[],
+  userPlaces: UserPlaceRow[],
+): boolean {
+  if (samples.length < 2) return false;
+
+  // Count how many unique places are matched
+  const matchedPlaces = new Set<string | null>();
+  for (const sample of samples) {
+    if (sample.latitude === null || sample.longitude === null) continue;
+    const match = findMatchingPlace(sample.latitude, sample.longitude, userPlaces);
+    matchedPlaces.add(match?.id ?? null);
+  }
+
+  // If we see 2+ different places (including null for unknown), it's movement
+  // OR if no samples match any place (all null), check distance traveled
+  if (matchedPlaces.size >= 2) return true;
+
+  // Also check if the total distance suggests movement
+  const distance = calculatePathDistance(samples);
+  return distance >= MIN_COMMUTE_DISTANCE_M;
+}
+
+/**
+ * Find the first and last stable place in a sequence of samples.
+ * Used to determine commute origin and destination.
+ */
+function findBoundaryPlaces(
+  samples: EvidenceLocationSample[],
+  userPlaces: UserPlaceRow[],
+): {
+  fromPlace: { id: string | null; label: string | null } | null;
+  toPlace: { id: string | null; label: string | null } | null;
+} {
+  if (samples.length === 0) {
+    return { fromPlace: null, toPlace: null };
+  }
+
+  // Find first matched place
+  let fromPlace: { id: string | null; label: string | null } | null = null;
+  for (const sample of samples) {
+    if (sample.latitude === null || sample.longitude === null) continue;
+    const match = findMatchingPlace(sample.latitude, sample.longitude, userPlaces);
+    if (match) {
+      fromPlace = { id: match.id, label: match.label };
+      break;
+    }
+  }
+
+  // Find last matched place (iterate backwards)
+  let toPlace: { id: string | null; label: string | null } | null = null;
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const sample = samples[i];
+    if (sample.latitude === null || sample.longitude === null) continue;
+    const match = findMatchingPlace(sample.latitude, sample.longitude, userPlaces);
+    if (match) {
+      toPlace = { id: match.id, label: match.label };
+      break;
+    }
+  }
+
+  return { fromPlace, toPlace };
+}
+
+/**
+ * Detect commute in a sequence of location samples.
+ *
+ * A commute is detected when:
+ * - The location is changing between places without a stable position
+ * - There is significant distance traveled (> 200m)
+ *
+ * Returns:
+ * - If commute >= 10 minutes: isLongCommute = true (create separate segment)
+ * - If commute < 10 minutes: travelAnnotation is set (add to next segment)
+ *
+ * @param locationSamples - Raw GPS samples to analyze
+ * @param startTime - Start of the analysis window
+ * @param endTime - End of the analysis window
+ * @param userPlaces - User's labeled places for matching
+ * @returns Commute detection result
+ */
+export function detectCommute(
+  locationSamples: EvidenceLocationSample[],
+  startTime: Date,
+  endTime: Date,
+  userPlaces: UserPlaceRow[],
+): CommuteDetectionResult {
+  // Filter samples to the specified time window
+  const windowSamples = locationSamples.filter((s) => {
+    const timestamp = new Date(s.recorded_at).getTime();
+    return timestamp >= startTime.getTime() && timestamp <= endTime.getTime();
+  });
+
+  // Sort by timestamp
+  const sortedSamples = [...windowSamples].sort(
+    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
+  );
+
+  if (sortedSamples.length < 2) {
+    return {
+      isCommute: false,
+      durationMs: 0,
+      isLongCommute: false,
+      travelAnnotation: null,
+      fromPlace: null,
+      toPlace: null,
+      distanceM: 0,
+      samples: [],
+    };
+  }
+
+  // Check if this group represents movement
+  if (!isMovementGroup(sortedSamples, userPlaces)) {
+    return {
+      isCommute: false,
+      durationMs: 0,
+      isLongCommute: false,
+      travelAnnotation: null,
+      fromPlace: null,
+      toPlace: null,
+      distanceM: 0,
+      samples: [],
+    };
+  }
+
+  // Calculate duration
+  const firstTimestamp = new Date(sortedSamples[0].recorded_at).getTime();
+  const lastTimestamp = new Date(sortedSamples[sortedSamples.length - 1].recorded_at).getTime();
+  const durationMs = lastTimestamp - firstTimestamp;
+
+  // Calculate distance
+  const distanceM = calculatePathDistance(sortedSamples);
+
+  // Find boundary places
+  const { fromPlace, toPlace } = findBoundaryPlaces(sortedSamples, userPlaces);
+
+  // Determine if this is a long commute (>= 10 min)
+  const isLongCommute = durationMs >= MIN_COMMUTE_DURATION_MS;
+
+  // Generate travel annotation for short commutes
+  let travelAnnotation: string | null = null;
+  if (!isLongCommute && durationMs > 0) {
+    const durationMinutes = Math.round(durationMs / (60 * 1000));
+    const destinationLabel = toPlace?.label ?? "destination";
+    travelAnnotation = `Traveled ${durationMinutes} min to ${destinationLabel}`;
+  }
+
+  return {
+    isCommute: true,
+    durationMs,
+    isLongCommute,
+    travelAnnotation,
+    fromPlace,
+    toPlace,
+    distanceM,
+    samples: sortedSamples,
+  };
+}
+
+/**
+ * Generate a commute source ID.
+ * Format: commute:{windowStartMs}:{segmentStartMs}
+ */
+function generateCommuteSourceId(windowStart: Date, segmentStart: Date): string {
+  const windowStartMs = windowStart.getTime();
+  const segmentStartMs = segmentStart.getTime();
+  return `commute:${windowStartMs}:${segmentStartMs}`;
+}
+
+/**
+ * Create a commute segment from a commute detection result.
+ */
+export function createCommuteSegment(
+  commute: CommuteDetectionResult,
+  windowStart: Date,
+): LocationSegment | null {
+  if (!commute.isCommute || !commute.isLongCommute || commute.samples.length === 0) {
+    return null;
+  }
+
+  const firstSample = commute.samples[0];
+  const lastSample = commute.samples[commute.samples.length - 1];
+  const segmentStart = new Date(firstSample.recorded_at);
+  const segmentEnd = new Date(lastSample.recorded_at);
+
+  // Calculate centroid
+  const centroid = calculateCentroid(commute.samples);
+
+  // Generate source ID
+  const sourceId = generateCommuteSourceId(windowStart, segmentStart);
+
+  // Calculate confidence based on sample count
+  const confidence = calculateSegmentConfidence(commute.samples.length, 1.0);
+
+  return {
+    sourceId,
+    start: segmentStart,
+    end: segmentEnd,
+    placeId: null, // Commutes don't have a single place
+    placeLabel: null,
+    latitude: centroid.latitude,
+    longitude: centroid.longitude,
+    sampleCount: commute.samples.length,
+    confidence,
+    meta: {
+      kind: "commute",
+      place_id: null,
+      place_label: null,
+      sample_count: commute.samples.length,
+      confidence,
+      intent: "commute",
+      destination_place_id: commute.toPlace?.id ?? null,
+      destination_place_label: commute.toPlace?.label ?? null,
+      distance_m: commute.distanceM,
+    },
+  };
+}
+
+/**
+ * Apply travel annotations from short commutes to the following segment.
+ * Modifies the segments array in place.
+ */
+export function applyTravelAnnotations(
+  segments: LocationSegment[],
+  commutes: CommuteDetectionResult[],
+): void {
+  // For each short commute (not long enough for its own segment),
+  // find the next segment and add the travel annotation
+  for (const commute of commutes) {
+    if (!commute.isCommute || commute.isLongCommute || !commute.travelAnnotation) {
+      continue;
+    }
+
+    if (commute.samples.length === 0) continue;
+
+    // Find the end time of this commute
+    const commuteEndTime = new Date(
+      commute.samples[commute.samples.length - 1].recorded_at,
+    ).getTime();
+
+    // Find the next segment that starts after or near this commute end
+    let bestMatch: LocationSegment | null = null;
+    let bestGap = Infinity;
+
+    for (const segment of segments) {
+      const segmentStart = segment.start.getTime();
+      const gap = segmentStart - commuteEndTime;
+
+      // Look for segments starting after the commute (within 5 min)
+      if (gap >= 0 && gap < 5 * 60 * 1000 && gap < bestGap) {
+        bestMatch = segment;
+        bestGap = gap;
+      }
+    }
+
+    // Apply the annotation
+    if (bestMatch) {
+      bestMatch.meta.travel_annotation = commute.travelAnnotation;
+    }
+  }
+}
+
+/**
+ * Process location segments with commute detection.
+ * This function:
+ * 1. Identifies gaps between location segments that might be commutes
+ * 2. Detects commutes in those gaps
+ * 3. For long commutes (>= 10 min), creates commute segments
+ * 4. For short commutes (< 10 min), adds travel annotation to next segment
+ *
+ * @param segments - Location segments from generateLocationSegments
+ * @param locationSamples - All location samples for commute analysis
+ * @param userPlaces - User's labeled places
+ * @param windowStart - Window start time for source ID generation
+ * @returns Array of segments including any detected commute segments
+ */
+export function processSegmentsWithCommutes(
+  segments: LocationSegment[],
+  locationSamples: EvidenceLocationSample[],
+  userPlaces: UserPlaceRow[],
+  windowStart: Date,
+): LocationSegment[] {
+  if (segments.length === 0) {
+    // If no segments but we have samples, check if entire window is a commute
+    if (locationSamples.length >= 2) {
+      const sortedSamples = [...locationSamples].sort(
+        (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
+      );
+      const startTime = new Date(sortedSamples[0].recorded_at);
+      const endTime = new Date(sortedSamples[sortedSamples.length - 1].recorded_at);
+
+      const commute = detectCommute(locationSamples, startTime, endTime, userPlaces);
+      if (commute.isCommute && commute.isLongCommute) {
+        const commuteSegment = createCommuteSegment(commute, windowStart);
+        if (commuteSegment) {
+          return [commuteSegment];
+        }
+      }
+    }
+    return segments;
+  }
+
+  // Sort segments by start time
+  const sortedSegments = [...segments].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  const result: LocationSegment[] = [];
+  const detectedCommutes: CommuteDetectionResult[] = [];
+
+  // Check for commutes in gaps between segments
+  for (let i = 0; i < sortedSegments.length; i++) {
+    const currentSegment = sortedSegments[i];
+
+    if (i === 0) {
+      // Check for commute before first segment
+      const firstSampleTime = locationSamples.length > 0
+        ? Math.min(...locationSamples.map((s) => new Date(s.recorded_at).getTime()))
+        : currentSegment.start.getTime();
+
+      if (currentSegment.start.getTime() - firstSampleTime > 60 * 1000) {
+        const commute = detectCommute(
+          locationSamples,
+          new Date(firstSampleTime),
+          currentSegment.start,
+          userPlaces,
+        );
+        if (commute.isCommute) {
+          detectedCommutes.push(commute);
+          if (commute.isLongCommute) {
+            const commuteSegment = createCommuteSegment(commute, windowStart);
+            if (commuteSegment) {
+              result.push(commuteSegment);
+            }
+          }
+        }
+      }
+    }
+
+    result.push(currentSegment);
+
+    // Check for commute after this segment (gap to next segment)
+    if (i < sortedSegments.length - 1) {
+      const nextSegment = sortedSegments[i + 1];
+      const gapStart = currentSegment.end;
+      const gapEnd = nextSegment.start;
+      const gapMs = gapEnd.getTime() - gapStart.getTime();
+
+      // Only check for commute if there's a meaningful gap (> 1 min)
+      if (gapMs > 60 * 1000) {
+        const commute = detectCommute(locationSamples, gapStart, gapEnd, userPlaces);
+        if (commute.isCommute) {
+          detectedCommutes.push(commute);
+          if (commute.isLongCommute) {
+            const commuteSegment = createCommuteSegment(commute, windowStart);
+            if (commuteSegment) {
+              result.push(commuteSegment);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Apply travel annotations from short commutes
+  applyTravelAnnotations(result, detectedCommutes);
+
+  // Sort final result by start time
+  return result.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
