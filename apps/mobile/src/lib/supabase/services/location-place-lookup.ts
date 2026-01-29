@@ -76,6 +76,15 @@ export async function ensureGooglePlaceNamesForDay(params: {
   locationHourly: LocationHourlyLikeRow[];
 }): Promise<boolean> {
   const { userId, ymd, locationHourly } = params;
+  
+  // Early return if no userId (user not authenticated)
+  if (!userId) {
+    if (__DEV__) {
+      console.log("[LocationPlaceLookup] Skipping - no userId (user not authenticated)");
+    }
+    return false;
+  }
+  
   const dayKey = `${userId}|${ymd}`;
   if (ensuredDayKey.has(dayKey)) return false;
 
@@ -141,6 +150,7 @@ export async function ensureGooglePlaceNamesForDay(params: {
         message: error instanceof Error ? error.message : String(error),
       });
     }
+    // Don't mark as ensured on error - allow retry on next call
     return false;
   }
 }

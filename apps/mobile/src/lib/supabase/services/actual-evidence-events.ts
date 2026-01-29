@@ -2,6 +2,11 @@ import { supabase } from "../client";
 import { handleSupabaseError } from "../utils/error-handler";
 import type { Json } from "../database.types";
 import type { ActualBlock } from "@/lib/calendar/verification-engine";
+import {
+  formatLocalIso,
+  ymdMinutesToLocalDate,
+  ymdToLocalDayStart,
+} from "@/lib/calendar/local-time";
 
 interface ActualEvidenceEventRow {
   id: string;
@@ -15,21 +20,9 @@ function tmSchema(): any {
   return supabase.schema("tm");
 }
 
-function ymdToDate(ymd: string): Date {
-  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return new Date();
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  return new Date(year, month, day, 0, 0, 0, 0);
-}
-
 function minutesToIso(ymd: string, minutes: number): string {
-  const base = ymdToDate(ymd);
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  base.setHours(hours, mins, 0, 0);
-  return base.toISOString();
+  const date = ymdMinutesToLocalDate(ymd, minutes);
+  return formatLocalIso(date);
 }
 
 function buildSourceId(ymd: string, block: ActualBlock): string {
@@ -52,11 +45,11 @@ export async function syncActualEvidenceBlocks({
   blocks: ActualBlock[];
 }): Promise<void> {
   if (blocks.length === 0) return;
-  const dayStart = ymdToDate(ymd);
+  const dayStart = ymdToLocalDayStart(ymd);
   const dayEnd = new Date(dayStart);
   dayEnd.setDate(dayEnd.getDate() + 1);
-  const startIso = dayStart.toISOString();
-  const endIso = dayEnd.toISOString();
+  const startIso = formatLocalIso(dayStart);
+  const endIso = formatLocalIso(dayEnd);
 
   try {
     const { data, error } = await tmSchema()

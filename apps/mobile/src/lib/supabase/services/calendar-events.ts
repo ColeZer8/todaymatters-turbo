@@ -6,6 +6,7 @@ import type {
   EventCategory,
   ScheduledEvent,
 } from "@/stores";
+import { formatLocalIso, ymdToLocalDayStart } from "@/lib/calendar/local-time";
 
 const PLANNED_EVENT_TYPE = "calendar_planned";
 const ACTUAL_EVENT_TYPE = "calendar_actual";
@@ -22,16 +23,6 @@ function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
   const rec = value as Record<string, Json>;
   const category = rec.category;
   return typeof category === "string" && category.length > 0;
-}
-
-function ymdToLocalDayStart(ymd: string): Date {
-  // ymd: YYYY-MM-DD
-  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return new Date();
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  return new Date(year, month, day, 0, 0, 0, 0);
 }
 
 function addDays(date: Date, days: number): Date {
@@ -51,16 +42,18 @@ function ymdToDate(ymd: string): Date {
 
 /**
  * Parse a database timestamp string to a Date object.
- * Ensures the timestamp is interpreted as UTC if no timezone info is present.
- * This prevents issues where timestamps without 'Z' suffix would be interpreted as local time.
+ * Ensures timestamps without timezone are treated as local time.
  */
 function parseDbTimestamp(timestamp: string): Date {
+  const normalized = timestamp.includes(" ")
+    ? timestamp.replace(" ", "T")
+    : timestamp;
   // If the timestamp already has timezone info (Z or offset), parse normally
-  if (/Z$|[+-]\d{2}:\d{2}$/.test(timestamp)) {
-    return new Date(timestamp);
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(normalized)) {
+    return new Date(normalized);
   }
-  // Otherwise, treat it as UTC by appending 'Z'
-  return new Date(timestamp + "Z");
+  // Otherwise, treat it as local time
+  return new Date(normalized);
 }
 
 function isoToLocalYmd(iso: string): string {
@@ -454,8 +447,8 @@ export async function fetchPlannedCalendarEventsForDay(
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
-    const startIso = dayStart.toISOString();
-    const endIso = dayEnd.toISOString();
+    const startIso = formatLocalIso(dayStart);
+    const endIso = formatLocalIso(dayEnd);
 
     const [tmResult, publicResult, tmGoogleMeetingsResult] = await Promise.all([
       supabase
@@ -556,8 +549,8 @@ export async function fetchActualCalendarEventsForDay(
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
-    const startIso = dayStart.toISOString();
-    const endIso = dayEnd.toISOString();
+    const startIso = formatLocalIso(dayStart);
+    const endIso = formatLocalIso(dayEnd);
 
     const [tmResult, publicResult] = await Promise.all([
       supabase
@@ -634,8 +627,8 @@ export async function fetchActualCalendarEventsForRange(
   try {
     const rangeStart = ymdToLocalDayStart(startYmd);
     const rangeEnd = addDays(ymdToLocalDayStart(endYmd), 1);
-    const startIso = rangeStart.toISOString();
-    const endIso = rangeEnd.toISOString();
+    const startIso = formatLocalIso(rangeStart);
+    const endIso = formatLocalIso(rangeEnd);
 
     const { data, error } = await supabase
       .schema("tm")
@@ -651,10 +644,17 @@ export async function fetchActualCalendarEventsForRange(
 
     return (data ?? [])
       .map((row) => {
-        const mapped = rowToScheduledEvent(row as TmEventRow);
-        if (!mapped || !row.scheduled_start) return null;
+        if (!row.scheduled_start) return null;
         const ymd = isoToLocalYmd(row.scheduled_start);
         if (!ymd) return null;
+        const dayStart = ymdToLocalDayStart(ymd);
+        const dayEnd = addDays(dayStart, 1);
+        const mapped = rowToScheduledEventForDay(
+          row as TmEventRow,
+          dayStart,
+          dayEnd,
+        );
+        if (!mapped) return null;
         return { ymd, event: mapped };
       })
       .filter((item): item is ActualPatternSourceEvent => Boolean(item));
@@ -825,8 +825,8 @@ export async function ensurePlannedSleepScheduleForDay(
       end.setDate(end.getDate() + 1);
     }
 
-    const desiredStartIso = start.toISOString();
-    const desiredEndIso = end.toISOString();
+    const desiredStartIso = formatLocalIso(start);
+    const desiredEndIso = formatLocalIso(end);
 
     const targetMeta: PlannedCalendarMeta = {
       category: "sleep",
@@ -1059,8 +1059,8 @@ export async function syncDerivedActualEvents(
   try {
     const dayStart = ymdToLocalDayStart(ymd);
     const dayEnd = addDays(dayStart, 1);
-    const startIso = dayStart.toISOString();
-    const endIso = dayEnd.toISOString();
+    const startIso = formatLocalIso(dayStart);
+    const endIso = formatLocalIso(dayEnd);
 
     // Fetch existing actual events for this day to check for duplicates
     const { data: existing, error: fetchError } = await supabase
@@ -1181,8 +1181,8 @@ export async function syncDerivedActualEvents(
         type: ACTUAL_EVENT_TYPE,
         title: event.title,
         description: event.description ?? "",
-        scheduled_start: startDate.toISOString(),
-        scheduled_end: endDate.toISOString(),
+        scheduled_start: formatLocalIso(startDate),
+        scheduled_end: formatLocalIso(endDate),
         meta: meta as unknown as Json,
       });
     }

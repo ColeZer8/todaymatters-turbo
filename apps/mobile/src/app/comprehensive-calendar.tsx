@@ -52,6 +52,7 @@ import { fetchUserAppCategoryOverrides } from "@/lib/supabase/services/user-app-
 import { fetchUserDataPreferences } from "@/lib/supabase/services/user-preferences";
 import { DEFAULT_USER_PREFERENCES } from "@/stores/user-preferences-store";
 import { supabase } from "@/lib/supabase/client";
+import { formatLocalIso } from "@/lib/calendar/local-time";
 
 export default function ComprehensiveCalendarScreen() {
   const router = useRouter();
@@ -806,8 +807,8 @@ export default function ComprehensiveCalendarScreen() {
               : undefined,
           description: existing.description,
           location,
-          scheduledStartIso: newStart.toISOString(),
-          scheduledEndIso: newEnd.toISOString(),
+          scheduledStartIso: formatLocalIso(newStart),
+          scheduledEndIso: formatLocalIso(newEnd),
           meta: {
             ...existing.meta,
             category: updates.category ?? existing.category,
@@ -883,8 +884,8 @@ export default function ComprehensiveCalendarScreen() {
               : undefined,
           description: existing.description,
           location,
-          scheduledStartIso: newStart.toISOString(),
-          scheduledEndIso: newEnd.toISOString(),
+          scheduledStartIso: formatLocalIso(newStart),
+          scheduledEndIso: formatLocalIso(newEnd),
           meta: {
             ...existing.meta,
             category: updates.category ?? existing.category,

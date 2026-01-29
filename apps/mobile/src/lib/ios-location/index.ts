@@ -41,6 +41,10 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
   background: "granted" | "denied" | "undetermined";
   canAskAgainForeground: boolean;
   canAskAgainBackground: boolean;
+  /** iOS doesn't require notification permission for background location */
+  notifications: "granted" | "denied" | "undetermined";
+  canAskAgainNotifications: boolean;
+  notificationsRequired: boolean;
   hasNativeModule: boolean;
 }> {
   if (Platform.OS !== "ios") {
@@ -49,6 +53,9 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      notifications: "denied",
+      canAskAgainNotifications: false,
+      notificationsRequired: false,
       hasNativeModule: false,
     };
   }
@@ -60,6 +67,10 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      // iOS doesn't require notification permission for location foreground service
+      notifications: "granted",
+      canAskAgainNotifications: true,
+      notificationsRequired: false,
       hasNativeModule: false,
     };
   }
@@ -88,6 +99,11 @@ export async function requestIosLocationPermissionsAsync(): Promise<{
       typeof background.canAskAgain === "boolean"
         ? background.canAskAgain
         : true,
+    // iOS doesn't require notification permission for background location
+    // (unlike Android 13+ which requires it for foreground services)
+    notifications: "granted",
+    canAskAgainNotifications: true,
+    notificationsRequired: false,
     hasNativeModule: true,
   };
 }

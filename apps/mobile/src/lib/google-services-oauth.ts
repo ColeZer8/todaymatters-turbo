@@ -205,15 +205,36 @@ export const startGoogleServicesOAuth = async (
 
   const oauthUrl = buildGoogleServicesOAuthUrl(services);
 
+  if (__DEV__) {
+    console.log("🔗 Google Services OAuth start request:", {
+      url: oauthUrl,
+      baseUrl: resolveOAuthBaseUrl(),
+      services,
+    });
+  }
+
   // Backend requires Authorization header; we must request the redirect URL first.
-  const response = await fetch(oauthUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    // In RN this may still follow redirects; we handle both cases.
-    redirect: "manual",
-  } as RequestInit);
+  let response: Response;
+  try {
+    response = await fetch(oauthUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      // In RN this may still follow redirects; we handle both cases.
+      redirect: "manual",
+    } as RequestInit);
+  } catch (error) {
+    if (__DEV__) {
+      console.error("🔗 Google Services OAuth fetch failed:", {
+        error,
+        url: oauthUrl,
+        baseUrl: resolveOAuthBaseUrl(),
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
 
   if (__DEV__) {
     const location =
@@ -378,18 +399,23 @@ export const fetchConnectedGoogleServices = async (
   }
 
   const baseUrl = resolveOAuthBaseUrl();
+  const statusUrl = `${trimTrailingSlash(baseUrl)}/oauth2/google/status`;
+
+  if (__DEV__) {
+    console.log("🔗 Fetching connected Google services:", {
+      url: statusUrl,
+      baseUrl,
+    });
+  }
 
   try {
-    const response = await fetch(
-      `${trimTrailingSlash(baseUrl)}/oauth2/google/status`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+    const response = await fetch(statusUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+    });
 
     if (response.status === 401 || response.status === 403) {
       throw new Error(
@@ -421,7 +447,12 @@ export const fetchConnectedGoogleServices = async (
     }
     // If the endpoint doesn't exist yet, return empty array (graceful degradation)
     if (__DEV__) {
-      console.warn("⚠️ Could not fetch connected Google services:", error);
+      console.error("⚠️ Could not fetch connected Google services:", {
+        error,
+        url: statusUrl,
+        baseUrl,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
     return [];
   }

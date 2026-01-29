@@ -13,6 +13,10 @@ import {
   DERIVED_ACTUAL_PREFIX,
   DERIVED_EVIDENCE_PREFIX,
 } from "@/lib/calendar/actual-display-events";
+import {
+  formatLocalIso,
+  ymdMinutesToLocalDate,
+} from "@/lib/calendar/local-time";
 import { applyUserAppCategoryFeedback } from "@/lib/supabase/services/user-app-categories";
 import { fetchActivityCategories } from "@/lib/supabase/services/activity-categories";
 import type { ActivityCategory } from "@/lib/supabase/services/activity-categories";
@@ -82,19 +86,6 @@ const formatMinutesToTime = (totalMinutes: number): string => {
   const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
   return `${hours12}:${mins.toString().padStart(2, "0")} ${period}`;
-};
-
-const ymdMinutesToDate = (ymd: string, minutes: number): Date => {
-  const [year, month, day] = ymd.split("-").map(Number);
-  return new Date(
-    year,
-    (month ?? 1) - 1,
-    day ?? 1,
-    Math.floor(minutes / 60),
-    minutes % 60,
-    0,
-    0,
-  );
 };
 
 const formatDateLabel = (ymd: string): string => {
@@ -571,13 +562,13 @@ export default function ActualAdjustScreen() {
       setIsSavingPlace(true);
       try {
         // Compute ISO time range for this event to fetch location samples
-        const start = ymdMinutesToDate(selectedDateYmd, startMinutes);
+        const start = ymdMinutesToLocalDate(selectedDateYmd, startMinutes);
         const end = new Date(start);
         end.setMinutes(end.getMinutes() + durationMinutes);
         const samples = await fetchLocationSamplesForRange(
           userId,
-          start.toISOString(),
-          end.toISOString(),
+          formatLocalIso(start),
+          formatLocalIso(end),
           200,
         );
         if (samples.length === 0) {
@@ -794,7 +785,7 @@ export default function ActualAdjustScreen() {
   const handleSave = useCallback(async () => {
     setIsSaving(true);
     try {
-      const start = ymdMinutesToDate(selectedDateYmd, startMinutes);
+      const start = ymdMinutesToLocalDate(selectedDateYmd, startMinutes);
       const end = new Date(start);
       end.setMinutes(end.getMinutes() + durationMinutes);
 
@@ -890,8 +881,8 @@ export default function ActualAdjustScreen() {
           title,
           description,
           location: event.location,
-          scheduledStartIso: start.toISOString(),
-          scheduledEndIso: end.toISOString(),
+          scheduledStartIso: formatLocalIso(start),
+          scheduledEndIso: formatLocalIso(end),
           meta,
         });
         addActualEvent(created, selectedDateYmd);
@@ -900,8 +891,8 @@ export default function ActualAdjustScreen() {
           title,
           description,
           location: event.location,
-          scheduledStartIso: start.toISOString(),
-          scheduledEndIso: end.toISOString(),
+          scheduledStartIso: formatLocalIso(start),
+          scheduledEndIso: formatLocalIso(end),
           meta,
         });
         updateActualEvent(updated, selectedDateYmd);
@@ -1037,7 +1028,7 @@ export default function ActualAdjustScreen() {
       <TimePickerModal
         visible={isSleepStartPickerOpen}
         label="Sleep start"
-        initialTime={ymdMinutesToDate(selectedDateYmd, startMinutes)}
+        initialTime={ymdMinutesToLocalDate(selectedDateYmd, startMinutes)}
         onConfirm={(time) => {
           const nextMinutes = time.getHours() * 60 + time.getMinutes();
           const currentEnd = startMinutes + durationMinutes;
@@ -1056,7 +1047,7 @@ export default function ActualAdjustScreen() {
       <TimePickerModal
         visible={isSleepEndPickerOpen}
         label="Sleep end"
-        initialTime={ymdMinutesToDate(
+        initialTime={ymdMinutesToLocalDate(
           selectedDateYmd,
           startMinutes + durationMinutes,
         )}

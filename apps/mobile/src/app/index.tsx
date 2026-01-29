@@ -1,14 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { InteractionManager } from "react-native";
-import { useRouter, useRootNavigationState } from "expo-router";
+import {
+  useRouter,
+  useRootNavigationState,
+  useLocalSearchParams,
+} from "expo-router";
 import { SignInTemplate } from "@/components/templates";
 import { performOAuth } from "@/lib/supabase";
 import { useAuthStore, useOnboardingStore } from "@/stores";
 
 type OAuthProvider = "apple" | "google";
+const AUTH_NEXT_ROUTES = new Set(["connect-google-services"]);
+
+const resolveNextRoute = (
+  nextParam: string | string[] | undefined,
+): string | null => {
+  if (!nextParam || Array.isArray(nextParam)) return null;
+  const normalized = nextParam.replace(/^\/+/, "");
+  if (!AUTH_NEXT_ROUTES.has(normalized)) return null;
+  return `/${normalized}`;
+};
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const navigationState = useRootNavigationState();
   const isNavigationReady =
     navigationState?.key != null && navigationState?.routes?.length > 0;
@@ -20,6 +35,7 @@ export default function SignInScreen() {
   const hasCompletedOnboarding = useOnboardingStore(
     (s) => s.hasCompletedOnboarding,
   );
+  const nextRoute = useMemo(() => resolveNextRoute(next), [next]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,6 +52,10 @@ export default function SignInScreen() {
     }
     if (isAuthenticated && !isAuthBypassed) {
       InteractionManager.runAfterInteractions(() => {
+        if (nextRoute) {
+          router.replace(nextRoute);
+          return;
+        }
         router.replace(hasCompletedOnboarding ? "/home" : "/explainer-video");
       });
     }
@@ -45,6 +65,7 @@ export default function SignInScreen() {
     isAuthBypassed,
     onboardingHydrated,
     hasCompletedOnboarding,
+    nextRoute,
     router,
   ]);
 

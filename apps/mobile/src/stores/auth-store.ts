@@ -51,10 +51,31 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   signIn: async (email: string, password: string) => {
     set({ isLoading: true });
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      let data;
+      let error;
+      try {
+        const result = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        data = result.data;
+        error = result.error;
+      } catch (networkError) {
+        // Handle network errors gracefully
+        if (__DEV__) {
+          console.error("❌ Network error during sign-in:", {
+            error: networkError,
+            message: networkError instanceof Error ? networkError.message : String(networkError),
+          });
+        }
+        const errorMsg = networkError instanceof Error ? networkError.message : String(networkError);
+        if (errorMsg.toLowerCase().includes("network")) {
+          throw new Error(
+            "Unable to connect. Please check your internet connection and try again.",
+          );
+        }
+        throw networkError;
+      }
 
       if (error) {
         // Improve error messages for common cases
@@ -184,9 +205,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         return undefined;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      let session;
+      try {
+        const result = await supabase.auth.getSession();
+        session = result.data?.session ?? null;
+      } catch (error) {
+        if (__DEV__) {
+          console.error("❌ Network error in auth.getSession() during init:", {
+            error,
+            message: error instanceof Error ? error.message : String(error),
+            supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+          });
+        }
+        // Continue with null session - user will need to sign in
+        session = null;
+      }
 
       // Only update store if Supabase has a session. We don't clear on init; we clear on SIGNED_OUT.
       if (session) {

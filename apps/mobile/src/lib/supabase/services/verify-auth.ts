@@ -11,10 +11,23 @@ export async function verifyAuthAndData() {
   console.log("🔍 Verifying Auth and Data...\n");
 
   // Check session
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  let session;
+  let sessionError;
+  try {
+    const result = await supabase.auth.getSession();
+    session = result.data?.session ?? null;
+    sessionError = result.error ?? null;
+  } catch (error) {
+    if (__DEV__) {
+      console.error("❌ Network error in getSession():", {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      });
+    }
+    sessionError = error;
+    session = null;
+  }
 
   if (sessionError) {
     console.error("❌ Session Error:", sessionError);
@@ -48,22 +61,59 @@ export async function verifyAuthAndData() {
   console.log("   Email Confirmed:", user.email_confirmed_at ? "Yes" : "No\n");
 
   // Extra verification: validate token against Supabase (network)
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) {
-    console.log("⚠️ getUser() error:", userError);
+  // Only call getUser() if we have a valid session with an access token
+  if (!session.access_token) {
+    console.log("⚠️ No access token in session, skipping getUser()");
   } else {
-    console.log("✅ getUser() ok:", { userId: userData.user?.id ?? null });
+    let userData;
+    let userError;
+    try {
+      const result = await supabase.auth.getUser();
+      userData = result.data;
+      userError = result.error;
+    } catch (error) {
+      if (__DEV__) {
+        console.error("❌ Network error in getUser():", {
+          error,
+          message: error instanceof Error ? error.message : String(error),
+          supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+        });
+      }
+      userError = error;
+    }
+    
+    if (userError) {
+      console.log("⚠️ getUser() error:", userError);
+    } else {
+      console.log("✅ getUser() ok:", { userId: userData?.user?.id ?? null });
+    }
   }
 
   // Check profile record
   console.log("📋 Checking Profile Record...");
   try {
-    const { data: profile, error: profileError } = await supabase
-      .schema("tm")
-      .from("profiles")
-      .select("user_id, created_at")
-      .eq("user_id", user.id)
-      .single();
+    let profile;
+    let profileError;
+    try {
+      const result = await supabase
+        .schema("tm")
+        .from("profiles")
+        .select("user_id, created_at")
+        .eq("user_id", user.id)
+        .single();
+      profile = result.data;
+      profileError = result.error;
+    } catch (error) {
+      if (__DEV__) {
+        console.error("❌ Network error querying profiles:", {
+          error,
+          message: error instanceof Error ? error.message : String(error),
+          supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+        });
+      }
+      profileError = error;
+      profile = null;
+    }
 
     if (profileError) {
       const error = handleSupabaseError(profileError);
@@ -83,12 +133,28 @@ export async function verifyAuthAndData() {
   // Check profile values
   console.log("\n📊 Checking Profile Values...");
   try {
-    const { data: valuesData, error: valuesError } = await supabase
-      .schema("tm")
-      .from("profile_values")
-      .select("id, value_label, rank, created_at")
-      .eq("user_id", user.id)
-      .order("rank", { ascending: true });
+    let valuesData;
+    let valuesError;
+    try {
+      const result = await supabase
+        .schema("tm")
+        .from("profile_values")
+        .select("id, value_label, rank, created_at")
+        .eq("user_id", user.id)
+        .order("rank", { ascending: true });
+      valuesData = result.data;
+      valuesError = result.error;
+    } catch (error) {
+      if (__DEV__) {
+        console.error("❌ Network error querying profile_values:", {
+          error,
+          message: error instanceof Error ? error.message : String(error),
+          supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+        });
+      }
+      valuesError = error;
+      valuesData = null;
+    }
 
     if (valuesError) {
       // If table isn't created yet (or schema cache not refreshed), don't spam errors in dev.

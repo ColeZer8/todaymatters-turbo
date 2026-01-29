@@ -184,8 +184,6 @@ export const EventEditorModal = ({
   // Combine goals and initiatives
   const allGoals = [...goals, ...initiatives].filter(Boolean);
 
-  if (!event) return null;
-
   const coreValueOptions = coreValues
     .filter((value) => value.isSelected)
     .map((value) => ({ id: value.id, label: value.label }));
@@ -230,6 +228,8 @@ export const EventEditorModal = ({
     );
     setSelectedSubcategoryId(match?.id ?? null);
   }, [coreSubcategoryOptions, event, visible]);
+
+  if (!event) return null;
 
   const handleSave = () => {
     const startMins = startTime.getHours() * 60 + startTime.getMinutes();

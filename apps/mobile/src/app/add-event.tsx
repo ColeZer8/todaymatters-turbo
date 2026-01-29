@@ -26,6 +26,7 @@ import {
   fetchBig3ForDate,
   upsertBig3ForDate,
 } from "@/lib/supabase/services/daily-big3";
+import { formatLocalIso } from "@/lib/calendar/local-time";
 
 export default function AddEventScreen() {
   const router = useRouter();
@@ -208,8 +209,8 @@ export default function AddEventScreen() {
           if (__DEV__) {
             console.log(`[AddEvent] Creating ${column} event:`, {
               title,
-              start: start.toISOString(),
-              end: end.toISOString(),
+              start: formatLocalIso(start),
+              end: formatLocalIso(end),
               category: draft.category,
               isBig3: draft.isBig3,
               big3Priority: draft.big3Priority,
@@ -231,8 +232,8 @@ export default function AddEventScreen() {
                   title,
                   description: "",
                   location: draft.location,
-                  scheduledStartIso: start.toISOString(),
-                  scheduledEndIso: end.toISOString(),
+                  scheduledStartIso: formatLocalIso(start),
+                  scheduledEndIso: formatLocalIso(end),
                   meta: {
                     category: draft.category,
                     isBig3: draft.isBig3,
@@ -246,8 +247,8 @@ export default function AddEventScreen() {
                   title,
                   description: "",
                   location: draft.location,
-                  scheduledStartIso: start.toISOString(),
-                  scheduledEndIso: end.toISOString(),
+                  scheduledStartIso: formatLocalIso(start),
+                  scheduledEndIso: formatLocalIso(end),
                   meta: {
                     category: draft.category,
                     isBig3: draft.isBig3,

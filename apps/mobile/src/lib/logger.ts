@@ -119,9 +119,27 @@ export function installGlobalErrorHandlers(): void {
   const g = globalThis as unknown as {
     __tmLoggerInstalled?: boolean;
     ErrorUtils?: any;
+    fetch?: typeof fetch;
   };
   if (g.__tmLoggerInstalled) return;
   g.__tmLoggerInstalled = true;
+
+  // Intercept fetch to log all network requests in dev mode
+  if (__DEV__ && typeof g.fetch === "function") {
+    const originalFetch = g.fetch;
+    g.fetch = async function (...args: Parameters<typeof fetch>) {
+      const url = typeof args[0] === "string" ? args[0] : (args[0] as Request)?.url ?? "unknown";
+      console.log("🌐 [fetch] Request:", url);
+      try {
+        const response = await originalFetch.apply(this, args);
+        console.log("🌐 [fetch] Response:", url, response.status);
+        return response;
+      } catch (error) {
+        console.error("🌐 [fetch] Error:", url, error);
+        throw error;
+      }
+    };
+  }
 
   // React Native global exception handler
   const ErrorUtils = g.ErrorUtils as

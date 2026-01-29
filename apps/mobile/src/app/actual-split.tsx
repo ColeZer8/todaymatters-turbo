@@ -7,6 +7,10 @@ import {
   DERIVED_EVIDENCE_PREFIX,
 } from "@/lib/calendar/actual-display-events";
 import {
+  formatLocalIso,
+  ymdMinutesToLocalDate,
+} from "@/lib/calendar/local-time";
+import {
   useEventsStore,
   type CalendarEventMeta,
   type EventCategory,
@@ -20,19 +24,6 @@ const formatMinutesToTime = (totalMinutes: number): string => {
   const period = hours24 >= 12 ? "PM" : "AM";
   const hours12 = hours24 % 12 || 12;
   return `${hours12}:${mins.toString().padStart(2, "0")} ${period}`;
-};
-
-const ymdMinutesToDate = (ymd: string, minutes: number): Date => {
-  const [year, month, day] = ymd.split("-").map(Number);
-  return new Date(
-    year,
-    (month ?? 1) - 1,
-    day ?? 1,
-    Math.floor(minutes / 60),
-    minutes % 60,
-    0,
-    0,
-  );
 };
 
 export default function ActualSplitScreen() {
@@ -105,7 +96,10 @@ export default function ActualSplitScreen() {
       if (splitMinutes <= 0 || splitMinutes >= normalizedDuration) return;
       setIsSaving(true);
       try {
-        const start = ymdMinutesToDate(selectedDateYmd, normalizedStartMinutes);
+        const start = ymdMinutesToLocalDate(
+          selectedDateYmd,
+          normalizedStartMinutes,
+        );
         const split = new Date(start);
         split.setMinutes(split.getMinutes() + splitMinutes);
         const end = new Date(start);
@@ -128,8 +122,8 @@ export default function ActualSplitScreen() {
           title: event.title,
           description: event.description,
           location: event.location,
-          scheduledStartIso: start.toISOString(),
-          scheduledEndIso: split.toISOString(),
+          scheduledStartIso: formatLocalIso(start),
+          scheduledEndIso: formatLocalIso(split),
           meta: baseMeta,
         });
         addActualEvent(createdFirst, selectedDateYmd);
@@ -138,8 +132,8 @@ export default function ActualSplitScreen() {
           title: event.title,
           description: event.description,
           location: event.location,
-          scheduledStartIso: split.toISOString(),
-          scheduledEndIso: end.toISOString(),
+          scheduledStartIso: formatLocalIso(split),
+          scheduledEndIso: formatLocalIso(end),
           meta: baseMeta,
         });
         addActualEvent(createdSecond, selectedDateYmd);

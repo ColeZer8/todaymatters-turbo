@@ -41,6 +41,10 @@ import { fetchAllEvidenceForDay } from "@/lib/supabase/services/evidence-data";
 import { buildReviewTimeBlocks } from "@/lib/calendar/review-time-blocks";
 import { requestReviewTimeSuggestion } from "@/lib/supabase/services/review-time-suggestions";
 import {
+  formatLocalIso,
+  ymdMinutesToLocalDate,
+} from "@/lib/calendar/local-time";
+import {
   fetchLocationSamplesForRange,
   upsertUserPlaceFromSamples,
 } from "@/lib/supabase/services/user-places";
@@ -465,13 +469,16 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
       if (!block || !userId) return;
       setPlaceSavingBlockId(blockId);
       try {
-        const start = ymdMinutesToDate(selectedDateYmd, block.startMinutes);
+        const start = ymdMinutesToLocalDate(
+          selectedDateYmd,
+          block.startMinutes,
+        );
         const end = new Date(start);
         end.setMinutes(end.getMinutes() + block.duration);
         const samples = await fetchLocationSamplesForRange(
           userId,
-          start.toISOString(),
-          end.toISOString(),
+          formatLocalIso(start),
+          formatLocalIso(end),
         );
         if (samples.length === 0) return;
         await upsertUserPlaceFromSamples({
@@ -516,7 +523,10 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
         const description = note || ai?.description || block.description || "";
         const location = block.location ?? undefined;
 
-        const start = ymdMinutesToDate(selectedDateYmd, block.startMinutes);
+        const start = ymdMinutesToLocalDate(
+          selectedDateYmd,
+          block.startMinutes,
+        );
         const end = new Date(start);
         end.setMinutes(end.getMinutes() + block.duration);
 
@@ -534,8 +544,8 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
             title,
             description,
             location,
-            scheduledStartIso: start.toISOString(),
-            scheduledEndIso: end.toISOString(),
+            scheduledStartIso: formatLocalIso(start),
+            scheduledEndIso: formatLocalIso(end),
             meta,
           });
           updateActualEvent(updated, selectedDateYmd);
@@ -544,8 +554,8 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
             title,
             description,
             location,
-            scheduledStartIso: start.toISOString(),
-            scheduledEndIso: end.toISOString(),
+            scheduledStartIso: formatLocalIso(start),
+            scheduledEndIso: formatLocalIso(end),
             meta,
           });
           addActualEvent(created, selectedDateYmd);
@@ -954,13 +964,3 @@ export const ReviewTimeTemplate = ({ focusBlock }: ReviewTimeTemplateProps) => {
   );
 };
 
-function ymdMinutesToDate(ymd: string, startMinutes: number): Date {
-  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return new Date();
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const date = new Date(year, month, day, 0, 0, 0, 0);
-  date.setMinutes(startMinutes);
-  return date;
-}

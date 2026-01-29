@@ -425,6 +425,21 @@ export async function fetchAllEvidenceForDay(
   userId: string,
   ymd: string,
 ): Promise<EvidenceBundle> {
+  // Early return if no userId (user not authenticated)
+  if (!userId) {
+    if (__DEV__) {
+      console.warn("[Evidence] fetchAllEvidenceForDay called without userId");
+    }
+    return {
+      locationHourly: [],
+      locationSamples: [],
+      screenTimeSessions: [],
+      healthWorkouts: [],
+      healthDaily: [],
+      userPlaces: [],
+    };
+  }
+
   // Fetch location hourly first (so we can opportunistically resolve place names).
   const initialLocationHourly = await fetchLocationHourlyForDay(userId, ymd);
 

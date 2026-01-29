@@ -57,7 +57,10 @@ export default function ConnectGoogleServicesScreen() {
     if (!isNavigationReady) return;
     if (!isAuthenticated) {
       InteractionManager.runAfterInteractions(() => {
-        router.replace("/");
+        router.replace({
+          pathname: "/",
+          params: { next: "connect-google-services" },
+        });
       });
     }
   }, [isAuthenticated, isNavigationReady, router]);

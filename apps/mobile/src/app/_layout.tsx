@@ -83,10 +83,25 @@ export default function Layout() {
     logger.debug("Onboarding sync: waiting for authentication...");
 
     // Verify auth and data after initialization (for debugging)
+    // Only run if authenticated to avoid unnecessary network requests
     setTimeout(() => {
-      verifyAuthAndData().catch((error) =>
-        logger.error("verifyAuthAndData failed", error),
-      );
+      const isAuth = useAuthStore.getState().isAuthenticated;
+      if (isAuth) {
+        verifyAuthAndData().catch((error) => {
+          logger.error("verifyAuthAndData failed", error);
+          if (__DEV__) {
+            console.error("❌ verifyAuthAndData error details:", {
+              error,
+              message: error instanceof Error ? error.message : String(error),
+              supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
+            });
+          }
+        });
+      } else {
+        if (__DEV__) {
+          console.log("⏭️ Skipping verifyAuthAndData - user not authenticated");
+        }
+      }
     }, 2000); // Wait 2 seconds for auth to initialize
 
     return () => {
