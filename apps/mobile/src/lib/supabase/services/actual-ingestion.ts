@@ -524,3 +524,386 @@ export function shouldRunIngestion(
   // Same window or earlier - don't run
   return null;
 }
+
+// ============================================================================
+// Reconciliation Types and Functions (US-003)
+// ============================================================================
+
+/**
+ * Represents an existing Actual event from the database.
+ */
+export interface ExistingActualEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  scheduledStart: Date;
+  scheduledEnd: Date;
+  meta: {
+    source?: string;
+    kind?: string;
+    category?: string;
+    source_id?: string;
+    [key: string]: Json | undefined;
+  } | null;
+}
+
+/**
+ * Sources that indicate user-edited events which should never be overwritten.
+ */
+const PROTECTED_SOURCES = ["user", "actual_adjust"];
+
+/**
+ * Sources that indicate derived/evidence events which can be replaced.
+ */
+const REPLACEABLE_SOURCES = ["derived", "evidence", "ingestion", "system"];
+
+/**
+ * Result of the reconciliation process.
+ */
+export interface ReconciliationResult {
+  success: boolean;
+  eventsInserted: number;
+  eventsUpdated: number;
+  eventsDeleted: number;
+  error?: string;
+}
+
+/**
+ * An operation to perform during reconciliation.
+ */
+type ReconciliationOp =
+  | { type: "insert"; segment: EvidenceSegment }
+  | { type: "update"; eventId: string; segment: EvidenceSegment }
+  | { type: "delete"; eventId: string };
+
+/**
+ * Check if an event is protected (user-edited) and should not be overwritten.
+ */
+function isProtectedEvent(event: ExistingActualEvent): boolean {
+  const source = event.meta?.source;
+  return typeof source === "string" && PROTECTED_SOURCES.includes(source);
+}
+
+/**
+ * Check if an event can be replaced by evidence segments.
+ */
+function isReplaceableEvent(event: ExistingActualEvent): boolean {
+  const source = event.meta?.source;
+  // If no source, consider it replaceable (old events)
+  if (!source) return true;
+  // If it's a protected source, don't replace
+  if (PROTECTED_SOURCES.includes(source)) return false;
+  // If it's explicitly replaceable or unknown kind, allow replacement
+  const kind = event.meta?.kind;
+  if (kind === "unknown_gap" || kind === "evidence_block") return true;
+  return REPLACEABLE_SOURCES.includes(source);
+}
+
+/**
+ * Fetch existing actual events that overlap with the given time window.
+ */
+export async function fetchExistingActualEvents(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+): Promise<ExistingActualEvent[]> {
+  try {
+    const startIso = windowStart.toISOString();
+    const endIso = windowEnd.toISOString();
+
+    const { data, error } = await tmSchema()
+      .from("events")
+      .select("id, title, description, scheduled_start, scheduled_end, meta")
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      // Events that overlap with the window:
+      // Event starts before window ends AND event ends after window starts
+      .lt("scheduled_start", endIso)
+      .gt("scheduled_end", startIso)
+      .order("scheduled_start", { ascending: true });
+
+    if (error) {
+      if (error.code === "42P01") {
+        // Table doesn't exist
+        return [];
+      }
+      throw handleSupabaseError(error);
+    }
+
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      scheduledStart: parseDbTimestamp(row.scheduled_start),
+      scheduledEnd: parseDbTimestamp(row.scheduled_end),
+      meta: row.meta as ExistingActualEvent["meta"],
+    }));
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[Ingestion] Failed to fetch existing events:", error);
+    }
+    return [];
+  }
+}
+
+/**
+ * Check if two time ranges overlap.
+ */
+function rangesOverlap(
+  start1: Date,
+  end1: Date,
+  start2: Date,
+  end2: Date,
+): boolean {
+  return start1.getTime() < end2.getTime() && end1.getTime() > start2.getTime();
+}
+
+/**
+ * Compute reconciliation operations for evidence segments against existing events.
+ *
+ * Rules:
+ * 1. User-edited events (source='user' or 'actual_adjust') are never touched
+ * 2. Evidence segments can replace derived/evidence segments
+ * 3. If an evidence segment overlaps with a protected event, clip or skip it
+ * 4. No overlapping events after reconciliation
+ */
+export function computeReconciliationOps(
+  segments: EvidenceSegment[],
+  existingEvents: ExistingActualEvent[],
+): ReconciliationOp[] {
+  const ops: ReconciliationOp[] = [];
+
+  // Separate protected and replaceable events
+  const protectedEvents = existingEvents.filter(isProtectedEvent);
+  const replaceableEvents = existingEvents.filter(isReplaceableEvent);
+
+  // Track which replaceable events will be deleted
+  const eventsToDelete = new Set<string>();
+
+  // Track existing source_ids to avoid duplicates
+  const existingSourceIds = new Set<string>();
+  for (const event of existingEvents) {
+    if (event.meta?.source_id) {
+      existingSourceIds.add(event.meta.source_id);
+    }
+  }
+
+  for (const segment of segments) {
+    // Skip if we already have this segment (idempotency)
+    if (existingSourceIds.has(segment.sourceId)) {
+      continue;
+    }
+
+    let segmentStart = segment.startAt.getTime();
+    let segmentEnd = segment.endAt.getTime();
+
+    // Clip segment against protected events
+    for (const protectedEvent of protectedEvents) {
+      const protectedStart = protectedEvent.scheduledStart.getTime();
+      const protectedEnd = protectedEvent.scheduledEnd.getTime();
+
+      if (!rangesOverlap(
+        new Date(segmentStart),
+        new Date(segmentEnd),
+        protectedEvent.scheduledStart,
+        protectedEvent.scheduledEnd,
+      )) {
+        continue;
+      }
+
+      // Segment overlaps with protected event - clip it
+      if (segmentStart >= protectedStart && segmentEnd <= protectedEnd) {
+        // Segment is fully contained in protected event - skip it entirely
+        segmentStart = segmentEnd; // Mark as empty
+        break;
+      } else if (segmentStart < protectedStart && segmentEnd > protectedEnd) {
+        // Segment spans the protected event - take the earlier portion only
+        // (could split into two, but for simplicity we take the first part)
+        segmentEnd = protectedStart;
+      } else if (segmentStart < protectedStart) {
+        // Segment starts before and overlaps - clip the end
+        segmentEnd = protectedStart;
+      } else {
+        // Segment starts during and extends past - clip the start
+        segmentStart = protectedEnd;
+      }
+    }
+
+    // Skip if segment was clipped to nothing
+    if (segmentEnd <= segmentStart) {
+      continue;
+    }
+
+    // Skip if clipped segment is too short (< 30 seconds)
+    if (segmentEnd - segmentStart < 30_000) {
+      continue;
+    }
+
+    // Find replaceable events that this segment overlaps with
+    for (const replaceableEvent of replaceableEvents) {
+      if (rangesOverlap(
+        new Date(segmentStart),
+        new Date(segmentEnd),
+        replaceableEvent.scheduledStart,
+        replaceableEvent.scheduledEnd,
+      )) {
+        eventsToDelete.add(replaceableEvent.id);
+      }
+    }
+
+    // Create clipped segment if necessary
+    const clippedSegment: EvidenceSegment =
+      segmentStart === segment.startAt.getTime() &&
+      segmentEnd === segment.endAt.getTime()
+        ? segment
+        : {
+            ...segment,
+            startAt: new Date(segmentStart),
+            endAt: new Date(segmentEnd),
+            durationSeconds: Math.round((segmentEnd - segmentStart) / 1000),
+          };
+
+    ops.push({ type: "insert", segment: clippedSegment });
+  }
+
+  // Add delete operations for replaced events
+  for (const eventId of eventsToDelete) {
+    ops.push({ type: "delete", eventId });
+  }
+
+  return ops;
+}
+
+/**
+ * Execute reconciliation operations to persist changes to the database.
+ */
+export async function executeReconciliation(
+  userId: string,
+  ops: ReconciliationOp[],
+): Promise<ReconciliationResult> {
+  let eventsInserted = 0;
+  const eventsUpdated = 0; // Reserved for future use when update operations are added
+  let eventsDeleted = 0;
+
+  try {
+    // Batch delete operations
+    const deleteIds = ops
+      .filter((op): op is Extract<ReconciliationOp, { type: "delete" }> =>
+        op.type === "delete"
+      )
+      .map((op) => op.eventId);
+
+    if (deleteIds.length > 0) {
+      const { error: deleteError } = await tmSchema()
+        .from("events")
+        .delete()
+        .eq("user_id", userId)
+        .eq("type", "calendar_actual")
+        .in("id", deleteIds);
+
+      if (deleteError) {
+        throw handleSupabaseError(deleteError);
+      }
+      eventsDeleted = deleteIds.length;
+    }
+
+    // Batch insert operations
+    const insertOps = ops.filter(
+      (op): op is Extract<ReconciliationOp, { type: "insert" }> =>
+        op.type === "insert",
+    );
+
+    if (insertOps.length > 0) {
+      const inserts = insertOps.map((op) => ({
+        user_id: userId,
+        type: "calendar_actual",
+        title: op.segment.displayName,
+        description: `App usage: ${op.segment.appId}`,
+        scheduled_start: op.segment.startAt.toISOString(),
+        scheduled_end: op.segment.endAt.toISOString(),
+        meta: {
+          category: "digital",
+          source: "ingestion",
+          source_id: op.segment.sourceId,
+          actual: true,
+          kind: "screen_time",
+          app_id: op.segment.appId,
+          session_ids: op.segment.sessionIds,
+          duration_seconds: op.segment.durationSeconds,
+        } as unknown as Json,
+      }));
+
+      const { error: insertError } = await tmSchema()
+        .from("events")
+        .insert(inserts);
+
+      if (insertError) {
+        throw handleSupabaseError(insertError);
+      }
+      eventsInserted = inserts.length;
+    }
+
+    if (__DEV__) {
+      console.log("[Ingestion] Reconciliation complete:", {
+        eventsInserted,
+        eventsUpdated,
+        eventsDeleted,
+      });
+    }
+
+    return {
+      success: true,
+      eventsInserted,
+      eventsUpdated,
+      eventsDeleted,
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    if (__DEV__) {
+      console.error("[Ingestion] Reconciliation failed:", error);
+    }
+
+    return {
+      success: false,
+      eventsInserted,
+      eventsUpdated,
+      eventsDeleted,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Full reconciliation pipeline: fetch existing, compute ops, execute.
+ * This is the main entry point for US-003.
+ */
+export async function reconcileWindow(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+  segments: EvidenceSegment[],
+): Promise<ReconciliationResult> {
+  // Step 1: Fetch existing events that overlap with the window
+  const existingEvents = await fetchExistingActualEvents(
+    userId,
+    windowStart,
+    windowEnd,
+  );
+
+  // Step 2: Compute reconciliation operations
+  const ops = computeReconciliationOps(segments, existingEvents);
+
+  if (ops.length === 0) {
+    return {
+      success: true,
+      eventsInserted: 0,
+      eventsUpdated: 0,
+      eventsDeleted: 0,
+    };
+  }
+
+  // Step 3: Execute the operations
+  return executeReconciliation(userId, ops);
+}
