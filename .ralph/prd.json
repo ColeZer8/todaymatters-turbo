@@ -39,7 +39,7 @@
         "Migration is idempotent (can be run multiple times safely)"
       ],
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-002",

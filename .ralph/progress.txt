@@ -1,0 +1,25 @@
+# Ralph Progress Log
+Started: Thu Jan 29 00:10:10 CST 2026
+
+## Codebase Patterns
+- Supabase migrations are in `supabase/migrations/` with naming pattern `YYYYMMDD_description.sql`
+- Use `create table if not exists` and `create index if not exists` for idempotent migrations
+- RLS policies should use `do $$ begin ... end $$` blocks with `if not exists` checks
+- The tm schema is used for all Today Matters-specific tables
+- Always use `public.update_updated_at_column()` trigger function for `updated_at` columns
+- Grant `select, insert, update` (no delete unless needed) to `authenticated` role
+- Pre-existing TypeScript type errors exist in the codebase - migration-only changes don't affect them
+
+---
+
+## 2026-01-29 00:15 - US-001
+- **What was implemented:** Created the `tm.actual_ingestion_checkpoints` table migration
+- **Files changed:**
+  - `supabase/migrations/20260129_create_tm_actual_ingestion_checkpoints.sql` (new)
+  - `.ralph/prd.json` (updated to Ralph format with user stories)
+- **Learnings for future iterations:**
+  - The PRD needed to be converted to proper Ralph format with `branchName` and `userStories` array with `passes` flags
+  - Existing tables like `tm.screen_time_app_sessions` already have the evidence data needed for ingestion
+  - The `public.update_updated_at_column()` function already exists and is used across all tm tables for updated_at triggers
+  - RLS policy naming convention: `"tm.<table_name>: <action> own"` (e.g., `"tm.actual_ingestion_checkpoints: select own"`)
+---
