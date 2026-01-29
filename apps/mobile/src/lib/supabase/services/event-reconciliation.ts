@@ -1079,3 +1079,465 @@ export async function executeExtensions(
 
   return { extendedCount, errors };
 }
+
+// ============================================================================
+// Priority-Based Reconciliation (US-011)
+// ============================================================================
+
+/**
+ * Event type for priority ordering.
+ * Priority order: protected > screen_time > location > unknown
+ */
+export type EventPriority = "protected" | "screen_time" | "location" | "unknown";
+
+/**
+ * Get the priority of a reconciliation event.
+ * Higher priority events take precedence and can overlap lower priority.
+ */
+export function getEventPriority(event: ReconciliationEvent | DerivedEvent): EventPriority {
+  // Protected events have highest priority
+  if ("lockedAt" in event && isEventLocked(event as ReconciliationEvent)) {
+    return "protected";
+  }
+
+  // Check for user-edited events (also protected)
+  const meta = event.meta;
+  if (meta?.source === "user" || meta?.source === "actual_adjust") {
+    return "protected";
+  }
+
+  // Check for screen-time events (have app_id)
+  if (meta?.app_id) {
+    return "screen_time";
+  }
+
+  // Check for location events (have kind = 'location_block' or 'commute')
+  if (meta?.kind === "location_block" || meta?.kind === "commute") {
+    return "location";
+  }
+
+  // Unknown/other events have lowest priority
+  return "unknown";
+}
+
+/**
+ * Get the priority of a derived event.
+ */
+export function getDerivedEventPriority(event: DerivedEvent): EventPriority {
+  const meta = event.meta;
+
+  // Check for screen-time events (have app_id)
+  if (meta?.app_id) {
+    return "screen_time";
+  }
+
+  // Check for location events (have kind = 'location_block' or 'commute')
+  if (meta?.kind === "location_block" || meta?.kind === "commute") {
+    return "location";
+  }
+
+  // Unknown/other events have lowest priority
+  return "unknown";
+}
+
+/**
+ * Check if event A has higher or equal priority than event B.
+ */
+function hasHigherOrEqualPriority(
+  priorityA: EventPriority,
+  priorityB: EventPriority,
+): boolean {
+  const order: Record<EventPriority, number> = {
+    protected: 4,
+    screen_time: 3,
+    location: 2,
+    unknown: 1,
+  };
+  return order[priorityA] >= order[priorityB];
+}
+
+/**
+ * Check if an event is a commute event.
+ */
+function isCommuteEvent(event: ReconciliationEvent | DerivedEvent): boolean {
+  return event.meta?.kind === "commute";
+}
+
+/**
+ * Trim a derived event to fill only the gaps not covered by higher-priority events.
+ * Returns null if the event is completely covered.
+ * Returns an array of events if the event needs to be split around higher-priority events.
+ */
+export function trimEventToGaps(
+  event: DerivedEvent,
+  higherPriorityEvents: Array<{ start: Date; end: Date }>,
+): DerivedEvent[] {
+  // Sort higher priority events by start time
+  const sortedHigher = [...higherPriorityEvents].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  // Find gaps that the event can fill
+  const eventStart = event.scheduledStart.getTime();
+  const eventEnd = event.scheduledEnd.getTime();
+
+  // Collect occupied ranges within the event's time span
+  const occupiedRanges: Array<{ start: number; end: number }> = [];
+  for (const higher of sortedHigher) {
+    const overlapStart = Math.max(eventStart, higher.start.getTime());
+    const overlapEnd = Math.min(eventEnd, higher.end.getTime());
+    if (overlapStart < overlapEnd) {
+      occupiedRanges.push({ start: overlapStart, end: overlapEnd });
+    }
+  }
+
+  // Merge overlapping occupied ranges
+  const mergedOccupied: Array<{ start: number; end: number }> = [];
+  for (const range of occupiedRanges) {
+    if (mergedOccupied.length === 0) {
+      mergedOccupied.push(range);
+    } else {
+      const last = mergedOccupied[mergedOccupied.length - 1];
+      if (range.start <= last.end) {
+        last.end = Math.max(last.end, range.end);
+      } else {
+        mergedOccupied.push(range);
+      }
+    }
+  }
+
+  // Find free ranges within the event
+  const freeRanges: Array<{ start: number; end: number }> = [];
+  let cursor = eventStart;
+
+  for (const occupied of mergedOccupied) {
+    if (cursor < occupied.start) {
+      freeRanges.push({ start: cursor, end: occupied.start });
+    }
+    cursor = Math.max(cursor, occupied.end);
+  }
+
+  // Add final free range if any
+  if (cursor < eventEnd) {
+    freeRanges.push({ start: cursor, end: eventEnd });
+  }
+
+  // No free space - event is completely covered
+  if (freeRanges.length === 0) {
+    return [];
+  }
+
+  // Create trimmed events for each free range
+  return freeRanges.map((range, index) => ({
+    ...event,
+    // Modify source ID to include segment index if split
+    sourceId: freeRanges.length > 1 ? `${event.sourceId}:${index}` : event.sourceId,
+    scheduledStart: new Date(range.start),
+    scheduledEnd: new Date(range.end),
+  }));
+}
+
+/**
+ * Compute reconciliation operations with priority-based handling.
+ *
+ * Priority order: Protected > Screen-time > Location > Unknown
+ *
+ * Key rules:
+ * 1. Protected events (locked or user-edited) are never modified or deleted
+ * 2. Screen-time events take precedence over location blocks
+ * 3. Location blocks fill gaps where no screen-time exists
+ * 4. When screen-time occurs during a commute, both are kept (commute acts as container)
+ * 5. Unknown events have lowest priority
+ *
+ * @param existingEvents - Events currently in the database
+ * @param screenTimeEvents - Derived events from screen-time evidence
+ * @param locationEvents - Derived events from location evidence
+ * @param previousWindowEvents - Events from the previous window (for extension candidates)
+ * @returns Operations to perform including extensions
+ */
+export function computeReconciliationOpsWithPriority(
+  existingEvents: ReconciliationEvent[],
+  screenTimeEvents: DerivedEvent[],
+  locationEvents: DerivedEvent[],
+  previousWindowEvents: ReconciliationEvent[] = [],
+): ReconciliationOps {
+  const ops: ReconciliationOps = {
+    inserts: [],
+    updates: [],
+    deletes: [],
+    extensions: [],
+    protectedIds: [],
+  };
+
+  // Build a map of existing events by source_id for fast lookup
+  const existingBySourceId = new Map<string, ReconciliationEvent>();
+  for (const event of existingEvents) {
+    const sourceId = getSourceId(event);
+    if (sourceId) {
+      existingBySourceId.set(sourceId, event);
+    }
+  }
+
+  // Track which existing events are matched by derived events
+  const matchedExistingIds = new Set<string>();
+
+  // Track which derived events were handled by extension
+  const extendedDerivedSourceIds = new Set<string>();
+
+  // Collect all occupied time ranges by priority level
+  const protectedRanges: Array<{ start: Date; end: Date; eventId: string }> = [];
+  const screenTimeRanges: Array<{ start: Date; end: Date; eventId?: string }> = [];
+  const commuteRanges: Array<{ start: Date; end: Date; eventId?: string }> = [];
+
+  // Add existing protected events to protected ranges
+  for (const event of existingEvents) {
+    if (isEventLocked(event) || isUserEditedEvent(event)) {
+      protectedRanges.push({
+        start: event.scheduledStart,
+        end: event.scheduledEnd,
+        eventId: event.id,
+      });
+      ops.protectedIds.push(event.id);
+    }
+  }
+
+  // ============================================================================
+  // Pass 1: Process screen-time events first (higher priority)
+  // ============================================================================
+  for (const derived of screenTimeEvents) {
+    // Try app extension for screen-time events
+    const derivedAppId = derived.meta?.app_id;
+    if (typeof derivedAppId === "string") {
+      const extendable = findExtendableEvent(
+        previousWindowEvents,
+        derived.scheduledStart,
+        derivedAppId,
+      );
+
+      if (extendable) {
+        if (isEventLocked(extendable)) {
+          ops.protectedIds.push(extendable.id);
+        } else {
+          ops.extensions.push({
+            eventId: extendable.id,
+            newEnd: derived.scheduledEnd,
+          });
+          extendedDerivedSourceIds.add(derived.sourceId);
+          // Add to screen-time ranges
+          screenTimeRanges.push({
+            start: extendable.scheduledStart,
+            end: derived.scheduledEnd,
+            eventId: extendable.id,
+          });
+          continue;
+        }
+      }
+    }
+
+    // Skip if handled by extension
+    if (extendedDerivedSourceIds.has(derived.sourceId)) {
+      continue;
+    }
+
+    const existingMatch = existingBySourceId.get(derived.sourceId);
+
+    if (existingMatch) {
+      matchedExistingIds.add(existingMatch.id);
+
+      if (isEventLocked(existingMatch)) {
+        ops.protectedIds.push(existingMatch.id);
+        continue;
+      }
+
+      // Check if update is needed
+      const timesMatch =
+        existingMatch.scheduledStart.getTime() === derived.scheduledStart.getTime() &&
+        existingMatch.scheduledEnd.getTime() === derived.scheduledEnd.getTime();
+
+      if (!timesMatch) {
+        ops.updates.push({
+          eventId: existingMatch.id,
+          updates: {
+            scheduledStart: derived.scheduledStart,
+            scheduledEnd: derived.scheduledEnd,
+            meta: derived.meta,
+          },
+        });
+      }
+
+      // Add to screen-time ranges
+      screenTimeRanges.push({
+        start: derived.scheduledStart,
+        end: derived.scheduledEnd,
+        eventId: existingMatch.id,
+      });
+    } else {
+      // Check for overlap with protected events
+      const hasProtectedOverlap = protectedRanges.some((range) =>
+        eventsOverlap(
+          derived.scheduledStart,
+          derived.scheduledEnd,
+          range.start,
+          range.end,
+        ),
+      );
+
+      if (!hasProtectedOverlap) {
+        ops.inserts.push({ event: derived });
+        // Add to screen-time ranges
+        screenTimeRanges.push({
+          start: derived.scheduledStart,
+          end: derived.scheduledEnd,
+        });
+      }
+    }
+  }
+
+  // ============================================================================
+  // Pass 2: Process location events (fill gaps around screen-time)
+  // ============================================================================
+  for (const derived of locationEvents) {
+    const isCommute = isCommuteEvent(derived);
+
+    // Try location extension
+    const derivedPlaceId = (derived.meta?.place_id as string | null) ?? null;
+    const derivedKind = derived.meta?.kind;
+
+    if (derivedKind === "location_block" || derivedKind === "commute") {
+      const extendable = findExtendableLocationEvent(
+        previousWindowEvents,
+        derived.scheduledStart,
+        derivedPlaceId,
+      );
+
+      if (extendable) {
+        if (isEventLocked(extendable)) {
+          ops.protectedIds.push(extendable.id);
+        } else {
+          ops.extensions.push({
+            eventId: extendable.id,
+            newEnd: derived.scheduledEnd,
+          });
+          extendedDerivedSourceIds.add(derived.sourceId);
+
+          if (isCommute) {
+            commuteRanges.push({
+              start: extendable.scheduledStart,
+              end: derived.scheduledEnd,
+              eventId: extendable.id,
+            });
+          }
+          continue;
+        }
+      }
+    }
+
+    // Skip if handled by extension
+    if (extendedDerivedSourceIds.has(derived.sourceId)) {
+      continue;
+    }
+
+    const existingMatch = existingBySourceId.get(derived.sourceId);
+
+    if (existingMatch) {
+      matchedExistingIds.add(existingMatch.id);
+
+      if (isEventLocked(existingMatch)) {
+        ops.protectedIds.push(existingMatch.id);
+        continue;
+      }
+
+      // Check if update is needed
+      const timesMatch =
+        existingMatch.scheduledStart.getTime() === derived.scheduledStart.getTime() &&
+        existingMatch.scheduledEnd.getTime() === derived.scheduledEnd.getTime();
+
+      if (!timesMatch) {
+        ops.updates.push({
+          eventId: existingMatch.id,
+          updates: {
+            scheduledStart: derived.scheduledStart,
+            scheduledEnd: derived.scheduledEnd,
+            meta: derived.meta,
+          },
+        });
+      }
+
+      if (isCommute) {
+        commuteRanges.push({
+          start: derived.scheduledStart,
+          end: derived.scheduledEnd,
+          eventId: existingMatch.id,
+        });
+      }
+    } else {
+      // Check for overlap with protected events
+      const hasProtectedOverlap = protectedRanges.some((range) =>
+        eventsOverlap(
+          derived.scheduledStart,
+          derived.scheduledEnd,
+          range.start,
+          range.end,
+        ),
+      );
+
+      if (hasProtectedOverlap) {
+        continue;
+      }
+
+      // For commute events: keep both commute and screen-time (screen-time inside commute)
+      // Don't trim commutes, just insert them
+      if (isCommute) {
+        ops.inserts.push({ event: derived });
+        commuteRanges.push({
+          start: derived.scheduledStart,
+          end: derived.scheduledEnd,
+        });
+        continue;
+      }
+
+      // For location_block events: trim to fill gaps around screen-time
+      const combinedHigherPriority = [
+        ...protectedRanges,
+        ...screenTimeRanges,
+      ];
+
+      const trimmedEvents = trimEventToGaps(derived, combinedHigherPriority);
+
+      for (const trimmed of trimmedEvents) {
+        // Only insert if there's meaningful duration (> 1 minute)
+        const durationMs =
+          trimmed.scheduledEnd.getTime() - trimmed.scheduledStart.getTime();
+        if (durationMs > 60 * 1000) {
+          ops.inserts.push({ event: trimmed });
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  // Pass 3: Clean up orphaned derived events
+  // ============================================================================
+  for (const existing of existingEvents) {
+    // Skip if matched
+    if (matchedExistingIds.has(existing.id)) {
+      continue;
+    }
+
+    // Skip if not a derived event
+    if (!isDerivedEvent(existing)) {
+      continue;
+    }
+
+    // Skip if locked
+    if (isEventLocked(existing)) {
+      ops.protectedIds.push(existing.id);
+      continue;
+    }
+
+    // Delete orphaned derived events
+    ops.deletes.push({ eventId: existing.id });
+  }
+
+  return ops;
+}
