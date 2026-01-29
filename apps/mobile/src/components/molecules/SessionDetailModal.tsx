@@ -14,9 +14,15 @@ import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, Chev
 import { Icon } from "../atoms/Icon";
 import { TimePickerModal } from "../organisms/TimePickerModal";
 import { AddPlaceModal } from "./AddPlaceModal";
+import { PlaceSuggestionPrompt } from "./PlaceSuggestionPrompt";
 import type { ScheduledEvent } from "@/stores";
 import { useAuth } from "@/hooks/use-auth";
 import { splitSessionEvent, mergeSessionEvents, findMergeableNeighbors } from "@/lib/supabase/services/calendar-events";
+import {
+  isGooglePlacesAvailable,
+  mapPlaceTypeToCategory,
+  type GooglePlaceSuggestion,
+} from "@/lib/supabase/services/google-places";
 import {
   splitScheduledEventSession,
   mergeScheduledEventSessions,
@@ -139,6 +145,8 @@ export const SessionDetailModal = ({
   // Add place state
   const [showAddPlaceModal, setShowAddPlaceModal] = useState(false);
   const [isAddingPlace, setIsAddingPlace] = useState(false);
+  // Track if user dismissed the suggestion to show manual entry button
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
   const meta = event?.meta;
   const isSessionBlock = meta?.kind === "session_block";
@@ -226,6 +234,17 @@ export const SessionDetailModal = ({
     return isUnknownLocation && hasCoordinates;
   }, [meta]);
 
+  // Check if we should show the Google Places suggestion prompt
+  const showGooglePlacesSuggestion = useMemo(() => {
+    // Must be able to add a place
+    if (!canAddPlace) return false;
+    // Must not have dismissed the suggestion already
+    if (suggestionDismissed) return false;
+    // Google Places API must be available
+    if (!isGooglePlacesAvailable()) return false;
+    return true;
+  }, [canAddPlace, suggestionDismissed]);
+
   // Handle add place button press
   const handleAddPlacePress = useCallback(() => {
     if (!canAddPlace) {
@@ -238,6 +257,110 @@ export const SessionDetailModal = ({
     }
     setShowAddPlaceModal(true);
   }, [canAddPlace]);
+
+  // Handle accepting a Google Places suggestion
+  const handleAcceptPlaceSuggestion = useCallback(
+    async (suggestion: GooglePlaceSuggestion, category: string | null) => {
+      if (!user?.id || !meta?.latitude || !meta?.longitude) return;
+
+      setIsAddingPlace(true);
+      try {
+        // Create the user place with the suggestion's name
+        await createUserPlace({
+          userId: user.id,
+          label: suggestion.name,
+          latitude: suggestion.latitude, // Use suggestion's coordinates for accuracy
+          longitude: suggestion.longitude,
+          category,
+          radiusMeters: 150, // Default 150m radius
+        });
+
+        // Notify parent component
+        if (onAddPlace) {
+          onAddPlace(suggestion.name);
+        }
+
+        Alert.alert(
+          "Place Added",
+          `"${suggestion.name}" has been saved. Future visits will be recognized automatically.`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setSuggestionDismissed(true);
+                onClose();
+              },
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Failed to add place from suggestion:", error);
+        Alert.alert(
+          "Failed to Add Place",
+          "There was an error saving the place. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsAddingPlace(false);
+      }
+    },
+    [user?.id, meta?.latitude, meta?.longitude, onAddPlace, onClose]
+  );
+
+  // Handle rejecting a Google Places suggestion - show manual entry
+  const handleRejectPlaceSuggestion = useCallback(() => {
+    setSuggestionDismissed(true);
+    setShowAddPlaceModal(true);
+  }, []);
+
+  // Handle using the "Near [Area]" fallback from suggestion prompt
+  const handleUseFallbackPlace = useCallback(
+    async (fallbackName: string) => {
+      if (!user?.id || !meta?.latitude || !meta?.longitude) return;
+
+      setIsAddingPlace(true);
+      try {
+        // Create the user place with the fallback name
+        await createUserPlace({
+          userId: user.id,
+          label: fallbackName,
+          latitude: meta.latitude,
+          longitude: meta.longitude,
+          category: "other",
+          radiusMeters: 150,
+        });
+
+        // Notify parent component
+        if (onAddPlace) {
+          onAddPlace(fallbackName);
+        }
+
+        Alert.alert(
+          "Place Added",
+          `"${fallbackName}" has been saved. Future visits will be recognized automatically.`,
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setSuggestionDismissed(true);
+                onClose();
+              },
+            },
+          ]
+        );
+      } catch (error) {
+        console.error("Failed to add fallback place:", error);
+        Alert.alert(
+          "Failed to Add Place",
+          "There was an error saving the place. Please try again.",
+          [{ text: "OK" }]
+        );
+      } finally {
+        setIsAddingPlace(false);
+      }
+    },
+    [user?.id, meta?.latitude, meta?.longitude, onAddPlace, onClose]
+  );
 
   // Handle saving a new place
   const handleSavePlace = useCallback(
@@ -603,6 +726,7 @@ export const SessionDetailModal = ({
       setSelectedMergeTarget(null);
       setShowAddPlaceModal(false);
       setIsAddingPlace(false);
+      setSuggestionDismissed(false);
     }
   }, [visible]);
 
@@ -678,6 +802,22 @@ export const SessionDetailModal = ({
                 </View>
               </View>
 
+              {/* Google Places Suggestion Prompt (shown for unknown locations) */}
+              {showGooglePlacesSuggestion &&
+                meta?.latitude !== undefined &&
+                meta?.longitude !== undefined && (
+                  <View className="mt-4 mx-4">
+                    <PlaceSuggestionPrompt
+                      latitude={meta.latitude}
+                      longitude={meta.longitude}
+                      onAccept={handleAcceptPlaceSuggestion}
+                      onReject={handleRejectPlaceSuggestion}
+                      onUseFallback={handleUseFallbackPlace}
+                      isSaving={isAddingPlace}
+                    />
+                  </View>
+                )}
+
               {/* Actions Section */}
               <View className="mt-6 px-4">
                 <Text className="text-xs font-semibold tracking-wider text-[#94A3B8] mb-3">
@@ -742,8 +882,8 @@ export const SessionDetailModal = ({
                     )}
                   </Pressable>
 
-                  {/* Add Place Button (only shown for unknown locations) */}
-                  {canAddPlace && (
+                  {/* Add Place Button (only shown for unknown locations when suggestion is not showing) */}
+                  {canAddPlace && !showGooglePlacesSuggestion && (
                     <>
                       <View className="h-[1px] ml-4 bg-[#E5E5EA]" />
                       <Pressable

@@ -29,18 +29,21 @@ const ENV = {
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY_DEV || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     oauthApiBaseUrl: process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL_DEV || process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL,
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID_DEV || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    googlePlacesApiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY_DEV || process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
   },
   staging: {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL_STAGING || process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY_STAGING || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     oauthApiBaseUrl: process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL_STAGING || process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL,
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID_STAGING || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    googlePlacesApiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY_STAGING || process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
   },
   production: {
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL_PROD || process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY_PROD || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     oauthApiBaseUrl: process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL_PROD || process.env.EXPO_PUBLIC_OAUTH_API_BASE_URL,
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID_PROD || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    googlePlacesApiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY_PROD || process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
   },
 };
 

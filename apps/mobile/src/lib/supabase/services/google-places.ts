@@ -1,0 +1,544 @@
+/**
+ * Google Places API Service
+ *
+ * Provides place suggestions for unknown locations using Google Places Nearby Search API.
+ * Includes 15-minute TTL caching to reduce API calls.
+ *
+ * Usage:
+ *   import { fetchNearbyPlaces, GooglePlaceSuggestion } from './google-places';
+ *   const suggestions = await fetchNearbyPlaces(lat, lng);
+ */
+
+import appConfig from "@/lib/config";
+
+// ============================================================================
+// Types
+// ============================================================================
+
+/** A place suggestion from Google Places API */
+export interface GooglePlaceSuggestion {
+  /** Google Place ID */
+  placeId: string;
+  /** Display name of the place */
+  name: string;
+  /** Address or vicinity */
+  vicinity: string;
+  /** Place types (e.g., "cafe", "restaurant", "gym") */
+  types: string[];
+  /** Distance in meters from query location */
+  distanceM: number;
+  /** Latitude of the place */
+  latitude: number;
+  /** Longitude of the place */
+  longitude: number;
+  /** Rating (0-5) if available */
+  rating?: number;
+  /** Whether the place is currently open */
+  isOpen?: boolean;
+  /** Icon URL for the place type */
+  iconUrl?: string;
+}
+
+/** Result from a nearby places search */
+export interface NearbyPlacesResult {
+  /** Whether the search was successful */
+  success: boolean;
+  /** Error message if search failed */
+  error?: string;
+  /** Whether the result came from cache */
+  fromCache: boolean;
+  /** Place suggestions */
+  suggestions: GooglePlaceSuggestion[];
+}
+
+/** Cached entry for a location query */
+interface CacheEntry {
+  /** Cached suggestions */
+  suggestions: GooglePlaceSuggestion[];
+  /** Timestamp when cached */
+  cachedAt: number;
+  /** Cache key (lat,lng rounded) */
+  key: string;
+}
+
+// Google Places API nearby search response types
+interface GooglePlaceResult {
+  place_id: string;
+  name: string;
+  vicinity?: string;
+  types?: string[];
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  rating?: number;
+  opening_hours?: {
+    open_now?: boolean;
+  };
+  icon?: string;
+}
+
+interface GooglePlacesResponse {
+  status: string;
+  error_message?: string;
+  results?: GooglePlaceResult[];
+}
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+/** Cache TTL in milliseconds (15 minutes) */
+const CACHE_TTL_MS = 15 * 60 * 1000;
+
+/** Search radius in meters */
+const SEARCH_RADIUS_M = 100;
+
+/** Maximum number of suggestions to return */
+const MAX_SUGGESTIONS = 5;
+
+/** Coordinate precision for cache keys (4 decimal places = ~11m precision) */
+const CACHE_PRECISION = 4;
+
+/** Place types to prioritize (order matters) */
+const PRIORITY_TYPES = [
+  "cafe",
+  "restaurant",
+  "gym",
+  "bar",
+  "library",
+  "park",
+  "shopping_mall",
+  "store",
+  "supermarket",
+  "church",
+  "museum",
+  "hospital",
+  "doctor",
+  "pharmacy",
+  "bank",
+  "lodging",
+  "university",
+  "school",
+  "airport",
+  "train_station",
+  "bus_station",
+];
+
+// ============================================================================
+// Cache
+// ============================================================================
+
+/** In-memory cache for place suggestions */
+const placesCache = new Map<string, CacheEntry>();
+
+/**
+ * Generate a cache key from coordinates.
+ * Rounds to CACHE_PRECISION decimal places for grouping nearby queries.
+ */
+function getCacheKey(latitude: number, longitude: number): string {
+  const lat = latitude.toFixed(CACHE_PRECISION);
+  const lng = longitude.toFixed(CACHE_PRECISION);
+  return `${lat},${lng}`;
+}
+
+/**
+ * Get cached suggestions if available and not expired.
+ */
+function getCachedSuggestions(
+  latitude: number,
+  longitude: number
+): GooglePlaceSuggestion[] | null {
+  const key = getCacheKey(latitude, longitude);
+  const entry = placesCache.get(key);
+
+  if (!entry) return null;
+
+  // Check if expired
+  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) {
+    placesCache.delete(key);
+    return null;
+  }
+
+  return entry.suggestions;
+}
+
+/**
+ * Cache suggestions for a location.
+ */
+function cacheSuggestions(
+  latitude: number,
+  longitude: number,
+  suggestions: GooglePlaceSuggestion[]
+): void {
+  const key = getCacheKey(latitude, longitude);
+  placesCache.set(key, {
+    suggestions,
+    cachedAt: Date.now(),
+    key,
+  });
+}
+
+/**
+ * Clear expired cache entries.
+ * Called periodically to prevent memory growth.
+ */
+export function clearExpiredCache(): number {
+  const now = Date.now();
+  let cleared = 0;
+
+  for (const [key, entry] of placesCache.entries()) {
+    if (now - entry.cachedAt > CACHE_TTL_MS) {
+      placesCache.delete(key);
+      cleared++;
+    }
+  }
+
+  return cleared;
+}
+
+/**
+ * Clear all cached entries.
+ */
+export function clearAllCache(): void {
+  placesCache.clear();
+}
+
+/**
+ * Get cache stats for debugging.
+ */
+export function getCacheStats(): {
+  size: number;
+  oldestEntryAge: number | null;
+} {
+  let oldestAge: number | null = null;
+  const now = Date.now();
+
+  for (const entry of placesCache.values()) {
+    const age = now - entry.cachedAt;
+    if (oldestAge === null || age > oldestAge) {
+      oldestAge = age;
+    }
+  }
+
+  return {
+    size: placesCache.size,
+    oldestEntryAge: oldestAge,
+  };
+}
+
+// ============================================================================
+// Distance Calculation
+// ============================================================================
+
+/**
+ * Calculate distance between two coordinates using Haversine formula.
+ * Returns distance in meters.
+ */
+function haversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// ============================================================================
+// API Key Access
+// ============================================================================
+
+/**
+ * Get the Google Places API key from environment.
+ * Returns null if not configured.
+ */
+function getGooglePlacesApiKey(): string | null {
+  // Try Expo config extra first
+  const config = appConfig as unknown as {
+    googlePlacesApiKey?: string;
+  };
+  if (config.googlePlacesApiKey) {
+    return config.googlePlacesApiKey;
+  }
+
+  // Try process.env fallback
+  try {
+    // eslint-disable-next-line no-undef
+    const envKey =
+      typeof process !== "undefined"
+        ? (process.env as Record<string, string | undefined>)[
+            "EXPO_PUBLIC_GOOGLE_PLACES_API_KEY"
+          ]
+        : undefined;
+    if (envKey) {
+      return envKey;
+    }
+  } catch {
+    // Ignore env access errors
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Main API Functions
+// ============================================================================
+
+/**
+ * Fetch nearby places from Google Places API.
+ *
+ * @param latitude - Latitude of the location
+ * @param longitude - Longitude of the location
+ * @param radiusM - Search radius in meters (default: 100m)
+ * @returns NearbyPlacesResult with suggestions or error
+ */
+export async function fetchNearbyPlaces(
+  latitude: number,
+  longitude: number,
+  radiusM: number = SEARCH_RADIUS_M
+): Promise<NearbyPlacesResult> {
+  // Check cache first
+  const cached = getCachedSuggestions(latitude, longitude);
+  if (cached !== null) {
+    return {
+      success: true,
+      fromCache: true,
+      suggestions: cached,
+    };
+  }
+
+  // Get API key
+  const apiKey = getGooglePlacesApiKey();
+  if (!apiKey) {
+    return {
+      success: false,
+      error: "Google Places API key not configured",
+      fromCache: false,
+      suggestions: [],
+    };
+  }
+
+  try {
+    // Build API URL
+    const params = new URLSearchParams({
+      location: `${latitude},${longitude}`,
+      radius: radiusM.toString(),
+      key: apiKey,
+    });
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${params}`;
+
+    // Fetch from API
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data: GooglePlacesResponse = await response.json();
+
+    // Handle API errors
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      throw new Error(data.error_message || `API status: ${data.status}`);
+    }
+
+    // Transform results to suggestions
+    const results = data.results || [];
+    const suggestions = results
+      .map((place): GooglePlaceSuggestion => {
+        const distance = haversineDistance(
+          latitude,
+          longitude,
+          place.geometry.location.lat,
+          place.geometry.location.lng
+        );
+
+        return {
+          placeId: place.place_id,
+          name: place.name,
+          vicinity: place.vicinity || "",
+          types: place.types || [],
+          distanceM: Math.round(distance),
+          latitude: place.geometry.location.lat,
+          longitude: place.geometry.location.lng,
+          rating: place.rating,
+          isOpen: place.opening_hours?.open_now,
+          iconUrl: place.icon,
+        };
+      })
+      // Sort by priority type first, then by distance
+      .sort((a, b) => {
+        const aPriority = getPriorityScore(a.types);
+        const bPriority = getPriorityScore(b.types);
+        if (aPriority !== bPriority) {
+          return bPriority - aPriority; // Higher priority first
+        }
+        return a.distanceM - b.distanceM;
+      })
+      // Take top suggestions
+      .slice(0, MAX_SUGGESTIONS);
+
+    // Cache results
+    cacheSuggestions(latitude, longitude, suggestions);
+
+    return {
+      success: true,
+      fromCache: false,
+      suggestions,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error fetching places";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Fetch error:", message);
+    }
+
+    return {
+      success: false,
+      error: message,
+      fromCache: false,
+      suggestions: [],
+    };
+  }
+}
+
+/**
+ * Get a priority score for a place based on its types.
+ * Higher score = more likely to be useful for user.
+ */
+function getPriorityScore(types: string[]): number {
+  for (let i = 0; i < PRIORITY_TYPES.length; i++) {
+    if (types.includes(PRIORITY_TYPES[i])) {
+      return PRIORITY_TYPES.length - i; // Higher priority types get higher scores
+    }
+  }
+  return 0;
+}
+
+/**
+ * Get a user-friendly place type label from Google Places types.
+ */
+export function getPlaceTypeLabel(types: string[]): string {
+  // Map Google types to friendly labels
+  const typeLabels: Record<string, string> = {
+    cafe: "Cafe",
+    restaurant: "Restaurant",
+    gym: "Gym",
+    bar: "Bar",
+    library: "Library",
+    park: "Park",
+    shopping_mall: "Mall",
+    store: "Store",
+    supermarket: "Supermarket",
+    church: "Church",
+    museum: "Museum",
+    hospital: "Hospital",
+    doctor: "Doctor",
+    pharmacy: "Pharmacy",
+    bank: "Bank",
+    lodging: "Hotel",
+    university: "University",
+    school: "School",
+    airport: "Airport",
+    train_station: "Train Station",
+    bus_station: "Bus Station",
+    bakery: "Bakery",
+    hair_care: "Salon",
+    spa: "Spa",
+    beauty_salon: "Salon",
+    movie_theater: "Movie Theater",
+    bowling_alley: "Bowling",
+    night_club: "Night Club",
+    laundry: "Laundry",
+    car_wash: "Car Wash",
+    gas_station: "Gas Station",
+    parking: "Parking",
+    post_office: "Post Office",
+    courthouse: "Courthouse",
+    police: "Police Station",
+    fire_station: "Fire Station",
+    veterinary_care: "Vet",
+    pet_store: "Pet Store",
+    florist: "Florist",
+  };
+
+  for (const type of types) {
+    if (typeLabels[type]) {
+      return typeLabels[type];
+    }
+  }
+
+  // If no match, try to format the first type
+  if (types.length > 0 && types[0] !== "point_of_interest" && types[0] !== "establishment") {
+    return types[0]
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  return "Place";
+}
+
+/**
+ * Map Google Place types to user place categories.
+ */
+export function mapPlaceTypeToCategory(
+  types: string[]
+): "home" | "work" | "gym" | "cafe" | "restaurant" | "other" {
+  // Check for specific types
+  if (types.includes("gym") || types.includes("fitness_center")) {
+    return "gym";
+  }
+  if (types.includes("cafe") || types.includes("coffee_shop")) {
+    return "cafe";
+  }
+  if (
+    types.includes("restaurant") ||
+    types.includes("bakery") ||
+    types.includes("food")
+  ) {
+    return "restaurant";
+  }
+  // Work-related types
+  if (
+    types.includes("office") ||
+    types.includes("accounting") ||
+    types.includes("lawyer") ||
+    types.includes("real_estate_agency")
+  ) {
+    return "work";
+  }
+
+  return "other";
+}
+
+/**
+ * Get the best suggestion from a list based on type preferences.
+ * Used for auto-suggest "Are you at X?" prompts.
+ */
+export function getBestSuggestion(
+  suggestions: GooglePlaceSuggestion[]
+): GooglePlaceSuggestion | null {
+  if (suggestions.length === 0) return null;
+
+  // The suggestions are already sorted by priority and distance
+  // Return the first one as the best suggestion
+  return suggestions[0];
+}
+
+/**
+ * Check if Google Places API is available (API key configured).
+ */
+export function isGooglePlacesAvailable(): boolean {
+  return getGooglePlacesApiKey() !== null;
+}
