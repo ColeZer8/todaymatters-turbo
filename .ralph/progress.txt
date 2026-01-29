@@ -42,3 +42,19 @@ Started: Thu Jan 29 00:10:10 CST 2026
   - Use `getReadableAppName` from `@/lib/app-names` to convert package names to human-readable names
   - Parse database timestamps carefully: append "Z" if no timezone suffix to treat as UTC
 ---
+
+## 2026-01-29 - US-003
+- **What was implemented:** Implemented the reconciliation algorithm that merges evidence segments into existing Actual events
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (added reconciliation functions)
+- **Learnings for future iterations:**
+  - Protected sources that should never be overwritten: `user`, `actual_adjust`
+  - Replaceable sources that can be replaced by evidence: `derived`, `evidence`, `ingestion`, `system`
+  - Event kinds `unknown_gap` and `evidence_block` are always replaceable
+  - The reconciliation algorithm clips evidence segments against protected events to avoid overlap
+  - When a segment fully overlaps a protected event, it's skipped entirely
+  - When a segment partially overlaps, it's clipped to the non-overlapping portion
+  - Idempotency is ensured by checking existing `source_id` values before inserting
+  - Batch operations: delete replaced events first, then insert new segments
+  - Inserted events use `source: "ingestion"` and `kind: "screen_time"` for traceability
+---

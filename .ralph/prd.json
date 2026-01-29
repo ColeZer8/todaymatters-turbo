@@ -67,7 +67,7 @@
         "Adjacent events with same attributes can be merged"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-004",
