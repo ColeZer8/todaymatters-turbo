@@ -151,6 +151,10 @@ const DEFAULT_PLACE_MATCH_RADIUS_METERS = 200;
 
 interface TransitionContext {
   locationBlocks: LocationBlock[];
+  ymd: string;
+  usageSummary?: UsageSummary | null;
+  screenTimeSessions?: ScreenTimeSessionRow[] | null;
+  appCategoryOverrides?: AppCategoryOverrides;
 }
 
 const TRANSITION_TARGET_CATEGORIES: EventCategory[] = [
@@ -314,6 +318,11 @@ export function buildActualDisplayEvents({
     occupied.push({ start, end });
   };
 
+  const overlapsLocationBlocks = (start: number, end: number) =>
+    locationBlocks.some((block) =>
+      intervalsOverlap(start, end, block.startMinutes, block.endMinutes),
+    );
+
   const removeSleepOverlaps = (start: number, end: number) => {
     for (let i = results.length - 1; i >= 0; i -= 1) {
       const existing = results[i];
@@ -352,6 +361,15 @@ export function buildActualDisplayEvents({
         event.id.startsWith("st_") || event.id.startsWith("st_session_")
           ? { ...event, id: `${DERIVED_EVIDENCE_PREFIX}${event.id}` }
           : event;
+      if (
+        nextEvent.meta?.kind === "screen_time" &&
+        overlapsLocationBlocks(
+          nextEvent.startMinutes,
+          nextEvent.startMinutes + nextEvent.duration,
+        )
+      ) {
+        continue;
+      }
       addIfFree(nextEvent);
     }
   }
@@ -380,6 +398,11 @@ export function buildActualDisplayEvents({
         appCategoryOverrides,
       });
       for (const block of usageBlocks) {
+        const start = block.startMinutes;
+        const end = start + block.duration;
+        if (overlapsLocationBlocks(start, end)) {
+          continue;
+        }
         addIfFree(block);
       }
     }
@@ -425,15 +448,12 @@ export function buildActualDisplayEvents({
               event.startMinutes + event.duration,
             ),
         );
-        const overlapsLocation = locationBlocks.some((block) =>
-          intervalsOverlap(start, end, block.startMinutes, block.endMinutes),
-        );
         if (overlapsSleep) {
           removeSleepOverlaps(start, end);
           addIfFree(nextEvent);
           continue;
         }
-        if (overlapsLocation) {
+        if (overlapsLocationBlocks(start, end)) {
           continue;
         }
       }
@@ -602,6 +622,10 @@ export function buildActualDisplayEvents({
   // Travel detection always runs — it's evidence-based (location change), not a gap-filling suggestion
   const withTransitions = replaceUnknownWithTransitions(withProductiveFilled, {
     locationBlocks,
+    ymd,
+    usageSummary,
+    screenTimeSessions: evidence?.screenTimeSessions ?? null,
+    appCategoryOverrides,
   });
   const withPrepWindDown = withTransitions;
   const withPatternFilled = allowPatterns
@@ -1556,6 +1580,20 @@ function replaceUnknownWithTransitions(
       continue;
     }
 
+    const screenTime = getScreenTimeOverlapInfo({
+      ymd: context.ymd,
+      startMinutes: startMinute,
+      endMinutes: endMinute,
+      usageSummary: context.usageSummary,
+      screenTimeSessions: context.screenTimeSessions,
+      appCategoryOverrides: context.appCategoryOverrides,
+    });
+    const travelTitle = buildTravelTitle(fromLabel, toLabel);
+    const baseDescription = `${fromLabel} → ${toLabel}`;
+    const description = mergeBaseWithNote(
+      baseDescription,
+      buildScreenTimeNote(screenTime),
+    );
     const meta: CalendarEventMeta = {
       category: "travel",
       source: "derived",
@@ -1563,13 +1601,15 @@ function replaceUnknownWithTransitions(
       confidence: 0.45,
       evidence: {
         locationLabel: `${fromLabel} → ${toLabel}`,
+        screenTimeMinutes: screenTime?.totalMinutes,
+        topApp: screenTime?.topApp ?? null,
       },
     };
 
     updated.push({
       ...event,
-      title: `Travel: ${fromLabel} → ${toLabel}`,
-      description: `${fromLabel} → ${toLabel}`,
+      title: travelTitle,
+      description,
       category: "travel",
       meta,
     });
@@ -2063,27 +2103,33 @@ function buildLocationDescription(options: {
   base: string;
   screenTime: ScreenTimeOverlapInfo | null;
 }): string {
-  const parts: string[] = [];
   const base = options.base.trim();
-  if (base) parts.push(base);
-  const screenTime = options.screenTime;
-  if (screenTime && screenTime.totalMinutes >= DISTRACTION_THRESHOLD_MINUTES) {
-    const minutes = Math.round(screenTime.totalMinutes);
-    if (screenTime.isDistraction) {
-      parts.push(
-        `Distracted: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
-      );
-    } else if (screenTime.isProductive) {
-      parts.push(
-        `Productive: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
-      );
-    } else {
-      parts.push(
-        `Phone use: ${minutes} min${screenTime.topApp ? ` on ${screenTime.topApp}` : ""}`,
-      );
-    }
+  const note = buildScreenTimeNote(options.screenTime);
+  return mergeBaseWithNote(base, note);
+}
+
+function buildScreenTimeNote(screenTime: ScreenTimeOverlapInfo | null): string {
+  if (!screenTime || screenTime.totalMinutes < DISTRACTION_THRESHOLD_MINUTES) {
+    return "";
   }
-  return parts.join(" • ");
+  const minutes = Math.round(screenTime.totalMinutes);
+  const appLabel = screenTime.topApp || "Phone usage";
+  return `${minutes} min on ${appLabel}`;
+}
+
+function mergeBaseWithNote(base: string, note: string): string {
+  if (base && note) return `${base} - ${note}`;
+  if (note) return note;
+  return base;
+}
+
+function buildTravelTitle(fromLabel: string, toLabel: string): string {
+  const destination = toLabel.trim();
+  if (destination) {
+    return `Drove to ${destination}`;
+  }
+  const origin = fromLabel.trim();
+  return origin ? `Travel from ${origin}` : "Travel";
 }
 
 interface SleepInterruptionSummary {
@@ -2121,7 +2167,9 @@ function buildSleepInterruptionSummaryFromSessions(
       getReadableAppName({
         appId: session.app_id,
         displayName: session.display_name,
-      }) ?? session.app_id;
+      }) ??
+      session.app_id ??
+      "Phone usage";
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }
@@ -2227,7 +2275,9 @@ function buildScreenTimeOverlapFromSessions(
       getReadableAppName({
         appId: session.app_id,
         displayName: session.display_name,
-      }) ?? session.app_id;
+      }) ??
+      session.app_id ??
+      "Phone usage";
     const current = appUsage.get(appName) ?? 0;
     appUsage.set(appName, current + overlapMinutes);
   }

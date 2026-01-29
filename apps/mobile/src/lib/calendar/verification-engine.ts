@@ -274,11 +274,13 @@ export function verifyEvent(
         sessionEndMins,
       );
 
-      const appName =
-        getReadableAppName({
-          appId: session.app_id,
-          displayName: session.display_name,
-        }) ?? session.app_id;
+    const appName =
+      getReadableAppName({
+        appId: session.app_id,
+        displayName: session.display_name,
+      }) ??
+      session.app_id ??
+      "Phone usage";
       const currentUsage = appUsage.get(appName) ?? 0;
       appUsage.set(appName, currentUsage + overlap);
       totalMinutes += overlap;
@@ -766,10 +768,12 @@ export function generateActualBlocks(
         block,
         appCategoryOverrides,
       );
+      const title = classification.title || "Screen Time";
+      const description = classification.description || "Phone usage";
       blocks.push({
         id: `screen_${block.startMinutes}`,
-        title: classification.title,
-        description: classification.description,
+        title,
+        description,
         category: classification.category,
         startMinutes: block.startMinutes,
         endMinutes: block.endMinutes,
@@ -865,7 +869,9 @@ function groupScreenTimeSessions(
       getReadableAppName({
         appId: session.app_id,
         displayName: session.display_name,
-      }) ?? session.app_id;
+      }) ??
+      session.app_id ??
+      "Phone usage";
     const isDistraction = appMatchesList(appName, DISTRACTION_APPS);
 
     if (

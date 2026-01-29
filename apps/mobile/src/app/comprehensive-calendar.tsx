@@ -576,7 +576,7 @@ export default function ComprehensiveCalendarScreen() {
     if (!userId) return;
     const interval = setInterval(() => {
       void refreshActualEventsForSelectedDay();
-    }, 5 * 60_000); // 5 minutes
+    }, 30 * 60_000); // 30 minutes
     return () => clearInterval(interval);
   }, [refreshActualEventsForSelectedDay, userId]);
 
