@@ -8,6 +8,16 @@ import type {
   UserPlaceRow,
 } from "./evidence-data";
 
+import {
+  classifyIntent,
+  type AppSummary,
+  type Intent,
+  type IntentClassificationResult,
+  type UserAppCategoryOverrides,
+} from "./app-categories";
+
+import type { ReconciliationEvent, DerivedEvent } from "./event-reconciliation";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -947,4 +957,431 @@ export function processSegmentsWithCommutes(
 
   // Sort final result by start time
   return result.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+// ============================================================================
+// Sessionization
+// ============================================================================
+
+/**
+ * A session block representing a contiguous block of time at a place
+ * with classified intent based on screen-time during that period.
+ */
+export interface SessionBlock {
+  /** Deterministic source ID for reconciliation */
+  sourceId: string;
+  /** Session title: '[Place] - [Intent]' */
+  title: string;
+  /** Start timestamp of this session */
+  start: Date;
+  /** End timestamp of this session */
+  end: Date;
+  /** Place ID if known */
+  placeId: string | null;
+  /** Place label if known */
+  placeLabel: string | null;
+  /** Classified intent for this session */
+  intent: Intent;
+  /** Intent classification result with reasoning */
+  intentClassification: IntentClassificationResult;
+  /** IDs of child events (granular screen-time/location events) within this session */
+  childEventIds: string[];
+  /** Confidence score 0-1 based on location data quality */
+  confidence: number;
+  /** Metadata for event creation */
+  meta: {
+    kind: "session_block";
+    place_id: string | null;
+    place_label: string | null;
+    intent: Intent;
+    children: string[];
+    confidence: number;
+    /** Summary of top apps used in this session */
+    summary?: Array<{ label: string; seconds: number }>;
+    /** Human-readable reasoning for intent classification */
+    intent_reasoning?: string;
+  };
+}
+
+/**
+ * Input event for sessionization. Can be either:
+ * - ReconciliationEvent (from database)
+ * - DerivedEvent (from evidence processing)
+ * - A generic event with required fields
+ */
+export interface SessionizableEvent {
+  /** Event ID (for child linking) */
+  id?: string;
+  /** Source ID (for derived events without database IDs) */
+  sourceId?: string;
+  /** Event title */
+  title: string;
+  /** Start time */
+  scheduledStart: Date;
+  /** End time */
+  scheduledEnd: Date;
+  /** Event metadata */
+  meta: Record<string, unknown>;
+}
+
+/**
+ * Generate a deterministic source ID for a session block.
+ * Format: session:{windowStartMs}:{placeId}:{sessionStartMs}
+ */
+function generateSessionSourceId(
+  windowStart: Date,
+  placeId: string | null,
+  sessionStart: Date,
+): string {
+  const windowStartMs = windowStart.getTime();
+  const sessionStartMs = sessionStart.getTime();
+  const placeIdPart = placeId ?? "unknown";
+  return `session:${windowStartMs}:${placeIdPart}:${sessionStartMs}`;
+}
+
+/**
+ * Extract place_id from an event's metadata.
+ */
+function getEventPlaceId(event: SessionizableEvent): string | null {
+  const placeId = event.meta?.place_id;
+  if (typeof placeId === "string" && placeId.trim().length > 0) {
+    return placeId.trim();
+  }
+  return null;
+}
+
+/**
+ * Extract place_label from an event's metadata.
+ */
+function getEventPlaceLabel(event: SessionizableEvent): string | null {
+  const placeLabel = event.meta?.place_label;
+  if (typeof placeLabel === "string" && placeLabel.trim().length > 0) {
+    return placeLabel.trim();
+  }
+  return null;
+}
+
+/**
+ * Get the event identifier (id or sourceId) for child linking.
+ */
+function getEventIdentifier(event: SessionizableEvent): string {
+  return event.id ?? event.sourceId ?? `event:${event.scheduledStart.getTime()}`;
+}
+
+/**
+ * Check if an event is a screen-time event (has app_id in meta).
+ */
+function isScreenTimeEvent(event: SessionizableEvent): boolean {
+  const appId = event.meta?.app_id;
+  return typeof appId === "string" && appId.trim().length > 0;
+}
+
+/**
+ * Check if an event is a commute event.
+ */
+function isEventCommute(event: SessionizableEvent): boolean {
+  return event.meta?.kind === "commute";
+}
+
+/**
+ * Check if two events have the same location context.
+ * Returns true if:
+ * 1. Same place_id (including both null for unknown)
+ * 2. Both are commutes
+ */
+function haveSameLocationContext(
+  event1: SessionizableEvent,
+  event2: SessionizableEvent,
+): boolean {
+  const place1 = getEventPlaceId(event1);
+  const place2 = getEventPlaceId(event2);
+
+  // Commute events are their own location context
+  if (isEventCommute(event1) || isEventCommute(event2)) {
+    // Commutes can only group with other events of same commute
+    // For now, commutes don't merge with other events
+    return isEventCommute(event1) && isEventCommute(event2);
+  }
+
+  // Same place_id (both can be null for unknown locations)
+  return place1 === place2;
+}
+
+/**
+ * Build app usage summary from child events.
+ * Aggregates screen-time by app_id for intent classification.
+ */
+function buildAppSummary(events: SessionizableEvent[]): AppSummary[] {
+  const appDurations = new Map<string, number>();
+
+  for (const event of events) {
+    if (!isScreenTimeEvent(event)) continue;
+
+    const appId = event.meta?.app_id as string;
+    const durationMs =
+      event.scheduledEnd.getTime() - event.scheduledStart.getTime();
+    const durationSec = Math.round(durationMs / 1000);
+
+    const existing = appDurations.get(appId) ?? 0;
+    appDurations.set(appId, existing + durationSec);
+  }
+
+  // Convert to AppSummary array sorted by duration descending
+  return Array.from(appDurations.entries())
+    .map(([appId, seconds]) => ({ appId, seconds }))
+    .sort((a, b) => b.seconds - a.seconds);
+}
+
+/**
+ * Format intent for display in session title.
+ * Capitalizes and cleans up the intent string.
+ */
+function formatIntentForTitle(intent: Intent): string {
+  switch (intent) {
+    case "work":
+      return "Work";
+    case "leisure":
+      return "Leisure";
+    case "distracted_work":
+      return "Distracted Work";
+    case "offline":
+      return "Offline";
+    case "mixed":
+      return "Mixed";
+    default:
+      return "Unknown";
+  }
+}
+
+/**
+ * Generate session title: '[Place] - [Intent]'
+ */
+function generateSessionTitle(
+  placeLabel: string | null,
+  intent: Intent,
+  isCommute: boolean,
+): string {
+  if (isCommute) {
+    return "Commute";
+  }
+
+  const placePart = placeLabel ?? "Unknown Location";
+  const intentPart = formatIntentForTitle(intent);
+  return `${placePart} - ${intentPart}`;
+}
+
+/**
+ * Group events by location to form session boundaries.
+ * A new session starts when:
+ * 1. Place changes (different place_id)
+ * 2. There's a commute event (acts as its own session)
+ */
+function groupEventsByLocation(
+  events: SessionizableEvent[],
+): SessionizableEvent[][] {
+  if (events.length === 0) return [];
+
+  // Sort events by start time
+  const sortedEvents = [...events].sort(
+    (a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime(),
+  );
+
+  const groups: SessionizableEvent[][] = [];
+  let currentGroup: SessionizableEvent[] = [];
+
+  for (const event of sortedEvents) {
+    if (currentGroup.length === 0) {
+      currentGroup.push(event);
+      continue;
+    }
+
+    const lastEvent = currentGroup[currentGroup.length - 1];
+
+    // Check if we should start a new group
+    const shouldStartNewGroup =
+      // Commute events are their own group
+      isEventCommute(event) ||
+      isEventCommute(lastEvent) ||
+      // Place changed
+      !haveSameLocationContext(lastEvent, event);
+
+    if (shouldStartNewGroup) {
+      groups.push(currentGroup);
+      currentGroup = [event];
+    } else {
+      currentGroup.push(event);
+    }
+  }
+
+  // Don't forget the last group
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
+
+  return groups;
+}
+
+/**
+ * Create a session block from a group of events.
+ */
+function createSessionBlock(
+  events: SessionizableEvent[],
+  windowStart: Date,
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionBlock | null {
+  if (events.length === 0) return null;
+
+  // Sort events by start time
+  const sortedEvents = [...events].sort(
+    (a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime(),
+  );
+
+  // Determine session boundaries
+  const sessionStart = sortedEvents[0].scheduledStart;
+  const sessionEnd = sortedEvents[sortedEvents.length - 1].scheduledEnd;
+
+  // Get location info from the first location event, or first event
+  let placeId: string | null = null;
+  let placeLabel: string | null = null;
+  let confidence = 0.5; // Default confidence
+
+  // Find the first event with location info
+  for (const event of sortedEvents) {
+    const eventPlaceId = getEventPlaceId(event);
+    const eventPlaceLabel = getEventPlaceLabel(event);
+    const eventConfidence = event.meta?.confidence;
+
+    if (eventPlaceId !== null || eventPlaceLabel !== null) {
+      placeId = eventPlaceId;
+      placeLabel = eventPlaceLabel;
+      if (typeof eventConfidence === "number") {
+        confidence = eventConfidence;
+      }
+      break;
+    }
+  }
+
+  // Check if this is a commute session
+  const isCommute = sortedEvents.length === 1 && isEventCommute(sortedEvents[0]);
+
+  // Build app summary from screen-time events
+  const appSummary = buildAppSummary(sortedEvents);
+
+  // Classify intent based on app usage
+  const intentClassification = classifyIntent(appSummary, userOverrides);
+  const intent = isCommute ? "offline" : intentClassification.intent;
+
+  // Build top 3 app summary for display
+  const summary = appSummary.slice(0, 3).map((app) => ({
+    label: app.appId,
+    seconds: app.seconds,
+  }));
+
+  // Collect child event IDs
+  const childEventIds = sortedEvents.map(getEventIdentifier);
+
+  // Generate source ID
+  const sourceId = generateSessionSourceId(windowStart, placeId, sessionStart);
+
+  // Generate title
+  const title = generateSessionTitle(placeLabel, intent, isCommute);
+
+  return {
+    sourceId,
+    title,
+    start: sessionStart,
+    end: sessionEnd,
+    placeId,
+    placeLabel,
+    intent,
+    intentClassification,
+    childEventIds,
+    confidence,
+    meta: {
+      kind: "session_block",
+      place_id: placeId,
+      place_label: placeLabel,
+      intent,
+      children: childEventIds,
+      confidence,
+      summary: summary.length > 0 ? summary : undefined,
+      intent_reasoning: intentClassification.reasoning,
+    },
+  };
+}
+
+/**
+ * Convert a SessionBlock to a DerivedEvent for reconciliation.
+ */
+export function sessionBlockToDerivedEvent(session: SessionBlock): DerivedEvent {
+  return {
+    sourceId: session.sourceId,
+    title: session.title,
+    scheduledStart: session.start,
+    scheduledEnd: session.end,
+    meta: {
+      ...session.meta,
+      source: "derived",
+      source_id: session.sourceId,
+    },
+  };
+}
+
+/**
+ * Sessionize events within a time window.
+ *
+ * This function groups granular events (screen-time, location blocks) into
+ * place-anchored session blocks. Session boundaries are created when:
+ * 1. The place changes (different place_id)
+ * 2. A commute event occurs (commutes are their own sessions)
+ *
+ * Each session block:
+ * - Has meta.kind = 'session_block'
+ * - Links to child events via meta.children array
+ * - Has title format: '[Place] - [Intent]' (e.g., 'Cafe - Work')
+ * - Has classified intent based on screen-time during the session
+ *
+ * @param userId - The user's ID (for potential future database queries)
+ * @param windowStart - Start of the ingestion window
+ * @param windowEnd - End of the ingestion window
+ * @param events - Granular events to sessionize (screen-time, location, etc.)
+ * @param userOverrides - Optional user category overrides for intent classification
+ * @returns Array of session blocks
+ */
+export function sessionizeWindow(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+  events: SessionizableEvent[],
+  userOverrides?: UserAppCategoryOverrides | null,
+): SessionBlock[] {
+  // Filter events to those within the window
+  const windowEvents = events.filter((event) => {
+    const eventStart = event.scheduledStart.getTime();
+    const eventEnd = event.scheduledEnd.getTime();
+    const winStart = windowStart.getTime();
+    const winEnd = windowEnd.getTime();
+
+    // Event overlaps with window
+    return eventStart < winEnd && eventEnd > winStart;
+  });
+
+  if (windowEvents.length === 0) {
+    return [];
+  }
+
+  // Group events by location (place changes = session boundary)
+  const eventGroups = groupEventsByLocation(windowEvents);
+
+  // Create session blocks from groups
+  const sessions: SessionBlock[] = [];
+  for (const group of eventGroups) {
+    const session = createSessionBlock(group, windowStart, userOverrides);
+    if (session) {
+      sessions.push(session);
+    }
+  }
+
+  // Sort sessions by start time
+  return sessions.sort((a, b) => a.start.getTime() - b.start.getTime());
 }
