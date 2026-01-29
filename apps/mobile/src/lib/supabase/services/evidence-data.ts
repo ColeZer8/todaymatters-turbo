@@ -583,3 +583,447 @@ function ymdToDate(ymd: string): Date {
   const day = Number(match[3]);
   return new Date(year, month, day, 0, 0, 0, 0);
 }
+
+// ============================================================================
+// Location Evidence for Window (Ingestion Pipeline)
+// ============================================================================
+
+/**
+ * Processed location evidence for a single time segment within the window.
+ * Used by the ingestion pipeline to create location-based events.
+ */
+export interface LocationEvidence {
+  /** Start timestamp of this location evidence segment */
+  start: string;
+  /** End timestamp of this location evidence segment */
+  end: string;
+  /** User place ID if location matches a labeled place, null otherwise */
+  place_id: string | null;
+  /** User place label if matched, null otherwise */
+  place_label: string | null;
+  /** Latitude of the location (centroid or sample point) */
+  latitude: number | null;
+  /** Longitude of the location (centroid or sample point) */
+  longitude: number | null;
+  /** Confidence score 0-1 based on sample count and accuracy */
+  confidence: number;
+}
+
+/**
+ * Raw location sample within a window.
+ */
+interface WindowLocationSample {
+  recorded_at: string;
+  latitude: number;
+  longitude: number;
+  accuracy_m: number | null;
+}
+
+/**
+ * Fetch location evidence for an ingestion window.
+ *
+ * This function combines data from:
+ * 1. tm.location_samples - raw GPS points for precise timestamps
+ * 2. tm.location_hourly - aggregated hourly data with place matching
+ * 3. tm.user_places - for ST_DWithin matching of samples to labeled places
+ *
+ * @param userId - User ID to fetch location data for
+ * @param windowStart - Start of the ingestion window (ISO timestamp)
+ * @param windowEnd - End of the ingestion window (ISO timestamp)
+ * @returns Array of LocationEvidence segments with place matching and confidence
+ */
+export async function fetchLocationEvidenceForWindow(
+  userId: string,
+  windowStart: string,
+  windowEnd: string,
+): Promise<LocationEvidence[]> {
+  if (!userId) {
+    if (__DEV__) {
+      console.warn(
+        "[Evidence] fetchLocationEvidenceForWindow called without userId",
+      );
+    }
+    return [];
+  }
+
+  try {
+    // Fetch all three data sources in parallel
+    const [locationSamples, locationHourly, userPlaces] = await Promise.all([
+      fetchLocationSamplesForWindow(userId, windowStart, windowEnd),
+      fetchLocationHourlyForWindow(userId, windowStart, windowEnd),
+      fetchUserPlaces(userId),
+    ]);
+
+    // If we have no location data, return empty array
+    if (locationSamples.length === 0 && locationHourly.length === 0) {
+      return [];
+    }
+
+    // Build location evidence from the data
+    return buildLocationEvidence(
+      locationSamples,
+      locationHourly,
+      userPlaces,
+      windowStart,
+      windowEnd,
+    );
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(
+        "[Evidence] Failed to fetch location evidence for window:",
+        error,
+      );
+    }
+    return [];
+  }
+}
+
+/**
+ * Fetch raw location samples for a specific time window.
+ */
+async function fetchLocationSamplesForWindow(
+  userId: string,
+  windowStart: string,
+  windowEnd: string,
+): Promise<WindowLocationSample[]> {
+  try {
+    const { data, error } = await tmSchema()
+      .from("location_samples")
+      .select("recorded_at, latitude, longitude, accuracy_m")
+      .eq("user_id", userId)
+      .gte("recorded_at", windowStart)
+      .lt("recorded_at", windowEnd)
+      .order("recorded_at", { ascending: true });
+
+    if (error) {
+      if (error.code === "PGRST204" || error.code === "42P01") {
+        return [];
+      }
+      throw handleSupabaseError(error);
+    }
+
+    return (data ?? []).map(
+      (row: {
+        recorded_at: string;
+        latitude: number;
+        longitude: number;
+        accuracy_m: number | null;
+      }) => ({
+        recorded_at: row.recorded_at,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        accuracy_m: row.accuracy_m ?? null,
+      }),
+    );
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(
+        "[Evidence] Failed to fetch location samples for window:",
+        error,
+      );
+    }
+    return [];
+  }
+}
+
+/**
+ * Fetch location hourly aggregates that overlap with a specific time window.
+ * The hourly view already joins with user_places for place matching.
+ */
+async function fetchLocationHourlyForWindow(
+  userId: string,
+  windowStart: string,
+  windowEnd: string,
+): Promise<LocationHourlyRow[]> {
+  // Expand to include hours that might overlap with the window
+  const windowStartDate = new Date(windowStart);
+  const windowEndDate = new Date(windowEnd);
+
+  // Floor windowStart to the hour
+  const hourStart = new Date(windowStartDate);
+  hourStart.setMinutes(0, 0, 0);
+
+  // Ceil windowEnd to the next hour
+  const hourEnd = new Date(windowEndDate);
+  if (hourEnd.getMinutes() > 0 || hourEnd.getSeconds() > 0) {
+    hourEnd.setHours(hourEnd.getHours() + 1);
+    hourEnd.setMinutes(0, 0, 0);
+  }
+
+  try {
+    const { data, error } = await tmSchema()
+      .from("location_hourly")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("hour_start", hourStart.toISOString())
+      .lt("hour_start", hourEnd.toISOString())
+      .order("hour_start", { ascending: true });
+
+    if (error) {
+      if (error.code === "PGRST204" || error.code === "42P01") {
+        return [];
+      }
+      throw handleSupabaseError(error);
+    }
+
+    const rows = (data ?? []) as Record<string, unknown>[];
+    return rows.map(coerceLocationHourlyRow);
+  } catch (error) {
+    if (__DEV__) {
+      console.warn(
+        "[Evidence] Failed to fetch location hourly for window:",
+        error,
+      );
+    }
+    return [];
+  }
+}
+
+/**
+ * Calculate the haversine distance between two points in meters.
+ */
+function haversineDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371000; // Earth's radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
+
+/**
+ * Find the best matching user place for a given coordinate.
+ * Uses haversine distance to replicate ST_DWithin behavior.
+ */
+function findMatchingPlace(
+  latitude: number,
+  longitude: number,
+  userPlaces: UserPlaceRow[],
+): UserPlaceRow | null {
+  let bestMatch: UserPlaceRow | null = null;
+  let bestDistance = Infinity;
+
+  for (const place of userPlaces) {
+    if (place.latitude === null || place.longitude === null) continue;
+
+    const distance = haversineDistance(
+      latitude,
+      longitude,
+      place.latitude,
+      place.longitude,
+    );
+
+    // Check if within radius and closer than current best
+    if (distance <= place.radius_m && distance < bestDistance) {
+      bestMatch = place;
+      bestDistance = distance;
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Calculate confidence score based on sample count and accuracy.
+ * Higher sample count and better accuracy = higher confidence.
+ */
+function calculateConfidence(
+  sampleCount: number,
+  avgAccuracyM: number | null,
+): number {
+  // Base confidence from sample count (0.3-0.7)
+  // More samples = higher confidence, up to ~10 samples per 30-min window
+  const countConfidence = Math.min(0.7, 0.3 + (sampleCount / 10) * 0.4);
+
+  // Accuracy bonus (0-0.3)
+  // Under 20m = excellent, under 50m = good, under 100m = okay
+  let accuracyBonus = 0;
+  if (avgAccuracyM !== null) {
+    if (avgAccuracyM <= 20) {
+      accuracyBonus = 0.3;
+    } else if (avgAccuracyM <= 50) {
+      accuracyBonus = 0.2;
+    } else if (avgAccuracyM <= 100) {
+      accuracyBonus = 0.1;
+    }
+  }
+
+  return Math.min(1, countConfidence + accuracyBonus);
+}
+
+/**
+ * Build location evidence from raw samples, hourly aggregates, and user places.
+ *
+ * Strategy:
+ * 1. If we have raw samples, group them into segments by place matching
+ * 2. Fall back to hourly aggregates if no raw samples
+ * 3. Match each segment to user places using ST_DWithin logic (haversine distance)
+ */
+function buildLocationEvidence(
+  samples: WindowLocationSample[],
+  hourlyData: LocationHourlyRow[],
+  userPlaces: UserPlaceRow[],
+  windowStart: string,
+  windowEnd: string,
+): LocationEvidence[] {
+  const evidence: LocationEvidence[] = [];
+
+  if (samples.length > 0) {
+    // Build evidence from raw samples
+    // Group consecutive samples that match the same place
+    let currentSegment: {
+      start: string;
+      end: string;
+      place: UserPlaceRow | null;
+      samples: WindowLocationSample[];
+    } | null = null;
+
+    for (const sample of samples) {
+      const matchingPlace = findMatchingPlace(
+        sample.latitude,
+        sample.longitude,
+        userPlaces,
+      );
+      const placeId = matchingPlace?.id ?? null;
+
+      if (currentSegment === null) {
+        // Start first segment
+        currentSegment = {
+          start: sample.recorded_at,
+          end: sample.recorded_at,
+          place: matchingPlace,
+          samples: [sample],
+        };
+      } else if (
+        currentSegment.place?.id === placeId ||
+        (currentSegment.place === null && placeId === null)
+      ) {
+        // Same place, extend segment
+        currentSegment.end = sample.recorded_at;
+        currentSegment.samples.push(sample);
+      } else {
+        // Different place, finalize current segment and start new one
+        evidence.push(
+          createEvidenceFromSegment(currentSegment, windowStart, windowEnd),
+        );
+        currentSegment = {
+          start: sample.recorded_at,
+          end: sample.recorded_at,
+          place: matchingPlace,
+          samples: [sample],
+        };
+      }
+    }
+
+    // Finalize last segment
+    if (currentSegment) {
+      evidence.push(
+        createEvidenceFromSegment(currentSegment, windowStart, windowEnd),
+      );
+    }
+  } else if (hourlyData.length > 0) {
+    // Fall back to hourly aggregates
+    for (const hourly of hourlyData) {
+      const hourStart = new Date(hourly.hour_start);
+      const hourEnd = new Date(hourStart);
+      hourEnd.setHours(hourEnd.getHours() + 1);
+
+      // Clamp to window boundaries
+      const windowStartDate = new Date(windowStart);
+      const windowEndDate = new Date(windowEnd);
+      const segmentStart = new Date(
+        Math.max(hourStart.getTime(), windowStartDate.getTime()),
+      );
+      const segmentEnd = new Date(
+        Math.min(hourEnd.getTime(), windowEndDate.getTime()),
+      );
+
+      // Skip if segment doesn't overlap with window
+      if (segmentStart >= segmentEnd) continue;
+
+      evidence.push({
+        start: segmentStart.toISOString(),
+        end: segmentEnd.toISOString(),
+        place_id: hourly.place_id,
+        place_label: hourly.place_label,
+        latitude: hourly.centroid_latitude ?? null,
+        longitude: hourly.centroid_longitude ?? null,
+        confidence: calculateConfidence(
+          hourly.sample_count,
+          hourly.avg_accuracy_m,
+        ),
+      });
+    }
+  }
+
+  return evidence;
+}
+
+/**
+ * Create a LocationEvidence object from a segment of samples.
+ */
+function createEvidenceFromSegment(
+  segment: {
+    start: string;
+    end: string;
+    place: UserPlaceRow | null;
+    samples: WindowLocationSample[];
+  },
+  windowStart: string,
+  windowEnd: string,
+): LocationEvidence {
+  // Calculate centroid from samples
+  let latSum = 0;
+  let lonSum = 0;
+  let accuracySum = 0;
+  let accuracyCount = 0;
+
+  for (const sample of segment.samples) {
+    latSum += sample.latitude;
+    lonSum += sample.longitude;
+    if (sample.accuracy_m !== null) {
+      accuracySum += sample.accuracy_m;
+      accuracyCount++;
+    }
+  }
+
+  const avgLat = latSum / segment.samples.length;
+  const avgLon = lonSum / segment.samples.length;
+  const avgAccuracy = accuracyCount > 0 ? accuracySum / accuracyCount : null;
+
+  // Clamp segment boundaries to window
+  const windowStartDate = new Date(windowStart);
+  const windowEndDate = new Date(windowEnd);
+  const segmentStartDate = new Date(segment.start);
+  const segmentEndDate = new Date(segment.end);
+
+  const clampedStart = new Date(
+    Math.max(segmentStartDate.getTime(), windowStartDate.getTime()),
+  );
+  const clampedEnd = new Date(
+    Math.min(segmentEndDate.getTime(), windowEndDate.getTime()),
+  );
+
+  return {
+    start: clampedStart.toISOString(),
+    end: clampedEnd.toISOString(),
+    place_id: segment.place?.id ?? null,
+    place_label: segment.place?.label ?? null,
+    latitude: avgLat,
+    longitude: avgLon,
+    confidence: calculateConfidence(segment.samples.length, avgAccuracy),
+  };
+}
