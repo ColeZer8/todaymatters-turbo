@@ -1314,6 +1314,39 @@ export type Database = {
           },
         ];
       };
+      actual_ingestion_checkpoints: {
+        Row: {
+          user_id: string;
+          timezone: string;
+          last_processed_at: string | null;
+          last_processed_window_start: string | null;
+          last_processed_window_end: string | null;
+          last_run_stats: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          timezone?: string;
+          last_processed_at?: string | null;
+          last_processed_window_start?: string | null;
+          last_processed_window_end?: string | null;
+          last_run_stats?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          timezone?: string;
+          last_processed_at?: string | null;
+          last_processed_window_start?: string | null;
+          last_processed_window_end?: string | null;
+          last_run_stats?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
