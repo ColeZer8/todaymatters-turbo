@@ -47,6 +47,90 @@
 - App category types: AppCategory (work/social/entertainment/comms/utility/ignore) for intent, distinct from EventCategory
 - Recently used apps: fetchRecentlyUsedApps queries screen_time_app_daily for 30-day aggregated usage
 - App category override: upsertAppCategoryOverride saves to tm.user_app_categories with AppCategory type
+- Location permission: lib/location-permission/index.ts has getLocationPermissionStatus, isLocationAvailableForIngestion, getLocationPromptState
+- Permission prompt tracking: AsyncStorage key "tm:locationPermission:lastPromptDate" with 7-day rate limit
+- LocationPermissionPrompt: Self-contained component that auto-checks if eligible to show
+- Fuzzy location: FUZZY_LOCATION_CONFIDENCE_THRESHOLD = 0.7, use "Near [Area]" label when confidence < 70%
+- Fuzzy location detection: fuzzyLocation property on SessionBlock, fuzzy_location in meta for persistence
+- Fuzzy UI: MapPinOff icon + dashed border in ComprehensiveCalendarTemplate, "(approximate)" suffix in SessionDetailModal
+- Reverse geocoding: reverseGeocode and getFuzzyLocationLabel in google-places.ts with 15-min TTL cache
+- applyFuzzyLocationLabels: Optional FuzzyLabelGetter parameter to avoid import chain issues in tests
+
+---
+
+## 2026-01-29 - US-028
+- **What was implemented:** Fuzzy location labels for low confidence locations (<70%)
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/google-places.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.test.ts` (modified)
+  - `apps/mobile/src/stores/events-store.ts` (modified)
+  - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` (modified)
+  - `apps/mobile/src/components/molecules/SessionDetailModal.tsx` (modified)
+- **google-places.ts additions:**
+  - `ReverseGeocodeResult` interface with areaName, city, neighborhood
+  - `reverseGeocode(lat, lon)` - Calls Google Geocoding API with result_type filtering
+  - `getFuzzyLocationLabel(lat, lon)` - Returns "Near [Area]" format for display
+  - `clearExpiredReverseGeocodeCache()` - Cache management helper
+  - 15-min TTL in-memory cache for reverse geocode results
+- **actual-ingestion.ts additions:**
+  - `FUZZY_LOCATION_CONFIDENCE_THRESHOLD` constant (0.7)
+  - `fuzzy_location` field in LocationSegment.meta and SessionBlock.meta
+  - `fuzzyLocation` property on SessionBlock interface
+  - `shouldUseFuzzyLocation(confidence, placeId)` helper function
+  - `FuzzyLabelGetter` type for optional label function
+  - `applyFuzzyLocationLabels(sessions, getFuzzyLabel?)` - Enhances sessions with fuzzy labels
+  - Updated createSessionBlock, createSleepSession, splitSession, mergeSessions to set fuzzyLocation
+- **events-store.ts additions:**
+  - `fuzzy_location?: boolean` in CalendarEventMeta interface
+- **ComprehensiveCalendarTemplate.tsx changes:**
+  - Added MapPinOff icon import
+  - `isFuzzyLocation` computed for session blocks
+  - `useDashedBorder` uses fuzzy or unknown status
+  - Fuzzy locations show MapPinOff icon with 0.5 opacity
+- **SessionDetailModal.tsx changes:**
+  - Added MapPinOff icon import
+  - Place label shows "(approximate)" suffix when fuzzy
+  - Italic styling and lighter color for fuzzy locations
+- **Learnings for future iterations:**
+  - Use FuzzyLabelGetter parameter instead of direct import to avoid config dependency issues in tests
+  - Fuzzy status inherits through merge/split operations
+  - User-defined places (with place_id) are never marked as fuzzy
+  - Sleep sessions at home are not fuzzy (known location)
+
+---
+
+## 2026-01-29 - US-027
+- **What was implemented:** Graceful handling of location permission denied with weekly prompt
+- **Files changed:**
+  - `apps/mobile/src/lib/location-permission/index.ts` (new)
+  - `apps/mobile/src/components/molecules/LocationPermissionPrompt.tsx` (new)
+  - `apps/mobile/src/components/molecules/index.ts` (modified)
+  - `apps/mobile/src/lib/supabase/hooks/use-actual-ingestion.ts` (modified)
+- **location-permission service features:**
+  - `getLocationPermissionStatus()` - Check foreground/background permission status without requesting
+  - `isLocationAvailableForIngestion()` - Returns true only if both FG and BG granted + services enabled
+  - `getLocationPromptState()` - Tracks last prompt date with 7-day minimum interval
+  - `recordLocationPromptShown()` - Updates AsyncStorage with current timestamp
+  - `shouldShowLocationPrompt()` - Combined check returning { shouldShow, reason, permissionStatus, promptState }
+  - `openLocationSettings()` - Calls Linking.openSettings()
+- **LocationPermissionPrompt component features:**
+  - Auto-checks eligibility via shouldShowLocationPrompt on mount
+  - Shows gentle reminder with MapPin icon
+  - Lists benefits: see where you spent time, automatic place recognition, better session blocks
+  - "Go to Settings" and "Not now" buttons
+  - "We'll only ask once per week" note at bottom
+  - useLocationPermissionPrompt hook for programmatic use
+- **useActualIngestion hook changes:**
+  - Added isLocationAvailableForIngestion check before fetching location data
+  - locationFallback flag tracks when location is skipped
+  - Empty locationSamples array when location not available (graceful degradation)
+  - stats.locationSkipped and result.locationFallback for tracking
+- **Learnings for future iterations:**
+  - Location permission can be checked without requesting via getForegroundPermissionsAsync/getBackgroundPermissionsAsync
+  - AsyncStorage key pattern: "tm:featureName:settingName" for app-level settings
+  - Weekly rate limit (7 days) prevents user fatigue from repeated prompts
+  - Fallback to screen-time only is seamless - same pipeline, just empty location data
 
 ---
 

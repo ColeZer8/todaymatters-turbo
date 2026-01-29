@@ -436,8 +436,8 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created location-permission service (apps/mobile/src/lib/location-permission/index.ts) with: getLocationPermissionStatus, isLocationAvailableForIngestion, getLocationPromptState (weekly rate limit via AsyncStorage), recordLocationPromptShown. Created LocationPermissionPrompt component (apps/mobile/src/components/molecules/LocationPermissionPrompt.tsx) with 'Go to Settings' and 'Not now' buttons, benefits list, and weekly limit note. Updated useActualIngestion hook to check isLocationAvailableForIngestion and fall back to screen-time only when location not available."
     },
     {
       "id": "US-028",
@@ -451,8 +451,8 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added reverseGeocode and getFuzzyLocationLabel to google-places.ts with 15-min cache. Added fuzzy_location field to CalendarEventMeta (events-store.ts), LocationSegment.meta and SessionBlock.meta (actual-ingestion.ts). FUZZY_LOCATION_CONFIDENCE_THRESHOLD constant (0.7). Updated createSessionBlock, createSleepSession, splitSession, mergeSessions to set fuzzyLocation flag. applyFuzzyLocationLabels helper accepts optional FuzzyLabelGetter for lazy loading. UI: ComprehensiveCalendarTemplate shows MapPinOff icon and dashed border for fuzzy locations. SessionDetailModal shows '(approximate)' suffix and italic styling for fuzzy place labels. Tests pass (38 in actual-ingestion.test.ts)."
     }
   ]
 }
