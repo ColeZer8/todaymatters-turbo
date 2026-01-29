@@ -1,0 +1,249 @@
+# Location-Informed Actual Ingestion — Simulation & Plan
+
+**Scope:** This document captures (1) a 2‑hour simulation with *location ingestion in place*, (2) how the app should present/categorize results, and (3) concrete changes needed to get the system working as intended. It is grounded in the **current ingestion logic** (screen‑time evidence + reconciliation + gap fill), then extends it **conceptually** with location evidence.
+
+> **No code changes in this doc.** This is a blueprint + simulation of expected outcomes.
+
+---
+
+## 1) Quick recap of current ingestion (what exists now)
+
+- Evidence source: `tm.screen_time_app_sessions` only.
+- Runs on the **previous 30‑minute window**.
+- Sessions are **clipped** to window boundaries.
+- Sessions < **60s** ignored; clipped segments < **30s** ignored.
+- Adjacent same‑app segments within **60s** are merged.
+- Reconciliation rules:
+  - **Protected** sources (`user`, `actual_adjust`) are never overwritten.
+  - **Replaceable** sources (`derived`, `evidence`, `ingestion`, `system`) can be replaced.
+- Gaps ≥ **60s** are filled with **Unknown** blocks.
+
+---
+
+## 2) Add location ingestion (conceptual design)
+
+**Goal:** Replace Unknown gaps with location‑aware “place blocks,” and provide an offline context when no screen evidence exists.
+
+**Proposed evidence sources (already in DB):**
+- `tm.location_samples`
+- `tm.location_hourly`
+- `tm.user_places`
+
+**Proposed inference:**
+- If a time range has **no screen evidence** but **consistent location**, mark as **"At Office" / "At Home" / "At Cafe"**.
+- If location changes along a path, classify as **"Commute"** (or "Travel") with `category: mobility`.
+- Where location isn’t confident, keep **Unknown**.
+
+---
+
+## 3) 2‑hour simulation with location ingestion in place
+
+### 3.1 Human‑level activity (09:00–11:00)
+- 09:00–09:08: Walking to cafe
+- 09:08–09:18: Ordering coffee, short texting
+- 09:18–09:40: Laptop work at cafe
+- 09:40–09:50: Walking back to office
+- 09:50–10:20: Focused work at desk
+- 10:20–10:30: Short break, checked social
+- 10:30–10:50: Meeting in office
+- 10:50–11:00: Email catch‑up
+
+### 3.2 Location evidence (what location tables would imply)
+
+**Derived place timeline (conceptual):**
+- 09:00–09:40: **Cafe** (place id: P_CAFE)
+- 09:40–09:50: **Commute/Travel** (moving between P_CAFE → P_OFFICE)
+- 09:50–11:00: **Office** (place id: P_OFFICE)
+
+> These place blocks would be inferred from `location_hourly` or aggregated `location_samples`, plus `user_places` labeling.
+
+### 3.3 Screen‑time evidence (same as previous example)
+
+| session_id | started_at | ended_at | duration_seconds | app_id | display_name |
+|---|---|---|---:|---|---|
+| s1 | 09:09:00 | 09:14:00 | 300 | com.apple.imessage | Messages |
+| s2 | 09:20:00 | 09:28:00 | 480 | com.google.chrome | Chrome |
+| s3 | 09:29:00 | 09:34:00 | 300 | com.google.docs | Google Docs |
+| s4 | 09:52:00 | 10:12:00 | 1200 | com.slack | Slack |
+| s5 | 10:13:00 | 10:18:00 | 300 | com.google.docs | Google Docs |
+| s6 | 10:21:00 | 10:26:00 | 300 | com.twitter.android | X |
+| s7 | 10:33:00 | 10:47:00 | 840 | com.google.meet | Google Meet |
+| s8 | 10:52:00 | 10:59:00 | 420 | com.google.gmail | Gmail |
+
+### 3.4 Window‑by‑window result (with location inference)
+
+#### Window A: 09:00–09:30
+**Screen segments:** Messages (09:09–09:14), Chrome (09:20–09:28), Docs (09:29–09:30)
+
+**Location evidence:** Cafe
+
+**Output (Actual):**
+- 09:09–09:14 — Messages (screen_time)
+- 09:20–09:28 — Chrome (screen_time)
+- 09:29–09:30 — Docs (screen_time)
+- 09:00–09:09 — **At Cafe** (location)
+- 09:14–09:20 — **At Cafe** (location)
+- 09:28–09:29 — **At Cafe** (location)
+
+#### Window B: 09:30–10:00
+**Screen segments:** Docs (09:30–09:34), Slack (09:52–10:00)
+
+**Location evidence:** Cafe until 09:40, Commute 09:40–09:50, Office 09:50–10:00
+
+**Output (Actual):**
+- 09:30–09:34 — Docs (screen_time)
+- 09:34–09:40 — **At Cafe** (location)
+- 09:40–09:50 — **Commute** (location)
+- 09:50–10:00 — Slack (screen_time)
+
+#### Window C: 10:00–10:30
+**Screen segments:** Slack (10:00–10:12), Docs (10:13–10:18), X (10:21–10:26)
+
+**Location evidence:** Office
+
+**Output (Actual):**
+- 10:00–10:12 — Slack (screen_time)
+- 10:12–10:13 — **At Office** (location)
+- 10:13–10:18 — Docs (screen_time)
+- 10:18–10:21 — **At Office** (location)
+- 10:21–10:26 — X (screen_time)
+- 10:26–10:30 — **At Office** (location)
+
+#### Window D: 10:30–11:00
+**Screen segments:** Meet (10:33–10:47), Gmail (10:52–10:59)
+
+**Location evidence:** Office
+
+**Output (Actual):**
+- 10:30–10:33 — **At Office** (location)
+- 10:33–10:47 — Meet (screen_time)
+- 10:47–10:52 — **At Office** (location)
+- 10:52–10:59 — Gmail (screen_time)
+- 10:59–11:00 — **At Office** (location)
+
+---
+
+## 4) Visual timeline (location‑aware)
+
+```
+09:00 ───────────────────────────────────────────── 11:00
+09:00-09:09  At Cafe      (location)
+09:09-09:14  Messages     (screen_time)
+09:14-09:20  At Cafe      (location)
+09:20-09:28  Chrome       (screen_time)
+09:28-09:29  At Cafe      (location)
+09:29-09:34  Docs         (screen_time)
+09:34-09:40  At Cafe      (location)
+09:40-09:50  Commute      (location)
+09:50-10:12  Slack        (screen_time)
+10:12-10:13  At Office    (location)
+10:13-10:18  Docs         (screen_time)
+10:18-10:21  At Office    (location)
+10:21-10:26  X            (screen_time)
+10:26-10:30  At Office    (location)
+10:30-10:33  At Office    (location)
+10:33-10:47  Meet         (screen_time)
+10:47-10:52  At Office    (location)
+10:52-10:59  Gmail        (screen_time)
+10:59-11:00  At Office    (location)
+```
+
+---
+
+## 5) How the app should categorize these (Actual side)
+
+**Screen‑time segments (ingestion):**
+- `meta.source = "ingestion"`
+- `meta.kind = "screen_time"`
+- `meta.category = "digital"`
+- `meta.app_id` + `meta.session_ids`
+
+**Location segments (new inference):**
+- `meta.source = "ingestion"` (or `"location"` if you want a separate provenance)
+- `meta.kind = "location_block"`
+- `meta.category = "place"` or `"mobility"`
+- `meta.place_id` (if known)
+- `meta.place_label` (Home/Office/Cafe)
+- `meta.confidence` (from location_hourly or heuristic)
+
+**Unknown segments:**
+- Only when **neither screen evidence nor confident location evidence** exists.
+- These should be **rare**, and ideally merged if small.
+
+---
+
+## 6) What should change to achieve this (no code changes yet, just design)
+
+### 6.1 New data pipeline steps
+1. **Fetch location evidence** for the same window:
+   - Use `location_hourly` and/or `location_samples`.
+   - Map location points to `user_places` where possible.
+2. **Generate location segments** similar to screen segments:
+   - Normalize into **contiguous blocks** by place.
+   - Identify **movement** between places as Commute.
+3. **Reconciliation priority order:**
+   1. Protected user events (never touched)
+   2. Screen‑time segments (direct evidence)
+   3. Location blocks (secondary evidence)
+   4. Unknown gaps (fallback)
+
+### 6.2 Gap handling rules
+- **Merge small Unknown gaps** between adjacent events (< 5 min) into neighbors.
+- Avoid inserting Unknown **inside** protected events.
+- Replace Unknown with location evidence when location confidence exceeds threshold.
+
+### 6.3 Proposed “place inference” heuristics
+- If 70%+ of location samples in a time span map to a single place → label as that place.
+- If the window shows **rapid coordinate change** and no stable place → classify as Commute.
+- If a place is unrecognized, label “At [City/Area]” or “Unlabeled place.”
+
+---
+
+## 7) How this should look in the app (UX expectations)
+
+**Actual timeline view:**
+- Screen‑time segments appear as **digital** blocks with app icon.
+- Location segments appear as **place** blocks (Home/Office/Cafe) with location icon.
+- Commute appears as a **mobility** block (car/train/walk icon if inferred).
+- Unknown should be **rare** and visually distinct (greyed).
+
+**Consistency:**
+- If a user edits a block, it becomes **protected** and future ingestion won’t overwrite it.
+- Location blocks should collapse when there is heavy screen‑time usage (screen‑time “wins” for those minutes).
+
+**Two subtle UX rules:**
+1. **No micro‑gaps:** If the gap is < 5 minutes, merge into adjacent block.
+2. **Location explains offline time:** Most “offline” minutes become place blocks rather than Unknown.
+
+---
+
+## 8) Questions / Decisions to finalize
+
+1. **Priority:** Should location blocks **override** “screen_time” when both exist? (My recommendation: **no** — screen_time is more specific.)
+2. **Minimum duration:** What’s the **minimum length** for a location block? (e.g., 2 min? 5 min?)
+3. **Commute rules:** How do we define commute? Speed threshold? Place change within X minutes?
+4. **Place confidence:** Do we want a single confidence threshold, or a tiered approach (High = auto, Low = Unknown)?
+5. **Category taxonomy:** Do we want `category=place` vs `category=mobility` vs `category=unknown` as the standard set?
+6. **Labels:** Should “At Office” be a **standardized label** or a **user‑editable title** tied to `user_places`?
+7. **Conflict resolution:** If location says **Office** but screen time says **Instagram**, do we need a combined label or keep screen time only?
+
+---
+
+## 9) Summary (what this gets us)
+
+- **Much fewer Unknown blocks** — offline time becomes meaningful.
+- **Timeline feels coherent**: screen time + place = real life.
+- **Deterministic, stable ingestion** maintained.
+
+---
+
+## 10) Next steps (non‑code)
+
+- Confirm priority and thresholds (questions above).
+- Decide naming conventions for location‑based Actual events.
+- Agree on UX representation (icons/colors).
+- Then implement: location evidence extraction + reconciliation order + gap rules.
+
+---
+
+*If you want, I can extend this doc with a second simulation (e.g., weekend day, gym + errands) and add a more formal rules table.*
