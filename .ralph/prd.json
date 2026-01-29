@@ -2,7 +2,8 @@
   "name": "Today Matters – Incremental Actual Ingestion (Android-first)",
   "version": "0.1.0",
   "owner": "Cole",
-  "status": "draft",
+  "status": "in_progress",
+  "branchName": "feat/incremental-actual-ingestion",
   "problem": {
     "summary": "The current Actual timeline is unstable: it rebuilds a full-day display pipeline frequently, auto-saves derived/evidence blocks, and can produce unknown blocks despite evidence, sleep not shifting, and overlapping/duplicated events.",
     "root_causes": [
@@ -26,6 +27,85 @@
     "Health-based derivation (explicitly ignored for now).",
     "Full pattern-based suggestions."
   ],
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create actual_ingestion_checkpoints migration",
+      "description": "Create the tm.actual_ingestion_checkpoints table to store per-user watermarks for tracking which time windows have been processed.",
+      "acceptance_criteria": [
+        "Migration creates tm.actual_ingestion_checkpoints table with fields: user_id, timezone, last_processed_at, last_processed_window_start, last_processed_window_end, updated_at",
+        "Table has RLS enabled with policies for select/insert/update own rows",
+        "Table has proper indexes for efficient queries",
+        "Migration is idempotent (can be run multiple times safely)"
+      ],
+      "priority": 1,
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "Implement ingestion service core logic",
+      "description": "Create the ActualIngestionService that fetches evidence from screen_time_app_sessions and reconciles it into calendar_actual events.",
+      "acceptance_criteria": [
+        "Service can query screen_time_app_sessions for a given time window",
+        "Service can build candidate segments from usage sessions",
+        "Service computes deterministic source_id for idempotency",
+        "Service handles window alignment to 30-minute boundaries",
+        "TypeScript types are properly defined"
+      ],
+      "priority": 2,
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "Implement reconciliation algorithm",
+      "description": "Implement the split/merge logic that reconciles evidence segments into existing Actual events without creating overlaps.",
+      "acceptance_criteria": [
+        "Algorithm fetches existing calendar_actual events that overlap the window",
+        "User-edited events (source='user' or 'actual_adjust') are never overwritten",
+        "Evidence segments replace Unknown and derived segments",
+        "No overlapping events after reconciliation",
+        "Adjacent events with same attributes can be merged"
+      ],
+      "priority": 3,
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "Implement gap filling for processed windows",
+      "description": "After reconciliation, fill any uncovered minutes in the window with Unknown blocks.",
+      "acceptance_criteria": [
+        "Gaps in the processed window are filled with Unknown blocks",
+        "Unknown blocks have proper meta.source and meta.kind",
+        "Gap filling only applies to the current window, not the entire day"
+      ],
+      "priority": 4,
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "Add useActualIngestion hook",
+      "description": "Create a React hook that triggers the ingestion service on app foreground/resume, similar to useInsightsSync.",
+      "acceptance_criteria": [
+        "Hook triggers ingestion on app foreground/resume",
+        "Hook respects the 30-minute interval (doesn't run more frequently)",
+        "Hook updates the checkpoint after successful processing",
+        "Hook handles errors gracefully without crashing the app"
+      ],
+      "priority": 5,
+      "passes": false
+    },
+    {
+      "id": "US-006",
+      "title": "Add Supabase types for new table",
+      "description": "Regenerate or manually add TypeScript types for the actual_ingestion_checkpoints table.",
+      "acceptance_criteria": [
+        "TypeScript types exist for actual_ingestion_checkpoints table",
+        "Types are properly exported and usable in the service"
+      ],
+      "priority": 6,
+      "passes": false
+    }
+  ],
   "scope": {
     "platforms": ["android"],
     "data_sources": [
@@ -38,11 +118,6 @@
       "tm.actual_ingestion_checkpoints (NEW - watermarks)"
     ]
   },
-  "user_story": {
-    "as_a": "user",
-    "i_want": "my Actual timeline to reflect what happened without changing retroactively",
-    "so_that": "the day feels trustworthy and edits are minimal."
-  },
   "principles": [
     "Ledger-first: Persisted Actuals are the source of truth; UI should not constantly rewrite them.",
     "Incremental: Only reconcile a small time window per run (+ small buffer).",
@@ -50,212 +125,12 @@
     "Split > relabel: When a short evidence segment exists inside a larger block, split and replace only the segment.",
     "Deterministic + idempotent: Stable keys, stable merge rules, safe re-runs."
   ],
-  "proposed_architecture": {
-    "overview": [
-      "Android usage is ALREADY persisted to tm.screen_time_app_sessions via existing useInsightsSync hook (every 5 min).",
-      "On app open (and optionally every 30 min while active), run ingestion for unprocessed windows since last checkpoint.",
-      "Reconcile evidence segments into tm.events (calendar_actual) via split/merge rules.",
-      "Store a watermark so windows are processed exactly-once or effectively-once (idempotent)."
-    ],
-    "where_it_runs": {
-      "approach": "App-triggered ingestion (client-side)",
-      "trigger_points": [
-        "On app foreground (resume from background)",
-        "Optionally: periodic check every 30 min while app is active"
-      ],
-      "rationale": [
-        "Simpler architecture - no Edge Functions or cron setup needed.",
-        "Leverages existing useInsightsSync pattern (runs every 5 min for screen time upload).",
-        "User gets fresh timeline when they open the app (most common use case).",
-        "Can migrate to server-side cron later if needed for background processing."
-      ]
-    }
-  },
-  "data_model": {
-    "existing_tables": [
-      {
-        "name": "tm.screen_time_app_sessions",
-        "status": "ALREADY EXISTS",
-        "purpose": "Repeatable, queryable Android usage evidence with precise timestamps",
-        "fields": [
-          "id (uuid)",
-          "screen_time_daily_id (uuid, FK to screen_time_daily)",
-          "user_id (uuid)",
-          "local_date (date)",
-          "app_id (text = package_name)",
-          "display_name (text, nullable)",
-          "started_at (timestamptz)",
-          "ended_at (timestamptz)",
-          "duration_seconds (int)",
-          "created_at (timestamptz)"
-        ],
-        "notes": [
-          "This is the evidence source for usage segments.",
-          "Already populated via useInsightsSync hook every 5 min.",
-          "Query by user_id + time range for window processing."
-        ]
-      },
-      {
-        "name": "tm.location_samples",
-        "status": "ALREADY EXISTS",
-        "purpose": "Raw location samples for precise event timing"
-      },
-      {
-        "name": "tm.location_hourly",
-        "status": "ALREADY EXISTS",
-        "purpose": "Hourly aggregated location (SQL view)"
-      },
-      {
-        "name": "tm.user_places",
-        "status": "ALREADY EXISTS",
-        "purpose": "User-labeled locations with categories"
-      },
-      {
-        "name": "tm.events",
-        "notes": [
-          "Write calendar_actual events here.",
-          "Use meta.source and meta.source_id for idempotency and reconciliation provenance.",
-          "Avoid inserting overlapping calendar_actual events."
-        ]
-      }
-    ],
-    "new_tables": [
-      {
-        "name": "tm.actual_ingestion_checkpoints",
-        "status": "NEW - needs migration",
-        "purpose": "Per-user watermarks and run bookkeeping",
-        "fields": [
-          "user_id (uuid, pk)",
-          "timezone (text)",
-          "last_processed_at (timestamptz)",
-          "last_processed_window_start (timestamptz)",
-          "last_processed_window_end (timestamptz)",
-          "updated_at"
-        ]
-      }
-    ],
-    "event_meta_conventions": {
-      "required": [
-        "meta.source: 'evidence' | 'derived' | 'user' | 'actual_adjust'",
-        "meta.kind: 'usage' | 'location' | 'travel' | 'unknown' (extendable)",
-        "meta.source_id: stable deterministic id for this segment"
-      ],
-      "recommended": [
-        "meta.confidence (0..1)",
-        "meta.evidence: { topApp, screenTimeMinutes, locationLabel }",
-        "meta.window: { startIso, endIso }"
-      ]
-    }
-  },
   "algorithm": {
     "cadence": {
       "interval_minutes": 30,
       "window": "[now-30m, now)",
       "buffer_minutes": 10,
       "mutable_cutoff_minutes": 120
-    },
-    "steps": [
-      {
-        "name": "Select window",
-        "details": [
-          "Compute windowStart, windowEnd based on user timezone and aligned to 30-min boundaries.",
-          "Optionally widen by +/- buffer_minutes for edge alignment."
-        ]
-      },
-      {
-        "name": "Fetch evidence for window",
-        "details": [
-          "Query tm.screen_time_app_sessions for [windowStart, windowEnd).",
-          "Query tm.location_samples for the window (or tm.location_hourly for fallback).",
-          "Query tm.user_places for auto-tagging.",
-          "Ignore health."
-        ]
-      },
-      {
-        "name": "Build candidate segments",
-        "details": [
-          "Create one or more candidate segments inside the window.",
-          "Example: usage sessions become segments; location stays as optional segments.",
-          "Each candidate has: start, end, category, title, meta.kind, meta.source_id."
-        ]
-      },
-      {
-        "name": "Reconcile into persisted Actual ledger",
-        "details": [
-          "Fetch existing tm.events calendar_actual that overlap [windowStart-buffer, windowEnd+buffer].",
-          "For each candidate segment:",
-          "- If it overlaps a user/actual_adjust event: do nothing for that overlap.",
-          "- Else: split existing event(s) around the candidate and replace the overlapped portion.",
-          "- Merge adjacent events if same (source, kind, category, title) and gap <= 1-2 min.",
-          "Guarantee no overlaps after reconciliation.",
-          "Guarantee idempotency via meta.source_id."
-        ]
-      },
-      {
-        "name": "Fill gaps (window-local)",
-        "details": [
-          "Only for the processed window, ensure uncovered minutes become Unknown blocks.",
-          "Do NOT fill the entire day every run."
-        ]
-      },
-      {
-        "name": "Commit + watermark",
-        "details": [
-          "Upsert tm.actual_ingestion_checkpoints with window bounds and last_processed_at.",
-          "Record run stats: inserted, updated, deleted, merged, skipped(user-lock), skipped(idempotent)."
-        ]
-      }
-    ],
-    "priority_rules": [
-      "Never modify meta.source in ['user','actual_adjust'] automatically.",
-      "Evidence segments replace Unknown and derived segments.",
-      "When conflict, keep higher priority + split lower priority around it.",
-      "Older than mutable_cutoff_minutes: do not modify (unless it is Unknown and fully covered by evidence within cutoff)."
-    ],
-    "idempotency": {
-      "strategy": "Every candidate segment gets a deterministic meta.source_id based on source + start/end (+ key attributes).",
-      "example": "screen_time_session:<session_id_from_db>",
-      "rule": "If a calendar_actual event with that meta.source_id already exists, skip insertion; if time boundaries changed slightly, reconcile by splitting/merging but preserve a stable identity mapping."
     }
-  },
-  "ui_impact": {
-    "short_term": [
-      "UI continues to render tm.events calendar_actual as Actual.",
-      "Stop (or heavily reduce) auto-sync of full-day derived display events.",
-      "Keep a lightweight display-only gap fill if needed, but do not persist display-only artifacts."
-    ],
-    "debugging": [
-      "Add a small diagnostics panel (dev-only) showing: last ingestion run, window, evidence counts, inserted/updated/merged/skipped."
-    ]
-  },
-  "acceptance_criteria": [
-    "At 3:00, processing 2:30–3:00 creates/reconciles only events in that window (+buffer).",
-    "Re-running 2:30–3:00 again produces no net changes.",
-    "User-edited Actual events are never overwritten.",
-    "If a 10-min evidence segment appears inside an Unknown block, the Unknown block is split and only that 10-min segment is replaced.",
-    "Persisted calendar_actual events have no overlaps."
-  ],
-  "edge_cases": [
-    "Cross-midnight windows and timezones (ensure ymd alignment is correct).",
-    "Daylight Saving Time transitions (missing or repeated hour).",
-    "Late-arriving evidence (allow limited backfill within mutable_cutoff_minutes).",
-    "Sparse location labels (fallback labeling strategy).",
-    "App killed / device offline (server ingestion continues if evidence is uploaded)."
-  ],
-  "rollout_plan": [
-    "Phase 0: ✅ COMPLETE - Evidence persistence already exists (tm.screen_time_app_sessions via useInsightsSync).",
-    "Phase 1: Create tm.actual_ingestion_checkpoints table + ingestion service.",
-    "Phase 2: Add useActualIngestion hook (similar to useInsightsSync) that runs on app open.",
-    "Phase 3: Ingestor writes calendar_actual but can be toggled off via feature flag.",
-    "Phase 4: Disable legacy buildActualDisplayEvents auto-sync paths that persist derived display events.",
-    "Phase 5: Remove feature flag + add user-facing 'Last ingestion' indicator."
-  ],
-  "open_questions": [
-    "✅ RESOLVED: Android usage sessions are uploaded via useInsightsSync hook every 5 min (already implemented).",
-    "✅ RESOLVED: We store raw sessions in tm.screen_time_app_sessions (started_at, ended_at, duration_seconds).",
-    "Should the ingestion hook run ONLY on app open, or also periodically every 30 min while app is active?",
-    "What is the minimal category mapping for usage evidence (e.g., productive apps = work)?",
-    "How do we handle sleep explicitly in this incremental model (separate rule set or just evidence replacement)?",
-    "Should we backfill historical windows on first run, or only process forward from 'now'?"
-  ]
+  }
 }
