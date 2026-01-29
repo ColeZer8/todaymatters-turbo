@@ -10,7 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X, MapPin, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, ChevronRight, Plus } from "lucide-react-native";
+import { X, MapPin, MapPinOff, Clock, Info, AlertCircle, CheckCircle, Scissors, Merge, ChevronRight, Plus } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import { TimePickerModal } from "../organisms/TimePickerModal";
 import { AddPlaceModal } from "./AddPlaceModal";
@@ -782,9 +782,20 @@ export const SessionDetailModal = ({
                   </Text>
                   {meta?.place_label && (
                     <View className="flex-row items-center mt-2">
-                      <Icon icon={MapPin} size={14} color={COLORS.textMuted} />
-                      <Text className="ml-1 text-sm text-[#64748B]">
+                      <Icon
+                        icon={meta.fuzzy_location ? MapPinOff : MapPin}
+                        size={14}
+                        color={meta.fuzzy_location ? COLORS.textSubtle : COLORS.textMuted}
+                      />
+                      <Text
+                        className="ml-1 text-sm"
+                        style={{
+                          color: meta.fuzzy_location ? COLORS.textSubtle : COLORS.textMuted,
+                          fontStyle: meta.fuzzy_location ? "italic" : "normal",
+                        }}
+                      >
                         {meta.place_label}
+                        {meta.fuzzy_location && " (approximate)"}
                       </Text>
                     </View>
                   )}

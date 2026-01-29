@@ -97,6 +97,8 @@ export interface LocationSegment {
     destination_place_label?: string | null;
     /** Distance traveled in meters (approximate) */
     distance_m?: number;
+    /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
+    fuzzy_location?: boolean;
   };
 }
 
@@ -164,6 +166,9 @@ const MIN_OVERNIGHT_GAP_MS = 3 * 60 * 60 * 1000;
 
 /** Common "Home" place labels for sleep detection (case-insensitive matching) */
 const HOME_PLACE_LABELS = ["home", "house", "apartment", "residence", "my place"];
+
+/** Confidence threshold below which location labels become fuzzy (use "Near [Area]" format) */
+export const FUZZY_LOCATION_CONFIDENCE_THRESHOLD = 0.7;
 
 // ============================================================================
 // Helpers
@@ -1039,6 +1044,8 @@ export interface SessionBlock {
   childEventIds: string[];
   /** Confidence score 0-1 based on location data quality */
   confidence: number;
+  /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
+  fuzzyLocation: boolean;
   /** Metadata for event creation */
   meta: {
     kind: "session_block";
@@ -1057,6 +1064,8 @@ export interface SessionBlock {
     latitude?: number | null;
     /** Longitude centroid for location (used for adding new places) */
     longitude?: number | null;
+    /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
+    fuzzy_location?: boolean;
   };
 }
 
@@ -1281,6 +1290,20 @@ function groupEventsByLocation(
 }
 
 /**
+ * Check if a location should be marked as fuzzy based on confidence.
+ * A location is fuzzy when confidence is below the threshold (70%).
+ */
+function shouldUseFuzzyLocation(
+  confidence: number,
+  placeId: string | null
+): boolean {
+  // Only mark as fuzzy if confidence is below threshold
+  // User-defined places (with place_id) should not be marked fuzzy
+  // as the user explicitly defined them
+  return confidence < FUZZY_LOCATION_CONFIDENCE_THRESHOLD && placeId === null;
+}
+
+/**
  * Create a session block from a group of events.
  */
 function createSessionBlock(
@@ -1337,6 +1360,9 @@ function createSessionBlock(
   // Check if this is a commute session
   const isCommute = sortedEvents.length === 1 && isEventCommute(sortedEvents[0]);
 
+  // Determine if this location should be marked as fuzzy
+  const isFuzzyLocation = !isCommute && shouldUseFuzzyLocation(confidence, placeId);
+
   // Build app summary from screen-time events
   const appSummary = buildAppSummary(sortedEvents);
 
@@ -1370,6 +1396,7 @@ function createSessionBlock(
     intentClassification,
     childEventIds,
     confidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: placeId,
@@ -1382,6 +1409,8 @@ function createSessionBlock(
       // Include coordinates for "Add Place" functionality at unknown locations
       latitude: latitude ?? undefined,
       longitude: longitude ?? undefined,
+      // Mark fuzzy location for UI styling
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 }
@@ -1401,6 +1430,82 @@ export function sessionBlockToDerivedEvent(session: SessionBlock): DerivedEvent 
       source_id: session.sourceId,
     },
   };
+}
+
+/** Type for the fuzzy label getter function */
+export type FuzzyLabelGetter = (latitude: number, longitude: number) => Promise<string | null>;
+
+/**
+ * Enhance session blocks with fuzzy location labels using reverse geocoding.
+ * This function asynchronously updates the place_label for sessions that:
+ * 1. Have fuzzy_location = true
+ * 2. Have coordinates available
+ * 3. Don't already have a place_label (unknown location)
+ *
+ * @param sessions - Array of SessionBlock objects to enhance
+ * @param getFuzzyLabel - Function to get a fuzzy label from coordinates (import from google-places.ts)
+ * @returns Array of SessionBlock objects with fuzzy labels applied where appropriate
+ *
+ * @example
+ * import { getFuzzyLocationLabel } from './google-places';
+ * const enhanced = await applyFuzzyLocationLabels(sessions, getFuzzyLocationLabel);
+ */
+export async function applyFuzzyLocationLabels(
+  sessions: SessionBlock[],
+  getFuzzyLabel?: FuzzyLabelGetter | null
+): Promise<SessionBlock[]> {
+  // If no label getter provided, just return sessions unchanged
+  if (!getFuzzyLabel) {
+    return sessions;
+  }
+
+  const enhancedSessions: SessionBlock[] = [];
+
+  for (const session of sessions) {
+    // Skip if not fuzzy or already has a place label
+    if (!session.fuzzyLocation || session.placeLabel !== null) {
+      enhancedSessions.push(session);
+      continue;
+    }
+
+    // Skip if no coordinates available
+    const lat = session.meta.latitude;
+    const lon = session.meta.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") {
+      enhancedSessions.push(session);
+      continue;
+    }
+
+    // Try to get a fuzzy label via reverse geocoding
+    try {
+      const fuzzyLabel = await getFuzzyLabel(lat, lon);
+
+      if (fuzzyLabel) {
+        // Update the session with the fuzzy label
+        const updatedSession: SessionBlock = {
+          ...session,
+          placeLabel: fuzzyLabel,
+          title: generateSessionTitle(fuzzyLabel, session.intent, false),
+          meta: {
+            ...session.meta,
+            place_label: fuzzyLabel,
+          },
+        };
+        enhancedSessions.push(updatedSession);
+      } else {
+        // No fuzzy label available, keep original
+        enhancedSessions.push(session);
+      }
+    } catch (error) {
+      // On error, keep original session
+      if (__DEV__) {
+        console.warn("[applyFuzzyLocationLabels] Error getting fuzzy label:", error);
+      }
+      enhancedSessions.push(session);
+    }
+  }
+
+  return enhancedSessions;
 }
 
 /**
@@ -1510,6 +1615,9 @@ function mergeSessionBlocks(
     seconds: app.seconds,
   }));
 
+  // Determine fuzzy location (merge inherits fuzzy status if either was fuzzy)
+  const isFuzzyLocation = first.fuzzyLocation || second.fuzzyLocation;
+
   return {
     sourceId,
     title,
@@ -1521,6 +1629,7 @@ function mergeSessionBlocks(
     intentClassification,
     childEventIds: combinedChildIds,
     confidence: newConfidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: placeId,
@@ -1530,6 +1639,7 @@ function mergeSessionBlocks(
       confidence: newConfidence,
       summary: summary.length > 0 ? summary : undefined,
       intent_reasoning: intentClassification.reasoning,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 }
@@ -1842,6 +1952,10 @@ export function createSleepSession(
     reasoning: "Detected as sleep session based on time and location",
   };
 
+  // Sleep sessions at home are not fuzzy (we know it's at home)
+  // Only mark as fuzzy if we don't have a place
+  const isFuzzyLocation = placeId === null && confidence < FUZZY_LOCATION_CONFIDENCE_THRESHOLD;
+
   return {
     sourceId,
     title,
@@ -1853,6 +1967,7 @@ export function createSleepSession(
     intentClassification: sleepIntentClassification,
     childEventIds,
     confidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: placeId,
@@ -1860,6 +1975,7 @@ export function createSleepSession(
       intent: "sleep",
       children: childEventIds,
       confidence,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 }
@@ -2286,6 +2402,9 @@ export function splitSession(
   const firstTitle = generateSessionTitle(session.placeLabel, firstIntent, false);
   const secondTitle = generateSessionTitle(session.placeLabel, secondIntent, false);
 
+  // Inherit fuzzy location status from original session
+  const isFuzzyLocation = session.fuzzyLocation;
+
   // Create first session block
   const firstSession: SessionBlock = {
     sourceId: firstSourceId,
@@ -2298,6 +2417,7 @@ export function splitSession(
     intentClassification: firstIntentClassification,
     childEventIds: firstChildIds,
     confidence: session.confidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: session.placeId,
@@ -2307,6 +2427,7 @@ export function splitSession(
       confidence: session.confidence,
       summary: firstSummary.length > 0 ? firstSummary : undefined,
       intent_reasoning: firstIntentClassification.reasoning,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 
@@ -2322,6 +2443,7 @@ export function splitSession(
     intentClassification: secondIntentClassification,
     childEventIds: secondChildIds,
     confidence: session.confidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: session.placeId,
@@ -2331,6 +2453,7 @@ export function splitSession(
       confidence: session.confidence,
       summary: secondSummary.length > 0 ? secondSummary : undefined,
       intent_reasoning: secondIntentClassification.reasoning,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 
@@ -2386,6 +2509,9 @@ export function splitScheduledEventSession(
   const sessionStart = new Date(dayStart.getTime() + event.startMinutes * 60 * 1000);
   const sessionEnd = new Date(sessionStart.getTime() + event.duration * 60 * 1000);
 
+  // Extract fuzzy location status from event meta
+  const isFuzzyLocation = event.meta.fuzzy_location === true;
+
   const session: SessionBlock = {
     sourceId: event.id,
     title: event.title,
@@ -2402,6 +2528,7 @@ export function splitScheduledEventSession(
     },
     childEventIds: event.meta.children ?? [],
     confidence: event.meta.confidence ?? 0.5,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: event.meta.place_id ?? null,
@@ -2411,6 +2538,7 @@ export function splitScheduledEventSession(
       confidence: event.meta.confidence ?? 0.5,
       summary: event.meta.summary,
       intent_reasoning: event.meta.intent_reasoning,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 
@@ -2516,6 +2644,9 @@ export function mergeSessions(
     seconds: app.seconds,
   }));
 
+  // Merged session is fuzzy if any of the source sessions was fuzzy
+  const isFuzzyLocation = sortedSessions.some((s) => s.fuzzyLocation);
+
   // Create merged session block
   const mergedSession: SessionBlock = {
     sourceId,
@@ -2528,6 +2659,7 @@ export function mergeSessions(
     intentClassification,
     childEventIds: allChildEventIds,
     confidence: mergedConfidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: placeId,
@@ -2537,6 +2669,7 @@ export function mergeSessions(
       confidence: mergedConfidence,
       summary: summary.length > 0 ? summary : undefined,
       intent_reasoning: intentClassification.reasoning,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 
@@ -2613,6 +2746,7 @@ export function mergeScheduledEventSessions(
   ): SessionBlock => {
     const sessionStart = new Date(dayStart.getTime() + event.startMinutes * 60 * 1000);
     const sessionEnd = new Date(sessionStart.getTime() + event.duration * 60 * 1000);
+    const isFuzzyLocation = event.meta?.fuzzy_location === true;
 
     return {
       sourceId: event.id,
@@ -2630,6 +2764,7 @@ export function mergeScheduledEventSessions(
       },
       childEventIds: event.meta?.children ?? [],
       confidence: event.meta?.confidence ?? 0.5,
+      fuzzyLocation: isFuzzyLocation,
       meta: {
         kind: "session_block",
         place_id: event.meta?.place_id ?? null,
@@ -2639,6 +2774,7 @@ export function mergeScheduledEventSessions(
         confidence: event.meta?.confidence ?? 0.5,
         summary: event.meta?.summary,
         intent_reasoning: event.meta?.intent_reasoning,
+        fuzzy_location: isFuzzyLocation || undefined,
       },
     };
   };

@@ -161,6 +161,8 @@ export interface CalendarEventMeta {
   latitude?: number | null;
   /** Longitude for location-based events (used for adding new places) */
   longitude?: number | null;
+  /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
+  fuzzy_location?: boolean;
 }
 
 export interface ScheduledEvent {

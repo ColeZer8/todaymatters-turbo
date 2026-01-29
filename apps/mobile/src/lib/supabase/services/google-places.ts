@@ -542,3 +542,209 @@ export function getBestSuggestion(
 export function isGooglePlacesAvailable(): boolean {
   return getGooglePlacesApiKey() !== null;
 }
+
+// ============================================================================
+// Reverse Geocoding
+// ============================================================================
+
+/** Result from reverse geocoding lookup */
+export interface ReverseGeocodeResult {
+  /** Whether the lookup was successful */
+  success: boolean;
+  /** Error message if lookup failed */
+  error?: string;
+  /** Whether the result came from cache */
+  fromCache: boolean;
+  /** Formatted area name (e.g., "Downtown", "Mission District", "Santa Monica") */
+  areaName: string | null;
+  /** City name */
+  city: string | null;
+  /** Neighborhood name if available */
+  neighborhood: string | null;
+}
+
+/** Google Geocoding API response types */
+interface GoogleGeocodingAddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
+}
+
+interface GoogleGeocodingResult {
+  address_components: GoogleGeocodingAddressComponent[];
+  formatted_address: string;
+  geometry: {
+    location: { lat: number; lng: number };
+    location_type: string;
+  };
+  types: string[];
+}
+
+interface GoogleGeocodingResponse {
+  status: string;
+  error_message?: string;
+  results?: GoogleGeocodingResult[];
+}
+
+/** In-memory cache for reverse geocoding results */
+const reverseGeocodeCache = new Map<string, { result: ReverseGeocodeResult; cachedAt: number }>();
+
+/**
+ * Reverse geocode coordinates to get an area/neighborhood name.
+ * Returns a fuzzy "Near [Area]" label for use when location confidence is low.
+ *
+ * @param latitude - Latitude of the location
+ * @param longitude - Longitude of the location
+ * @returns ReverseGeocodeResult with area information
+ */
+export async function reverseGeocode(
+  latitude: number,
+  longitude: number
+): Promise<ReverseGeocodeResult> {
+  // Check cache first (use same precision as places cache)
+  const cacheKey = getCacheKey(latitude, longitude);
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return { ...cached.result, fromCache: true };
+  }
+
+  // Get API key
+  const apiKey = getGooglePlacesApiKey();
+  if (!apiKey) {
+    return {
+      success: false,
+      error: "Google API key not configured",
+      fromCache: false,
+      areaName: null,
+      city: null,
+      neighborhood: null,
+    };
+  }
+
+  try {
+    // Build API URL for reverse geocoding
+    const params = new URLSearchParams({
+      latlng: `${latitude},${longitude}`,
+      key: apiKey,
+      result_type: "neighborhood|sublocality|locality|administrative_area_level_3",
+    });
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?${params}`;
+
+    // Fetch from API
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data: GoogleGeocodingResponse = await response.json();
+
+    // Handle API errors
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      throw new Error(data.error_message || `API status: ${data.status}`);
+    }
+
+    // Parse results to find area name
+    let areaName: string | null = null;
+    let city: string | null = null;
+    let neighborhood: string | null = null;
+
+    if (data.results && data.results.length > 0) {
+      for (const result of data.results) {
+        for (const component of result.address_components) {
+          // Look for neighborhood (most specific)
+          if (
+            component.types.includes("neighborhood") ||
+            component.types.includes("sublocality_level_1") ||
+            component.types.includes("sublocality")
+          ) {
+            if (!neighborhood) {
+              neighborhood = component.long_name;
+            }
+          }
+          // Look for city
+          if (
+            component.types.includes("locality") ||
+            component.types.includes("administrative_area_level_3")
+          ) {
+            if (!city) {
+              city = component.long_name;
+            }
+          }
+        }
+      }
+    }
+
+    // Determine best area name: prefer neighborhood, fall back to city
+    areaName = neighborhood || city;
+
+    const successResult: ReverseGeocodeResult = {
+      success: true,
+      fromCache: false,
+      areaName,
+      city,
+      neighborhood,
+    };
+
+    // Cache the result
+    reverseGeocodeCache.set(cacheKey, {
+      result: successResult,
+      cachedAt: Date.now(),
+    });
+
+    return successResult;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error in reverse geocoding";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Reverse geocode error:", message);
+    }
+
+    return {
+      success: false,
+      error: message,
+      fromCache: false,
+      areaName: null,
+      city: null,
+      neighborhood: null,
+    };
+  }
+}
+
+/**
+ * Get a fuzzy location label from coordinates.
+ * Returns "Near [Area]" or "Near [City]" for display when location confidence is low.
+ *
+ * @param latitude - Latitude of the location
+ * @param longitude - Longitude of the location
+ * @returns A fuzzy label like "Near Downtown" or "Near Santa Monica", or null if unable to geocode
+ */
+export async function getFuzzyLocationLabel(
+  latitude: number,
+  longitude: number
+): Promise<string | null> {
+  const result = await reverseGeocode(latitude, longitude);
+
+  if (!result.success || !result.areaName) {
+    return null;
+  }
+
+  return `Near ${result.areaName}`;
+}
+
+/**
+ * Clear expired reverse geocode cache entries.
+ */
+export function clearExpiredReverseGeocodeCache(): number {
+  const now = Date.now();
+  let cleared = 0;
+
+  for (const [key, entry] of reverseGeocodeCache.entries()) {
+    if (now - entry.cachedAt > CACHE_TTL_MS) {
+      reverseGeocodeCache.delete(key);
+      cleared++;
+    }
+  }
+
+  return cleared;
+}

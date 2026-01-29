@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, HelpCircle, MapPin } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, HelpCircle, MapPin, MapPinOff } from "lucide-react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -227,6 +227,7 @@ const TimeEventBlock = ({
   // Get session block subtitle (top apps)
   const sessionSubtitle = buildSessionBlockSubtitle(event);
   const hasPlaceLabel = isSessionBlock && event.meta?.place_label;
+  const isFuzzyLocation = isSessionBlock && event.meta?.fuzzy_location === true;
 
   if (!shouldRender) {
     return null;
@@ -285,6 +286,9 @@ const TimeEventBlock = ({
     onPress?.(event);
   };
 
+  // Fuzzy locations get dashed border to indicate approximate location
+  const useDashedBorder = isUnknown || isFuzzyLocation;
+
   return (
     <TouchableOpacity
       onPress={handlePress}
@@ -296,9 +300,9 @@ const TimeEventBlock = ({
           height: blockHeight,
           backgroundColor: catStyles.bg,
           borderLeftColor: catStyles.accent,
-          borderStyle: isUnknown ? "dashed" : "solid",
-          borderColor: isUnknown ? catStyles.accent : "transparent",
-          borderWidth: isUnknown ? 1 : 0,
+          borderStyle: useDashedBorder ? "dashed" : "solid",
+          borderColor: useDashedBorder ? catStyles.accent : "transparent",
+          borderWidth: useDashedBorder ? 1 : 0,
           borderLeftWidth: 3,
           paddingVertical: isTiny ? 1 : 4,
           justifyContent: isTiny ? "center" : "flex-start",
@@ -317,12 +321,13 @@ const TimeEventBlock = ({
     >
       <View style={styles.eventContent}>
         {/* Location icon for session blocks with place label */}
+        {/* Use MapPinOff for fuzzy locations to indicate approximate location */}
         {isSessionBlock && hasPlaceLabel && !isTiny && (
           <Icon
-            icon={MapPin}
+            icon={isFuzzyLocation ? MapPinOff : MapPin}
             size={10}
             color={catStyles.text}
-            style={{ marginRight: 3, opacity: 0.7 }}
+            style={{ marginRight: 3, opacity: isFuzzyLocation ? 0.5 : 0.7 }}
           />
         )}
         {isUnknown && !isTiny && (

@@ -75,6 +75,9 @@ function createMockSession(
   const confidence = options.confidence ?? 0.5;
   const isCommute = options.isCommute ?? false;
 
+  // Determine fuzzy location based on confidence and place_id
+  const isFuzzyLocation = confidence < 0.7 && placeId === null;
+
   return {
     sourceId: `session:test:${placeId ?? "unknown"}:${start.getTime()}`,
     title: isCommute ? "Commute" : `${placeLabel ?? "Unknown Location"} - ${intent}`,
@@ -91,6 +94,7 @@ function createMockSession(
     },
     childEventIds: [id],
     confidence,
+    fuzzyLocation: isFuzzyLocation,
     meta: {
       kind: "session_block",
       place_id: placeId,
@@ -99,6 +103,7 @@ function createMockSession(
       children: [id],
       confidence,
       summary: options.summary,
+      fuzzy_location: isFuzzyLocation || undefined,
     },
   };
 }
