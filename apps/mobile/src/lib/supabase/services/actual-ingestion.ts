@@ -16,6 +16,42 @@ import {
   type UserAppCategoryOverrides,
 } from "./app-categories";
 
+// ============================================================================
+// Sleep Detection Types
+// ============================================================================
+
+/**
+ * User's sleep schedule configuration.
+ * Used to determine when to create sleep sessions.
+ */
+export interface SleepSchedule {
+  /** Typical bedtime in HH:MM format (24-hour), e.g., "22:30" */
+  bedtime: string;
+  /** Typical wake time in HH:MM format (24-hour), e.g., "07:00" */
+  wakeTime: string;
+}
+
+/**
+ * Default sleep schedule when user hasn't configured one.
+ * 22:00 (10 PM) to 07:00 (7 AM)
+ */
+export const DEFAULT_SLEEP_SCHEDULE: SleepSchedule = {
+  bedtime: "22:00",
+  wakeTime: "07:00",
+};
+
+/**
+ * Result of sleep session detection for a time range.
+ */
+export interface SleepDetectionResult {
+  /** Whether a sleep period was detected */
+  isSleep: boolean;
+  /** The detected sleep session blocks */
+  sleepSessions: SessionBlock[];
+  /** Screen-time interruptions during sleep */
+  screenTimeInterruptions: SessionizableEvent[];
+}
+
 import type { ReconciliationEvent, DerivedEvent } from "./event-reconciliation";
 
 // ============================================================================
@@ -119,6 +155,15 @@ const MAX_MICRO_GAP_MS = 5 * 60 * 1000;
 
 /** Minimum session duration in milliseconds (10 minutes) */
 const MIN_SESSION_DURATION_MS = 10 * 60 * 1000;
+
+/** Minimum sleep duration in milliseconds to be considered a sleep session (4 hours) */
+const MIN_SLEEP_DURATION_MS = 4 * 60 * 60 * 1000;
+
+/** Minimum gap duration to be considered a potential sleep period (3 hours) */
+const MIN_OVERNIGHT_GAP_MS = 3 * 60 * 60 * 1000;
+
+/** Common "Home" place labels for sleep detection (case-insensitive matching) */
+const HOME_PLACE_LABELS = ["home", "house", "apartment", "residence", "my place"];
 
 // ============================================================================
 // Helpers
@@ -1006,6 +1051,8 @@ export interface SessionBlock {
     summary?: Array<{ label: string; seconds: number }>;
     /** Human-readable reasoning for intent classification */
     intent_reasoning?: string;
+    /** True if this session occurred during scheduled sleep time */
+    during_scheduled_sleep?: boolean;
   };
 }
 
@@ -1154,6 +1201,8 @@ function formatIntentForTitle(intent: Intent): string {
       return "Offline";
     case "mixed":
       return "Mixed";
+    case "sleep":
+      return "Sleep";
     default:
       return "Unknown";
   }
@@ -1655,4 +1704,437 @@ export function sessionizeWindow(
   sessions = absorbShortSessions(sessions, windowStart, userOverrides);
 
   return sessions;
+}
+
+// ============================================================================
+// Sleep Detection
+// ============================================================================
+
+/**
+ * Check if a place is likely the user's home based on the label.
+ * Uses case-insensitive matching against common home-related labels.
+ */
+export function isHomePlace(placeLabel: string | null): boolean {
+  if (!placeLabel) return false;
+  const normalized = placeLabel.toLowerCase().trim();
+  return HOME_PLACE_LABELS.some(
+    (homeLabel) =>
+      normalized === homeLabel ||
+      normalized.includes(homeLabel) ||
+      homeLabel.includes(normalized),
+  );
+}
+
+/**
+ * Parse a time string in HH:MM format to hours and minutes.
+ */
+function parseTimeString(timeStr: string): { hours: number; minutes: number } | null {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
+}
+
+/**
+ * Check if a time falls within the scheduled sleep window.
+ * Handles overnight sleep (e.g., 22:00 to 07:00).
+ *
+ * @param timestamp - The time to check
+ * @param schedule - The sleep schedule
+ * @returns true if the timestamp falls within scheduled sleep time
+ */
+export function isWithinSleepSchedule(
+  timestamp: Date,
+  schedule: SleepSchedule,
+): boolean {
+  const bedtime = parseTimeString(schedule.bedtime);
+  const wakeTime = parseTimeString(schedule.wakeTime);
+
+  if (!bedtime || !wakeTime) {
+    // Invalid schedule - fall back to default
+    return isWithinSleepSchedule(timestamp, DEFAULT_SLEEP_SCHEDULE);
+  }
+
+  // Use UTC hours/minutes for consistency with ISO date strings
+  const hours = timestamp.getUTCHours();
+  const minutes = timestamp.getUTCMinutes();
+  const timeMinutes = hours * 60 + minutes;
+  const bedtimeMinutes = bedtime.hours * 60 + bedtime.minutes;
+  const wakeTimeMinutes = wakeTime.hours * 60 + wakeTime.minutes;
+
+  // Handle overnight sleep (bedtime > wake time)
+  if (bedtimeMinutes > wakeTimeMinutes) {
+    // Overnight: e.g., 22:00 to 07:00
+    // Sleep time is from bedtime to midnight OR from midnight to wake time
+    return timeMinutes >= bedtimeMinutes || timeMinutes < wakeTimeMinutes;
+  } else {
+    // Same day: e.g., 01:00 to 09:00 (unusual but handle it)
+    return timeMinutes >= bedtimeMinutes && timeMinutes < wakeTimeMinutes;
+  }
+}
+
+/**
+ * Generate a deterministic source ID for a sleep session block.
+ * Format: sleep:{windowStartMs}:{placeId}:{sessionStartMs}
+ */
+function generateSleepSourceId(
+  windowStart: Date,
+  placeId: string | null,
+  sessionStart: Date,
+): string {
+  const windowStartMs = windowStart.getTime();
+  const sessionStartMs = sessionStart.getTime();
+  const placeIdPart = placeId ?? "unknown";
+  return `sleep:${windowStartMs}:${placeIdPart}:${sessionStartMs}`;
+}
+
+/**
+ * Create a sleep session block.
+ *
+ * @param start - Sleep start time
+ * @param end - Sleep end time
+ * @param placeId - Place ID (typically home)
+ * @param placeLabel - Place label (typically "Home")
+ * @param windowStart - Window start for source ID generation
+ * @param childEventIds - IDs of child events (if any)
+ * @param confidence - Confidence score
+ */
+export function createSleepSession(
+  start: Date,
+  end: Date,
+  placeId: string | null,
+  placeLabel: string | null,
+  windowStart: Date,
+  childEventIds: string[] = [],
+  confidence: number = 0.5,
+): SessionBlock {
+  const sourceId = generateSleepSourceId(windowStart, placeId, start);
+  const displayLabel = placeLabel ?? "Home";
+  const title = `${displayLabel} - Sleep`;
+
+  const sleepIntentClassification: IntentClassificationResult = {
+    intent: "sleep",
+    breakdown: { work: 0, social: 0, entertainment: 0, comms: 0, utility: 0, ignore: 0 },
+    totalSeconds: Math.round((end.getTime() - start.getTime()) / 1000),
+    reasoning: "Detected as sleep session based on time and location",
+  };
+
+  return {
+    sourceId,
+    title,
+    start,
+    end,
+    placeId,
+    placeLabel,
+    intent: "sleep",
+    intentClassification: sleepIntentClassification,
+    childEventIds,
+    confidence,
+    meta: {
+      kind: "session_block",
+      place_id: placeId,
+      place_label: placeLabel,
+      intent: "sleep",
+      children: childEventIds,
+      confidence,
+    },
+  };
+}
+
+/**
+ * Detect sleep sessions in a time range.
+ *
+ * This function detects overnight gaps at home as sleep sessions.
+ * If screen-time is detected during scheduled sleep, it splits the sleep
+ * into multiple sessions with the screen-time interruption in between.
+ *
+ * @param userId - User ID
+ * @param windowStart - Start of the time range
+ * @param windowEnd - End of the time range
+ * @param events - Existing events in the window
+ * @param homePlace - User's home place (placeId and placeLabel)
+ * @param schedule - User's sleep schedule (optional, uses default if not provided)
+ * @returns Sleep detection result with sleep sessions and screen-time interruptions
+ */
+export function detectSleepSessions(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+  events: SessionizableEvent[],
+  homePlace: { placeId: string | null; placeLabel: string | null } | null,
+  schedule?: SleepSchedule | null,
+): SleepDetectionResult {
+  const sleepSchedule = schedule ?? DEFAULT_SLEEP_SCHEDULE;
+  const result: SleepDetectionResult = {
+    isSleep: false,
+    sleepSessions: [],
+    screenTimeInterruptions: [],
+  };
+
+  // If no home place is defined, we can't reliably detect sleep
+  if (!homePlace) {
+    return result;
+  }
+
+  // Sort events by start time
+  const sortedEvents = [...events].sort(
+    (a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime(),
+  );
+
+  // Find events at home during scheduled sleep time
+  const eventsAtHome = sortedEvents.filter((event) => {
+    const eventPlaceId = getEventPlaceId(event);
+    const eventPlaceLabel = getEventPlaceLabel(event);
+
+    // Check if at home
+    const isAtHome =
+      (homePlace.placeId && eventPlaceId === homePlace.placeId) ||
+      (homePlace.placeLabel && isHomePlace(eventPlaceLabel));
+
+    return isAtHome;
+  });
+
+  // Find screen-time events during scheduled sleep
+  const screenTimeDuringSleep = sortedEvents.filter((event) => {
+    if (!isScreenTimeEvent(event)) return false;
+
+    // Check if event is during scheduled sleep time
+    const eventMidpoint = new Date(
+      (event.scheduledStart.getTime() + event.scheduledEnd.getTime()) / 2,
+    );
+    return isWithinSleepSchedule(eventMidpoint, sleepSchedule);
+  });
+
+  // Determine the sleep window
+  // Look for gaps at home during typical sleep hours
+  const windowStartTime = windowStart.getTime();
+  const windowEndTime = windowEnd.getTime();
+  const windowDurationMs = windowEndTime - windowStartTime;
+
+  // Check if this window is during scheduled sleep time
+  const windowMidpoint = new Date((windowStartTime + windowEndTime) / 2);
+  const isDuringSleepTime = isWithinSleepSchedule(windowMidpoint, sleepSchedule);
+
+  if (!isDuringSleepTime) {
+    return result;
+  }
+
+  // Check if we have a long enough gap at home to consider it sleep
+  // Calculate total screen-time during the window
+  let totalScreenTimeMs = 0;
+  for (const event of screenTimeDuringSleep) {
+    const eventStart = Math.max(event.scheduledStart.getTime(), windowStartTime);
+    const eventEnd = Math.min(event.scheduledEnd.getTime(), windowEndTime);
+    if (eventEnd > eventStart) {
+      totalScreenTimeMs += eventEnd - eventStart;
+    }
+  }
+
+  // The gap (potential sleep time) is the window minus screen-time
+  const potentialSleepMs = windowDurationMs - totalScreenTimeMs;
+
+  // If potential sleep time is less than minimum, not a sleep session
+  if (potentialSleepMs < MIN_OVERNIGHT_GAP_MS) {
+    return result;
+  }
+
+  result.isSleep = true;
+
+  // If no screen-time during sleep, create a single sleep session
+  if (screenTimeDuringSleep.length === 0) {
+    const sleepSession = createSleepSession(
+      windowStart,
+      windowEnd,
+      homePlace.placeId,
+      homePlace.placeLabel,
+      windowStart,
+      [],
+      0.7, // Higher confidence for uninterrupted sleep
+    );
+    result.sleepSessions.push(sleepSession);
+    return result;
+  }
+
+  // Split sleep around screen-time interruptions
+  // Sort screen-time events by start time
+  const sortedScreenTime = [...screenTimeDuringSleep].sort(
+    (a, b) => a.scheduledStart.getTime() - b.scheduledStart.getTime(),
+  );
+
+  // Track screen-time interruptions
+  for (const event of sortedScreenTime) {
+    result.screenTimeInterruptions.push({
+      ...event,
+      meta: {
+        ...event.meta,
+        during_scheduled_sleep: true,
+      },
+    });
+  }
+
+  // Create sleep sessions around interruptions
+  let currentStart = windowStart;
+
+  for (const screenTimeEvent of sortedScreenTime) {
+    const eventStart = screenTimeEvent.scheduledStart;
+    const eventEnd = screenTimeEvent.scheduledEnd;
+
+    // Create sleep session before this screen-time if gap is significant
+    const gapBeforeMs = eventStart.getTime() - currentStart.getTime();
+    if (gapBeforeMs >= MIN_SESSION_DURATION_MS) {
+      const sleepBefore = createSleepSession(
+        currentStart,
+        eventStart,
+        homePlace.placeId,
+        homePlace.placeLabel,
+        windowStart,
+        [],
+        0.5, // Lower confidence for interrupted sleep
+      );
+      result.sleepSessions.push(sleepBefore);
+    }
+
+    // Move current start past this screen-time event
+    currentStart = eventEnd;
+  }
+
+  // Create final sleep session after last screen-time if gap is significant
+  const finalGapMs = windowEnd.getTime() - currentStart.getTime();
+  if (finalGapMs >= MIN_SESSION_DURATION_MS) {
+    const sleepAfter = createSleepSession(
+      currentStart,
+      windowEnd,
+      homePlace.placeId,
+      homePlace.placeLabel,
+      windowStart,
+      [],
+      0.5, // Lower confidence for interrupted sleep
+    );
+    result.sleepSessions.push(sleepAfter);
+  }
+
+  return result;
+}
+
+/**
+ * Apply sleep detection to sessionized events.
+ *
+ * This function takes existing sessions and:
+ * 1. Identifies overnight gaps at home that should be sleep
+ * 2. Converts those gaps to sleep sessions
+ * 3. Marks screen-time during sleep with meta.during_scheduled_sleep = true
+ *
+ * @param userId - User ID
+ * @param sessions - Existing session blocks
+ * @param windowStart - Start of the time range
+ * @param windowEnd - End of the time range
+ * @param homePlace - User's home place
+ * @param schedule - User's sleep schedule
+ * @returns Updated sessions with sleep detection applied
+ */
+export function applySleepDetection(
+  userId: string,
+  sessions: SessionBlock[],
+  windowStart: Date,
+  windowEnd: Date,
+  homePlace: { placeId: string | null; placeLabel: string | null } | null,
+  schedule?: SleepSchedule | null,
+): SessionBlock[] {
+  if (!homePlace) {
+    return sessions;
+  }
+
+  const sleepSchedule = schedule ?? DEFAULT_SLEEP_SCHEDULE;
+  const result: SessionBlock[] = [];
+
+  // Sort sessions by start time
+  const sortedSessions = [...sessions].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  );
+
+  // Process each session
+  for (let i = 0; i < sortedSessions.length; i++) {
+    const session = sortedSessions[i];
+
+    // Check if this session is at home during scheduled sleep
+    const isAtHome =
+      (homePlace.placeId && session.placeId === homePlace.placeId) ||
+      (homePlace.placeLabel && isHomePlace(session.placeLabel));
+
+    const sessionMidpoint = new Date(
+      (session.start.getTime() + session.end.getTime()) / 2,
+    );
+    const isDuringSleep = isWithinSleepSchedule(sessionMidpoint, sleepSchedule);
+
+    // If session is already a sleep session, keep it
+    if (session.intent === "sleep") {
+      result.push(session);
+      continue;
+    }
+
+    // If at home during sleep time and no screen-time (offline), convert to sleep
+    if (isAtHome && isDuringSleep && session.intent === "offline") {
+      const duration = session.end.getTime() - session.start.getTime();
+      if (duration >= MIN_OVERNIGHT_GAP_MS) {
+        // Convert to sleep session
+        const sleepSession = createSleepSession(
+          session.start,
+          session.end,
+          session.placeId,
+          session.placeLabel,
+          windowStart,
+          session.childEventIds,
+          session.confidence,
+        );
+        result.push(sleepSession);
+        continue;
+      }
+    }
+
+    // If at home during sleep time but has screen-time, mark it
+    if (isAtHome && isDuringSleep && session.intent !== "offline") {
+      // Mark session as during scheduled sleep
+      result.push({
+        ...session,
+        meta: {
+          ...session.meta,
+          during_scheduled_sleep: true,
+        },
+      });
+      continue;
+    }
+
+    // Otherwise, keep session as-is
+    result.push(session);
+  }
+
+  return result;
+}
+
+/**
+ * Find the user's home place from their labeled places.
+ *
+ * @param userPlaces - Array of user's labeled places
+ * @returns The home place if found, null otherwise
+ */
+export function findHomePlace(
+  userPlaces: Array<{ id: string; label: string; category?: string | null }>,
+): { placeId: string; placeLabel: string } | null {
+  // First, look for a place with "home" category
+  const homeByCategory = userPlaces.find(
+    (p) => p.category?.toLowerCase() === "home",
+  );
+  if (homeByCategory) {
+    return { placeId: homeByCategory.id, placeLabel: homeByCategory.label };
+  }
+
+  // Fall back to looking for "Home" label
+  const homeByLabel = userPlaces.find((p) => isHomePlace(p.label));
+  if (homeByLabel) {
+    return { placeId: homeByLabel.id, placeLabel: homeByLabel.label };
+  }
+
+  return null;
 }

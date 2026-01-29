@@ -389,7 +389,8 @@ export type Intent =
   | "leisure"
   | "distracted_work"
   | "offline"
-  | "mixed";
+  | "mixed"
+  | "sleep";
 
 /**
  * Summary of app usage within a session.

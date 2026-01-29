@@ -565,3 +565,328 @@ describe("sessionizeWindow with micro-gap merging", () => {
     expect(result[2].placeLabel).toBe("Cafe");
   });
 });
+
+// ============================================================================
+// Tests for Sleep Detection
+// ============================================================================
+
+import {
+  isHomePlace,
+  isWithinSleepSchedule,
+  createSleepSession,
+  detectSleepSessions,
+  applySleepDetection,
+  findHomePlace,
+  DEFAULT_SLEEP_SCHEDULE,
+  type SleepSchedule,
+} from "./actual-ingestion";
+
+describe("isHomePlace", () => {
+  it("should match 'Home' label", () => {
+    expect(isHomePlace("Home")).toBe(true);
+    expect(isHomePlace("home")).toBe(true);
+    expect(isHomePlace("HOME")).toBe(true);
+  });
+
+  it("should match variations of home", () => {
+    expect(isHomePlace("My Home")).toBe(true);
+    expect(isHomePlace("House")).toBe(true);
+    expect(isHomePlace("Apartment")).toBe(true);
+    expect(isHomePlace("My Apartment")).toBe(true);
+  });
+
+  it("should NOT match non-home places", () => {
+    expect(isHomePlace("Office")).toBe(false);
+    expect(isHomePlace("Cafe")).toBe(false);
+    expect(isHomePlace("Gym")).toBe(false);
+    expect(isHomePlace(null)).toBe(false);
+  });
+});
+
+describe("isWithinSleepSchedule", () => {
+  const defaultSchedule: SleepSchedule = { bedtime: "22:00", wakeTime: "07:00" };
+
+  it("should return true for times during overnight sleep", () => {
+    // 11 PM - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-29T23:00:00Z"), defaultSchedule)).toBe(true);
+    // Midnight - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-30T00:00:00Z"), defaultSchedule)).toBe(true);
+    // 3 AM - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-30T03:00:00Z"), defaultSchedule)).toBe(true);
+    // 6 AM - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-30T06:00:00Z"), defaultSchedule)).toBe(true);
+  });
+
+  it("should return false for times outside sleep schedule", () => {
+    // 8 AM - after wake time
+    expect(isWithinSleepSchedule(new Date("2026-01-29T08:00:00Z"), defaultSchedule)).toBe(false);
+    // 12 PM - daytime
+    expect(isWithinSleepSchedule(new Date("2026-01-29T12:00:00Z"), defaultSchedule)).toBe(false);
+    // 9 PM - before bedtime
+    expect(isWithinSleepSchedule(new Date("2026-01-29T21:00:00Z"), defaultSchedule)).toBe(false);
+  });
+
+  it("should handle same-day sleep schedule", () => {
+    const sameDaySchedule: SleepSchedule = { bedtime: "01:00", wakeTime: "09:00" };
+    // 2 AM - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-29T02:00:00Z"), sameDaySchedule)).toBe(true);
+    // 8 AM - during sleep
+    expect(isWithinSleepSchedule(new Date("2026-01-29T08:00:00Z"), sameDaySchedule)).toBe(true);
+    // 10 AM - after wake
+    expect(isWithinSleepSchedule(new Date("2026-01-29T10:00:00Z"), sameDaySchedule)).toBe(false);
+    // Midnight - before bedtime
+    expect(isWithinSleepSchedule(new Date("2026-01-29T00:00:00Z"), sameDaySchedule)).toBe(false);
+  });
+});
+
+describe("createSleepSession", () => {
+  const windowStart = new Date("2026-01-29T22:00:00Z");
+
+  it("should create a sleep session with correct properties", () => {
+    const start = new Date("2026-01-29T22:00:00Z");
+    const end = new Date("2026-01-30T07:00:00Z");
+    const placeId = "home-123";
+    const placeLabel = "Home";
+
+    const session = createSleepSession(start, end, placeId, placeLabel, windowStart);
+
+    expect(session.intent).toBe("sleep");
+    expect(session.title).toBe("Home - Sleep");
+    expect(session.start).toEqual(start);
+    expect(session.end).toEqual(end);
+    expect(session.placeId).toBe(placeId);
+    expect(session.placeLabel).toBe(placeLabel);
+    expect(session.meta.kind).toBe("session_block");
+    expect(session.meta.intent).toBe("sleep");
+    expect(session.sourceId).toContain("sleep:");
+  });
+
+  it("should use default label when placeLabel is null", () => {
+    const start = new Date("2026-01-29T22:00:00Z");
+    const end = new Date("2026-01-30T07:00:00Z");
+
+    const session = createSleepSession(start, end, null, null, windowStart);
+
+    expect(session.title).toBe("Home - Sleep");
+  });
+});
+
+describe("detectSleepSessions", () => {
+  const userId = "test-user";
+  const homePlace = { placeId: "home-123", placeLabel: "Home" };
+
+  it("should detect sleep session when no events during sleep time", () => {
+    // Window during sleep time (midnight to 6 AM)
+    const windowStart = new Date("2026-01-30T00:00:00Z");
+    const windowEnd = new Date("2026-01-30T06:00:00Z");
+    const events: SessionizableEvent[] = [];
+
+    const result = detectSleepSessions(
+      userId,
+      windowStart,
+      windowEnd,
+      events,
+      homePlace,
+    );
+
+    expect(result.isSleep).toBe(true);
+    expect(result.sleepSessions).toHaveLength(1);
+    expect(result.sleepSessions[0].intent).toBe("sleep");
+    expect(result.sleepSessions[0].title).toBe("Home - Sleep");
+    expect(result.screenTimeInterruptions).toHaveLength(0);
+  });
+
+  it("should split sleep sessions around screen-time interruptions", () => {
+    // Window during sleep time (11 PM to 7 AM)
+    const windowStart = new Date("2026-01-29T23:00:00Z");
+    const windowEnd = new Date("2026-01-30T07:00:00Z");
+
+    // Screen-time at 2 AM for 15 minutes
+    const events: SessionizableEvent[] = [
+      createMockEvent(
+        "phone-check",
+        new Date("2026-01-30T02:00:00Z"),
+        new Date("2026-01-30T02:15:00Z"),
+        { placeId: "home-123", placeLabel: "Home", appId: "com.apple.mobilesafari" },
+      ),
+    ];
+
+    const result = detectSleepSessions(
+      userId,
+      windowStart,
+      windowEnd,
+      events,
+      homePlace,
+    );
+
+    expect(result.isSleep).toBe(true);
+    expect(result.sleepSessions.length).toBeGreaterThanOrEqual(1);
+    expect(result.screenTimeInterruptions).toHaveLength(1);
+    expect(result.screenTimeInterruptions[0].meta.during_scheduled_sleep).toBe(true);
+  });
+
+  it("should NOT detect sleep when not at home", () => {
+    const windowStart = new Date("2026-01-30T00:00:00Z");
+    const windowEnd = new Date("2026-01-30T06:00:00Z");
+    const events: SessionizableEvent[] = [];
+
+    const result = detectSleepSessions(
+      userId,
+      windowStart,
+      windowEnd,
+      events,
+      null, // No home place
+    );
+
+    expect(result.isSleep).toBe(false);
+    expect(result.sleepSessions).toHaveLength(0);
+  });
+
+  it("should NOT detect sleep during daytime hours", () => {
+    // Window during daytime (10 AM to 4 PM)
+    const windowStart = new Date("2026-01-29T10:00:00Z");
+    const windowEnd = new Date("2026-01-29T16:00:00Z");
+    const events: SessionizableEvent[] = [];
+
+    const result = detectSleepSessions(
+      userId,
+      windowStart,
+      windowEnd,
+      events,
+      homePlace,
+    );
+
+    expect(result.isSleep).toBe(false);
+    expect(result.sleepSessions).toHaveLength(0);
+  });
+});
+
+describe("applySleepDetection", () => {
+  const userId = "test-user";
+  const homePlace = { placeId: "home-123", placeLabel: "Home" };
+  const windowStart = new Date("2026-01-29T22:00:00Z");
+  const windowEnd = new Date("2026-01-30T08:00:00Z");
+
+  it("should convert offline session at home during sleep to sleep session", () => {
+    const offlineSession = createMockSession(
+      "s1",
+      new Date("2026-01-30T00:00:00Z"),
+      new Date("2026-01-30T06:00:00Z"),
+      { placeId: "home-123", placeLabel: "Home", intent: "offline" },
+    );
+
+    const result = applySleepDetection(
+      userId,
+      [offlineSession],
+      windowStart,
+      windowEnd,
+      homePlace,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].intent).toBe("sleep");
+    expect(result[0].title).toBe("Home - Sleep");
+  });
+
+  it("should mark screen-time sessions during sleep with during_scheduled_sleep", () => {
+    const workSession = createMockSession(
+      "s1",
+      new Date("2026-01-30T02:00:00Z"),
+      new Date("2026-01-30T02:30:00Z"),
+      { placeId: "home-123", placeLabel: "Home", intent: "work" },
+    );
+
+    const result = applySleepDetection(
+      userId,
+      [workSession],
+      windowStart,
+      windowEnd,
+      homePlace,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].meta.during_scheduled_sleep).toBe(true);
+  });
+
+  it("should keep existing sleep sessions unchanged", () => {
+    const sleepSession = createSleepSession(
+      new Date("2026-01-30T00:00:00Z"),
+      new Date("2026-01-30T06:00:00Z"),
+      "home-123",
+      "Home",
+      windowStart,
+    );
+
+    const result = applySleepDetection(
+      userId,
+      [sleepSession],
+      windowStart,
+      windowEnd,
+      homePlace,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].intent).toBe("sleep");
+  });
+
+  it("should NOT convert sessions outside sleep hours", () => {
+    const offlineSession = createMockSession(
+      "s1",
+      new Date("2026-01-29T14:00:00Z"),
+      new Date("2026-01-29T17:00:00Z"),
+      { placeId: "home-123", placeLabel: "Home", intent: "offline" },
+    );
+
+    const result = applySleepDetection(
+      userId,
+      [offlineSession],
+      new Date("2026-01-29T10:00:00Z"),
+      new Date("2026-01-29T18:00:00Z"),
+      homePlace,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].intent).toBe("offline"); // NOT sleep
+  });
+});
+
+describe("findHomePlace", () => {
+  it("should find home by category", () => {
+    const places = [
+      { id: "office-1", label: "Work", category: "office" },
+      { id: "home-1", label: "My Pad", category: "home" },
+      { id: "gym-1", label: "Gym", category: "fitness" },
+    ];
+
+    const result = findHomePlace(places);
+
+    expect(result).not.toBeNull();
+    expect(result!.placeId).toBe("home-1");
+    expect(result!.placeLabel).toBe("My Pad");
+  });
+
+  it("should fall back to finding home by label", () => {
+    const places = [
+      { id: "office-1", label: "Work", category: null },
+      { id: "home-1", label: "Home", category: null },
+      { id: "gym-1", label: "Gym", category: null },
+    ];
+
+    const result = findHomePlace(places);
+
+    expect(result).not.toBeNull();
+    expect(result!.placeId).toBe("home-1");
+    expect(result!.placeLabel).toBe("Home");
+  });
+
+  it("should return null when no home found", () => {
+    const places = [
+      { id: "office-1", label: "Work", category: "office" },
+      { id: "cafe-1", label: "Coffee Shop", category: null },
+    ];
+
+    const result = findHomePlace(places);
+
+    expect(result).toBeNull();
+  });
+});
