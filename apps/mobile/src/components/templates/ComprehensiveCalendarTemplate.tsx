@@ -30,6 +30,7 @@ import type {
   ScheduledEvent,
 } from "@/stores";
 import { EventEditorModal } from "../molecules/EventEditorModal";
+import { SessionDetailModal } from "../molecules/SessionDetailModal";
 import {
   DERIVED_ACTUAL_PREFIX,
   DERIVED_EVIDENCE_PREFIX,
@@ -433,6 +434,10 @@ export const ComprehensiveCalendarTemplate = ({
   const [isEditorVisible, setIsEditorVisible] = useState(false);
   const [isScrollEnabled, setIsScrollEnabled] = useState(true);
 
+  // Session detail modal state
+  const [sessionDetailEvent, setSessionDetailEvent] = useState<ScheduledEvent | null>(null);
+  const [isSessionDetailVisible, setIsSessionDetailVisible] = useState(false);
+
   // Demo mode support - use simulated time when active
   const isDemoActive = useDemoStore((state) => state.isActive);
   const simulatedHour = useDemoStore((state) => state.simulatedHour);
@@ -747,7 +752,17 @@ export const ComprehensiveCalendarTemplate = ({
                         event={event}
                         visibleUntilMinutes={actualVisibleUntil}
                         enableReviewTimeShortcut={false}
-                        onPress={() =>
+                        onPress={() => {
+                          // Open session detail modal for session blocks
+                          if (event.meta?.kind === "session_block") {
+                            const fullEvent = actualEvents.find((e) => e.id === event.id);
+                            if (fullEvent) {
+                              setSessionDetailEvent(fullEvent);
+                              setIsSessionDetailVisible(true);
+                            }
+                            return;
+                          }
+                          // Default: navigate to actual-adjust
                           router.push({
                             pathname: "/actual-adjust",
                             params: {
@@ -761,8 +776,8 @@ export const ComprehensiveCalendarTemplate = ({
                                 ? JSON.stringify(event.meta)
                                 : undefined,
                             },
-                          })
-                        }
+                          });
+                        }}
                       />
                     ))}
                   </View>
@@ -846,6 +861,15 @@ export const ComprehensiveCalendarTemplate = ({
             void onDeleteActualEvent(editorEvent.id);
           }
           handleCloseEditor();
+        }}
+      />
+
+      <SessionDetailModal
+        event={sessionDetailEvent}
+        visible={isSessionDetailVisible}
+        onClose={() => {
+          setIsSessionDetailVisible(false);
+          setSessionDetailEvent(null);
         }}
       />
 
