@@ -53,6 +53,7 @@
 **Derived place timeline (conceptual):**
 - 09:00–09:40: **Cafe** (place id: P_CAFE)
 - 09:40–09:50: **Commute/Travel** (moving between P_CAFE → P_OFFICE)
+  - If <10 min, **do not create a commute block**; annotate the next session: “traveled X min to Office”.
 - 09:50–11:00: **Office** (place id: P_OFFICE)
 
 > These place blocks would be inferred from `location_hourly` or aggregated `location_samples`, plus `user_places` labeling.
@@ -399,15 +400,17 @@ Session event example:
 | w5 | 14:52:00 | 14:59:00 | 420 | com.instagram.android | Instagram |
 
 ### 11.4 Sessionized output (collapsed view)
-- **13:00–13:10 — Commute**
+- **13:00–13:10 — Commute** *(>=10m so it is its own block)*
 - **13:10–13:55 — Gym — Fitness**
   - Summary: Spotify (4m)
-- **13:55–14:05 — Commute**
+- **13:55–14:05 — Commute** *(>=10m so it is its own block)*
 - **14:05–14:35 — Grocery — Errands**
   - Summary: Target (3m), Messages (2m)
-- **14:35–14:50 — Commute**
+- **14:35–14:50 — Commute** *(>=10m so it is its own block)*
 - **14:50–15:00 — Home — Leisure**
   - Summary: Instagram (7m)
+
+> If any commute segment is **<10 minutes**, do **not** create a commute block. Instead, annotate the next session subtitle, e.g., “traveled 6 min to Home”.
 
 ### 11.5 Expanded view (on tap)
 ```
@@ -431,7 +434,7 @@ Session event example:
 | Rule | Description | Default Threshold | Example |
 |---|---|---:|---|
 | Location anchoring | Session blocks begin/end at location changes | N/A | Cafe → Office → Home |
-| Commute detection | Movement without stable place | ≥ 10 min moving | 09:40–09:50 commute |
+| Commute detection | Movement without stable place | **>= 10 min moving = Commute block; < 10 min = annotate next session (“traveled X min to [Place]”)** | 09:40–09:50 commute |
 | Screen‑time dominance | If screen‑time exists, it informs intent | Work ≥ 60% | “Cafe — Work” |
 | Distracted work | Mixed work + social | Work 40–60% + Social ≥ 25% | “Office — Distracted Work” |
 | Leisure | Social + entertainment dominates | ≥ 60% | “Home — Leisure” |
