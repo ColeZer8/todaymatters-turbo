@@ -102,6 +102,19 @@ function getAppId(event: ReconciliationEvent): string | null {
   return null;
 }
 
+function getPlaceId(event: ReconciliationEvent): string | null {
+  const placeId = event.meta?.place_id;
+  if (typeof placeId === "string" && placeId.trim().length > 0) {
+    return placeId.trim();
+  }
+  return null;
+}
+
+function isLocationEvent(event: ReconciliationEvent): boolean {
+  const kind = event.meta?.kind;
+  return kind === "location_block" || kind === "commute";
+}
+
 /** Maximum gap in milliseconds for events to be considered extendable (60 seconds) */
 const EXTENSION_GAP_THRESHOLD_MS = 60 * 1000;
 
@@ -439,6 +452,280 @@ export function canExtendEvent(
 
   const gap = derived.scheduledStart.getTime() - existing.scheduledEnd.getTime();
   return gap >= 0 && gap <= EXTENSION_GAP_THRESHOLD_MS;
+}
+
+// ============================================================================
+// Location Trailing Edge Extension Logic
+// ============================================================================
+
+/**
+ * Find an extendable location event for a given place.
+ * An event is extendable if:
+ * 1. It has the same place_id as the new event (including null for unknown)
+ * 2. It ends near the start of the window (within 60 seconds)
+ * 3. It is a location_block kind event
+ *
+ * @param existingEvents - Events to search through (typically from the previous window)
+ * @param windowStart - Start of the current window
+ * @param placeId - The place ID to match (can be null for unknown locations)
+ * @returns The extendable event, or null if none found
+ */
+export function findExtendableLocationEvent(
+  existingEvents: ReconciliationEvent[],
+  windowStart: Date,
+  placeId: string | null,
+): ReconciliationEvent | null {
+  const windowStartMs = windowStart.getTime();
+
+  // Find location events that end near the window start (within threshold)
+  const candidates = existingEvents.filter((event) => {
+    // Must be a location event
+    if (!isLocationEvent(event)) {
+      return false;
+    }
+
+    const eventPlaceId = getPlaceId(event);
+
+    // Match place_id (both can be null for unknown locations)
+    if (eventPlaceId !== placeId) {
+      return false;
+    }
+
+    // Check if event ends near the window start
+    const eventEndMs = event.scheduledEnd.getTime();
+    const gap = windowStartMs - eventEndMs;
+
+    // Event must end before or at window start, and within threshold
+    return gap >= 0 && gap <= EXTENSION_GAP_THRESHOLD_MS;
+  });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  // Return the most recent event (closest to window start)
+  return candidates.reduce((latest, current) =>
+    current.scheduledEnd.getTime() > latest.scheduledEnd.getTime()
+      ? current
+      : latest,
+  );
+}
+
+/**
+ * Check if a derived location event can extend an existing location event.
+ * Returns true if:
+ * 1. The derived event starts within 60 seconds of an existing event's end
+ * 2. They have the same place_id (including null for unknown)
+ * 3. Both are location events (kind = 'location_block' or 'commute')
+ *
+ * @param derived - The derived event to check
+ * @param existing - The existing event to check against
+ * @returns Whether the derived event can extend the existing event
+ */
+export function canExtendLocationEvent(
+  derived: DerivedEvent,
+  existing: ReconciliationEvent,
+): boolean {
+  // Check if both are location events
+  const derivedKind = derived.meta?.kind;
+  if (derivedKind !== "location_block" && derivedKind !== "commute") {
+    return false;
+  }
+  if (!isLocationEvent(existing)) {
+    return false;
+  }
+
+  // Match place_id (both can be null for unknown locations)
+  const derivedPlaceId = derived.meta?.place_id as string | null | undefined;
+  const existingPlaceId = getPlaceId(existing);
+
+  // Handle the null/undefined comparison for unknown locations
+  const normalizedDerivedPlaceId = derivedPlaceId ?? null;
+  if (normalizedDerivedPlaceId !== existingPlaceId) {
+    return false;
+  }
+
+  const gap = derived.scheduledStart.getTime() - existing.scheduledEnd.getTime();
+  return gap >= 0 && gap <= EXTENSION_GAP_THRESHOLD_MS;
+}
+
+/**
+ * Compute reconciliation operations with trailing edge extension for location events.
+ * This is similar to computeReconciliationOpsWithExtension but specifically handles
+ * location events, matching by place_id instead of app_id.
+ *
+ * When a user stays at the same place across multiple windows, instead of creating
+ * duplicate location events, this extends the existing event's scheduled_end.
+ *
+ * @param existingEvents - Events currently in the database
+ * @param derivedEvents - New events derived from evidence
+ * @param previousWindowEvents - Events from the previous window (for extension candidates)
+ * @returns Operations to perform including extensions
+ */
+export function computeReconciliationOpsWithLocationExtension(
+  existingEvents: ReconciliationEvent[],
+  derivedEvents: DerivedEvent[],
+  previousWindowEvents: ReconciliationEvent[] = [],
+): ReconciliationOps {
+  const ops: ReconciliationOps = {
+    inserts: [],
+    updates: [],
+    deletes: [],
+    extensions: [],
+    protectedIds: [],
+  };
+
+  // Build a map of existing events by source_id for fast lookup
+  const existingBySourceId = new Map<string, ReconciliationEvent>();
+  for (const event of existingEvents) {
+    const sourceId = getSourceId(event);
+    if (sourceId) {
+      existingBySourceId.set(sourceId, event);
+    }
+  }
+
+  // Track which existing events are matched by derived events
+  const matchedExistingIds = new Set<string>();
+
+  // Track which derived events were handled by extension
+  const extendedDerivedSourceIds = new Set<string>();
+
+  // First pass: check for extension opportunities
+  for (const derived of derivedEvents) {
+    // Try location extension first (for location events)
+    const derivedKind = derived.meta?.kind;
+    if (derivedKind === "location_block" || derivedKind === "commute") {
+      const derivedPlaceId = (derived.meta?.place_id as string | null) ?? null;
+
+      // Look for an extendable location event in the previous window
+      const extendable = findExtendableLocationEvent(
+        previousWindowEvents,
+        derived.scheduledStart,
+        derivedPlaceId,
+      );
+
+      if (extendable) {
+        // Check if the event is locked - cannot extend locked events
+        if (isEventLocked(extendable)) {
+          ops.protectedIds.push(extendable.id);
+          continue;
+        }
+
+        // Create extension operation
+        ops.extensions.push({
+          eventId: extendable.id,
+          newEnd: derived.scheduledEnd,
+        });
+
+        extendedDerivedSourceIds.add(derived.sourceId);
+        continue;
+      }
+    }
+
+    // Try app extension for screen-time events
+    const derivedAppId = derived.meta?.app_id;
+    if (typeof derivedAppId === "string") {
+      const extendable = findExtendableEvent(
+        previousWindowEvents,
+        derived.scheduledStart,
+        derivedAppId,
+      );
+
+      if (extendable) {
+        // Check if the event is locked - cannot extend locked events
+        if (isEventLocked(extendable)) {
+          ops.protectedIds.push(extendable.id);
+          continue;
+        }
+
+        // Create extension operation
+        ops.extensions.push({
+          eventId: extendable.id,
+          newEnd: derived.scheduledEnd,
+        });
+
+        extendedDerivedSourceIds.add(derived.sourceId);
+      }
+    }
+  }
+
+  // Second pass: process derived events not handled by extension
+  for (const derived of derivedEvents) {
+    // Skip if this derived event was handled by extension
+    if (extendedDerivedSourceIds.has(derived.sourceId)) {
+      continue;
+    }
+
+    const existingMatch = existingBySourceId.get(derived.sourceId);
+
+    if (existingMatch) {
+      matchedExistingIds.add(existingMatch.id);
+
+      // Check if the existing event is locked
+      if (isEventLocked(existingMatch)) {
+        // Locked event - cannot be modified
+        ops.protectedIds.push(existingMatch.id);
+        continue;
+      }
+
+      // Check if update is needed (times changed)
+      const timesMatch =
+        existingMatch.scheduledStart.getTime() ===
+          derived.scheduledStart.getTime() &&
+        existingMatch.scheduledEnd.getTime() === derived.scheduledEnd.getTime();
+
+      if (!timesMatch) {
+        ops.updates.push({
+          eventId: existingMatch.id,
+          updates: {
+            scheduledStart: derived.scheduledStart,
+            scheduledEnd: derived.scheduledEnd,
+            meta: derived.meta,
+          },
+        });
+      }
+    } else {
+      // No existing event with this source_id - check for overlaps with protected events
+      const hasProtectedOverlap = existingEvents.some(
+        (existing) =>
+          (isEventLocked(existing) || isUserEditedEvent(existing)) &&
+          eventsOverlap(
+            derived.scheduledStart,
+            derived.scheduledEnd,
+            existing.scheduledStart,
+            existing.scheduledEnd,
+          ),
+      );
+
+      if (!hasProtectedOverlap) {
+        ops.inserts.push({ event: derived });
+      }
+    }
+  }
+
+  // Find existing derived events that are no longer in the derived set - candidates for deletion
+  for (const existing of existingEvents) {
+    // Skip if this event was matched by a derived event
+    if (matchedExistingIds.has(existing.id)) {
+      continue;
+    }
+
+    // Skip if not a derived event (user-created events should never be auto-deleted)
+    if (!isDerivedEvent(existing)) {
+      continue;
+    }
+
+    // Skip if locked - locked events cannot be deleted
+    if (isEventLocked(existing)) {
+      ops.protectedIds.push(existing.id);
+      continue;
+    }
+
+    // This derived event is no longer in the derived set - delete it
+    ops.deletes.push({ eventId: existing.id });
+  }
+
+  return ops;
 }
 
 // ============================================================================

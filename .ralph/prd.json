@@ -110,8 +110,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Function added to apps/mobile/src/lib/supabase/services/evidence-data.ts. Includes LocationEvidence interface, fetchLocationSamplesForWindow, fetchLocationHourlyForWindow helpers, haversine distance matching, and confidence calculation based on sample count and accuracy."
     },
     {
       "id": "US-008",
@@ -126,8 +126,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Function created in apps/mobile/src/lib/supabase/services/actual-ingestion.ts. Includes generateLocationSegments, mergeAdjacentSegments, segmentsToDerivedEvents. Uses 150m default radius, 70% place match threshold, and deterministic source_id format."
     },
     {
       "id": "US-009",
@@ -141,8 +141,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to actual-ingestion.ts: detectCommute, createCommuteSegment, applyTravelAnnotations, processSegmentsWithCommutes, isMovementGroup, calculatePathDistance, findBoundaryPlaces. Movement detection uses 200m min distance and 2+ unique places. Long commutes (>=10min) get own segment with meta.kind='commute' and meta.intent='commute'. Short commutes add meta.travel_annotation to next segment."
     },
     {
       "id": "US-010",
@@ -156,8 +156,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to event-reconciliation.ts: findExtendableLocationEvent, canExtendLocationEvent, computeReconciliationOpsWithLocationExtension. Helpers: getPlaceId, isLocationEvent. 19 new unit tests (48 total). Extension works for same place_id (including null for unknown locations) with 60s gap threshold."
     },
     {
       "id": "US-011",

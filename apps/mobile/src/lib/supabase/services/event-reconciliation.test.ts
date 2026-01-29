@@ -1,8 +1,11 @@
 import {
   computeReconciliationOps,
   computeReconciliationOpsWithExtension,
+  computeReconciliationOpsWithLocationExtension,
   findExtendableEvent,
+  findExtendableLocationEvent,
   canExtendEvent,
+  canExtendLocationEvent,
   type ReconciliationEvent,
   type DerivedEvent,
 } from "./event-reconciliation";
@@ -687,6 +690,636 @@ describe("event-reconciliation", () => {
       expect(ops.inserts).toHaveLength(0);
       expect(ops.updates).toHaveLength(1);
       expect(ops.updates[0].eventId).toBe("existing-1");
+    });
+  });
+
+  // ============================================================================
+  // Location Extension Tests (US-010)
+  // ============================================================================
+
+  describe("findExtendableLocationEvent", () => {
+    // Helper to create a location ReconciliationEvent
+    const makeLocationEvent = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `loc-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "At Office",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: {
+        source: "derived",
+        source_id: `loc-src-${Math.random().toString(36).slice(2)}`,
+        kind: "location_block",
+        place_id: "place-office-123",
+        place_label: "Office",
+      },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    it("should find extendable location event when same place_id and gap < 60s", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeLocationEvent({
+        id: "office-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"), // Ends exactly at window start
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [existingEvent],
+        windowStart,
+        "place-office-123",
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("office-event");
+    });
+
+    it("should find extendable location event when gap is 30 seconds", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeLocationEvent({
+        id: "office-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:30Z"), // 30 seconds before window start
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [existingEvent],
+        windowStart,
+        "place-office-123",
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("office-event");
+    });
+
+    it("should return null when gap > 60s", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeLocationEvent({
+        id: "office-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:28:59Z"), // 61 seconds before window start
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [existingEvent],
+        windowStart,
+        "place-office-123",
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null when place_id differs", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeLocationEvent({
+        id: "office-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [existingEvent],
+        windowStart,
+        "place-home-456", // Different place
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("should match null place_id for unknown locations", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const existingEvent = makeLocationEvent({
+        id: "unknown-location-event",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: null, // Unknown location
+          place_label: null,
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [existingEvent],
+        windowStart,
+        null, // Also unknown location
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("unknown-location-event");
+    });
+
+    it("should return the most recent event when multiple candidates exist", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const olderEvent = makeLocationEvent({
+        id: "older-office",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+      const newerEvent = makeLocationEvent({
+        id: "newer-office",
+        scheduledStart: new Date("2026-01-29T10:15:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:29:45Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const result = findExtendableLocationEvent(
+        [olderEvent, newerEvent],
+        windowStart,
+        "place-office-123",
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("newer-office");
+    });
+
+    it("should not match non-location events", () => {
+      const windowStart = new Date("2026-01-29T10:30:00Z");
+      const screenTimeEvent: ReconciliationEvent = {
+        id: "screen-time-event",
+        userId: "user-123",
+        title: "Slack",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          app_id: "com.slack.Slack", // Screen-time event, not location
+        },
+        lockedAt: null,
+      };
+
+      const result = findExtendableLocationEvent(
+        [screenTimeEvent],
+        windowStart,
+        "place-office-123",
+      );
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("canExtendLocationEvent", () => {
+    // Helper to create a location ReconciliationEvent
+    const makeLocationEvent = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `loc-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "At Office",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: {
+        source: "derived",
+        source_id: `loc-src-${Math.random().toString(36).slice(2)}`,
+        kind: "location_block",
+        place_id: "place-office-123",
+        place_label: "Office",
+      },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    // Helper to create a location DerivedEvent
+    const makeLocationDerived = (
+      overrides: Partial<DerivedEvent> = {},
+    ): DerivedEvent => ({
+      sourceId: `loc-src-${Math.random().toString(36).slice(2)}`,
+      title: "At Office",
+      scheduledStart: new Date("2026-01-29T10:30:00Z"),
+      scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+      meta: {
+        source: "derived",
+        kind: "location_block",
+        place_id: "place-office-123",
+        place_label: "Office",
+      },
+      ...overrides,
+    });
+
+    it("should return true when same place_id and gap is 0", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+      const derived = makeLocationDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(true);
+    });
+
+    it("should return true when same place_id and gap < 60s", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:29:30Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+      const derived = makeLocationDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(true);
+    });
+
+    it("should return false when gap > 60s", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:28:59Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+      const derived = makeLocationDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(false);
+    });
+
+    it("should return false when place_ids differ", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+      const derived = makeLocationDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-home-456" },
+      });
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(false);
+    });
+
+    it("should return true when both have null place_id (unknown locations)", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: null },
+      });
+      const derived = makeLocationDerived({
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: null },
+      });
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(true);
+    });
+
+    it("should return false when derived is not a location event", () => {
+      const existing = makeLocationEvent({
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: { kind: "location_block", place_id: "place-office-123" },
+      });
+      const derived: DerivedEvent = {
+        sourceId: "screen-time-src",
+        title: "Slack",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: { source: "derived", app_id: "com.slack.Slack" }, // Not a location event
+      };
+
+      expect(canExtendLocationEvent(derived, existing)).toBe(false);
+    });
+  });
+
+  describe("computeReconciliationOpsWithLocationExtension", () => {
+    // Helper to create a location ReconciliationEvent
+    const makeLocationEvent = (
+      overrides: Partial<ReconciliationEvent> = {},
+    ): ReconciliationEvent => ({
+      id: `loc-${Math.random().toString(36).slice(2)}`,
+      userId: "user-123",
+      title: "At Office",
+      scheduledStart: new Date("2026-01-29T10:00:00Z"),
+      scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+      meta: {
+        source: "derived",
+        source_id: `loc-src-${Math.random().toString(36).slice(2)}`,
+        kind: "location_block",
+        place_id: "place-office-123",
+        place_label: "Office",
+      },
+      lockedAt: null,
+      ...overrides,
+    });
+
+    // Helper to create a location DerivedEvent
+    const makeLocationDerived = (
+      overrides: Partial<DerivedEvent> = {},
+    ): DerivedEvent => ({
+      sourceId: `loc-src-${Math.random().toString(36).slice(2)}`,
+      title: "At Office",
+      scheduledStart: new Date("2026-01-29T10:30:00Z"),
+      scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+      meta: {
+        source: "derived",
+        kind: "location_block",
+        place_id: "place-office-123",
+        place_label: "Office",
+      },
+      ...overrides,
+    });
+
+    it("staying at office across windows creates one 'At Office' event (extension)", () => {
+      // Window 1: 10:00-10:30 - At Office
+      const previousWindowEvent = makeLocationEvent({
+        id: "office-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "office-session-1",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      // Window 2: 10:30-11:00 - Still at Office
+      const newOfficeDerived = makeLocationDerived({
+        sourceId: "office-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [], // No existing events in current window
+        [newOfficeDerived],
+        [previousWindowEvent], // Previous window events for extension
+      );
+
+      // Should have extension, not insert
+      expect(ops.extensions).toHaveLength(1);
+      expect(ops.extensions[0].eventId).toBe("office-window-1");
+      expect(ops.extensions[0].newEnd).toEqual(new Date("2026-01-29T11:00:00Z"));
+      expect(ops.inserts).toHaveLength(0);
+    });
+
+    it("different place creates separate event even with 0 gap", () => {
+      // Window 1: 10:00-10:30 - At Office
+      const previousWindowEvent = makeLocationEvent({
+        id: "office-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "office-session-1",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      // Window 2: 10:30-11:00 - At Home (different place)
+      const newHomeDerived = makeLocationDerived({
+        sourceId: "home-session-1",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-home-456",
+          place_label: "Home",
+        },
+      });
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [],
+        [newHomeDerived],
+        [previousWindowEvent],
+      );
+
+      // Should have insert, not extension (different place)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+      expect(ops.inserts[0].event.sourceId).toBe("home-session-1");
+    });
+
+    it("gap > 60s creates separate events", () => {
+      // Window 1: Office ends at 10:28:50 (70 seconds gap)
+      const previousWindowEvent = makeLocationEvent({
+        id: "office-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:28:50Z"),
+        meta: {
+          source: "derived",
+          source_id: "office-session-1",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      // Window 2: Office continues at 10:30
+      const newOfficeDerived = makeLocationDerived({
+        sourceId: "office-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [],
+        [newOfficeDerived],
+        [previousWindowEvent],
+      );
+
+      // Should have insert, not extension (gap > 60s)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+    });
+
+    it("should not extend locked location events", () => {
+      // Window 1: Locked Office event
+      const previousWindowEvent = makeLocationEvent({
+        id: "locked-office",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "office-session-1",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+        lockedAt: new Date("2026-01-29T10:31:00Z"), // Locked
+      });
+
+      // Window 2: Office continues
+      const newOfficeDerived = makeLocationDerived({
+        sourceId: "office-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [],
+        [newOfficeDerived],
+        [previousWindowEvent],
+      );
+
+      // Should create new event, not extend (locked)
+      expect(ops.extensions).toHaveLength(0);
+      expect(ops.inserts).toHaveLength(1);
+      expect(ops.protectedIds).toContain("locked-office");
+    });
+
+    it("unknown locations (null place_id) can be extended", () => {
+      // Window 1: Unknown location
+      const previousWindowEvent = makeLocationEvent({
+        id: "unknown-window-1",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "unknown-session-1",
+          kind: "location_block",
+          place_id: null,
+          place_label: null,
+        },
+      });
+
+      // Window 2: Still unknown location
+      const newUnknownDerived = makeLocationDerived({
+        sourceId: "unknown-session-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: null,
+          place_label: null,
+        },
+      });
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [],
+        [newUnknownDerived],
+        [previousWindowEvent],
+      );
+
+      // Should have extension for unknown -> unknown
+      expect(ops.extensions).toHaveLength(1);
+      expect(ops.extensions[0].eventId).toBe("unknown-window-1");
+      expect(ops.inserts).toHaveLength(0);
+    });
+
+    it("should handle mixed location and screen-time events", () => {
+      // Previous window has both location and screen-time events
+      const prevLocationEvent = makeLocationEvent({
+        id: "office-location",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "office-loc-1",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const prevScreenTimeEvent: ReconciliationEvent = {
+        id: "slack-event",
+        userId: "user-123",
+        title: "Slack",
+        scheduledStart: new Date("2026-01-29T10:00:00Z"),
+        scheduledEnd: new Date("2026-01-29T10:30:00Z"),
+        meta: {
+          source: "derived",
+          source_id: "slack-1",
+          app_id: "com.slack.Slack",
+        },
+        lockedAt: null,
+      };
+
+      // Current window continues both
+      const newLocationDerived = makeLocationDerived({
+        sourceId: "office-loc-2",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          kind: "location_block",
+          place_id: "place-office-123",
+          place_label: "Office",
+        },
+      });
+
+      const newScreenTimeDerived: DerivedEvent = {
+        sourceId: "slack-2",
+        title: "Slack",
+        scheduledStart: new Date("2026-01-29T10:30:00Z"),
+        scheduledEnd: new Date("2026-01-29T11:00:00Z"),
+        meta: {
+          source: "derived",
+          app_id: "com.slack.Slack",
+        },
+      };
+
+      const ops = computeReconciliationOpsWithLocationExtension(
+        [],
+        [newLocationDerived, newScreenTimeDerived],
+        [prevLocationEvent, prevScreenTimeEvent],
+      );
+
+      // Should have extensions for both location and screen-time
+      expect(ops.extensions).toHaveLength(2);
+      const extensionIds = ops.extensions.map((e) => e.eventId);
+      expect(extensionIds).toContain("office-location");
+      expect(extensionIds).toContain("slack-event");
+      expect(ops.inserts).toHaveLength(0);
     });
   });
 });

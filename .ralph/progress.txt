@@ -13,6 +13,133 @@
 - TypeScript pre-existing errors in codebase - not blocking for SQL migrations
 - Services pattern: Use `tmSchema()` helper function for `supabase.schema("tm")` access
 - Error handling: Use `handleSupabaseError()` wrapper and graceful fallbacks for missing tables
+- Location segments: Use haversineDistance for coordinate matching, LocationSegment interface for event creation
+- Commute detection: Movement = 2+ unique places OR >200m total distance; 10min threshold for separate segment
+
+---
+
+## 2026-01-29 - US-010
+- **What was implemented:** Trailing edge extension for location events
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/event-reconciliation.test.ts` (modified)
+- **Functions created:**
+  - `findExtendableLocationEvent(existingEvents, windowStart, placeId)` - Finds the most recent location event ending near window start with matching place_id
+  - `canExtendLocationEvent(derived, existing)` - Check if derived location event can extend an existing location event
+  - `computeReconciliationOpsWithLocationExtension(existingEvents, derivedEvents, previousWindowEvents)` - Reconciliation with location extension support
+- **Helpers added:**
+  - `getPlaceId(event)` - Extract place_id from event meta
+  - `isLocationEvent(event)` - Check if event has meta.kind = 'location_block' or 'commute'
+- **Key design decisions:**
+  - Extension gap threshold: 60 seconds (same as screen-time extension)
+  - Matches place_id including null for unknown locations (continuous unknown locations can extend)
+  - Only the most recent location event is extended (not multiple)
+  - Locked events cannot be extended (protected)
+  - Handles mixed location and screen-time events in the same reconciliation pass
+- **Tests added:** 19 new tests (48 total in file)
+  - findExtendableLocationEvent: 7 tests for gap/place matching including null place_id
+  - canExtendLocationEvent: 6 tests for gap threshold, place matching, and event type validation
+  - computeReconciliationOpsWithLocationExtension: 6 tests for continuous sessions, place changes, gaps, and locked events
+- **Learnings for future iterations:**
+  - Location extension follows same pattern as screen-time extension (US-006)
+  - Unknown locations (null place_id) can be extended if they're consecutive
+  - The computeReconciliationOpsWithLocationExtension function handles both location and screen-time extensions in one pass
+  - Use isLocationEvent helper to distinguish location events from screen-time events
+
+---
+
+## 2026-01-29 - US-009
+- **What was implemented:** Commute detection for actual ingestion pipeline
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (modified)
+- **Functions created:**
+  - `detectCommute(locationSamples, startTime, endTime, userPlaces)` - Main function that identifies movement between places
+  - `createCommuteSegment(commute, windowStart)` - Creates a LocationSegment with meta.kind='commute' for long commutes
+  - `applyTravelAnnotations(segments, commutes)` - Adds meta.travel_annotation to segments following short commutes
+  - `processSegmentsWithCommutes(segments, locationSamples, userPlaces, windowStart)` - Main entry point combining segments with commute detection
+  - `isMovementGroup(samples, userPlaces)` - Checks if samples represent movement (2+ places or >200m distance)
+  - `calculatePathDistance(samples)` - Calculates total path distance using haversine
+  - `findBoundaryPlaces(samples, userPlaces)` - Finds first and last stable place for commute origin/destination
+  - `generateCommuteSourceId(windowStart, segmentStart)` - Creates deterministic source_id for commute segments
+- **Types created/updated:**
+  - `CommuteDetectionResult` - Exported interface with isCommute, durationMs, isLongCommute, travelAnnotation, fromPlace, toPlace, distanceM, samples
+  - `LocationSegment.meta.kind` - Updated to union type `"location_block" | "commute"`
+  - `LocationSegment.meta` - Added optional fields: intent, travel_annotation, destination_place_id, destination_place_label, distance_m
+- **Key design decisions:**
+  - MIN_COMMUTE_DURATION_MS = 10 minutes (threshold for separate commute segment)
+  - MIN_COMMUTE_DISTANCE_M = 200m (minimum distance to consider movement)
+  - Movement detection: 2+ unique places matched OR >200m total path distance
+  - Short commutes (<10min) add travel_annotation to the next location segment
+  - Long commutes (>=10min) create separate segment with meta.intent = 'commute'
+  - Commute source ID format: `commute:{windowStartMs}:{segmentStartMs}`
+  - segmentsToDerivedEvents updated to use "Commute" title for commute segments
+- **Learnings for future iterations:**
+  - Commute detection is separate from location segment generation for clarity
+  - processSegmentsWithCommutes is the main entry point that combines both
+  - Travel annotations are applied in-place to segments array
+  - Boundary places found by first/last matched place in commute samples
+
+---
+
+## 2026-01-29 - US-008
+- **What was implemented:** Location segment generation for actual ingestion pipeline
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (new)
+- **Functions created:**
+  - `generateLocationSegments(locationSamples, userPlaces, windowStart, windowEnd)` - Main function that converts raw GPS samples into contiguous place blocks
+  - `mergeAdjacentSegments(segments, maxGapMs)` - Merge adjacent segments with same place (handles GPS drift)
+  - `segmentsToDerivedEvents(segments)` - Convert segments to DerivedEvent format for reconciliation
+  - `findMatchingPlace(latitude, longitude, userPlaces)` - Match coordinates to user places using haversine distance
+  - `findDominantPlace(samples, userPlaces)` - Find the dominant place for a group of samples (70%+ threshold)
+  - `calculateCentroid(samples)` - Calculate average coordinates for a segment
+  - `generateSourceId(windowStart, placeId, segmentStart)` - Create deterministic source_id
+  - `calculateSegmentConfidence(sampleCount, placeMatchRatio)` - Calculate confidence score 0-1
+- **Types created:**
+  - `LocationSegment` - Exported interface for location blocks with meta.kind = 'location_block'
+  - `SampleGroup` - Internal type for grouping samples during segmentation
+- **Key design decisions:**
+  - DEFAULT_PLACE_RADIUS_M = 150m (matches PostGIS ST_DWithin behavior)
+  - PLACE_MATCH_THRESHOLD = 0.7 (70% of samples must match for place assignment)
+  - Haversine distance for coordinate matching (Earth-accurate, ~1m precision)
+  - Source ID format: `location:{windowStartMs}:{placeId}:{segmentStartMs}` for deterministic reconciliation
+  - Segment boundaries clamped to window boundaries
+  - Confidence = sample count contribution (0.3-0.6) + place match bonus (0-0.4)
+- **Learnings for future iterations:**
+  - Reuse haversine distance function from evidence-data.ts rather than reimplementing (kept for now for locality)
+  - Location segment generation is separate from commute detection (US-009) for clarity
+  - mergeAdjacentSegments handles GPS drift scenarios
+  - segmentsToDerivedEvents creates proper meta structure for reconciliation pipeline
+
+---
+
+## 2026-01-29 - US-007
+- **What was implemented:** fetchLocationEvidenceForWindow function for ingestion pipeline
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/evidence-data.ts` (modified)
+- **Functions created:**
+  - `fetchLocationEvidenceForWindow(userId, windowStart, windowEnd)` - Main function that combines all location data sources
+  - `fetchLocationSamplesForWindow(userId, windowStart, windowEnd)` - Query raw GPS points in time window
+  - `fetchLocationHourlyForWindow(userId, windowStart, windowEnd)` - Query aggregated hourly data with place joins
+  - `haversineDistance(lat1, lon1, lat2, lon2)` - Calculate distance between two coordinates in meters
+  - `findMatchingPlace(latitude, longitude, userPlaces)` - Find best matching user place using haversine (ST_DWithin equivalent)
+  - `calculateConfidence(sampleCount, avgAccuracyM)` - Calculate confidence score 0-1 based on data quality
+  - `buildLocationEvidence(samples, hourlyData, userPlaces, windowStart, windowEnd)` - Combine data into LocationEvidence array
+  - `createEvidenceFromSegment(segment, windowStart, windowEnd)` - Create single LocationEvidence from sample segment
+- **Types created:**
+  - `LocationEvidence` - Exported interface with start, end, place_id, place_label, latitude, longitude, confidence
+  - `WindowLocationSample` - Internal type for raw location samples
+- **Key design decisions:**
+  - Raw samples preferred over hourly aggregates for precise timestamps
+  - Groups consecutive samples by matching place to create segments
+  - Falls back to hourly aggregates when no raw samples available
+  - Haversine distance used client-side to replicate ST_DWithin database behavior
+  - Confidence calculation: 0.3-0.7 base from sample count (up to 10 samples), +0.3 accuracy bonus (<20m excellent, <50m good, <100m okay)
+  - Segment boundaries clamped to window boundaries
+- **Learnings for future iterations:**
+  - Reuse existing `fetchUserPlaces` function rather than reimplementing
+  - Hour boundaries for hourly query expanded to capture overlapping hours (floor start, ceil end)
+  - LocationEvidence segments match consecutive samples with same place_id (including null for unknown)
+  - Pre-existing typecheck error at line 438 (healthDaily: [] should be null) is unrelated to this change
 
 ---
 
