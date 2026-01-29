@@ -58,3 +58,17 @@ Started: Thu Jan 29 00:10:10 CST 2026
   - Batch operations: delete replaced events first, then insert new segments
   - Inserted events use `source: "ingestion"` and `kind: "screen_time"` for traceability
 ---
+
+## 2026-01-29 - US-004
+- **What was implemented:** Implemented gap filling to create Unknown blocks for uncovered time in processed windows
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (added gap filling functions)
+- **Learnings for future iterations:**
+  - `findGapsInWindow()` finds gaps by sorting/merging event coverage and finding holes
+  - Gap blocks use `source: "ingestion"` and `kind: "unknown_gap"` for proper meta tracking
+  - Gap source_id format: `gap:{windowStartMs}:{gapStartMs}` for idempotency
+  - Minimum gap duration: 60 seconds (MIN_GAP_DURATION_MS) to avoid cluttering timeline
+  - Gap filling is called AFTER reconciliation to fill any remaining uncovered time
+  - `runFullIngestion()` orchestrates the full pipeline: process → reconcile → fill gaps
+  - Gap filling failure is non-fatal - the main evidence events are still preserved
+---

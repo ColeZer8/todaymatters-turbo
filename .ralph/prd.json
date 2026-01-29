@@ -79,7 +79,7 @@
         "Gap filling only applies to the current window, not the entire day"
       ],
       "priority": 4,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-005",
