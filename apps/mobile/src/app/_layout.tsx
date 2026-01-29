@@ -24,6 +24,7 @@ import {
   useInsightsSync,
   useLocationSamplesSync,
   useOnboardingSync,
+  useActualIngestion,
 } from "@/lib/supabase/hooks";
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
@@ -58,6 +59,8 @@ export default function Layout() {
   // iOS-only: start background location collection when authenticated, and periodically flush queued samples.
   useLocationSamplesSync();
   useInsightsSync();
+  // Android-only: run incremental actual ingestion on app foreground/resume
+  useActualIngestion();
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;
