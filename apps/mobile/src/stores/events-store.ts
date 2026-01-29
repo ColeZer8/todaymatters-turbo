@@ -50,7 +50,10 @@ export interface CalendarEventMeta {
     | "transition_prep"
     | "transition_wind_down"
     | "location_inferred"
-    | "travel";
+    | "travel"
+    | "session_block"
+    | "location_block"
+    | "commute";
   startYmd?: string;
   actual?: boolean;
   tags?: string[];
@@ -132,6 +135,28 @@ export interface CalendarEventMeta {
     confidence?: number;
     reason?: string;
   };
+  // Session block fields (for kind === 'session_block')
+  /** Place ID for session blocks */
+  place_id?: string | null;
+  /** Place label for session blocks (e.g., "Home", "Office") */
+  place_label?: string | null;
+  /** Intent classification for session blocks */
+  intent?:
+    | "work"
+    | "leisure"
+    | "distracted_work"
+    | "offline"
+    | "mixed"
+    | "sleep"
+    | "commute";
+  /** Child event IDs that belong to this session block */
+  children?: string[];
+  /** Summary of top apps used in the session block */
+  summary?: Array<{ label: string; seconds: number }>;
+  /** Human-readable reasoning for intent classification */
+  intent_reasoning?: string;
+  /** True if this session occurred during scheduled sleep time */
+  during_scheduled_sleep?: boolean;
 }
 
 export interface ScheduledEvent {

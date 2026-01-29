@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, HelpCircle } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, HelpCircle, MapPin } from "lucide-react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -82,6 +82,14 @@ const CATEGORY_STYLES: Record<
   sleep: { bg: "#EEF2FF", accent: "#818CF8", text: "#4F46E5" }, // Soft indigo - much lighter
   unknown: { bg: "#FAFAFA", accent: "#CBD5E1", text: "#64748B", dashed: true },
   free: { bg: "#F0FDFA", accent: "#2DD4BF", text: "#0D9488" },
+  // Intent-based styles for session blocks
+  intent_work: { bg: "#EFF6FF", accent: "#3B82F6", text: "#1D4ED8" }, // Blue
+  intent_leisure: { bg: "#F0FDF4", accent: "#22C55E", text: "#16A34A" }, // Green
+  intent_distracted_work: { bg: "#FFF7ED", accent: "#F97316", text: "#C2410C" }, // Orange
+  intent_sleep: { bg: "#EEF2FF", accent: "#818CF8", text: "#4F46E5" }, // Purple
+  intent_offline: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" }, // Gray
+  intent_mixed: { bg: "#FEF9C3", accent: "#EAB308", text: "#A16207" }, // Yellow
+  commute: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" }, // Gray
 };
 
 // Helper to calculate position
@@ -140,6 +148,51 @@ interface TimeEventBlockProps {
   enableReviewTimeShortcut?: boolean;
 }
 
+/**
+ * Get the style key for a session block based on its intent.
+ * Falls back to the event category if not a session block.
+ */
+const getSessionBlockStyleKey = (event: CalendarEvent): string => {
+  const meta = event.meta;
+  if (meta?.kind === "session_block") {
+    const intent = meta.intent;
+    // Map intents to style keys
+    if (intent === "work") return "intent_work";
+    if (intent === "leisure") return "intent_leisure";
+    if (intent === "distracted_work") return "intent_distracted_work";
+    if (intent === "sleep") return "intent_sleep";
+    if (intent === "offline") return "intent_offline";
+    if (intent === "mixed") return "intent_mixed";
+  }
+  // Check for commute events
+  if (meta?.kind === "commute" || meta?.intent === "commute") {
+    return "commute";
+  }
+  return event.category;
+};
+
+/**
+ * Build a subtitle string from session block summary (top 3 apps).
+ */
+const buildSessionBlockSubtitle = (event: CalendarEvent): string | null => {
+  const meta = event.meta;
+  if (meta?.kind !== "session_block") return null;
+
+  const summary = meta.summary;
+  if (!summary || summary.length === 0) return null;
+
+  // Format top apps with duration
+  return summary
+    .slice(0, 3)
+    .map((item) => {
+      const mins = Math.round(item.seconds / 60);
+      return mins >= 60
+        ? `${item.label} ${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}m` : ""}`
+        : `${item.label} ${mins}m`;
+    })
+    .join(" · ");
+};
+
 const TimeEventBlock = ({
   event,
   visibleUntilMinutes,
@@ -158,12 +211,21 @@ const TimeEventBlock = ({
   const visibleDuration = Math.max(effectiveVisibleEnd - eventStart, 0);
   const shouldRender = visibleDuration > 0;
   const { top, height } = getPosition(eventStart, visibleDuration || 1);
-  const catStyles = CATEGORY_STYLES[event.category] || CATEGORY_STYLES.work;
+
+  // Determine if this is a session block and get appropriate styles
+  const isSessionBlock = event.meta?.kind === "session_block";
+  const styleKey = getSessionBlockStyleKey(event);
+  const catStyles = CATEGORY_STYLES[styleKey] || CATEGORY_STYLES.work;
+
   const isUnknown =
     event.category === "unknown" || event.meta?.kind === "unknown_gap";
   const extendsAbove = eventStart <= START_HOUR * 60;
   const extendsBelow = eventEnd >= DAY_END_MINUTES;
   const hasHiddenTail = !!visibleUntilMinutes && visibleUntilMinutes < eventEnd;
+
+  // Get session block subtitle (top apps)
+  const sessionSubtitle = buildSessionBlockSubtitle(event);
+  const hasPlaceLabel = isSessionBlock && event.meta?.place_label;
 
   if (!shouldRender) {
     return null;
@@ -253,6 +315,15 @@ const TimeEventBlock = ({
       ]}
     >
       <View style={styles.eventContent}>
+        {/* Location icon for session blocks with place label */}
+        {isSessionBlock && hasPlaceLabel && !isTiny && (
+          <Icon
+            icon={MapPin}
+            size={10}
+            color={catStyles.text}
+            style={{ marginRight: 3, opacity: 0.7 }}
+          />
+        )}
         {isUnknown && !isTiny && (
           <Icon
             icon={HelpCircle}
@@ -275,7 +346,17 @@ const TimeEventBlock = ({
           {event.title}
         </Text>
       </View>
-      {maxDescriptionLines > 0 && event.description && (
+      {/* Session block subtitle: top 3 apps with duration */}
+      {isSessionBlock && sessionSubtitle && maxDescriptionLines > 0 && (
+        <Text
+          numberOfLines={Math.min(maxDescriptionLines, 2)}
+          style={[styles.eventDescription, { color: catStyles.text, opacity: 0.8 }]}
+        >
+          {sessionSubtitle}
+        </Text>
+      )}
+      {/* Regular event description (non-session blocks) */}
+      {!isSessionBlock && maxDescriptionLines > 0 && event.description && (
         <Text
           numberOfLines={maxDescriptionLines}
           style={[styles.eventDescription, { color: catStyles.text }]}

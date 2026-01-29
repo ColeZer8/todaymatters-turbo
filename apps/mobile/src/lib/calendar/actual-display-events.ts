@@ -256,10 +256,38 @@ export function buildActualDisplayEvents({
 
   const sleepOverrideIntervals = buildSleepScheduleIntervals(plannedSorted);
 
+  // Collect all child event IDs from session blocks to hide them in the default view
+  const sessionBlockChildIds = new Set<string>();
+  for (const event of actualEvents) {
+    const meta = event.meta;
+    if (meta?.kind === "session_block" && Array.isArray(meta.children)) {
+      for (const childId of meta.children) {
+        if (typeof childId === "string") {
+          sessionBlockChildIds.add(childId);
+        }
+      }
+    }
+  }
+
   const filteredActualEvents = actualEvents.filter((event) => {
+    // Keep session blocks, they are the primary display format
+    const meta = event.meta;
+    if (meta?.kind === "session_block") {
+      return true;
+    }
+
+    // Hide child events that belong to session blocks
+    if (sessionBlockChildIds.has(event.id)) {
+      return false;
+    }
+    // Also hide by source_id for derived events
+    const sourceId = meta?.source_id;
+    if (typeof sourceId === "string" && sessionBlockChildIds.has(sourceId)) {
+      return false;
+    }
+
     if (event.category === "sleep") return false;
-    const sourceId = event.meta?.source_id;
-    const source = event.meta?.source;
+    const source = meta?.source;
     const isDerivedSourceId =
       typeof sourceId === "string" &&
       (sourceId.startsWith(DERIVED_ACTUAL_PREFIX) ||
@@ -281,7 +309,7 @@ export function buildActualDisplayEvents({
   // Track saved derived events by their source_id to avoid duplicates
   const savedDerivedEventKeys = new Set<string>();
   for (const event of filteredActualEvents) {
-    const meta = event.meta as Record<string, unknown> | undefined;
+    const meta = event.meta;
     if (meta?.source_id && typeof meta.source_id === "string") {
       // Check if this is a saved derived event
       if (

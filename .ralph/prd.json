@@ -271,8 +271,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Functions added to actual-ingestion.ts: isHomePlace, isWithinSleepSchedule, createSleepSession, detectSleepSessions, applySleepDetection, findHomePlace. Added SleepSchedule interface, DEFAULT_SLEEP_SCHEDULE constant, SleepDetectionResult type. Added 'sleep' to Intent type. Added during_scheduled_sleep to SessionBlock.meta. 19 new unit tests (38 total in actual-ingestion.test.ts)."
     },
     {
       "id": "US-018",
@@ -285,8 +285,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/mobile/src/lib/supabase/hooks/use-actual-ingestion.ts. Exports useActualIngestion hook with processWindow, processWindows, getCurrentWindow, getPreviousWindow functions. Implements full pipeline: 1) isWindowLocked check, 2) Parallel fetch of screentime/location/userPlaces/overrides/existingEvents/extensionCandidates, 3) computeReconciliationOpsWithPriority, 4) sessionizeWindow + applySleepDetection, 5) lockEventsInWindow + lockWindow. Graceful error handling with non-fatal failures for locks. Stats logging in dev mode."
     },
     {
       "id": "US-019",
@@ -301,8 +301,8 @@
         "Verify in browser/simulator"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated actual-display-events.ts to filter session_block events and hide child events. Added intent-based color coding to ComprehensiveCalendarTemplate.tsx. Extended CalendarEventMeta type with session block fields (kind: session_block/location_block/commute, place_id, place_label, intent, children, summary, etc.). TimeEventBlock shows location icon (MapPin), title, and session subtitle with top 3 apps."
     },
     {
       "id": "US-020",

@@ -16,6 +16,124 @@
 - Location segments: Use haversineDistance for coordinate matching, LocationSegment interface for event creation
 - Commute detection: Movement = 2+ unique places OR >200m total distance; 10min threshold for separate segment
 - Reconciliation priority: protected (4) > screen_time (3) > location (2) > unknown (1); use computeReconciliationOpsWithPriority for final reconciliation
+- Sleep detection: isHomePlace checks HOME_PLACE_LABELS array, isWithinSleepSchedule uses UTC hours for consistency
+- Sleep sessions have meta.intent='sleep' and title format '[Place] - Sleep'
+- Screen-time during sleep gets meta.during_scheduled_sleep=true
+- Ingestion hook: useActualIngestion in hooks/use-actual-ingestion.ts, processWindow for single 30-min window
+- Window alignment: 30-min boundaries (00:00, 00:30, 01:00, etc.) using setMinutes(windowStartMinutes, 0, 0)
+- Session block display: meta.kind='session_block', intent-based colors in CATEGORY_STYLES with intent_* prefix
+- Session block subtitle: meta.summary array format `{ label: string; seconds: number }` for top apps
+
+---
+
+## 2026-01-29 - US-019
+- **What was implemented:** Calendar display updates to show session blocks as the primary display format
+- **Files changed:**
+  - `apps/mobile/src/lib/calendar/actual-display-events.ts` (modified)
+  - `apps/mobile/src/components/templates/ComprehensiveCalendarTemplate.tsx` (modified)
+  - `apps/mobile/src/stores/events-store.ts` (modified)
+- **Key changes to actual-display-events.ts:**
+  - Added `sessionBlockChildIds` Set to collect child event IDs from session blocks
+  - Updated `filteredActualEvents` to keep session_block events and hide their children
+  - Child events are hidden by matching event.id or meta.source_id against session children
+- **Key changes to ComprehensiveCalendarTemplate.tsx:**
+  - Added intent-based style keys: intent_work (blue), intent_leisure (green), intent_distracted_work (orange), intent_sleep (purple), intent_offline (gray), intent_mixed (yellow), commute (gray)
+  - Added `getSessionBlockStyleKey(event)` function to map session block intents to style keys
+  - Added `buildSessionBlockSubtitle(event)` function to format top 3 apps as "App 15m · App2 10m" subtitle
+  - Updated `TimeEventBlock` to:
+    - Use intent-based styles for session blocks
+    - Show MapPin icon for session blocks with place_label
+    - Display session subtitle with top apps and durations
+- **Key changes to events-store.ts (CalendarEventMeta type):**
+  - Added to `kind` union: "session_block", "location_block", "commute"
+  - Added session block fields: place_id, place_label, intent (work/leisure/distracted_work/offline/mixed/sleep/commute), children, summary, intent_reasoning, during_scheduled_sleep
+- **Learnings for future iterations:**
+  - Session blocks use meta.kind = 'session_block' to identify them
+  - Child events referenced in meta.children array (can be event IDs or source_ids)
+  - Intent maps to color: work=blue, leisure=green, distracted=orange, sleep=purple, offline/commute=gray
+  - Use CalendarEventMeta type directly (no need for Record<string, unknown> cast)
+
+---
+
+## 2026-01-29 - US-018
+- **What was implemented:** useActualIngestion hook for the new immutable ingestion pipeline
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/hooks/use-actual-ingestion.ts` (new)
+  - `apps/mobile/src/lib/supabase/hooks/index.ts` (modified - added export)
+- **Types created:**
+  - `IngestionWindowResult` - Interface with skipped, reason, stats, error fields
+  - `IngestionStats` - Interface tracking eventsCreated, eventsExtended, eventsUpdated, eventsDeleted, sessionsCreated, screenTimeSessions, locationSegments
+- **Hook API:**
+  - `processWindow(windowStart, windowEnd, sleepSchedule?)` - Process a single 30-minute window
+  - `processWindows(windows[], sleepSchedule?)` - Process multiple windows in sequence
+  - `getCurrentWindow()` - Get the current 30-min aligned window
+  - `getPreviousWindow()` - Get the previous window (the one to process)
+  - `isProcessing` - State indicating if processing is in progress
+  - `lastResult` - Last processing result
+- **Pipeline steps implemented:**
+  1. Check if window is locked (skip if already processed)
+  2. Parallel fetch: screen-time sessions, location samples, user places, app overrides, existing events, extension candidates
+  3. Generate derived events: screenTimeToDerivedEvents, generateLocationSegments + processSegmentsWithCommutes
+  4. Run computeReconciliationOpsWithPriority
+  5. Execute reconciliation ops (extensions, inserts, updates, deletes)
+  6. Run sessionizeWindow + applySleepDetection
+  7. Insert session blocks as events
+  8. Lock events in window + lock window
+- **Key design decisions:**
+  - Graceful error handling for all lock operations (non-fatal)
+  - Stats logging in __DEV__ mode
+  - Window alignment to 30-minute boundaries (00, 30)
+  - User app category overrides converted from EventCategory to AppCategory
+  - All operations use tmSchema() pattern for tm schema access
+- **Learnings for future iterations:**
+  - Hook doesn't have useCalendarEvents hook, so fetches screen-time sessions via fetchScreenTimeSessionsForDay
+  - User app overrides need conversion from EventCategory (work, exercise, relationship, growth, routine) to AppCategory (work, social, entertainment, comms, utility, ignore)
+  - 30-min window boundaries calculated from current time using setMinutes(0/30, 0, 0)
+
+---
+
+## 2026-01-29 - US-017
+- **What was implemented:** Sleep session detection for overnight gaps at home
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/actual-ingestion.test.ts` (modified)
+  - `apps/mobile/src/lib/supabase/services/app-categories.ts` (modified)
+- **Types created:**
+  - `SleepSchedule` - Interface with bedtime and wakeTime strings (HH:MM format)
+  - `SleepDetectionResult` - Interface with isSleep, sleepSessions, screenTimeInterruptions
+  - Added `"sleep"` to the `Intent` union type
+  - Added `during_scheduled_sleep?: boolean` to SessionBlock.meta
+- **Constants created:**
+  - `DEFAULT_SLEEP_SCHEDULE` - { bedtime: "22:00", wakeTime: "07:00" }
+  - `MIN_SLEEP_DURATION_MS` - 4 hours
+  - `MIN_OVERNIGHT_GAP_MS` - 3 hours
+  - `HOME_PLACE_LABELS` - ["home", "house", "apartment", "residence", "my place"]
+- **Functions created:**
+  - `isHomePlace(placeLabel)` - Check if label matches home-like names
+  - `isWithinSleepSchedule(timestamp, schedule)` - Check if time falls within sleep hours
+  - `createSleepSession(start, end, placeId, placeLabel, windowStart, childEventIds, confidence)` - Create sleep session block
+  - `detectSleepSessions(userId, windowStart, windowEnd, events, homePlace, schedule)` - Detect sleep and split around screen-time
+  - `applySleepDetection(userId, sessions, windowStart, windowEnd, homePlace, schedule)` - Apply sleep detection to existing sessions
+  - `findHomePlace(userPlaces)` - Find home place by category or label
+- **Key design decisions:**
+  - Uses UTC hours for time comparison (consistent with ISO date strings)
+  - Sleep must be at home (matches by placeId or placeLabel)
+  - Overnight gaps >= 3 hours at home during sleep schedule = sleep session
+  - Screen-time interruptions during sleep split the sleep session
+  - Screen-time blocks during sleep get `meta.during_scheduled_sleep = true`
+  - Offline sessions at home during sleep hours are converted to sleep sessions
+- **Tests added:** 19 tests in actual-ingestion.test.ts (38 total):
+  - `isHomePlace`: 3 tests (home label, variations, non-home)
+  - `isWithinSleepSchedule`: 3 tests (overnight, outside hours, same-day)
+  - `createSleepSession`: 2 tests (properties, null label)
+  - `detectSleepSessions`: 4 tests (no events, interruptions, not at home, daytime)
+  - `applySleepDetection`: 4 tests (convert offline, mark during_sleep, keep existing, outside hours)
+  - `findHomePlace`: 3 tests (by category, by label, not found)
+- **Learnings for future iterations:**
+  - Use `getUTCHours()` for time comparisons with ISO date strings
+  - Home detection prioritizes category over label matching
+  - Sleep detection requires both home place AND scheduled sleep time window
+  - applySleepDetection is the main entry point for post-processing sessions
 
 ---
 
