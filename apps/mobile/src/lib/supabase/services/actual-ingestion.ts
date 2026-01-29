@@ -907,3 +907,335 @@ export async function reconcileWindow(
   // Step 3: Execute the operations
   return executeReconciliation(userId, ops);
 }
+
+// ============================================================================
+// Gap Filling (US-004)
+// ============================================================================
+
+/**
+ * Represents a gap (uncovered time) in the window.
+ */
+export interface GapSegment {
+  startAt: Date;
+  endAt: Date;
+  durationSeconds: number;
+}
+
+/**
+ * Minimum gap duration to create an Unknown block (1 minute).
+ * Smaller gaps are ignored to avoid cluttering the timeline.
+ */
+const MIN_GAP_DURATION_MS = 60_000;
+
+/**
+ * Find gaps in the window that are not covered by any event.
+ *
+ * @param windowStart - Start of the window
+ * @param windowEnd - End of the window
+ * @param events - Existing events in the window (after reconciliation)
+ * @returns Array of gaps that need to be filled with Unknown blocks
+ */
+export function findGapsInWindow(
+  windowStart: Date,
+  windowEnd: Date,
+  events: Array<{ startAt: Date; endAt: Date }>,
+): GapSegment[] {
+  const gaps: GapSegment[] = [];
+  const windowStartMs = windowStart.getTime();
+  const windowEndMs = windowEnd.getTime();
+
+  // Sort events by start time
+  const sortedEvents = [...events].sort(
+    (a, b) => a.startAt.getTime() - b.startAt.getTime(),
+  );
+
+  // Clip events to window boundaries for coverage calculation
+  const clippedEvents: Array<{ startMs: number; endMs: number }> = [];
+  for (const event of sortedEvents) {
+    const eventStartMs = Math.max(event.startAt.getTime(), windowStartMs);
+    const eventEndMs = Math.min(event.endAt.getTime(), windowEndMs);
+    if (eventEndMs > eventStartMs) {
+      clippedEvents.push({ startMs: eventStartMs, endMs: eventEndMs });
+    }
+  }
+
+  // Merge overlapping clipped events to find actual coverage
+  const merged: Array<{ startMs: number; endMs: number }> = [];
+  for (const event of clippedEvents) {
+    if (merged.length === 0) {
+      merged.push({ ...event });
+    } else {
+      const last = merged[merged.length - 1];
+      if (event.startMs <= last.endMs) {
+        // Overlapping or adjacent - extend the last range
+        last.endMs = Math.max(last.endMs, event.endMs);
+      } else {
+        merged.push({ ...event });
+      }
+    }
+  }
+
+  // Find gaps between merged coverage ranges
+  let currentPosition = windowStartMs;
+
+  for (const coverage of merged) {
+    if (coverage.startMs > currentPosition) {
+      // There's a gap before this coverage
+      const gapDuration = coverage.startMs - currentPosition;
+      if (gapDuration >= MIN_GAP_DURATION_MS) {
+        gaps.push({
+          startAt: new Date(currentPosition),
+          endAt: new Date(coverage.startMs),
+          durationSeconds: Math.round(gapDuration / 1000),
+        });
+      }
+    }
+    currentPosition = Math.max(currentPosition, coverage.endMs);
+  }
+
+  // Check for gap at the end of the window
+  if (currentPosition < windowEndMs) {
+    const gapDuration = windowEndMs - currentPosition;
+    if (gapDuration >= MIN_GAP_DURATION_MS) {
+      gaps.push({
+        startAt: new Date(currentPosition),
+        endAt: new Date(windowEndMs),
+        durationSeconds: Math.round(gapDuration / 1000),
+      });
+    }
+  }
+
+  return gaps;
+}
+
+/**
+ * Generate a deterministic source_id for an Unknown gap block.
+ * Format: `gap:{windowStartMs}:{gapStartMs}`
+ */
+export function computeGapSourceId(windowStart: Date, gapStart: Date): string {
+  return `gap:${windowStart.getTime()}:${gapStart.getTime()}`;
+}
+
+/**
+ * Result of the gap filling process.
+ */
+export interface GapFillResult {
+  success: boolean;
+  gapsFound: number;
+  gapsFilled: number;
+  error?: string;
+}
+
+/**
+ * Fill gaps in the window with Unknown blocks.
+ *
+ * This should be called AFTER reconciliation to fill any remaining uncovered
+ * time in the window with Unknown blocks.
+ *
+ * @param userId - User ID
+ * @param windowStart - Start of the window
+ * @param windowEnd - End of the window
+ * @returns Result of the gap filling operation
+ */
+export async function fillGapsInWindow(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+): Promise<GapFillResult> {
+  try {
+    // Fetch current state of events in the window (after reconciliation)
+    const existingEvents = await fetchExistingActualEvents(
+      userId,
+      windowStart,
+      windowEnd,
+    );
+
+    // Convert to the format expected by findGapsInWindow
+    const eventRanges = existingEvents.map((event) => ({
+      startAt: event.scheduledStart,
+      endAt: event.scheduledEnd,
+    }));
+
+    // Find gaps
+    const gaps = findGapsInWindow(windowStart, windowEnd, eventRanges);
+
+    if (gaps.length === 0) {
+      return {
+        success: true,
+        gapsFound: 0,
+        gapsFilled: 0,
+      };
+    }
+
+    // Check for existing gap blocks to avoid duplicates (idempotency)
+    const existingGapSourceIds = new Set<string>();
+    for (const event of existingEvents) {
+      if (event.meta?.source_id?.startsWith("gap:")) {
+        existingGapSourceIds.add(event.meta.source_id);
+      }
+    }
+
+    // Filter out gaps that already have blocks
+    const newGaps = gaps.filter((gap) => {
+      const sourceId = computeGapSourceId(windowStart, gap.startAt);
+      return !existingGapSourceIds.has(sourceId);
+    });
+
+    if (newGaps.length === 0) {
+      return {
+        success: true,
+        gapsFound: gaps.length,
+        gapsFilled: 0,
+      };
+    }
+
+    // Create Unknown blocks for gaps
+    const gapInserts = newGaps.map((gap) => ({
+      user_id: userId,
+      type: "calendar_actual",
+      title: "Unknown",
+      description: "Gap filled by ingestion",
+      scheduled_start: gap.startAt.toISOString(),
+      scheduled_end: gap.endAt.toISOString(),
+      meta: {
+        category: "unknown",
+        source: "ingestion",
+        source_id: computeGapSourceId(windowStart, gap.startAt),
+        actual: true,
+        kind: "unknown_gap",
+        duration_seconds: gap.durationSeconds,
+      } as unknown as Json,
+    }));
+
+    const { error: insertError } = await tmSchema()
+      .from("events")
+      .insert(gapInserts);
+
+    if (insertError) {
+      throw handleSupabaseError(insertError);
+    }
+
+    if (__DEV__) {
+      console.log("[Ingestion] Gap filling complete:", {
+        gapsFound: gaps.length,
+        gapsFilled: newGaps.length,
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+      });
+    }
+
+    return {
+      success: true,
+      gapsFound: gaps.length,
+      gapsFilled: newGaps.length,
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    if (__DEV__) {
+      console.error("[Ingestion] Gap filling failed:", error);
+    }
+
+    return {
+      success: false,
+      gapsFound: 0,
+      gapsFilled: 0,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Complete ingestion pipeline for a window: process, reconcile, and fill gaps.
+ * This is the main orchestration function that ties together all the pieces.
+ *
+ * @param userId - User ID
+ * @param windowStart - Start of the window
+ * @param windowEnd - End of the window
+ * @param config - Ingestion configuration
+ * @returns Combined result of all operations
+ */
+export interface FullIngestionResult {
+  success: boolean;
+  windowStart: Date;
+  windowEnd: Date;
+  sessionsProcessed: number;
+  segmentsCreated: number;
+  eventsInserted: number;
+  eventsDeleted: number;
+  gapsFilled: number;
+  error?: string;
+}
+
+export async function runFullIngestion(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+  config: IngestionConfig = DEFAULT_CONFIG,
+): Promise<FullIngestionResult> {
+  // Step 1: Process the window to get evidence segments
+  const processResult = await processIngestionWindow(
+    userId,
+    windowStart,
+    windowEnd,
+    config,
+  );
+
+  if (!processResult.success) {
+    return {
+      success: false,
+      windowStart,
+      windowEnd,
+      sessionsProcessed: 0,
+      segmentsCreated: 0,
+      eventsInserted: 0,
+      eventsDeleted: 0,
+      gapsFilled: 0,
+      error: processResult.error,
+    };
+  }
+
+  // Step 2: Reconcile segments into existing events
+  const reconcileResult = await reconcileWindow(
+    userId,
+    windowStart,
+    windowEnd,
+    processResult.segments,
+  );
+
+  if (!reconcileResult.success) {
+    return {
+      success: false,
+      windowStart,
+      windowEnd,
+      sessionsProcessed: processResult.sessionsProcessed,
+      segmentsCreated: processResult.segmentsCreated,
+      eventsInserted: reconcileResult.eventsInserted,
+      eventsDeleted: reconcileResult.eventsDeleted,
+      gapsFilled: 0,
+      error: reconcileResult.error,
+    };
+  }
+
+  // Step 3: Fill gaps with Unknown blocks
+  const gapResult = await fillGapsInWindow(userId, windowStart, windowEnd);
+
+  if (!gapResult.success) {
+    // Gap filling failure is non-fatal - we still have the main events
+    if (__DEV__) {
+      console.warn("[Ingestion] Gap filling failed but continuing:", gapResult.error);
+    }
+  }
+
+  return {
+    success: true,
+    windowStart,
+    windowEnd,
+    sessionsProcessed: processResult.sessionsProcessed,
+    segmentsCreated: processResult.segmentsCreated,
+    eventsInserted: reconcileResult.eventsInserted,
+    eventsDeleted: reconcileResult.eventsDeleted,
+    gapsFilled: gapResult.gapsFilled,
+  };
+}
