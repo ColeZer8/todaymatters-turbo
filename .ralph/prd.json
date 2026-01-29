@@ -92,7 +92,7 @@
         "Hook handles errors gracefully without crashing the app"
       ],
       "priority": 5,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-006",

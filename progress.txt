@@ -81,3 +81,19 @@
   - Pre-existing type errors (CalendarEventMeta export, Json types) are unrelated to timezone handling
 ---
 
+## 2026-01-29 - US-005
+- What was implemented: Created useActualIngestion React hook that triggers the ingestion service on app foreground/resume
+- Files changed:
+  - apps/mobile/src/lib/supabase/hooks/use-actual-ingestion.ts (new file)
+  - apps/mobile/src/lib/supabase/hooks/index.ts (added export)
+  - apps/mobile/src/app/_layout.tsx (added hook usage)
+- **Learnings for future iterations:**
+  - useInsightsSync is the pattern to follow for hooks that run on app foreground/resume
+  - AppState.addEventListener("change") with state === "active" triggers on foreground
+  - Use a ref (isSyncingRef) to prevent concurrent runs
+  - Set isCancelled flag in cleanup to prevent state updates after unmount
+  - For Android-only features, gate with `Platform.OS !== "android"` early return
+  - The actual-ingestion.ts service already has all the core logic (shouldRunIngestion, runFullIngestion, upsertIngestionCheckpoint)
+  - Pre-existing type errors in the codebase don't block new feature work
+---
+
