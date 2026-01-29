@@ -110,6 +110,9 @@ import { supabase } from "../client";
 import { handleSupabaseError } from "../utils/error-handler";
 import type { Json } from "../database.types";
 
+// Location permission check
+import { isLocationAvailableForIngestion } from "@/lib/location-permission";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -123,6 +126,8 @@ export interface IngestionWindowResult {
   stats?: WindowLockStats;
   /** Error message if processing failed */
   error?: string;
+  /** Whether location was unavailable and we fell back to screen-time only */
+  locationFallback?: boolean;
 }
 
 export interface IngestionStats {
@@ -140,6 +145,8 @@ export interface IngestionStats {
   screenTimeSessions: number;
   /** Number of location segments processed */
   locationSegments: number;
+  /** Whether location was skipped due to permission denied */
+  locationSkipped?: boolean;
 }
 
 interface UseActualIngestionOptions {
@@ -470,8 +477,23 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
 
       setIsProcessing(true);
 
+      // Track if we're using screen-time only fallback
+      let locationFallback = false;
+
       try {
+        // Step 1.5: Check if location is available (permission granted)
+        const locationAvailable = await isLocationAvailableForIngestion();
+        if (!locationAvailable) {
+          locationFallback = true;
+          if (__DEV__) {
+            console.log(
+              "[ActualIngestion] Location not available, using screen-time only fallback"
+            );
+          }
+        }
+
         // Step 2: Fetch evidence data in parallel
+        // Skip location fetches if location is not available
         const [
           screenTimeSessions,
           locationSamples,
@@ -481,7 +503,11 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
           previousWindowEvents,
         ] = await Promise.all([
           fetchScreenTimeForWindow(userId, windowStart, windowEnd),
-          fetchLocationSamplesForWindow(userId, windowStart, windowEnd),
+          // Skip location samples if location not available
+          locationFallback
+            ? Promise.resolve([])
+            : fetchLocationSamplesForWindow(userId, windowStart, windowEnd),
+          // Still fetch user places (needed for sleep detection)
           fetchUserPlaces(userId),
           fetchUserAppCategoryOverrides(userId).catch(() => ({} as UserAppCategoryOverrides)),
           fetchEventsInWindow(userId, windowStart, windowEnd),
@@ -496,21 +522,25 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
           windowStart,
         );
 
-        // Location segments and derived events
-        let locationSegments = generateLocationSegments(
-          locationSamples,
-          userPlaces,
-          windowStart,
-          windowEnd,
-        );
+        // Location segments and derived events (empty if location not available)
+        let locationSegments = locationFallback
+          ? []
+          : generateLocationSegments(
+              locationSamples,
+              userPlaces,
+              windowStart,
+              windowEnd,
+            );
 
-        // Process with commute detection
-        locationSegments = processSegmentsWithCommutes(
-          locationSegments,
-          locationSamples,
-          userPlaces,
-          windowStart,
-        );
+        // Process with commute detection (skip if location not available)
+        if (!locationFallback && locationSegments.length > 0) {
+          locationSegments = processSegmentsWithCommutes(
+            locationSegments,
+            locationSamples,
+            userPlaces,
+            windowStart,
+          );
+        }
 
         const locationEvents = segmentsToDerivedEvents(locationSegments);
 
@@ -608,6 +638,7 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
         // Update stats
         stats.screenTimeSessions = screenTimeSessions.length;
         stats.locationSegments = locationSegments.length;
+        stats.locationSkipped = locationFallback;
 
         // Step 6: Lock events in window
         try {
@@ -647,6 +678,7 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
           console.log("[ActualIngestion] Window processed:", {
             windowStart: windowStart.toISOString(),
             windowEnd: windowEnd.toISOString(),
+            locationFallback,
             ...stats,
           });
         }
@@ -654,6 +686,7 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
         const result: IngestionWindowResult = {
           skipped: false,
           stats: lockStats,
+          locationFallback,
         };
 
         setLastResult(result);

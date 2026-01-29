@@ -37,3 +37,7 @@ export type {
   CategoryPath,
   HierarchicalCategoryPickerProps,
 } from "./HierarchicalCategoryPicker";
+export {
+  LocationPermissionPrompt,
+  useLocationPermissionPrompt,
+} from "./LocationPermissionPrompt";
