@@ -31,6 +31,7 @@ import {
 import { createUserPlace } from "@/lib/supabase/services/user-places";
 import type { Intent } from "@/lib/supabase/services/app-categories";
 import { formatLocalIso } from "@/lib/calendar/local-time";
+import { getReadableAppName } from "@/lib/app-names";
 
 // Theme colors matching ComprehensiveCalendarTemplate
 const COLORS = {
@@ -178,17 +179,29 @@ export const SessionDetailModal = ({
 
   // Calculate percentages for app breakdown
   const appBreakdown = useMemo(() => {
-    if (!meta?.summary || meta.summary.length === 0) {
+    const summary =
+      meta?.app_summary?.map((entry) => ({
+        label:
+          getReadableAppName({ appId: entry.app_id }) ?? entry.app_id,
+        seconds: entry.seconds,
+      })) ??
+      meta?.summary?.map((entry) => ({
+        label: getReadableAppName({ appId: entry.label }) ?? entry.label,
+        seconds: entry.seconds,
+      })) ??
+      [];
+
+    if (summary.length === 0) {
       return [];
     }
 
-    const totalSeconds = meta.summary.reduce((sum, app) => sum + app.seconds, 0);
-    return meta.summary.map((app) => ({
+    const totalSeconds = summary.reduce((sum, app) => sum + app.seconds, 0);
+    return summary.map((app) => ({
       label: app.label,
       seconds: app.seconds,
       percentage: totalSeconds > 0 ? Math.round((app.seconds / totalSeconds) * 100) : 0,
     }));
-  }, [meta?.summary]);
+  }, [meta?.app_summary, meta?.summary]);
 
   // Time range
   const timeRange = useMemo(() => {

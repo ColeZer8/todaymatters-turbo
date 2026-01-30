@@ -17,6 +17,7 @@ import {
   formatLocalIso,
   ymdMinutesToLocalDate,
 } from "@/lib/calendar/local-time";
+import { getReadableAppName } from "@/lib/app-names";
 import { applyUserAppCategoryFeedback } from "@/lib/supabase/services/user-app-categories";
 import { fetchActivityCategories } from "@/lib/supabase/services/activity-categories";
 import type { ActivityCategory } from "@/lib/supabase/services/activity-categories";
@@ -215,6 +216,18 @@ export default function ActualAdjustScreen() {
     if (meta.kind)
       rows.push({ label: "Kind", value: meta.kind.replace(/_/g, " ") });
     if (meta.source) rows.push({ label: "Source", value: meta.source });
+    if (meta.place_label) {
+      rows.push({ label: "Place", value: meta.place_label });
+    }
+    if (
+      typeof meta.latitude === "number" &&
+      typeof meta.longitude === "number"
+    ) {
+      rows.push({
+        label: "Coordinates",
+        value: `${meta.latitude.toFixed(5)}, ${meta.longitude.toFixed(5)}`,
+      });
+    }
     if (meta.evidence?.locationLabel) {
       rows.push({ label: "Location", value: meta.evidence.locationLabel });
     }
@@ -226,6 +239,46 @@ export default function ActualAdjustScreen() {
     }
     if (meta.evidence?.topApp) {
       rows.push({ label: "Top app", value: meta.evidence.topApp });
+    }
+    if (meta.app_summary && meta.app_summary.length > 0) {
+      const totalSeconds = meta.app_summary.reduce(
+        (sum, app) => sum + app.seconds,
+        0,
+      );
+      rows.push({
+        label: "Screen time",
+        value: `${Math.round(totalSeconds / 60)} min`,
+      });
+      rows.push({
+        label: "Apps",
+        value: meta.app_summary
+          .map((app) => {
+            const label =
+              getReadableAppName({ appId: app.app_id }) ?? app.app_id;
+            const minutes = Math.round(app.seconds / 60);
+            return `${label} ${minutes}m`;
+          })
+          .join(", "),
+      });
+    } else if (meta.summary && meta.summary.length > 0) {
+      const totalSeconds = meta.summary.reduce(
+        (sum, app) => sum + app.seconds,
+        0,
+      );
+      rows.push({
+        label: "Screen time",
+        value: `${Math.round(totalSeconds / 60)} min`,
+      });
+      rows.push({
+        label: "Apps",
+        value: meta.summary
+          .map((app) => {
+            const label = getReadableAppName({ appId: app.label }) ?? app.label;
+            const minutes = Math.round(app.seconds / 60);
+            return `${label} ${minutes}m`;
+          })
+          .join(", "),
+      });
     }
     if (meta.evidence?.sleep?.interruptions !== undefined) {
       rows.push({

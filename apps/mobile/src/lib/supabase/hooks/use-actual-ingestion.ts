@@ -156,6 +156,15 @@ interface UseActualIngestionOptions {
   logStats?: boolean;
 }
 
+export interface ProcessActualIngestionWindowInput {
+  userId: string | null;
+  windowStart: Date;
+  windowEnd: Date;
+  sleepSchedule?: SleepSchedule | null;
+  onError?: (error: Error) => void;
+  logStats?: boolean;
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -163,6 +172,31 @@ interface UseActualIngestionOptions {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tmSchema(): any {
   return supabase.schema("tm");
+}
+
+export function getCurrentIngestionWindow(
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  const minutes = now.getMinutes();
+  const windowStartMinutes = minutes >= 30 ? 30 : 0;
+
+  const windowStart = new Date(now);
+  windowStart.setMinutes(windowStartMinutes, 0, 0);
+
+  const windowEnd = new Date(windowStart);
+  windowEnd.setMinutes(windowEnd.getMinutes() + 30);
+
+  return { start: windowStart, end: windowEnd };
+}
+
+export function getPreviousIngestionWindow(
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  const current = getCurrentIngestionWindow(now);
+  const previousStart = new Date(current.start);
+  previousStart.setMinutes(previousStart.getMinutes() - 30);
+
+  return { start: previousStart, end: current.start };
 }
 
 /**
@@ -241,6 +275,273 @@ function screenTimeToDerivedEvents(
       },
     };
   });
+}
+
+export async function processActualIngestionWindow(
+  input: ProcessActualIngestionWindowInput,
+): Promise<IngestionWindowResult> {
+  const {
+    userId,
+    windowStart,
+    windowEnd,
+    sleepSchedule,
+    onError,
+    logStats,
+  } = input;
+
+  if (!userId) {
+    return { skipped: true, reason: "no_user" };
+  }
+
+  // Step 1: Check if window is already locked
+  try {
+    const locked = await isWindowLocked(userId, windowStart);
+    if (locked) {
+      return {
+        skipped: true,
+        reason: "already_locked",
+      };
+    }
+  } catch (error) {
+    // Non-fatal - continue with processing
+    if (__DEV__) {
+      console.warn("[ActualIngestion] Failed to check window lock:", error);
+    }
+  }
+
+  // Track if we're using screen-time only fallback
+  let locationFallback = false;
+
+  try {
+    // Step 1.5: Check if location is available (permission granted)
+    const locationAvailable = await isLocationAvailableForIngestion();
+    if (!locationAvailable) {
+      locationFallback = true;
+      if (__DEV__) {
+        console.log(
+          "[ActualIngestion] Location not available, using screen-time only fallback",
+        );
+      }
+    }
+
+    // Step 2: Fetch evidence data in parallel
+    // Skip location fetches if location is not available
+    const [
+      screenTimeSessions,
+      locationSamples,
+      userPlaces,
+      userAppOverrides,
+      existingEvents,
+      previousWindowEvents,
+    ] = await Promise.all([
+      fetchScreenTimeForWindow(userId, windowStart, windowEnd),
+      // Skip location samples if location not available
+      locationFallback
+        ? Promise.resolve([])
+        : fetchLocationSamplesForWindow(userId, windowStart, windowEnd),
+      // Still fetch user places (needed for sleep detection)
+      fetchUserPlaces(userId),
+      fetchUserAppCategoryOverrides(userId).catch(
+        () => ({}) as UserAppCategoryOverrides,
+      ),
+      fetchEventsInWindow(userId, windowStart, windowEnd),
+      fetchExtensionCandidates(userId, windowStart),
+    ]);
+
+    // Step 3: Generate derived events from evidence
+
+    // Screen-time derived events
+    const screenTimeEvents = screenTimeToDerivedEvents(
+      screenTimeSessions,
+      windowStart,
+    );
+
+    // Location segments and derived events (empty if location not available)
+    let locationSegments = locationFallback
+      ? []
+      : generateLocationSegments(
+          locationSamples,
+          userPlaces,
+          windowStart,
+          windowEnd,
+        );
+
+    // Process with commute detection (skip if location not available)
+    if (!locationFallback && locationSegments.length > 0) {
+      locationSegments = processSegmentsWithCommutes(
+        locationSegments,
+        locationSamples,
+        userPlaces,
+        windowStart,
+      );
+    }
+
+    const locationEvents = segmentsToDerivedEvents(locationSegments);
+
+    // Step 4: Run priority-based reconciliation
+    const reconciliationOps = computeReconciliationOpsWithPriority(
+      existingEvents,
+      screenTimeEvents,
+      locationEvents,
+      previousWindowEvents,
+    );
+
+    // Execute reconciliation operations
+    const { stats, errors } = await executeReconciliationOps(
+      userId,
+      reconciliationOps,
+    );
+
+    // Log any reconciliation errors
+    if (errors.length > 0 && __DEV__) {
+      console.warn("[ActualIngestion] Reconciliation errors:", errors);
+    }
+
+    // Step 5: Run sessionization pass
+    // Fetch updated events after reconciliation
+    const updatedEvents = await fetchEventsInWindow(
+      userId,
+      windowStart,
+      windowEnd,
+    );
+
+    // Convert to sessionizable events
+    const sessionizableEvents = updatedEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      scheduledStart: event.scheduledStart,
+      scheduledEnd: event.scheduledEnd,
+      meta: event.meta,
+    }));
+
+    // Run sessionization
+    let sessions = sessionizeWindow(
+      userId,
+      windowStart,
+      windowEnd,
+      sessionizableEvents,
+      userAppOverrides,
+    );
+
+    // Apply sleep detection
+    const homePlace = findHomePlace(
+      userPlaces.map((p) => ({ id: p.id, label: p.label, category: p.category })),
+    );
+
+    sessions = applySleepDetection(
+      userId,
+      sessions,
+      windowStart,
+      windowEnd,
+      homePlace,
+      sleepSchedule ?? DEFAULT_SLEEP_SCHEDULE,
+    );
+
+    // Insert session blocks as events
+    if (sessions.length > 0) {
+      const sessionEvents = sessions.map((session) =>
+        sessionBlockToDerivedEvent(session),
+      );
+
+      const sessionInserts = sessionEvents.map((event) => ({
+        user_id: userId,
+        type: "calendar_actual",
+        title: event.title,
+        description: "",
+        scheduled_start: event.scheduledStart.toISOString(),
+        scheduled_end: event.scheduledEnd.toISOString(),
+        meta: event.meta as Json,
+      }));
+
+      try {
+        const { data, error } = await tmSchema()
+          .from("events")
+          .insert(sessionInserts)
+          .select("id");
+
+        if (error) {
+          if (__DEV__) {
+            console.warn("[ActualIngestion] Failed to insert sessions:", error);
+          }
+        } else {
+          stats.sessionsCreated = data?.length ?? 0;
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[ActualIngestion] Failed to insert sessions:", error);
+        }
+      }
+    }
+
+    // Update stats
+    stats.screenTimeSessions = screenTimeSessions.length;
+    stats.locationSegments = locationSegments.length;
+    stats.locationSkipped = locationFallback;
+
+    // Step 6: Lock events in window
+    try {
+      await lockEventsInWindow(userId, windowStart, windowEnd);
+    } catch (error) {
+      // Non-fatal - continue
+      if (__DEV__) {
+        console.warn("[ActualIngestion] Failed to lock events:", error);
+      }
+    }
+
+    // Step 7: Lock the window
+    const lockStats: WindowLockStats = {
+      eventsCreated: stats.eventsCreated,
+      eventsExtended: stats.eventsExtended,
+      eventsSessionized: stats.sessionsCreated,
+      screenTimeSessions: stats.screenTimeSessions,
+      locationSegments: stats.locationSegments,
+    };
+
+    try {
+      await lockWindow({
+        userId,
+        windowStart,
+        windowEnd,
+        stats: lockStats,
+      });
+    } catch (error) {
+      // Non-fatal - window lock failure doesn't invalidate processing
+      if (__DEV__) {
+        console.warn("[ActualIngestion] Failed to lock window:", error);
+      }
+    }
+
+    // Log stats in development
+    if (logStats && __DEV__) {
+      console.log("[ActualIngestion] Window processed:", {
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+        locationFallback,
+        ...stats,
+      });
+    }
+
+    return {
+      skipped: false,
+      stats: lockStats,
+      locationFallback,
+    };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    if (__DEV__) {
+      console.error("[ActualIngestion] Processing failed:", error);
+    }
+
+    onError?.(error instanceof Error ? error : new Error(errorMessage));
+
+    return {
+      skipped: true,
+      reason: "error",
+      error: errorMessage,
+    };
+  }
 }
 
 /**
@@ -450,272 +751,32 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
       windowEnd: Date,
       sleepSchedule?: SleepSchedule | null,
     ): Promise<IngestionWindowResult> => {
-      // Check if authenticated
       if (!isAuthenticated || !user?.id) {
-        return { skipped: true, reason: "no_user" };
-      }
-
-      const userId = user.id;
-
-      // Step 1: Check if window is already locked
-      try {
-        const locked = await isWindowLocked(userId, windowStart);
-        if (locked) {
-          const result: IngestionWindowResult = {
-            skipped: true,
-            reason: "already_locked",
-          };
-          setLastResult(result);
-          return result;
-        }
-      } catch (error) {
-        // Non-fatal - continue with processing
-        if (__DEV__) {
-          console.warn("[ActualIngestion] Failed to check window lock:", error);
-        }
+        const result: IngestionWindowResult = {
+          skipped: true,
+          reason: "no_user",
+        };
+        setLastResult(result);
+        return result;
       }
 
       setIsProcessing(true);
-
-      // Track if we're using screen-time only fallback
-      let locationFallback = false;
-
       try {
-        // Step 1.5: Check if location is available (permission granted)
-        const locationAvailable = await isLocationAvailableForIngestion();
-        if (!locationAvailable) {
-          locationFallback = true;
-          if (__DEV__) {
-            console.log(
-              "[ActualIngestion] Location not available, using screen-time only fallback"
-            );
-          }
-        }
-
-        // Step 2: Fetch evidence data in parallel
-        // Skip location fetches if location is not available
-        const [
-          screenTimeSessions,
-          locationSamples,
-          userPlaces,
-          userAppOverrides,
-          existingEvents,
-          previousWindowEvents,
-        ] = await Promise.all([
-          fetchScreenTimeForWindow(userId, windowStart, windowEnd),
-          // Skip location samples if location not available
-          locationFallback
-            ? Promise.resolve([])
-            : fetchLocationSamplesForWindow(userId, windowStart, windowEnd),
-          // Still fetch user places (needed for sleep detection)
-          fetchUserPlaces(userId),
-          fetchUserAppCategoryOverrides(userId).catch(() => ({} as UserAppCategoryOverrides)),
-          fetchEventsInWindow(userId, windowStart, windowEnd),
-          fetchExtensionCandidates(userId, windowStart),
-        ]);
-
-        // Step 3: Generate derived events from evidence
-
-        // Screen-time derived events
-        const screenTimeEvents = screenTimeToDerivedEvents(
-          screenTimeSessions,
-          windowStart,
-        );
-
-        // Location segments and derived events (empty if location not available)
-        let locationSegments = locationFallback
-          ? []
-          : generateLocationSegments(
-              locationSamples,
-              userPlaces,
-              windowStart,
-              windowEnd,
-            );
-
-        // Process with commute detection (skip if location not available)
-        if (!locationFallback && locationSegments.length > 0) {
-          locationSegments = processSegmentsWithCommutes(
-            locationSegments,
-            locationSamples,
-            userPlaces,
-            windowStart,
-          );
-        }
-
-        const locationEvents = segmentsToDerivedEvents(locationSegments);
-
-        // Step 4: Run priority-based reconciliation
-        const reconciliationOps = computeReconciliationOpsWithPriority(
-          existingEvents,
-          screenTimeEvents,
-          locationEvents,
-          previousWindowEvents,
-        );
-
-        // Execute reconciliation operations
-        const { stats, errors } = await executeReconciliationOps(
-          userId,
-          reconciliationOps,
-        );
-
-        // Log any reconciliation errors
-        if (errors.length > 0 && __DEV__) {
-          console.warn("[ActualIngestion] Reconciliation errors:", errors);
-        }
-
-        // Step 5: Run sessionization pass
-        // Fetch updated events after reconciliation
-        const updatedEvents = await fetchEventsInWindow(userId, windowStart, windowEnd);
-
-        // Convert to sessionizable events
-        const sessionizableEvents = updatedEvents.map((event) => ({
-          id: event.id,
-          title: event.title,
-          scheduledStart: event.scheduledStart,
-          scheduledEnd: event.scheduledEnd,
-          meta: event.meta,
-        }));
-
-        // Run sessionization
-        let sessions = sessionizeWindow(
-          userId,
+        const result = await processActualIngestionWindow({
+          userId: user.id,
           windowStart,
           windowEnd,
-          sessionizableEvents,
-          userAppOverrides,
-        );
-
-        // Apply sleep detection
-        const homePlace = findHomePlace(
-          userPlaces.map((p) => ({ id: p.id, label: p.label, category: p.category })),
-        );
-
-        sessions = applySleepDetection(
-          userId,
-          sessions,
-          windowStart,
-          windowEnd,
-          homePlace,
-          sleepSchedule ?? DEFAULT_SLEEP_SCHEDULE,
-        );
-
-        // Insert session blocks as events
-        if (sessions.length > 0) {
-          const sessionEvents = sessions.map((session) =>
-            sessionBlockToDerivedEvent(session),
-          );
-
-          const sessionInserts = sessionEvents.map((event) => ({
-            user_id: userId,
-            type: "calendar_actual",
-            title: event.title,
-            description: "",
-            scheduled_start: event.scheduledStart.toISOString(),
-            scheduled_end: event.scheduledEnd.toISOString(),
-            meta: event.meta as Json,
-          }));
-
-          try {
-            const { data, error } = await tmSchema()
-              .from("events")
-              .insert(sessionInserts)
-              .select("id");
-
-            if (error) {
-              if (__DEV__) {
-                console.warn("[ActualIngestion] Failed to insert sessions:", error);
-              }
-            } else {
-              stats.sessionsCreated = data?.length ?? 0;
-            }
-          } catch (error) {
-            if (__DEV__) {
-              console.warn("[ActualIngestion] Failed to insert sessions:", error);
-            }
-          }
-        }
-
-        // Update stats
-        stats.screenTimeSessions = screenTimeSessions.length;
-        stats.locationSegments = locationSegments.length;
-        stats.locationSkipped = locationFallback;
-
-        // Step 6: Lock events in window
-        try {
-          await lockEventsInWindow(userId, windowStart, windowEnd);
-        } catch (error) {
-          // Non-fatal - continue
-          if (__DEV__) {
-            console.warn("[ActualIngestion] Failed to lock events:", error);
-          }
-        }
-
-        // Step 7: Lock the window
-        const lockStats: WindowLockStats = {
-          eventsCreated: stats.eventsCreated,
-          eventsExtended: stats.eventsExtended,
-          eventsSessionized: stats.sessionsCreated,
-          screenTimeSessions: stats.screenTimeSessions,
-          locationSegments: stats.locationSegments,
-        };
-
-        try {
-          await lockWindow({
-            userId,
-            windowStart,
-            windowEnd,
-            stats: lockStats,
-          });
-        } catch (error) {
-          // Non-fatal - window lock failure doesn't invalidate processing
-          if (__DEV__) {
-            console.warn("[ActualIngestion] Failed to lock window:", error);
-          }
-        }
-
-        // Log stats in development
-        if (logStats && __DEV__) {
-          console.log("[ActualIngestion] Window processed:", {
-            windowStart: windowStart.toISOString(),
-            windowEnd: windowEnd.toISOString(),
-            locationFallback,
-            ...stats,
-          });
-        }
-
-        const result: IngestionWindowResult = {
-          skipped: false,
-          stats: lockStats,
-          locationFallback,
-        };
-
-        setLastResult(result);
-        return result;
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-
-        if (__DEV__) {
-          console.error("[ActualIngestion] Processing failed:", error);
-        }
-
-        onError?.(
-          error instanceof Error ? error : new Error(errorMessage),
-        );
-
-        const result: IngestionWindowResult = {
-          skipped: true,
-          reason: "error",
-          error: errorMessage,
-        };
-
+          sleepSchedule,
+          onError,
+          logStats,
+        });
         setLastResult(result);
         return result;
       } finally {
         setIsProcessing(false);
       }
     },
-    [isAuthenticated, user?.id, onError, logStats],
+    [isAuthenticated, logStats, onError, user?.id],
   );
 
   /**
@@ -752,31 +813,19 @@ export function useActualIngestion(options: UseActualIngestionOptions = {}) {
    * Calculate the current ingestion window based on the current time.
    * Windows are 30-minute aligned (00:00, 00:30, 01:00, etc.).
    */
-  const getCurrentWindow = useCallback((): { start: Date; end: Date } => {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const windowStartMinutes = minutes >= 30 ? 30 : 0;
-
-    const windowStart = new Date(now);
-    windowStart.setMinutes(windowStartMinutes, 0, 0);
-
-    const windowEnd = new Date(windowStart);
-    windowEnd.setMinutes(windowEnd.getMinutes() + 30);
-
-    return { start: windowStart, end: windowEnd };
-  }, []);
+  const getCurrentWindow = useCallback(
+    () => getCurrentIngestionWindow(),
+    [],
+  );
 
   /**
    * Calculate the previous ingestion window (the one that just completed).
    * This is the window that should be processed.
    */
-  const getPreviousWindow = useCallback((): { start: Date; end: Date } => {
-    const current = getCurrentWindow();
-    const previousStart = new Date(current.start);
-    previousStart.setMinutes(previousStart.getMinutes() - 30);
-
-    return { start: previousStart, end: current.start };
-  }, [getCurrentWindow]);
+  const getPreviousWindow = useCallback(
+    () => getPreviousIngestionWindow(),
+    [],
+  );
 
   return {
     /** Process a single ingestion window */

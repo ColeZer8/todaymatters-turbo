@@ -572,7 +572,7 @@ export const ComprehensiveCalendarTemplate = ({
     GRID_HEIGHT,
   );
   const currentIndicatorOffset = GRID_TOP_PADDING + clampedIndicatorTop;
-  const shouldLimitActualToNow = false;
+  const shouldLimitActualToNow = true;
   const visibilityCutoff = currentMinutes - VISIBILITY_DELAY_MINUTES;
   const actualVisibleUntil =
     shouldLimitActualToNow && isSelectedDateToday

@@ -48,6 +48,7 @@ export type UserAppCategoryOverrides = Record<string, UserAppCategoryOverride>;
  */
 export const DEFAULT_APP_CATEGORIES: Record<string, AppCategory> = {
   // Work apps - productivity, documentation, meetings, design
+  mobile: "work",
   slack: "work",
   "google docs": "work",
   docs: "work",

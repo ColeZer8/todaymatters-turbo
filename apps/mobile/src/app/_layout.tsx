@@ -21,6 +21,7 @@ import { fetchUserDataPreferences } from "@/lib/supabase/services/user-preferenc
 import { DemoOverlay } from "@/components/organisms";
 import { verifyAuthAndData } from "@/lib/supabase/services";
 import {
+  useActualIngestionScheduler,
   useInsightsSync,
   useLocationSamplesSync,
   useOnboardingSync,
@@ -33,10 +34,12 @@ import {
   getUpdateInfo,
 } from "@/lib/updates";
 import { installGlobalErrorHandlers, logger } from "@/lib/logger";
+import { registerActualIngestionBackgroundTaskAsync } from "@/lib/background-ingestion/register";
 
 // Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
 void registerIosLocationBackgroundTaskAsync();
 void registerAndroidLocationBackgroundTaskAsync();
+void registerActualIngestionBackgroundTaskAsync();
 
 export default function Layout() {
   const initialize = useAuthStore((state) => state.initialize);
@@ -58,6 +61,7 @@ export default function Layout() {
   // iOS-only: start background location collection when authenticated, and periodically flush queued samples.
   useLocationSamplesSync();
   useInsightsSync();
+  useActualIngestionScheduler();
 
   useEffect(() => {
     let unsubscribeAuth: (() => void) | undefined;

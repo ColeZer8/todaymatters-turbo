@@ -1056,6 +1056,8 @@ export interface SessionBlock {
     confidence: number;
     /** Summary of top apps used in this session */
     summary?: Array<{ label: string; seconds: number }>;
+    /** Full app usage summary for this session */
+    app_summary?: Array<{ app_id: string; seconds: number }>;
     /** Human-readable reasoning for intent classification */
     intent_reasoning?: string;
     /** True if this session occurred during scheduled sleep time */
@@ -1375,6 +1377,10 @@ function createSessionBlock(
     label: app.appId,
     seconds: app.seconds,
   }));
+  const fullSummary =
+    appSummary.length > 0
+      ? appSummary.map((app) => ({ app_id: app.appId, seconds: app.seconds }))
+      : undefined;
 
   // Collect child event IDs
   const childEventIds = sortedEvents.map(getEventIdentifier);
@@ -1405,6 +1411,7 @@ function createSessionBlock(
       children: childEventIds,
       confidence,
       summary: summary.length > 0 ? summary : undefined,
+      app_summary: fullSummary,
       intent_reasoning: intentClassification.reasoning,
       // Include coordinates for "Add Place" functionality at unknown locations
       latitude: latitude ?? undefined,

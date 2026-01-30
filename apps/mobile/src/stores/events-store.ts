@@ -153,6 +153,8 @@ export interface CalendarEventMeta {
   children?: string[];
   /** Summary of top apps used in the session block */
   summary?: Array<{ label: string; seconds: number }>;
+  /** Full app usage summary for the session block */
+  app_summary?: Array<{ app_id: string; seconds: number }>;
   /** Human-readable reasoning for intent classification */
   intent_reasoning?: string;
   /** True if this session occurred during scheduled sleep time */

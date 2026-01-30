@@ -92,7 +92,7 @@ export default {
         NSLocationAlwaysAndWhenInUseUsageDescription:
           'TodayMatters uses your location in the background to build an hour-by-hour view of your day for schedule comparison.',
         // Background modes must include location for background updates.
-        UIBackgroundModes: ['audio', 'location'],
+        UIBackgroundModes: ['audio', 'location', 'fetch'],
       },
     },
     android: {
