@@ -18,6 +18,22 @@ type PublicEventRow = Database["public"]["Tables"]["events"]["Row"];
 
 export type PlannedCalendarMeta = CalendarEventMeta & Record<string, Json>;
 
+let didWarnMissingPublicEventsTable = false;
+
+function isMissingPublicEventsTable(error: { code?: string } | null): boolean {
+  return error?.code === "PGRST205";
+}
+
+function warnMissingPublicEventsTableOnce(error: unknown): void {
+  if (!__DEV__) return;
+  if (didWarnMissingPublicEventsTable) return;
+  didWarnMissingPublicEventsTable = true;
+  console.warn(
+    "[Supabase] public.events is not available; skipping external calendar events.",
+    error,
+  );
+}
+
 function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const rec = value as Record<string, Json>;
@@ -483,7 +499,13 @@ export async function fetchPlannedCalendarEventsForDay(
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
-    if (publicResult.error) throw handleSupabaseError(publicResult.error);
+    if (publicResult.error) {
+      if (isMissingPublicEventsTable(publicResult.error)) {
+        warnMissingPublicEventsTableOnce(publicResult.error);
+      } else {
+        throw handleSupabaseError(publicResult.error);
+      }
+    }
     if (tmGoogleMeetingsResult.error)
       throw handleSupabaseError(tmGoogleMeetingsResult.error);
 
@@ -574,7 +596,13 @@ export async function fetchActualCalendarEventsForDay(
     ]);
 
     if (tmResult.error) throw handleSupabaseError(tmResult.error);
-    if (publicResult.error) throw handleSupabaseError(publicResult.error);
+    if (publicResult.error) {
+      if (isMissingPublicEventsTable(publicResult.error)) {
+        warnMissingPublicEventsTableOnce(publicResult.error);
+      } else {
+        throw handleSupabaseError(publicResult.error);
+      }
+    }
 
     const tmEvents = (tmResult.data ?? [])
       .map((row) =>
