@@ -83,6 +83,18 @@ export async function syncActualEvidenceBlocks({
         tags: ["actual"],
         confidence: block.confidence ?? null,
         kind: "evidence_block",
+        evidence: {
+          locationLabel: block.evidence.location?.placeLabel ?? null,
+          placeCategory: block.evidence.location?.placeCategory ?? null,
+          locationSampleCount: block.evidence.location?.sampleCount ?? null,
+          screenTimeMinutes: block.evidence.screenTime?.totalMinutes ?? null,
+          topApp: block.evidence.screenTime?.topApps[0]?.app ?? null,
+          topApps:
+            block.evidence.screenTime?.topApps?.map((app) => ({
+              app: app.app,
+              minutes: app.minutes,
+            })) ?? [],
+        },
       };
 
       if (block.source === "location") {

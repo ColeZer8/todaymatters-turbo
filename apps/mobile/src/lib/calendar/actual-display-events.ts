@@ -449,8 +449,14 @@ export function buildActualDisplayEvents({
         dataQuality,
         evidence: {
           locationLabel: block.evidence.location?.placeLabel ?? null,
+          locationSampleCount: block.evidence.location?.sampleCount ?? null,
           screenTimeMinutes: block.evidence.screenTime?.totalMinutes,
           topApp: block.evidence.screenTime?.topApps[0]?.app ?? null,
+          topApps:
+            block.evidence.screenTime?.topApps?.map((app) => ({
+              app: app.app,
+              minutes: app.minutes,
+            })) ?? [],
         },
       };
       const nextEvent: ScheduledEvent = {

@@ -231,6 +231,15 @@ export default function ActualAdjustScreen() {
     if (meta.evidence?.locationLabel) {
       rows.push({ label: "Location", value: meta.evidence.locationLabel });
     }
+    if (meta.evidence?.placeCategory) {
+      rows.push({ label: "Place category", value: meta.evidence.placeCategory });
+    }
+    if (meta.evidence?.locationSampleCount !== undefined) {
+      rows.push({
+        label: "Location samples",
+        value: `${meta.evidence.locationSampleCount}`,
+      });
+    }
     if (meta.evidence?.screenTimeMinutes !== undefined) {
       rows.push({
         label: "Screen time",
@@ -239,6 +248,17 @@ export default function ActualAdjustScreen() {
     }
     if (meta.evidence?.topApp) {
       rows.push({ label: "Top app", value: meta.evidence.topApp });
+    }
+    if (meta.evidence?.topApps && meta.evidence.topApps.length > 0) {
+      rows.push({
+        label: "Apps",
+        value: meta.evidence.topApps
+          .map((app) => {
+            const label = getReadableAppName({ appId: app.app }) ?? app.app;
+            return `${label} ${Math.round(app.minutes)}m`;
+          })
+          .join(", "),
+      });
     }
     if (meta.app_summary && meta.app_summary.length > 0) {
       const totalSeconds = meta.app_summary.reduce(
