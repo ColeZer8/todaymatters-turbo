@@ -1,5 +1,6 @@
-import { Platform } from "react-native";
+import { PermissionsAndroid, Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
+import * as IntentLauncher from "expo-intent-launcher";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import {
   sanitizeLocationSamplesForUpload,
@@ -7,6 +8,9 @@ import {
 } from "@/lib/supabase/services/location-samples";
 import { supabase } from "@/lib/supabase/client";
 import { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
+import { getAndroidApiLevel } from "./android-version";
+import { getAndroidLocationTaskMetadata } from "./task-metadata";
+import { getLastTaskHeartbeat } from "./task-heartbeat";
 import {
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
@@ -17,6 +21,7 @@ import type {
   AndroidLocationSupportStatus,
   AndroidLocationSample,
 } from "./types";
+import type { TaskHeartbeat } from "./task-heartbeat";
 
 /** Mirror of MAX_PENDING_SAMPLES_PER_USER in queue.ts — used for diagnostics peek. */
 const MAX_PENDING_SAMPLES_PER_USER = 10_000;
@@ -54,12 +59,161 @@ export type {
   MovementClassification,
 } from "./movement-detector";
 export { recordLastSyncTime, getLastSyncTime } from "./sync-timing";
+export { getAndroidLocationTaskMetadata } from "./task-metadata";
 
 export function getAndroidLocationSupportStatus(): AndroidLocationSupportStatus {
   if (Platform.OS !== "android") return "notAndroid";
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient)
     return "expoGo";
   return "available";
+}
+
+const ANDROID_13_API_LEVEL = 33;
+
+function isAndroid13Plus(): boolean {
+  const apiLevel = getAndroidApiLevel();
+  return typeof apiLevel === "number" && apiLevel >= ANDROID_13_API_LEVEL;
+}
+
+export async function openAndroidNotificationSettingsAsync(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const packageName =
+    Constants.expoConfig?.android?.package ??
+    Constants.manifest?.android?.package ??
+    null;
+  if (!packageName) return false;
+
+  try {
+    await IntentLauncher.startActivityAsync(
+      IntentLauncher.ActivityAction.APP_NOTIFICATION_SETTINGS,
+      {
+        extra: {
+          "android.provider.extra.APP_PACKAGE": packageName,
+        },
+      },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open Android's battery optimization settings for this app.
+ * Users need to disable battery optimization for reliable background location.
+ */
+export async function openAndroidBatteryOptimizationSettingsAsync(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const packageName =
+    Constants.expoConfig?.android?.package ??
+    Constants.manifest?.android?.package ??
+    null;
+  if (!packageName) return false;
+
+  try {
+    // First try to open the app-specific battery optimization page
+    await IntentLauncher.startActivityAsync(
+      "android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+      {
+        data: `package:${packageName}`,
+      },
+    );
+    return true;
+  } catch {
+    // Fallback to the general battery optimization settings list
+    try {
+      await IntentLauncher.startActivityAsync(
+        "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS",
+      );
+      return true;
+    } catch {
+      // Final fallback: open the app info page where users can manually find battery settings
+      try {
+        await IntentLauncher.startActivityAsync(
+          IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS,
+          {
+            data: `package:${packageName}`,
+          },
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }
+}
+
+/**
+ * Check if battery optimization is disabled (app is whitelisted) for this app.
+ * Returns null if check is not supported on this platform.
+ */
+export async function isAndroidBatteryOptimizationDisabledAsync(): Promise<boolean | null> {
+  if (Platform.OS !== "android") return null;
+
+  try {
+    // Use PowerManager.isIgnoringBatteryOptimizations via NativeModules
+    // Since we don't have direct access, we return null to indicate "unknown"
+    // The user should be guided to check manually
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getAndroidNotificationPermissionStatusAsync(): Promise<{
+  status: "granted" | "denied" | "undetermined";
+  required: boolean;
+}> {
+  if (Platform.OS !== "android") {
+    return { status: "undetermined", required: false };
+  }
+
+  const required = isAndroid13Plus();
+  if (!required) {
+    return { status: "granted", required: false };
+  }
+
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  const hasPermission = await PermissionsAndroid.check(permission).catch(
+    () => false,
+  );
+  return { status: hasPermission ? "granted" : "denied", required: true };
+}
+
+export async function requestAndroidNotificationPermissionsAsync(): Promise<{
+  status: "granted" | "denied" | "undetermined";
+  canAskAgain: boolean;
+  required: boolean;
+}> {
+  if (Platform.OS !== "android") {
+    return { status: "undetermined", canAskAgain: false, required: false };
+  }
+
+  const required = isAndroid13Plus();
+  if (!required) {
+    return { status: "granted", canAskAgain: true, required: false };
+  }
+
+  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
+  const hasPermission = await PermissionsAndroid.check(permission).catch(
+    () => false,
+  );
+  if (hasPermission) {
+    return { status: "granted", canAskAgain: true, required: true };
+  }
+
+  const result = await PermissionsAndroid.request(permission).catch(
+    () => PermissionsAndroid.RESULTS.DENIED,
+  );
+  if (result === PermissionsAndroid.RESULTS.GRANTED) {
+    return { status: "granted", canAskAgain: true, required: true };
+  }
+
+  return {
+    status: "denied",
+    canAskAgain: result !== PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN,
+    required: true,
+  };
 }
 
 async function loadExpoLocationAsync(): Promise<
@@ -96,6 +250,9 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
   background: "granted" | "denied" | "undetermined";
   canAskAgainForeground: boolean;
   canAskAgainBackground: boolean;
+  notifications: "granted" | "denied" | "undetermined";
+  canAskAgainNotifications: boolean;
+  notificationsRequired: boolean;
   hasNativeModule: boolean;
 }> {
   if (Platform.OS !== "android") {
@@ -104,6 +261,9 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      notifications: "denied",
+      canAskAgainNotifications: false,
+      notificationsRequired: false,
       hasNativeModule: false,
     };
   }
@@ -114,6 +274,9 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       background: "denied",
       canAskAgainForeground: false,
       canAskAgainBackground: false,
+      notifications: "denied",
+      canAskAgainNotifications: false,
+      notificationsRequired: false,
       hasNativeModule: false,
     };
   }
@@ -143,6 +306,8 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
     }
   }
 
+  const notificationResult = await requestAndroidNotificationPermissionsAsync();
+
   return {
     foreground: foreground.status,
     background: background.status,
@@ -154,6 +319,9 @@ export async function requestAndroidLocationPermissionsAsync(): Promise<{
       typeof background.canAskAgain === "boolean"
         ? background.canAskAgain
         : true,
+    notifications: notificationResult.status,
+    canAskAgainNotifications: notificationResult.canAskAgain,
+    notificationsRequired: notificationResult.required,
     hasNativeModule: true,
   };
 }
@@ -215,15 +383,25 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
       ANDROID_BACKGROUND_LOCATION_TASK_NAME,
       {
         accuracy: Location.Accuracy.Balanced,
-        distanceInterval: 40,
-        // Android-specific: control update cadence.
-        timeInterval: 2 * 60 * 1000,
+        // Trigger on significant movement (20 meters).
+        distanceInterval: 20,
+        // Request updates every 60 seconds minimum.
+        timeInterval: 60 * 1000,
+        // Deferred updates: batch location updates for more reliable delivery.
+        // Android will collect locations and deliver them in batches which is
+        // more battery-efficient and less likely to be killed by the OS.
+        deferredUpdatesInterval: 5 * 60 * 1000, // 5 minutes max deferral
+        deferredUpdatesDistance: 100, // or after 100 meters
+        // Show updates even when stationary (ensures we get periodic pings).
+        activityType: Location.ActivityType.Other,
         // Foreground service is required for background reliability.
         foregroundService: {
           notificationTitle: "TodayMatters is tracking your day",
           notificationBody:
             "Used to build an hour-by-hour view of your day for schedule comparison.",
           notificationColor: "#2563EB",
+          // killServiceOnDestroy: false ensures service survives app termination
+          killServiceOnDestroy: false,
         },
       },
     );
@@ -411,28 +589,42 @@ export async function flushPendingAndroidLocationSamplesToSupabaseAsync(
  */
 export async function getAndroidLocationDiagnostics(): Promise<{
   support: AndroidLocationSupportStatus;
+  androidApiLevel: number | null;
   locationModule: boolean;
   servicesEnabled: boolean;
   foregroundPermission: string;
   backgroundPermission: string;
+  notificationsPermission: "granted" | "denied" | "undetermined";
+  notificationsRequired: boolean;
   taskStarted: boolean;
   pendingSamples: number;
   lastSampleTimestamp: string | null;
   sampleCount24h: number;
+  lastTaskHeartbeat: TaskHeartbeat | null;
+  lastTaskFiredAt: string | null;
+  lastTaskQueuedCount: number | null;
+  lastTaskError: string | null;
   errors: string[];
   canStart: boolean;
 }> {
   const errors: string[] = [];
   const diagnostics = {
     support: getAndroidLocationSupportStatus(),
+    androidApiLevel: getAndroidApiLevel(),
     locationModule: false,
     servicesEnabled: false,
     foregroundPermission: "unknown",
     backgroundPermission: "unknown",
+    notificationsPermission: "undetermined" as const,
+    notificationsRequired: false,
     taskStarted: false,
     pendingSamples: 0,
     lastSampleTimestamp: null as string | null,
     sampleCount24h: 0,
+    lastTaskHeartbeat: null as TaskHeartbeat | null,
+    lastTaskFiredAt: null as string | null,
+    lastTaskQueuedCount: null as number | null,
+    lastTaskError: null as string | null,
     errors,
     canStart: false,
   };
@@ -482,6 +674,20 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   if (bg.status !== "granted") {
     errors.push(
       `Background permission: ${bg.status} (required: 'granted') - may need to enable in Settings`,
+    );
+  }
+
+  const notifications = await getAndroidNotificationPermissionStatusAsync();
+  diagnostics.notificationsPermission = notifications.status;
+  diagnostics.notificationsRequired = notifications.required;
+  if (__DEV__) {
+    console.log(
+      `📍 [diag] Notifications permission: ${notifications.status} (required=${notifications.required})`,
+    );
+  }
+  if (notifications.required && notifications.status !== "granted") {
+    errors.push(
+      `Notifications permission: ${notifications.status} (required: 'granted')`,
     );
   }
 
@@ -556,6 +762,21 @@ export async function getAndroidLocationDiagnostics(): Promise<{
   } catch (error) {
     errors.push(
       `Failed to check pending samples: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  try {
+    const [heartbeat, taskMeta] = await Promise.all([
+      getLastTaskHeartbeat(),
+      getAndroidLocationTaskMetadata(),
+    ]);
+    diagnostics.lastTaskHeartbeat = heartbeat;
+    diagnostics.lastTaskFiredAt = taskMeta.lastTaskFiredAt;
+    diagnostics.lastTaskQueuedCount = taskMeta.lastTaskQueuedCount;
+    diagnostics.lastTaskError = taskMeta.lastTaskError;
+  } catch (error) {
+    errors.push(
+      `Failed to read task metadata: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 

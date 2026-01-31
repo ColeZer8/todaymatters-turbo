@@ -859,6 +859,51 @@ export async function lockEventsInWindow(
 }
 
 /**
+ * Unlock all events in a time window by clearing their locked_at timestamp.
+ * Intended for dev-only forced reprocessing.
+ */
+export async function unlockEventsInWindow(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+): Promise<{ unlockedCount: number }> {
+  try {
+    const { data, error } = await tmSchema()
+      .from("events")
+      .update({ locked_at: null })
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      .lt("scheduled_start", windowEnd.toISOString())
+      .gt("scheduled_end", windowStart.toISOString())
+      .not("locked_at", "is", null)
+      .select("id");
+
+    if (error) throw handleSupabaseError(error);
+
+    const unlockedCount = data?.length ?? 0;
+    if (__DEV__ && unlockedCount > 0) {
+      console.log(
+        `[Reconciliation] Unlocked ${unlockedCount} events in window ${windowStart.toISOString()} - ${windowEnd.toISOString()}`,
+      );
+    }
+    return { unlockedCount };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.toLowerCase().includes("locked_at")
+    ) {
+      if (__DEV__) {
+        console.warn(
+          "[Reconciliation] locked_at column not found, skipping unlock operation",
+        );
+      }
+      return { unlockedCount: 0 };
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
  * Check if any events in a window are locked.
  *
  * @param userId - The user's ID
@@ -1078,6 +1123,353 @@ export async function executeExtensions(
   }
 
   return { extendedCount, errors };
+}
+
+// ============================================================================
+// Session Block Extension Logic
+// ============================================================================
+
+/**
+ * Check if an event is a session block.
+ */
+function isSessionBlock(event: ReconciliationEvent | DerivedEvent): boolean {
+  return event.meta?.kind === "session_block";
+}
+
+/**
+ * Get the place_id from a session block's metadata.
+ */
+function getSessionBlockPlaceId(event: ReconciliationEvent | DerivedEvent): string | null {
+  if (!isSessionBlock(event)) return null;
+  const placeId = event.meta?.place_id;
+  if (typeof placeId === "string" && placeId.trim().length > 0) {
+    return placeId.trim();
+  }
+  return null;
+}
+
+/**
+ * Find an extendable session block from the previous window.
+ * A session block is extendable if:
+ * 1. It has meta.kind === 'session_block'
+ * 2. It has the same place_id (including null for unknown locations)
+ * 3. It ends near the start of the new session (within 60 seconds)
+ * 4. It is not locked
+ *
+ * @param previousWindowEvents - Events from the previous window (extension candidates)
+ * @param newSessionStart - Start time of the new session block
+ * @param placeId - The place ID to match (can be null for unknown locations)
+ * @returns The extendable session block, or null if none found
+ */
+export function findExtendableSessionBlock(
+  previousWindowEvents: ReconciliationEvent[],
+  newSessionStart: Date,
+  placeId: string | null,
+): ReconciliationEvent | null {
+  const newSessionStartMs = newSessionStart.getTime();
+
+  // Find session blocks that end near the new session start (within threshold)
+  const candidates = previousWindowEvents.filter((event) => {
+    // Must be a session block
+    if (!isSessionBlock(event)) {
+      return false;
+    }
+
+    // Cannot extend locked events
+    if (isEventLocked(event)) {
+      return false;
+    }
+
+    // Match place_id (both can be null for unknown locations)
+    const eventPlaceId = getSessionBlockPlaceId(event);
+    if (eventPlaceId !== placeId) {
+      return false;
+    }
+
+    // Check if session block ends near the new session start
+    const eventEndMs = event.scheduledEnd.getTime();
+    const gap = newSessionStartMs - eventEndMs;
+
+    // Event must end before or at new session start, and within threshold
+    return gap >= 0 && gap <= EXTENSION_GAP_THRESHOLD_MS;
+  });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  // Return the most recent session block (closest to new session start)
+  return candidates.reduce((latest, current) =>
+    current.scheduledEnd.getTime() > latest.scheduledEnd.getTime()
+      ? current
+      : latest,
+  );
+}
+
+/**
+ * Fetch session blocks from the previous window that could be extended.
+ * Returns only session_block events that end near the window start.
+ *
+ * @param userId - The user's ID
+ * @param windowStart - Start of the current window
+ * @returns Array of session blocks that could be extended
+ */
+export async function fetchSessionBlockExtensionCandidates(
+  userId: string,
+  windowStart: Date,
+): Promise<ReconciliationEvent[]> {
+  // Look for session blocks that end within 60 seconds before the window start
+  const windowStartMs = windowStart.getTime();
+  const lookbackStart = new Date(windowStartMs - EXTENSION_GAP_THRESHOLD_MS);
+
+  try {
+    const { data, error } = await tmSchema()
+      .from("events")
+      .select("id, user_id, title, scheduled_start, scheduled_end, meta, locked_at")
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      .gte("scheduled_end", lookbackStart.toISOString())
+      .lte("scheduled_end", windowStart.toISOString())
+      .order("scheduled_end", { ascending: false });
+
+    if (error) throw handleSupabaseError(error);
+
+    // Filter to only session blocks
+    return (data ?? [])
+      .filter((row: Record<string, unknown>) => {
+        const meta = row.meta as Record<string, unknown> | undefined;
+        return meta?.kind === "session_block";
+      })
+      .map((row: Record<string, unknown>) => ({
+        id: String(row.id),
+        userId: String(row.user_id),
+        title: String(row.title ?? ""),
+        scheduledStart: new Date(String(row.scheduled_start)),
+        scheduledEnd: new Date(String(row.scheduled_end)),
+        meta: (row.meta as Record<string, unknown>) ?? {},
+        lockedAt: row.locked_at ? new Date(String(row.locked_at)) : null,
+      }));
+  } catch (error) {
+    // Handle case where locked_at column doesn't exist yet
+    if (
+      error instanceof Error &&
+      error.message.toLowerCase().includes("locked_at")
+    ) {
+      if (__DEV__) {
+        console.warn(
+          "[Reconciliation] locked_at column not found, fetching without it",
+        );
+      }
+      // Retry without locked_at
+      const { data, error: retryError } = await tmSchema()
+        .from("events")
+        .select("id, user_id, title, scheduled_start, scheduled_end, meta")
+        .eq("user_id", userId)
+        .eq("type", "calendar_actual")
+        .gte("scheduled_end", lookbackStart.toISOString())
+        .lte("scheduled_end", windowStart.toISOString())
+        .order("scheduled_end", { ascending: false });
+
+      if (retryError) throw handleSupabaseError(retryError);
+
+      return (data ?? [])
+        .filter((row: Record<string, unknown>) => {
+          const meta = row.meta as Record<string, unknown> | undefined;
+          return meta?.kind === "session_block";
+        })
+        .map((row: Record<string, unknown>) => ({
+          id: String(row.id),
+          userId: String(row.user_id),
+          title: String(row.title ?? ""),
+          scheduledStart: new Date(String(row.scheduled_start)),
+          scheduledEnd: new Date(String(row.scheduled_end)),
+          meta: (row.meta as Record<string, unknown>) ?? {},
+          lockedAt: null,
+        }));
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Result of extending a session block.
+ */
+export interface SessionBlockExtensionResult {
+  success: boolean;
+  error?: string;
+  /** The updated session block after extension */
+  extendedBlock?: ReconciliationEvent;
+}
+
+/**
+ * Extend a session block by updating its end time, children, and recalculating metadata.
+ *
+ * @param existingBlockId - ID of the existing session block to extend
+ * @param newEnd - New scheduled_end timestamp
+ * @param additionalChildren - Child event IDs to add to the existing children
+ * @param newTitle - Optional new title (if intent changed after merging)
+ * @param newMeta - Optional updated metadata (summary, intent, etc.)
+ * @returns Result of the extension operation
+ */
+export async function extendSessionBlock(
+  existingBlockId: string,
+  newEnd: Date,
+  additionalChildren: string[],
+  newTitle?: string,
+  newMeta?: Partial<Record<string, unknown>>,
+): Promise<SessionBlockExtensionResult> {
+  try {
+    // First fetch the existing session block to get its current children
+    const { data: existingData, error: fetchError } = await tmSchema()
+      .from("events")
+      .select("id, title, scheduled_start, scheduled_end, meta")
+      .eq("id", existingBlockId)
+      .single();
+
+    if (fetchError) throw handleSupabaseError(fetchError);
+    if (!existingData) {
+      return { success: false, error: "Session block not found" };
+    }
+
+    const existingMeta = (existingData.meta as Record<string, unknown>) ?? {};
+    const existingChildren = Array.isArray(existingMeta.children)
+      ? (existingMeta.children as string[])
+      : [];
+
+    // Merge children, avoiding duplicates
+    const mergedChildren = [...new Set([...existingChildren, ...additionalChildren])];
+
+    // Build updated metadata
+    const updatedMeta: Record<string, unknown> = {
+      ...existingMeta,
+      children: mergedChildren,
+      ...(newMeta ?? {}),
+    };
+
+    // Build update payload
+    const updatePayload: Record<string, unknown> = {
+      scheduled_end: newEnd.toISOString(),
+      meta: updatedMeta,
+    };
+
+    if (newTitle) {
+      updatePayload.title = newTitle;
+    }
+
+    // Update the session block
+    const { error: updateError } = await tmSchema()
+      .from("events")
+      .update(updatePayload)
+      .eq("id", existingBlockId)
+      .is("locked_at", null); // Only extend unlocked events
+
+    if (updateError) throw handleSupabaseError(updateError);
+
+    if (__DEV__) {
+      console.log(
+        `[Reconciliation] Extended session block ${existingBlockId} to ${newEnd.toISOString()}, ` +
+        `merged ${additionalChildren.length} new children (total: ${mergedChildren.length})`,
+      );
+    }
+
+    // Return the updated block info
+    return {
+      success: true,
+      extendedBlock: {
+        id: existingBlockId,
+        userId: "",
+        title: newTitle ?? String(existingData.title ?? ""),
+        scheduledStart: new Date(String(existingData.scheduled_start)),
+        scheduledEnd: newEnd,
+        meta: updatedMeta,
+        lockedAt: null,
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (__DEV__) {
+      console.warn(`[Reconciliation] Failed to extend session block: ${message}`);
+    }
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * Delete session blocks in a window that are not in the protected list.
+ * Used to clean up orphaned session blocks before creating new ones.
+ *
+ * @param userId - The user's ID
+ * @param windowStart - Start of the window
+ * @param windowEnd - End of the window
+ * @param protectedIds - IDs of session blocks that should NOT be deleted (extended ones)
+ * @returns Number of deleted session blocks
+ */
+export async function deleteOrphanedSessionBlocks(
+  userId: string,
+  windowStart: Date,
+  windowEnd: Date,
+  protectedIds: string[],
+): Promise<{ deletedCount: number }> {
+  try {
+    // Since we can't directly filter by meta.kind in Supabase, we need to:
+    // 1. Select all unlocked events in the window
+    // 2. Filter to session blocks that are not protected
+    // 3. Delete those specific IDs
+
+    const { data: candidates, error: selectError } = await tmSchema()
+      .from("events")
+      .select("id, meta")
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      .lt("scheduled_start", windowEnd.toISOString())
+      .gt("scheduled_end", windowStart.toISOString())
+      .is("locked_at", null);
+
+    if (selectError) throw handleSupabaseError(selectError);
+
+    // Filter to session blocks that are not protected
+    const idsToDelete = (candidates ?? [])
+      .filter((row: Record<string, unknown>) => {
+        const meta = row.meta as Record<string, unknown> | undefined;
+        const isSession = meta?.kind === "session_block";
+        const isProtected = protectedIds.includes(String(row.id));
+        return isSession && !isProtected;
+      })
+      .map((row: Record<string, unknown>) => String(row.id));
+
+    if (idsToDelete.length === 0) {
+      return { deletedCount: 0 };
+    }
+
+    // Delete the orphaned session blocks
+    const { error: deleteError } = await tmSchema()
+      .from("events")
+      .delete()
+      .in("id", idsToDelete);
+
+    if (deleteError) throw handleSupabaseError(deleteError);
+
+    if (__DEV__ && idsToDelete.length > 0) {
+      console.log(
+        `[Reconciliation] Deleted ${idsToDelete.length} orphaned session blocks in window`,
+      );
+    }
+
+    return { deletedCount: idsToDelete.length };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.toLowerCase().includes("locked_at")
+    ) {
+      if (__DEV__) {
+        console.warn(
+          "[Reconciliation] locked_at column not found, skipping orphaned session block deletion",
+        );
+      }
+      return { deletedCount: 0 };
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
 }
 
 // ============================================================================

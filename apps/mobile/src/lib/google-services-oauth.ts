@@ -1,7 +1,8 @@
+import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import appConfig from "@/lib/config";
+import appConfig, { readBooleanEnv } from "@/lib/config";
 
 export type GoogleService = "google-calendar" | "google-gmail";
 
@@ -25,6 +26,9 @@ const SERVICE_LOOKUP: Record<string, GoogleService> = {
 
 const GOOGLE_OAUTH_HOST = "oauth";
 const GOOGLE_OAUTH_PATH_PREFIX = "google/";
+const ALLOW_ANY_GOOGLE_ACCOUNT = readBooleanEnv(
+  "EXPO_PUBLIC_GOOGLE_OAUTH_ALLOW_ANY_ACCOUNT",
+);
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, "");
 
@@ -176,6 +180,37 @@ const toCanonicalGoogleOAuthAuthUrl = (url: string): string => {
   }
 };
 
+const ensureSelectAccountPrompt = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.toLowerCase() !== "accounts.google.com") {
+      return url;
+    }
+
+    const existingPrompt = parsed.searchParams.get("prompt");
+    const promptParts = existingPrompt
+      ? existingPrompt.split(/\s+/).filter(Boolean)
+      : [];
+    const normalizedPrompt = [
+      ...new Set(
+        promptParts.filter((part) => part !== "login").concat("select_account"),
+      ),
+    ].join(" ");
+    parsed.searchParams.set("prompt", normalizedPrompt);
+
+    // Avoid forcing a specific account so the chooser can appear.
+    parsed.searchParams.delete("login_hint");
+
+    if (ALLOW_ANY_GOOGLE_ACCOUNT) {
+      parsed.searchParams.delete("hd");
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
 const getRedirectUrlFromOAuthStartResponse = (
   response: Response,
 ): string | null => {
@@ -282,11 +317,30 @@ export const startGoogleServicesOAuth = async (
     );
   }
 
-  const redirectUrl = getRedirectUrlFromOAuthStartResponse(response);
+  let redirectUrl = getRedirectUrlFromOAuthStartResponse(response);
   if (!redirectUrl) {
     throw new Error(
       "Failed to start Google connection (missing redirect URL). The backend must return a 302 with a Google OAuth Location header.",
     );
+  }
+
+  if (Platform.OS === "android") {
+    redirectUrl = ensureSelectAccountPrompt(redirectUrl);
+  }
+
+  if (__DEV__) {
+    try {
+      const urlObj = new URL(redirectUrl);
+      const params: Record<string, string | null> = {
+        prompt: urlObj.searchParams.get("prompt"),
+        login_hint: urlObj.searchParams.get("login_hint"),
+        hd: urlObj.searchParams.get("hd"),
+        authuser: urlObj.searchParams.get("authuser"),
+      };
+      console.log("🔗 Final Google OAuth URL params:", params);
+    } catch {
+      // ignore URL parse errors in dev logging
+    }
   }
 
   if (!looksLikeGoogleOAuthUrl(redirectUrl)) {

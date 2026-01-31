@@ -27,10 +27,10 @@ import type { MovementState } from "@/lib/android-location";
 const MAX_RETRY_ATTEMPTS = 3;
 
 /** How often to check if the Android background task is still alive (ms). */
-const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+const HEALTH_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 min (more aggressive)
 
 /** Consider the task stale if it hasn't fired in this window. */
-const TASK_HEARTBEAT_STALE_MS = 15 * 60 * 1000; // 15 min
+const TASK_HEARTBEAT_STALE_MS = 8 * 60 * 1000; // 8 min (considering 5min deferred batching)
 
 const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
 
@@ -38,17 +38,17 @@ const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
 // Adaptive sync configuration
 // ---------------------------------------------------------------------------
 
-/** Sync interval when user is stationary (30 minutes). */
-const STATIONARY_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+/** Sync interval when user is stationary (15 minutes). */
+const STATIONARY_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 
-/** Sync interval when user is moving or state is unknown (15 minutes). */
-const MOVING_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+/** Sync interval when user is moving or state is unknown (5 minutes). */
+const MOVING_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Queue threshold to trigger sync when stationary. */
-const STATIONARY_QUEUE_THRESHOLD = 10;
+const STATIONARY_QUEUE_THRESHOLD = 6;
 
 /** Queue threshold to trigger sync when moving or unknown. */
-const MOVING_QUEUE_THRESHOLD = 20;
+const MOVING_QUEUE_THRESHOLD = 12;
 
 /** Polling interval to check queue size on Android (60 seconds). */
 const QUEUE_CHECK_INTERVAL_MS = 60 * 1000;

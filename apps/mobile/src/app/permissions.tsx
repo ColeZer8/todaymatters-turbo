@@ -1,7 +1,9 @@
-import { useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  AppStateStatus,
   Linking,
   Platform,
   View,
@@ -18,7 +20,13 @@ import {
 } from "@/stores/onboarding-store";
 import { useOnboardingSync } from "@/lib/supabase/hooks";
 import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
-import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
+import {
+  requestAndroidLocationPermissionsAsync,
+  getAndroidNotificationPermissionStatusAsync,
+  openAndroidNotificationSettingsAsync,
+  requestAndroidNotificationPermissionsAsync,
+  openAndroidBatteryOptimizationSettingsAsync,
+} from "@/lib/android-location";
 import { startIosBackgroundLocationAsync } from "@/lib/ios-location";
 import { startAndroidBackgroundLocationAsync } from "@/lib/android-location";
 import { useAuthStore } from "@/stores";
@@ -39,6 +47,10 @@ import { syncIosScreenTimeSummary } from "@/lib/supabase/services/screen-time-sy
 export default function PermissionsScreen() {
   const router = useRouter();
   const [showIndividual, setShowIndividual] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<{
+    status: "granted" | "denied" | "undetermined";
+    required: boolean;
+  }>({ status: "undetermined", required: false });
 
   const hasHydrated = useOnboardingStore((state) => state._hasHydrated);
   const permissions = useOnboardingStore((state) => state.permissions);
@@ -172,6 +184,72 @@ export default function PermissionsScreen() {
       return false;
     }, []);
 
+  const ensureAndroidNotificationsPermissionIfNeeded =
+    useCallback(async (): Promise<boolean> => {
+      if (Platform.OS !== "android") return true;
+      const result = await requestAndroidNotificationPermissionsAsync();
+      if (!result.required) return true;
+      if (result.status === "granted") return true;
+
+      const opened = await openAndroidNotificationSettingsAsync();
+      if (!opened) {
+        Alert.alert(
+          "Notifications permission needed",
+          "Please allow notifications so the background location service can keep running reliably.",
+          result.canAskAgain
+            ? [{ text: "OK" }]
+            : [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Open Settings",
+                  onPress: () => {
+                    void Linking.openSettings();
+                  },
+                },
+              ],
+        );
+      }
+      return false;
+    }, []);
+
+  const promptBatteryOptimizationIfNeeded = useCallback(async (): Promise<void> => {
+    if (Platform.OS !== "android") return;
+    // Show a dialog explaining why battery optimization should be disabled
+    Alert.alert(
+      "Improve Background Tracking",
+      "For reliable all-day location tracking, please disable battery optimization for TodayMatters.\n\nThis ensures the app can track your location even when running in the background.",
+      [
+        { text: "Skip", style: "cancel" },
+        {
+          text: "Open Settings",
+          onPress: async () => {
+            await openAndroidBatteryOptimizationSettingsAsync();
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const refreshNotificationStatus = useCallback(async () => {
+    if (Platform.OS !== "android") return;
+    const status = await getAndroidNotificationPermissionStatusAsync();
+    setNotificationStatus(status);
+  }, []);
+
+  useEffect(() => {
+    void refreshNotificationStatus();
+  }, [refreshNotificationStatus]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const handler = (state: AppStateStatus) => {
+      if (state !== "active") return;
+      void refreshNotificationStatus();
+    };
+    const subscription = AppState.addEventListener("change", handler);
+    return () => subscription.remove();
+  }, [refreshNotificationStatus]);
+
   // Derived: all permissions enabled = allowAll is on
   const allEnabled = useMemo(
     () => Object.values(permissions).every(Boolean),
@@ -195,6 +273,16 @@ export default function PermissionsScreen() {
             void startIosBackgroundLocationAsync();
           } else if (Platform.OS === "android") {
             void startAndroidBackgroundLocationAsync();
+            // Prompt for battery optimization after location tracking starts
+            await promptBatteryOptimizationIfNeeded();
+          }
+        }
+
+        if (Platform.OS === "android") {
+          const notificationsOk =
+            await ensureAndroidNotificationsPermissionIfNeeded();
+          if (!notificationsOk) {
+            togglePermission("notifications");
           }
         }
 
@@ -211,9 +299,11 @@ export default function PermissionsScreen() {
     })();
   }, [
     allEnabled,
+    ensureAndroidNotificationsPermissionIfNeeded,
     ensureIosScreenTimePermissionIfNeeded,
     ensureAndroidUsageAccessIfNeeded,
     ensureLocationPermissionIfNeeded,
+    promptBatteryOptimizationIfNeeded,
     setAllPermissions,
     togglePermission,
   ]);
@@ -231,7 +321,15 @@ export default function PermissionsScreen() {
             void startIosBackgroundLocationAsync();
           } else if (Platform.OS === "android") {
             void startAndroidBackgroundLocationAsync();
+            // Prompt for battery optimization after location tracking starts
+            await promptBatteryOptimizationIfNeeded();
           }
+        }
+
+        if (key === "notifications" && nextEnabled) {
+          const ok = await ensureAndroidNotificationsPermissionIfNeeded();
+          if (!ok) return;
+          await refreshNotificationStatus();
         }
 
         if (key === "appUsage" && nextEnabled) {
@@ -248,9 +346,12 @@ export default function PermissionsScreen() {
       })();
     },
     [
+      ensureAndroidNotificationsPermissionIfNeeded,
       ensureIosScreenTimePermissionIfNeeded,
       ensureAndroidUsageAccessIfNeeded,
       ensureLocationPermissionIfNeeded,
+      promptBatteryOptimizationIfNeeded,
+      refreshNotificationStatus,
       permissions,
       togglePermission,
     ],
@@ -270,6 +371,15 @@ export default function PermissionsScreen() {
           togglePermission("location");
           return;
         }
+      }
+
+      if (permissions.notifications && Platform.OS === "android") {
+        const ok = await ensureAndroidNotificationsPermissionIfNeeded();
+        if (!ok) {
+          togglePermission("notifications");
+          return;
+        }
+        await refreshNotificationStatus();
       }
 
       if (Platform.OS === "android" && permissions.appUsage) {
@@ -302,6 +412,20 @@ export default function PermissionsScreen() {
       permissions={permissions}
       onTogglePermission={handleTogglePermission}
       onContinue={handleContinue}
+      notificationSettingsAction={
+        Platform.OS === "android" &&
+        notificationStatus.required &&
+        notificationStatus.status !== "granted"
+          ? {
+              label: "Open notification settings",
+              helperText:
+                "Notifications are required to keep background tracking reliable.",
+              onPress: () => {
+                void openAndroidNotificationSettingsAsync();
+              },
+            }
+          : undefined
+      }
       onBack={() => router.replace("/explainer-video")}
       step={SETUP_SCREENS_STEPS.permissions}
       totalSteps={SETUP_SCREENS_TOTAL_STEPS}

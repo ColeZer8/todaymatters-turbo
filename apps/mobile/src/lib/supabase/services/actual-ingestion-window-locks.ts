@@ -224,6 +224,34 @@ export async function getLockedWindowsInRange(
 }
 
 /**
+ * Delete the lock for a specific window.
+ * Useful for dev-only forced reprocessing.
+ */
+export async function deleteWindowLock(
+  userId: string,
+  windowStart: Date | string,
+): Promise<boolean> {
+  const windowStartIso =
+    windowStart instanceof Date ? windowStart.toISOString() : windowStart;
+
+  try {
+    const { error } = await tmSchema()
+      .from("actual_ingestion_window_locks")
+      .delete()
+      .eq("user_id", userId)
+      .eq("window_start", windowStartIso);
+
+    if (error) throw handleSupabaseError(error);
+    return true;
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      return false;
+    }
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
  * Wrapper function to check lock before processing a window.
  * Returns early with { skipped: true } if window is already locked.
  *

@@ -154,6 +154,7 @@ export default function ComprehensiveCalendarScreen() {
     ymd: string;
     fingerprint: string;
   } | null>(null);
+  const derivedEventsSyncAtRef = useRef<number | null>(null);
   const cleanupRef = useRef<Set<string>>(new Set());
 
   const isStale = useCallback(
@@ -690,6 +691,15 @@ export default function ComprehensiveCalendarScreen() {
 
     if (derivedEvents.length === 0) return;
 
+    const now = Date.now();
+    const minIntervalMs = 30 * 60_000;
+    if (
+      derivedEventsSyncAtRef.current &&
+      now - derivedEventsSyncAtRef.current < minIntervalMs
+    ) {
+      return;
+    }
+
     // Create fingerprint to avoid duplicate syncs
     const fingerprint = derivedEvents
       .map((event) => `${event.id}:${event.startMinutes}:${event.duration}`)
@@ -717,6 +727,7 @@ export default function ComprehensiveCalendarScreen() {
           await refreshActualEventsForSelectedDay();
         }
         derivedEventsSyncRef.current = { ymd: selectedDateYmd, fingerprint };
+        derivedEventsSyncAtRef.current = Date.now();
       } catch (error) {
         if (__DEV__) {
           console.warn(

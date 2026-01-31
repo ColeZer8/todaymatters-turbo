@@ -53,6 +53,10 @@ import {
   fetchExtensionCandidates,
   lockEventsInWindow,
   extendEvent,
+  findExtendableSessionBlock,
+  fetchSessionBlockExtensionCandidates,
+  extendSessionBlock,
+  deleteOrphanedSessionBlocks,
   type ReconciliationEvent,
   type DerivedEvent,
   type ReconciliationOps,
@@ -60,8 +64,11 @@ import {
 
 // App categories
 import {
+  classifyIntent,
   type UserAppCategoryOverrides,
   type AppCategory,
+  type AppSummary,
+  type Intent,
 } from "../services/app-categories";
 
 // User app category overrides (from calendar app-classification)
@@ -406,13 +413,19 @@ export async function processActualIngestionWindow(
     );
 
     // Convert to sessionizable events
-    const sessionizableEvents = updatedEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      scheduledStart: event.scheduledStart,
-      scheduledEnd: event.scheduledEnd,
-      meta: event.meta,
-    }));
+    // IMPORTANT: Filter out existing session_block events to prevent:
+    // 1. Session blocks being nested inside other session blocks
+    // 2. Session blocks from previous windows being re-sessionized
+    // Only granular events (screen_time, location_block, commute) should be sessionized
+    const sessionizableEvents = updatedEvents
+      .filter((event) => event.meta?.kind !== "session_block")
+      .map((event) => ({
+        id: event.id,
+        title: event.title,
+        scheduledStart: event.scheduledStart,
+        scheduledEnd: event.scheduledEnd,
+        meta: event.meta,
+      }));
 
     // Run sessionization
     let sessions = sessionizeWindow(
@@ -437,39 +450,196 @@ export async function processActualIngestionWindow(
       sleepSchedule ?? DEFAULT_SLEEP_SCHEDULE,
     );
 
-    // Insert session blocks as events
+    // Step 5.5: Handle session block extension and insertion
+    // Instead of just inserting, we check if existing session blocks can be extended
+    const extendedSessionIds: string[] = [];
+    const sessionsToInsert: SessionBlock[] = [];
+    let sessionsExtended = 0;
+
     if (sessions.length > 0) {
-      const sessionEvents = sessions.map((session) =>
-        sessionBlockToDerivedEvent(session),
-      );
-
-      const sessionInserts = sessionEvents.map((event) => ({
-        user_id: userId,
-        type: "calendar_actual",
-        title: event.title,
-        description: "",
-        scheduled_start: event.scheduledStart.toISOString(),
-        scheduled_end: event.scheduledEnd.toISOString(),
-        meta: event.meta as Json,
-      }));
-
+      // Fetch session block extension candidates from previous window
+      let sessionBlockCandidates: ReconciliationEvent[] = [];
       try {
-        const { data, error } = await tmSchema()
-          .from("events")
-          .insert(sessionInserts)
-          .select("id");
+        sessionBlockCandidates = await fetchSessionBlockExtensionCandidates(
+          userId,
+          windowStart,
+        );
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[ActualIngestion] Failed to fetch session block candidates:",
+            error,
+          );
+        }
+      }
 
-        if (error) {
+      // Process each new session - either extend existing or prepare for insert
+      for (const session of sessions) {
+        const placeId = session.placeId;
+
+        // Try to find an extendable session block
+        const extendable = findExtendableSessionBlock(
+          sessionBlockCandidates,
+          session.start,
+          placeId,
+        );
+
+        if (extendable) {
+          // Extend the existing session block
+          try {
+            // Merge app summaries for intent recalculation
+            const existingAppSummary = (extendable.meta?.app_summary ?? []) as Array<{
+              app_id: string;
+              seconds: number;
+            }>;
+            const newAppSummary = session.meta.app_summary ?? [];
+
+            // Combine app summaries by aggregating seconds per app
+            const combinedAppMap = new Map<string, number>();
+            for (const app of existingAppSummary) {
+              combinedAppMap.set(
+                app.app_id,
+                (combinedAppMap.get(app.app_id) ?? 0) + app.seconds,
+              );
+            }
+            for (const app of newAppSummary) {
+              combinedAppMap.set(
+                app.app_id,
+                (combinedAppMap.get(app.app_id) ?? 0) + app.seconds,
+              );
+            }
+
+            // Convert to AppSummary array for classification
+            const mergedAppSummary: AppSummary[] = Array.from(
+              combinedAppMap.entries(),
+            )
+              .map(([appId, seconds]) => ({ appId, seconds }))
+              .sort((a, b) => b.seconds - a.seconds);
+
+            // Reclassify intent based on merged usage
+            const newIntentResult = classifyIntent(mergedAppSummary, userAppOverrides);
+            const newIntent = newIntentResult.intent;
+
+            // Generate new title if intent changed
+            const placeLabel = session.placeLabel ?? "Unknown Location";
+            const intentLabel = newIntent === "offline" ? "Offline" :
+              newIntent === "work" ? "Work" :
+              newIntent === "leisure" ? "Leisure" :
+              newIntent === "distracted_work" ? "Distracted" :
+              newIntent === "sleep" ? "Sleep" : "Mixed";
+            const newTitle = `${placeLabel} - ${intentLabel}`;
+
+            // Build top 3 summary for display
+            const topThreeSummary = mergedAppSummary.slice(0, 3).map((app) => ({
+              label: app.appId,
+              seconds: app.seconds,
+            }));
+
+            // Build full app summary for storage
+            const fullAppSummary = mergedAppSummary.map((app) => ({
+              app_id: app.appId,
+              seconds: app.seconds,
+            }));
+
+            // Extend the session block
+            const extendResult = await extendSessionBlock(
+              extendable.id,
+              session.end,
+              session.childEventIds,
+              newTitle,
+              {
+                intent: newIntent,
+                summary: topThreeSummary,
+                app_summary: fullAppSummary,
+                intent_reasoning: newIntentResult.reasoning,
+              },
+            );
+
+            if (extendResult.success) {
+              extendedSessionIds.push(extendable.id);
+              sessionsExtended++;
+              if (__DEV__) {
+                console.log(
+                  `[ActualIngestion] Extended session block ${extendable.id} to ${session.end.toISOString()}`,
+                );
+              }
+            } else {
+              // Extension failed, fall back to inserting
+              sessionsToInsert.push(session);
+              if (__DEV__) {
+                console.warn(
+                  `[ActualIngestion] Failed to extend session block: ${extendResult.error}`,
+                );
+              }
+            }
+          } catch (error) {
+            // Extension failed, fall back to inserting
+            sessionsToInsert.push(session);
+            if (__DEV__) {
+              console.warn("[ActualIngestion] Session extension error:", error);
+            }
+          }
+        } else {
+          // No extendable session block found, prepare for insert
+          sessionsToInsert.push(session);
+        }
+      }
+
+      // Delete orphaned session blocks in the current window
+      // (session blocks that weren't extended and will be replaced by new ones)
+      try {
+        await deleteOrphanedSessionBlocks(
+          userId,
+          windowStart,
+          windowEnd,
+          extendedSessionIds,
+        );
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[ActualIngestion] Failed to delete orphaned session blocks:",
+            error,
+          );
+        }
+      }
+
+      // Insert remaining session blocks
+      if (sessionsToInsert.length > 0) {
+        const sessionEvents = sessionsToInsert.map((session) =>
+          sessionBlockToDerivedEvent(session),
+        );
+
+        const sessionInserts = sessionEvents.map((event) => ({
+          user_id: userId,
+          type: "calendar_actual",
+          title: event.title,
+          description: "",
+          scheduled_start: event.scheduledStart.toISOString(),
+          scheduled_end: event.scheduledEnd.toISOString(),
+          meta: event.meta as Json,
+        }));
+
+        try {
+          const { data, error } = await tmSchema()
+            .from("events")
+            .insert(sessionInserts)
+            .select("id");
+
+          if (error) {
+            if (__DEV__) {
+              console.warn("[ActualIngestion] Failed to insert sessions:", error);
+            }
+          } else {
+            stats.sessionsCreated = (data?.length ?? 0) + sessionsExtended;
+          }
+        } catch (error) {
           if (__DEV__) {
             console.warn("[ActualIngestion] Failed to insert sessions:", error);
           }
-        } else {
-          stats.sessionsCreated = data?.length ?? 0;
         }
-      } catch (error) {
-        if (__DEV__) {
-          console.warn("[ActualIngestion] Failed to insert sessions:", error);
-        }
+      } else {
+        // All sessions were extended
+        stats.sessionsCreated = sessionsExtended;
       }
     }
 
@@ -711,6 +881,222 @@ async function executeReconciliationOps(
   }
 
   return { stats, errors };
+}
+
+// ============================================================================
+// Day Reprocessing Utilities
+// ============================================================================
+
+/**
+ * Delete all actual events for a day.
+ * Used for dev-only full day reprocessing.
+ */
+async function deleteActualEventsForDay(
+  userId: string,
+  dayStart: Date,
+  dayEnd: Date,
+): Promise<{ deletedCount: number }> {
+  try {
+    const { data, error } = await tmSchema()
+      .from("events")
+      .delete()
+      .eq("user_id", userId)
+      .eq("type", "calendar_actual")
+      .gte("scheduled_start", dayStart.toISOString())
+      .lt("scheduled_start", dayEnd.toISOString())
+      .select("id");
+
+    if (error) throw handleSupabaseError(error);
+    return { deletedCount: data?.length ?? 0 };
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[ActualIngestion] Failed to delete events:", error);
+    }
+    return { deletedCount: 0 };
+  }
+}
+
+/**
+ * Delete all window locks for a day.
+ */
+async function deleteWindowLocksForDay(
+  userId: string,
+  dayStart: Date,
+  dayEnd: Date,
+): Promise<{ deletedCount: number }> {
+  try {
+    const { data, error } = await tmSchema()
+      .from("actual_ingestion_window_locks")
+      .delete()
+      .eq("user_id", userId)
+      .gte("window_start", dayStart.toISOString())
+      .lt("window_start", dayEnd.toISOString())
+      .select("id");
+
+    if (error) throw handleSupabaseError(error);
+    return { deletedCount: data?.length ?? 0 };
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[ActualIngestion] Failed to delete window locks:", error);
+    }
+    return { deletedCount: 0 };
+  }
+}
+
+/**
+ * Build all 30-minute windows for a day up to the current time.
+ */
+function buildWindowsForDay(dayStart: Date, upToTime: Date): Array<{ start: Date; end: Date }> {
+  const windows: Array<{ start: Date; end: Date }> = [];
+  const current = new Date(dayStart);
+
+  while (current < upToTime) {
+    const windowEnd = new Date(current.getTime() + 30 * 60 * 1000);
+    // Only include windows that have fully completed
+    if (windowEnd <= upToTime) {
+      windows.push({ start: new Date(current), end: windowEnd });
+    }
+    current.setMinutes(current.getMinutes() + 30);
+  }
+
+  return windows;
+}
+
+export interface ReprocessDayResult {
+  /** Whether the reprocessing was successful */
+  success: boolean;
+  /** Number of events deleted */
+  eventsDeleted: number;
+  /** Number of window locks deleted */
+  locksDeleted: number;
+  /** Number of windows processed */
+  windowsProcessed: number;
+  /** Number of windows skipped (errors) */
+  windowsSkipped: number;
+  /** Total sessions created */
+  totalSessionsCreated: number;
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Reprocess an entire day's actual events from scratch.
+ *
+ * WARNING: This is a destructive operation that:
+ * 1. Deletes ALL actual events for the day
+ * 2. Deletes ALL window locks for the day
+ * 3. Re-runs ingestion for ALL windows from midnight to now
+ *
+ * Only use this for dev/debugging purposes.
+ */
+export async function reprocessDay(
+  userId: string,
+  date: Date = new Date(),
+): Promise<ReprocessDayResult> {
+  // Calculate day boundaries
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const now = new Date();
+  const upToTime = date.toDateString() === now.toDateString() ? now : dayEnd;
+
+  if (__DEV__) {
+    console.log(`[ActualIngestion] Reprocessing day ${dayStart.toISOString()} to ${upToTime.toISOString()}`);
+  }
+
+  try {
+    // Step 1: Delete all actual events for the day
+    const { deletedCount: eventsDeleted } = await deleteActualEventsForDay(
+      userId,
+      dayStart,
+      dayEnd,
+    );
+
+    if (__DEV__) {
+      console.log(`[ActualIngestion] Deleted ${eventsDeleted} events`);
+    }
+
+    // Step 2: Delete all window locks for the day
+    const { deletedCount: locksDeleted } = await deleteWindowLocksForDay(
+      userId,
+      dayStart,
+      dayEnd,
+    );
+
+    if (__DEV__) {
+      console.log(`[ActualIngestion] Deleted ${locksDeleted} window locks`);
+    }
+
+    // Step 3: Build all windows for the day
+    const windows = buildWindowsForDay(dayStart, upToTime);
+
+    if (__DEV__) {
+      console.log(`[ActualIngestion] Processing ${windows.length} windows`);
+    }
+
+    // Step 4: Process each window in sequence
+    let windowsProcessed = 0;
+    let windowsSkipped = 0;
+    let totalSessionsCreated = 0;
+
+    for (const window of windows) {
+      try {
+        const result = await processActualIngestionWindow({
+          userId,
+          windowStart: window.start,
+          windowEnd: window.end,
+          logStats: __DEV__,
+        });
+
+        if (result.skipped) {
+          windowsSkipped++;
+        } else {
+          windowsProcessed++;
+          totalSessionsCreated += result.stats?.eventsSessionized ?? 0;
+        }
+      } catch (error) {
+        windowsSkipped++;
+        if (__DEV__) {
+          console.warn(
+            `[ActualIngestion] Failed to process window ${window.start.toISOString()}:`,
+            error,
+          );
+        }
+      }
+    }
+
+    if (__DEV__) {
+      console.log(
+        `[ActualIngestion] Reprocess complete: ${windowsProcessed} processed, ${windowsSkipped} skipped, ${totalSessionsCreated} sessions`,
+      );
+    }
+
+    return {
+      success: true,
+      eventsDeleted,
+      locksDeleted,
+      windowsProcessed,
+      windowsSkipped,
+      totalSessionsCreated,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (__DEV__) {
+      console.error("[ActualIngestion] Reprocess failed:", error);
+    }
+    return {
+      success: false,
+      eventsDeleted: 0,
+      locksDeleted: 0,
+      windowsProcessed: 0,
+      windowsSkipped: 0,
+      totalSessionsCreated: 0,
+      error: message,
+    };
+  }
 }
 
 // ============================================================================

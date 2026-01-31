@@ -110,6 +110,11 @@ interface PermissionsTemplateProps {
   permissions: IndividualPermissions;
   onTogglePermission: (key: PermissionKey) => void;
   onContinue: () => void;
+  notificationSettingsAction?: {
+    label: string;
+    helperText?: string;
+    onPress: () => void;
+  };
   onBack?: () => void;
   step?: number;
   totalSteps?: number;
@@ -123,6 +128,7 @@ export const PermissionsTemplate = ({
   permissions,
   onTogglePermission,
   onContinue,
+  notificationSettingsAction,
   onBack,
   step = ONBOARDING_STEPS.permissions,
   totalSteps = ONBOARDING_TOTAL_STEPS,
@@ -248,15 +254,34 @@ export const PermissionsTemplate = ({
             {/* Individual Permissions */}
             {showIndividual && (
               <View className="mt-2">
-                {PERMISSION_ROWS.map((row, index) => (
-                  <PermissionRow
-                    key={row.key}
-                    config={row}
-                    enabled={permissions[row.key]}
-                    onToggle={() => onTogglePermission(row.key)}
-                    showDivider={index < PERMISSION_ROWS.length - 1}
-                  />
-                ))}
+                {PERMISSION_ROWS.map((row, index) => {
+                  const showNotificationsAction =
+                    row.key === "notifications" && !!notificationSettingsAction;
+                  return (
+                    <PermissionRow
+                      key={row.key}
+                      config={row}
+                      enabled={permissions[row.key]}
+                      onToggle={() => onTogglePermission(row.key)}
+                      showDivider={index < PERMISSION_ROWS.length - 1}
+                      helperText={
+                        showNotificationsAction
+                          ? notificationSettingsAction?.helperText
+                          : undefined
+                      }
+                      actionLabel={
+                        showNotificationsAction
+                          ? notificationSettingsAction?.label
+                          : undefined
+                      }
+                      onActionPress={
+                        showNotificationsAction
+                          ? notificationSettingsAction?.onPress
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </View>
             )}
           </View>
@@ -288,6 +313,9 @@ interface PermissionRowProps {
   enabled: boolean;
   onToggle: () => void;
   showDivider?: boolean;
+  helperText?: string;
+  actionLabel?: string;
+  onActionPress?: () => void;
 }
 
 const PermissionRow = ({
@@ -295,6 +323,9 @@ const PermissionRow = ({
   enabled,
   onToggle,
   showDivider = false,
+  helperText,
+  actionLabel,
+  onActionPress,
 }: PermissionRowProps) => {
   const Icon = config.icon;
 
@@ -329,6 +360,24 @@ const PermissionRow = ({
           />
         </View>
       </Pressable>
+      {helperText || actionLabel ? (
+        <View className="pl-14 pr-2 pb-3">
+          {helperText ? (
+            <Text className="text-xs text-slate-500">{helperText}</Text>
+          ) : null}
+          {actionLabel && onActionPress ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onActionPress}
+              className="mt-2 self-start rounded-full border border-slate-200 bg-white px-3 py-1.5"
+            >
+              <Text className="text-xs font-semibold text-slate-700">
+                {actionLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {showDivider && <View className="h-px bg-slate-200 ml-14" />}
     </View>
   );

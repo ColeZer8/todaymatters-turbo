@@ -63,34 +63,38 @@ const COLORS = {
   red: "#EF4444",
 };
 
-// Category Styling System - Softened colors for premium feel
+// Category Styling System - normalized to core value colors
 const CATEGORY_STYLES: Record<
   string,
   { bg: string; accent: string; text: string; dashed?: boolean }
 > = {
-  routine: { bg: "#EFF6FF", accent: "#3B82F6", text: "#1D4ED8" },
-  work: { bg: "#F8FAFC", accent: "#64748B", text: "#475569" },
-  meal: { bg: "#FFF8F3", accent: "#FB923C", text: "#C2410C" },
-  meeting: { bg: "#FAF5FF", accent: "#A855F7", text: "#7C3AED" },
-  health: { bg: "#F0FDF4", accent: "#22C55E", text: "#16A34A" },
-  family: { bg: "#FDF2F8", accent: "#EC4899", text: "#DB2777" },
+  routine: { bg: "rgba(243, 60, 131, 0.12)", accent: "#F33C83", text: "#F33C83" }, // Faith
+  work: { bg: "rgba(31, 165, 110, 0.12)", accent: "#1FA56E", text: "#1FA56E" },
+  meal: { bg: "rgba(249, 92, 46, 0.12)", accent: "#F95C2E", text: "#F95C2E" }, // Health
+  meeting: { bg: "rgba(31, 165, 110, 0.12)", accent: "#1FA56E", text: "#1FA56E" }, // Work
+  health: { bg: "rgba(249, 92, 46, 0.12)", accent: "#F95C2E", text: "#F95C2E" },
+  family: { bg: "rgba(245, 158, 11, 0.12)", accent: "#F59E0B", text: "#F59E0B" },
   error: { bg: "#FEF2F2", accent: "#F87171", text: "#DC2626" },
-  social: { bg: "#ECFEFF", accent: "#22D3EE", text: "#0891B2" },
+  social: { bg: "rgba(245, 158, 11, 0.12)", accent: "#F59E0B", text: "#F59E0B" }, // Family
   travel: { bg: "#FFFBEB", accent: "#FBBF24", text: "#D97706" },
-  finance: { bg: "#ECFDF5", accent: "#34D399", text: "#059669" },
-  comm: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" },
-  digital: { bg: "#F0F9FF", accent: "#38BDF8", text: "#0284C7" },
-  sleep: { bg: "#EEF2FF", accent: "#818CF8", text: "#4F46E5" }, // Soft indigo - much lighter
+  finance: { bg: "rgba(16, 185, 129, 0.12)", accent: "#10B981", text: "#10B981" },
+  comm: { bg: "rgba(31, 165, 110, 0.12)", accent: "#1FA56E", text: "#1FA56E" }, // Work
+  digital: { bg: "rgba(31, 165, 110, 0.12)", accent: "#1FA56E", text: "#1FA56E" }, // Work
+  sleep: { bg: "rgba(139, 92, 246, 0.12)", accent: "#8B5CF6", text: "#8B5CF6" }, // Purple
   unknown: { bg: "#FAFAFA", accent: "#CBD5E1", text: "#64748B", dashed: true },
-  free: { bg: "#F0FDFA", accent: "#2DD4BF", text: "#0D9488" },
+  free: { bg: "rgba(139, 92, 246, 0.12)", accent: "#8B5CF6", text: "#8B5CF6" }, // Personal Growth
   // Intent-based styles for session blocks
-  intent_work: { bg: "#EFF6FF", accent: "#3B82F6", text: "#1D4ED8" }, // Blue
-  intent_leisure: { bg: "#F0FDF4", accent: "#22C55E", text: "#16A34A" }, // Green
-  intent_distracted_work: { bg: "#FFF7ED", accent: "#F97316", text: "#C2410C" }, // Orange
-  intent_sleep: { bg: "#EEF2FF", accent: "#818CF8", text: "#4F46E5" }, // Purple
-  intent_offline: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" }, // Gray
-  intent_mixed: { bg: "#FEF9C3", accent: "#EAB308", text: "#A16207" }, // Yellow
-  commute: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" }, // Gray
+  intent_work: { bg: "rgba(31, 165, 110, 0.12)", accent: "#1FA56E", text: "#1FA56E" },
+  intent_leisure: { bg: "rgba(139, 92, 246, 0.12)", accent: "#8B5CF6", text: "#8B5CF6" },
+  intent_distracted_work: {
+    bg: "rgba(31, 165, 110, 0.12)",
+    accent: "#1FA56E",
+    text: "#1FA56E",
+  },
+  intent_sleep: { bg: "rgba(139, 92, 246, 0.12)", accent: "#8B5CF6", text: "#8B5CF6" },
+  intent_offline: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" },
+  intent_mixed: { bg: "#FEF9C3", accent: "#EAB308", text: "#A16207" },
+  commute: { bg: "#F8FAFC", accent: "#94A3B8", text: "#64748B" },
 };
 
 // Helper to calculate position

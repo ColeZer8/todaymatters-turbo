@@ -7,8 +7,6 @@ const HALF_HOUR_MS = 30 * 60 * 1000;
 
 interface UseActualIngestionSchedulerOptions {
   enabled?: boolean;
-  /** Number of previous windows to process on foreground/mount. */
-  catchUpWindows?: number;
 }
 
 function getNextHalfHourBoundary(now: Date): Date {
@@ -22,30 +20,15 @@ function getNextHalfHourBoundary(now: Date): Date {
   return next;
 }
 
-function buildRecentWindows(
-  latest: { start: Date; end: Date },
-  count: number,
-): Array<{ start: Date; end: Date }> {
-  const windows: Array<{ start: Date; end: Date }> = [];
-  const clampedCount = Math.max(1, count);
-  for (let i = clampedCount - 1; i >= 0; i -= 1) {
-    const start = new Date(latest.start);
-    start.setMinutes(start.getMinutes() - 30 * i);
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + 30);
-    windows.push({ start, end });
-  }
-  return windows;
-}
-
 export function useActualIngestionScheduler(
   options: UseActualIngestionSchedulerOptions = {},
 ): void {
-  const { enabled = true, catchUpWindows = 3 } = options;
+  const { enabled = true } = options;
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userId = useAuthStore((s) => s.user?.id ?? null);
-  const { processWindow, processWindows, getPreviousWindow } =
-    useActualIngestion({ logStats: __DEV__ });
+  const { processWindow, getPreviousWindow } = useActualIngestion({
+    logStats: __DEV__,
+  });
 
   const isRunningRef = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,26 +57,6 @@ export function useActualIngestionScheduler(
     }
   }, [enabled, getPreviousWindow, isAuthenticated, processWindow, userId]);
 
-  const runCatchUp = useCallback(async () => {
-    if (!enabled || !isAuthenticated || !userId) return;
-    if (isRunningRef.current) return;
-    isRunningRef.current = true;
-    try {
-      const latest = getPreviousWindow();
-      const windows = buildRecentWindows(latest, catchUpWindows);
-      await processWindows(windows);
-    } finally {
-      isRunningRef.current = false;
-    }
-  }, [
-    catchUpWindows,
-    enabled,
-    getPreviousWindow,
-    isAuthenticated,
-    processWindows,
-    userId,
-  ]);
-
   const scheduleAligned = useCallback(() => {
     clearTimers();
     const nextBoundary = getNextHalfHourBoundary(new Date());
@@ -113,14 +76,12 @@ export function useActualIngestionScheduler(
     }
 
     scheduleAligned();
-    void runCatchUp();
 
     const appStateListener = AppState.addEventListener(
       "change",
       (state: AppStateStatus) => {
         if (state === "active") {
           scheduleAligned();
-          void runCatchUp();
           return;
         }
         clearTimers();
@@ -135,7 +96,6 @@ export function useActualIngestionScheduler(
     clearTimers,
     enabled,
     isAuthenticated,
-    runCatchUp,
     scheduleAligned,
     userId,
   ]);

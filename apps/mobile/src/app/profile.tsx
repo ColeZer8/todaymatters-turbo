@@ -44,6 +44,9 @@ import {
   deleteUserAccount,
 } from "@/lib/supabase/services";
 import { deriveFullNameFromEmail } from "@/lib/user-name";
+import { useActualIngestion, reprocessDay } from "@/lib/supabase/hooks";
+import { deleteWindowLock } from "@/lib/supabase/services/actual-ingestion-window-locks";
+import { unlockEventsInWindow } from "@/lib/supabase/services/event-reconciliation";
 import {
   getCachedScreenTimeSummarySafeAsync,
   getScreenTimeAuthorizationStatusSafeAsync,
@@ -247,6 +250,111 @@ export default function ProfileScreen() {
     Alert.alert(
       "Captured location sample",
       `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`,
+    );
+  }, [user?.id]);
+
+  const { processWindow, getPreviousWindow } = useActualIngestion({
+    logStats: __DEV__,
+  });
+
+  const handleDevRerunLastActualWindow = useCallback(async () => {
+    try {
+      const window = getPreviousWindow();
+      const result = await processWindow(window.start, window.end);
+      const stats = result.stats
+        ? Object.entries(result.stats)
+            .map(([key, value]) => `${key}: ${String(value)}`)
+            .join("\n")
+        : "none";
+      const summary = [
+        `Skipped: ${result.skipped ? "yes" : "no"}`,
+        `Reason: ${result.reason ?? "n/a"}`,
+        `Location fallback: ${result.locationFallback ? "yes" : "no"}`,
+        `Stats:\n${stats}`,
+      ].join("\n");
+      Alert.alert("Re-run last 30-min window", summary);
+    } catch (error) {
+      Alert.alert(
+        "Re-run failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }, [getPreviousWindow, processWindow]);
+
+  const handleDevForceRerunLastActualWindow = useCallback(async () => {
+    try {
+      if (!user?.id) {
+        Alert.alert("Re-run failed", "No authenticated user.");
+        return;
+      }
+      const window = getPreviousWindow();
+      const [lockCleared, unlockResult] = await Promise.all([
+        deleteWindowLock(user.id, window.start),
+        unlockEventsInWindow(user.id, window.start, window.end),
+      ]);
+      const result = await processWindow(window.start, window.end);
+      const stats = result.stats
+        ? Object.entries(result.stats)
+            .map(([key, value]) => `${key}: ${String(value)}`)
+            .join("\n")
+        : "none";
+      const summary = [
+        `Lock cleared: ${lockCleared ? "yes" : "no"}`,
+        `Unlocked events: ${unlockResult.unlockedCount}`,
+        `Skipped: ${result.skipped ? "yes" : "no"}`,
+        `Reason: ${result.reason ?? "n/a"}`,
+        `Location fallback: ${result.locationFallback ? "yes" : "no"}`,
+        `Stats:\n${stats}`,
+      ].join("\n");
+      Alert.alert("Force re-run last 30-min window", summary);
+    } catch (error) {
+      Alert.alert(
+        "Force re-run failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }, [getPreviousWindow, processWindow, user?.id]);
+
+  const handleDevReprocessFullDay = useCallback(async () => {
+    if (!user?.id) {
+      Alert.alert("Reprocess failed", "No authenticated user.");
+      return;
+    }
+
+    Alert.alert(
+      "Reprocess Full Day?",
+      "This will DELETE all actual events for today and re-run ingestion from scratch. This may take a while.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reprocess",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              Alert.alert("Reprocessing...", "Please wait, this may take a minute.");
+              const result = await reprocessDay(user.id);
+
+              if (result.success) {
+                const summary = [
+                  `Events deleted: ${result.eventsDeleted}`,
+                  `Locks deleted: ${result.locksDeleted}`,
+                  `Windows processed: ${result.windowsProcessed}`,
+                  `Windows skipped: ${result.windowsSkipped}`,
+                  `Sessions created: ${result.totalSessionsCreated}`,
+                ].join("\n");
+                Alert.alert("Reprocess Complete", summary);
+              } else {
+                Alert.alert("Reprocess Failed", result.error ?? "Unknown error");
+              }
+            } catch (error) {
+              Alert.alert(
+                "Reprocess failed",
+                error instanceof Error ? error.message : "Unknown error",
+              );
+            }
+          },
+        },
+      ],
     );
   }, [user?.id]);
 
@@ -513,6 +621,24 @@ export default function ProfileScreen() {
             label: "🧪 Location Samples (dev)",
             icon: Calendar,
             onPress: () => router.push("/dev/location"),
+          },
+          {
+            id: "dev-rerun-actual-window",
+            label: "🧪 Re-run Actual Window (last 30m)",
+            icon: Calendar,
+            onPress: handleDevRerunLastActualWindow,
+          },
+          {
+            id: "dev-force-rerun-actual-window",
+            label: "🧪 Force Re-run Actual Window (last 30m)",
+            icon: Calendar,
+            onPress: handleDevForceRerunLastActualWindow,
+          },
+          {
+            id: "dev-reprocess-full-day",
+            label: "🧪 Reprocess Full Day (destructive!)",
+            icon: Calendar,
+            onPress: handleDevReprocessFullDay,
           },
           {
             id: "dev-android-location-diagnostics",

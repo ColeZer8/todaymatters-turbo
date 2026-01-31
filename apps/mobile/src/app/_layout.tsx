@@ -35,6 +35,7 @@ import {
 } from "@/lib/updates";
 import { installGlobalErrorHandlers, logger } from "@/lib/logger";
 import { registerActualIngestionBackgroundTaskAsync } from "@/lib/background-ingestion/register";
+import { ensureAndroidLocationChannelAsync } from "@/lib/notifications/android-channel";
 
 // Register background task only if the native modules exist (prevents hard-crash on stale dev clients).
 void registerIosLocationBackgroundTaskAsync();
@@ -64,6 +65,13 @@ export default function Layout() {
   useActualIngestionScheduler();
 
   useEffect(() => {
+    if (Platform.OS === "android") {
+      ensureAndroidLocationChannelAsync().catch((error) => {
+        if (__DEV__) {
+          console.warn("[Notifications] Failed to ensure channel:", error);
+        }
+      });
+    }
     let unsubscribeAuth: (() => void) | undefined;
 
     const run = async () => {
