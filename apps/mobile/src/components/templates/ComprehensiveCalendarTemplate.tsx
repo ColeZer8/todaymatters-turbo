@@ -762,15 +762,6 @@ export const ComprehensiveCalendarTemplate = ({
                         visibleUntilMinutes={actualVisibleUntil}
                         enableReviewTimeShortcut={false}
                         onPress={() => {
-                          // Open session detail modal for session blocks
-                          if (event.meta?.kind === "session_block") {
-                            const fullEvent = actualEvents.find((e) => e.id === event.id);
-                            if (fullEvent) {
-                              setSessionDetailEvent(fullEvent);
-                              setIsSessionDetailVisible(true);
-                            }
-                            return;
-                          }
                           // Default: navigate to actual-adjust
                           router.push({
                             pathname: "/actual-adjust",

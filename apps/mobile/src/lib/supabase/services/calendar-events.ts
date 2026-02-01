@@ -38,7 +38,13 @@ function isPlannedCalendarMeta(value: Json): value is PlannedCalendarMeta {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const rec = value as Record<string, Json>;
   const category = rec.category;
-  return typeof category === "string" && category.length > 0;
+  const kind = rec.kind;
+  const source = rec.source;
+  return (
+    (typeof category === "string" && category.length > 0) ||
+    (typeof kind === "string" && kind.length > 0) ||
+    (typeof source === "string" && source.length > 0)
+  );
 }
 
 function addDays(date: Date, days: number): Date {

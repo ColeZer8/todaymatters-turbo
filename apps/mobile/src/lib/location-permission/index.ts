@@ -140,9 +140,27 @@ export async function getLocationPermissionStatus(): Promise<LocationPermissionS
 /**
  * Check if location data is available for ingestion.
  * Returns true if both foreground and background permissions are granted.
+ * 
+ * Note: On Android, we prefer the foreground-service background task from
+ * expo-location for continuous updates, which requires background permission.
+ * WorkManager remains a fallback when the foreground service can't start.
  */
 export async function isLocationAvailableForIngestion(): Promise<boolean> {
   const status = await getLocationPermissionStatus();
+  
+  // On Android, foreground + background permissions are required for continuous
+  // background updates. WorkManager fallback still benefits from background access.
+  if (Platform.OS === "android") {
+    const hasNativeModule = requireOptionalNativeModule("ExpoBackgroundLocation");
+    return (
+      hasNativeModule !== null &&
+      status.servicesEnabled &&
+      status.foregroundGranted &&
+      status.backgroundGranted
+    );
+  }
+  
+  // On iOS, still use expo-location (need both foreground and background)
   return (
     status.hasModule &&
     status.servicesEnabled &&

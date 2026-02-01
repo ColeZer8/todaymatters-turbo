@@ -1,0 +1,94 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'maven-publish'
+
+group = 'expo.modules.backgroundlocation'
+version = '1.0.0'
+
+buildscript {
+  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+  if (expoModulesCorePlugin.exists()) {
+    apply from: expoModulesCorePlugin
+    applyKotlinExpoModulesCorePlugin()
+  }
+
+  // Simple alternative to `applyKotlinExpoModulesCorePlugin` with support for Kotlin.
+  if (!hasProperty('kotlinVersion')) {
+    ext.kotlinVersion = '1.9.24'
+  }
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+  }
+}
+
+afterEvaluate {
+  publishing {
+    publications {
+      release(MavenPublication) {
+        from components.release
+      }
+    }
+    repositories {
+      maven {
+        url = mavenLocal().url
+      }
+    }
+  }
+}
+
+android {
+  compileSdkVersion safeExtGet("compileSdkVersion", 35)
+
+  def agpVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
+  if (agpVersion.tokenize('.')[0].toInteger() < 8) {
+    compileOptions {
+      sourceCompatibility JavaVersion.VERSION_11
+      targetCompatibility JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+      jvmTarget = JavaVersion.VERSION_11.majorVersion
+    }
+  } else {
+    compileOptions {
+      sourceCompatibility JavaVersion.VERSION_17
+      targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+      jvmTarget = JavaVersion.VERSION_17.majorVersion
+    }
+  }
+
+  namespace "expo.modules.backgroundlocation"
+  defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion", 23)
+    targetSdkVersion safeExtGet("targetSdkVersion", 35)
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+  publishing {
+    singleVariant("release") {
+      withSourcesJar()
+    }
+  }
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion"
+  
+  // WorkManager
+  implementation 'androidx.work:work-runtime-ktx:2.9.0'
+  
+  // Google Play Services Location
+  implementation 'com.google.android.gms:play-services-location:21.1.0'
+  
+  // Note: AsyncStorage is provided by the main app, not included here
+}

@@ -29,6 +29,7 @@ import {
   fetchUserPlaceByLabel,
   fetchLocationSamplesForRange,
   upsertUserPlaceFromSamples,
+  upsertUserPlaceFromCoordinates,
 } from "@/lib/supabase/services/user-places";
 import type { CategoryPath } from "@/components/molecules/HierarchicalCategoryPicker";
 import {
@@ -576,10 +577,19 @@ export default function ActualAdjustScreen() {
     };
   }, [userId, big3Enabled, selectedDateYmd]);
 
-  // Check if this event's location already has a user-defined place label
-  const locationLabel = event.meta?.evidence?.locationLabel ?? null;
+  // Check if this event has location coordinates (for Add Place functionality)
+  const hasLocationCoordinates = Boolean(
+    typeof event.meta?.latitude === "number" && 
+    typeof event.meta?.longitude === "number"
+  );
+  
+  // Use place label if exists, otherwise generate from coordinates
+  const locationLabel = hasLocationCoordinates
+    ? event.meta?.place_label || "Unknown Location"
+    : event.meta?.evidence?.locationLabel ?? null;
+    
   useEffect(() => {
-    if (!userId || !locationLabel) return;
+    if (!userId || !locationLabel || !hasLocationCoordinates) return;
     let cancelled = false;
     fetchUserPlaceByLabel(userId, locationLabel)
       .then((place) => {
@@ -592,7 +602,7 @@ export default function ActualAdjustScreen() {
     return () => {
       cancelled = true;
     };
-  }, [userId, locationLabel]);
+  }, [userId, locationLabel, hasLocationCoordinates]);
 
   const handleSelectActivityCategory = useCallback(
     (categoryId: string, _path: CategoryPath) => {
@@ -645,6 +655,22 @@ export default function ActualAdjustScreen() {
           200,
         );
         if (samples.length === 0) {
+          if (hasLocationCoordinates) {
+            await upsertUserPlaceFromCoordinates({
+              userId,
+              label,
+              category: null,
+              categoryId,
+              latitude: event.meta?.latitude as number,
+              longitude: event.meta?.longitude as number,
+            });
+            setHasExistingPlaceLabel(true);
+            Alert.alert(
+              "Place labeled",
+              `"${label}" has been saved. Future visits will auto-tag.`,
+            );
+            return;
+          }
           Alert.alert(
             "No location data",
             "We could not find location samples for this time block. The place cannot be labeled without GPS data.",
@@ -676,7 +702,15 @@ export default function ActualAdjustScreen() {
         setIsSavingPlace(false);
       }
     },
-    [userId, selectedDateYmd, startMinutes, durationMinutes],
+    [
+      userId,
+      selectedDateYmd,
+      startMinutes,
+      durationMinutes,
+      hasLocationCoordinates,
+      event.meta?.latitude,
+      event.meta?.longitude,
+    ],
   );
 
   const placeLabelInfo = useMemo<PlaceLabelInfo | null>(() => {

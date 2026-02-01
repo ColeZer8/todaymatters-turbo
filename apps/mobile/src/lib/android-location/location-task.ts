@@ -88,12 +88,14 @@ if (
   Platform.OS === "android" &&
   requireOptionalNativeModule("ExpoTaskManager")
 ) {
+  console.log("📍 [init] Defining Android location background task...");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const TaskManager =
     require("expo-task-manager") as typeof import("expo-task-manager");
   TaskManager.defineTask(
     ANDROID_BACKGROUND_LOCATION_TASK_NAME,
     async ({ data, error }) => {
+      console.log("📍 [task] ========== TASK CALLBACK FIRED ==========");
       try {
         const firedAtIso = new Date().toISOString();
         AsyncStorage.setItem(
@@ -187,4 +189,5 @@ if (
       }
     },
   );
+  console.log("📍 [init] Android location background task defined successfully");
 }

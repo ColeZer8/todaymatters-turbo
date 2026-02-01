@@ -441,14 +441,36 @@ export function buildActualDisplayEvents({
       const duration = Math.max(1, block.endMinutes - block.startMinutes);
       if (duration < minEvidenceBlockMinutes) continue;
       const isScreenTimeBlock = block.source === "screen_time";
+      const matchedLocation =
+        block.source === "location"
+          ? locationBlocks.find((loc) =>
+              intervalsOverlap(
+                block.startMinutes,
+                block.endMinutes,
+                loc.startMinutes,
+                loc.endMinutes,
+              ),
+            )
+          : null;
+      const placeLabel =
+        matchedLocation?.placeLabel ?? block.evidence.location?.placeLabel ?? null;
+      const placeCategory =
+        matchedLocation?.placeCategory ??
+        block.evidence.location?.placeCategory ??
+        null;
       const meta: CalendarEventMeta = {
         category: block.category,
         source: "evidence",
         kind: isScreenTimeBlock ? "screen_time" : "evidence_block",
         confidence: block.confidence ?? 0.55,
         dataQuality,
+        place_id: matchedLocation?.placeId ?? null,
+        place_label: placeLabel,
+        latitude: matchedLocation?.avgLat ?? null,
+        longitude: matchedLocation?.avgLng ?? null,
         evidence: {
-          locationLabel: block.evidence.location?.placeLabel ?? null,
+          locationLabel: placeLabel,
+          placeCategory,
           locationSampleCount: block.evidence.location?.sampleCount ?? null,
           screenTimeMinutes: block.evidence.screenTime?.totalMinutes,
           topApp: block.evidence.screenTime?.topApps[0]?.app ?? null,

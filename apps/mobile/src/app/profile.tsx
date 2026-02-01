@@ -623,6 +623,12 @@ export default function ProfileScreen() {
             onPress: () => router.push("/dev/location"),
           },
           {
+            id: "dev-background-location",
+            label: "🧪 Background Location (dev)",
+            icon: Calendar,
+            onPress: () => router.push("/dev/background-location"),
+          },
+          {
             id: "dev-rerun-actual-window",
             label: "🧪 Re-run Actual Window (last 30m)",
             icon: Calendar,

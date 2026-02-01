@@ -13,24 +13,41 @@ import {
   startAndroidBackgroundLocationAsync,
   stopAndroidBackgroundLocationAsync,
   clearPendingAndroidLocationSamplesAsync,
-  isAndroidBackgroundLocationRunningAsync,
   peekPendingAndroidLocationSamplesAsync,
+  enqueueAndroidLocationSamplesForUserAsync,
   ErrorCategory,
   logError,
   getMovementState,
-  getLastTaskHeartbeat,
   recordLastSyncTime,
+  captureAndroidLocationSampleNowAsync,
 } from "@/lib/android-location";
 import type { MovementState } from "@/lib/android-location";
+// Supabase config for native uploads
+import { SUPABASE_URL, SUPABASE_ANON_KEY, supabase } from "@/lib/supabase/client";
+
+// Native WorkManager implementation for reliable background location
+// These imports are wrapped to prevent crashes if the native module isn't available
+let BackgroundLocation: typeof import("expo-background-location") | null = null;
+let drainPendingSamples: typeof import("expo-background-location").drainPendingSamples | null = null;
+let configureSupabase: typeof import("expo-background-location").configureSupabase | null = null;
+let updateJwtToken: typeof import("expo-background-location").updateJwtToken | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require("expo-background-location");
+  BackgroundLocation = mod;
+  drainPendingSamples = mod.drainPendingSamples;
+  configureSupabase = mod.configureSupabase;
+  updateJwtToken = mod.updateJwtToken;
+} catch (e) {
+  console.warn("📍 [native] expo-background-location not available, background tracking disabled");
+}
 
 /** Max consecutive start failures before backing off until next app foreground. */
 const MAX_RETRY_ATTEMPTS = 3;
 
-/** How often to check if the Android background task is still alive (ms). */
-const HEALTH_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2 min (more aggressive)
-
-/** Consider the task stale if it hasn't fired in this window. */
-const TASK_HEARTBEAT_STALE_MS = 8 * 60 * 1000; // 8 min (considering 5min deferred batching)
+/** Foreground location collection interval (fallback when background task fails). */
+const FOREGROUND_LOCATION_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
 
@@ -102,18 +119,67 @@ export function useLocationSamplesSync(
             console.error("📍 Failed to start iOS background location:", e);
         });
       } else {
-        startAndroidBackgroundLocationAsync()
-          .then((result) => {
-            if (!result.ok) {
-              const detail = "detail" in result ? result.detail : undefined;
-              console.warn(
-                `📍 [sync] Android location start failed: ${result.reason}${detail ? ` — ${detail}` : ""}`,
+        // Configure Supabase for native direct uploads (enables background sync when app is killed)
+        const configureNativeSupabase = async () => {
+          if (!configureSupabase) {
+            console.warn("📍 [native] configureSupabase not available, skipping");
+            return;
+          }
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              await configureSupabase(
+                SUPABASE_URL,
+                SUPABASE_ANON_KEY,
+                session.access_token,
+                userId
               );
+              console.log("📍 [native] Supabase configured for direct uploads");
+            } else {
+              console.warn("📍 [native] No session token available for Supabase config");
             }
-          })
-          .catch((e) => {
-            console.error("📍 [sync] Android location start threw:", e);
-          });
+          } catch (e) {
+            console.error("📍 [native] Failed to configure Supabase:", e);
+          }
+        };
+
+        // Configure Supabase first, then start tracking
+        configureNativeSupabase().then(() => {
+          // Foreground service (expo-location) for continuous background updates.
+          // Falls back to WorkManager if foreground service cannot start.
+          startAndroidBackgroundLocationAsync()
+            .then((result) => {
+              if (result.ok) {
+                console.log(
+                  `📍 [android] Foreground service location started (${result.reason})`,
+                );
+                return;
+              }
+              console.warn(
+                `📍 [android] Foreground service start failed: ${result.reason}`,
+              );
+              if (!BackgroundLocation) {
+                console.warn("📍 [native] BackgroundLocation not available");
+                return;
+              }
+              return BackgroundLocation.startLocationTracking(userId, 15).then(
+                () => {
+                  console.log("📍 [native] WorkManager location tracking started");
+                },
+              );
+            })
+            .catch((e) => {
+              console.error(
+                "📍 [android] Foreground service start failed:",
+                e,
+              );
+              if (BackgroundLocation) {
+                BackgroundLocation.startLocationTracking(userId, 15).catch((err) => {
+                  console.error("📍 [native] WorkManager start failed:", err);
+                });
+              }
+            });
+        });
       }
       return;
     }
@@ -125,10 +191,17 @@ export function useLocationSamplesSync(
           console.error("📍 Failed to stop iOS background location:", e);
       });
     } else {
+      // Stop both old and new implementations
       stopAndroidBackgroundLocationAsync().catch((e) => {
         if (__DEV__)
           console.error("📍 Failed to stop Android background location:", e);
       });
+      if (BackgroundLocation) {
+        BackgroundLocation.stopLocationTracking().catch((e) => {
+          if (__DEV__)
+            console.error("📍 [native] Failed to stop WorkManager:", e);
+        });
+      }
     }
 
     const previousUserId = lastAuthedUserIdRef.current;
@@ -161,80 +234,86 @@ export function useLocationSamplesSync(
     }
   }, [isAuthenticated, userId]);
 
-  // Android health check: periodically verify background task is alive and restart if needed.
+  // Android: Listen for token refresh and update native Supabase config
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (!isAuthenticated || !userId) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "TOKEN_REFRESHED" && session?.access_token && updateJwtToken) {
+          try {
+            await updateJwtToken(session.access_token);
+            if (__DEV__) {
+              console.log("📍 [native] JWT token updated after refresh");
+            }
+          } catch (e) {
+            if (__DEV__) {
+              console.error("📍 [native] Failed to update JWT token:", e);
+            }
+          }
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isAuthenticated, userId]);
+
+  // Android foreground location collection: Uses the SAME approach as "Capture Location Now"
+  // which we know WORKS. Background task is still registered but not reliable, so we collect
+  // location in foreground as a fallback. This runs when app is open.
   useEffect(() => {
     if (Platform.OS !== "android") return;
     if (!isAuthenticated || !userId) return;
 
     let isCancelled = false;
 
-    const healthCheck = async () => {
+    const collectAndSaveLocation = async () => {
       if (isCancelled) return;
-      if (retryAttemptsRef.current >= MAX_RETRY_ATTEMPTS) {
-        console.log(
-          `📍 [health] Skipping — retry limit reached (${MAX_RETRY_ATTEMPTS}), waiting for next foreground event`,
-        );
-        return;
-      }
-
-      const [running, heartbeat] = await Promise.all([
-        isAndroidBackgroundLocationRunningAsync(),
-        getLastTaskHeartbeat(),
-      ]);
-      const heartbeatAgeMs = heartbeat
-        ? Date.now() - new Date(heartbeat.timestamp).getTime()
-        : null;
-      const heartbeatStale =
-        heartbeatAgeMs != null && heartbeatAgeMs > TASK_HEARTBEAT_STALE_MS;
-
-      if (running && !heartbeatStale) {
-        // Task is alive — reset retry counter.
-        retryAttemptsRef.current = 0;
-        return;
-      }
-
-      if (running && heartbeatStale) {
-        console.warn(
-          `📍 [health] Task running but stale heartbeat (${Math.round(heartbeatAgeMs / 60000)}m) — restarting`,
-        );
-        await stopAndroidBackgroundLocationAsync();
-      }
-
-      // Task is not running (or stale) — attempt restart.
-      retryAttemptsRef.current += 1;
-      console.log(
-        `📍 [health] Background task not running — restarting (attempt ${retryAttemptsRef.current}/${MAX_RETRY_ATTEMPTS})`,
-      );
-      const result = await startAndroidBackgroundLocationAsync();
-      if (result.ok) {
-        console.log(`📍 [health] Restart successful: ${result.reason}`);
-        retryAttemptsRef.current = 0;
-      } else {
-        const detail = "detail" in result ? result.detail : undefined;
-        console.warn(
-          `📍 [health] Restart failed: ${result.reason}${detail ? ` — ${detail}` : ""}`,
-        );
+      
+      try {
+        // Use the EXACT same approach as "Capture Location Now" button
+        const result = await captureAndroidLocationSampleNowAsync(userId, {
+          flushToSupabase: true, // Immediately upload to Supabase
+        });
+        
+        if (result.ok && __DEV__) {
+          console.log(
+            `📍 [foreground] Location collected: enqueued=${result.enqueued}, uploaded=${result.uploaded ?? 0}`,
+          );
+        } else if (!result.ok && __DEV__) {
+          console.warn(
+            `📍 [foreground] Location collection failed: ${result.reason}`,
+          );
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("📍 [foreground] Location collection error:", error);
+        }
       }
     };
 
-    // Run health check on a slower interval than flush.
-    const id = setInterval(healthCheck, HEALTH_CHECK_INTERVAL_MS);
+    // Collect location immediately on mount
+    collectAndSaveLocation();
 
-    // Also health-check when app comes to foreground (resets retry counter first).
+    // Then collect every 2 minutes while app is open
+    const intervalId = setInterval(collectAndSaveLocation, FOREGROUND_LOCATION_INTERVAL_MS);
+
+    // Also collect when app comes to foreground
     const appStateListener = AppState.addEventListener(
       "change",
       (state: AppStateStatus) => {
-        if (state !== "active") return;
-        retryAttemptsRef.current = 0; // Reset on foreground — user is present.
-        healthCheck().catch((e) => {
-          console.error("📍 [health] Foreground health check failed:", e);
-        });
+        if (state === "active") {
+          collectAndSaveLocation();
+        }
       },
     );
 
     return () => {
       isCancelled = true;
-      clearInterval(id);
+      clearInterval(intervalId);
       appStateListener.remove();
     };
   }, [isAuthenticated, userId]);
@@ -300,6 +379,17 @@ export function useLocationSamplesSync(
       if (isFlushingRef.current) return;
       isFlushingRef.current = true;
       try {
+        if (drainPendingSamples) {
+          const nativeSamples = await drainPendingSamples(userId, 500);
+          if (nativeSamples.length > 0) {
+            await enqueueAndroidLocationSamplesForUserAsync(userId, nativeSamples);
+            if (__DEV__) {
+              console.log(
+                `📍 drained ${nativeSamples.length} background samples from native store`,
+              );
+            }
+          }
+        }
         const result =
           await flushPendingAndroidLocationSamplesToSupabaseAsync(userId);
         if (result.uploaded > 0) {

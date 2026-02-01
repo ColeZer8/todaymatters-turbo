@@ -332,8 +332,16 @@ function extractLatLngFromCenter(center: unknown): {
   latitude: number | null;
   longitude: number | null;
 } {
-  if (!center || typeof center !== "object")
+  if (!center) return { latitude: null, longitude: null };
+  if (typeof center === "string") {
+    // Accept WKT like "POINT(lng lat)" or "SRID=4326;POINT(lng lat)"
+    const match = center.match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
+    if (match) {
+      return { longitude: Number(match[1]), latitude: Number(match[2]) };
+    }
     return { latitude: null, longitude: null };
+  }
+  if (typeof center !== "object") return { latitude: null, longitude: null };
   const geo = center as { type?: string; coordinates?: number[] };
   if (
     geo.type === "Point" &&

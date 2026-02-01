@@ -196,10 +196,7 @@ export async function upsertUserPlaceFromSamples(input: {
     throw new Error("Unable to determine location center from samples.");
   }
 
-  const centerGeoJson = {
-    type: "Point",
-    coordinates: [centroid.longitude, centroid.latitude],
-  } as unknown as Json;
+  const centerWkt = `POINT(${centroid.longitude} ${centroid.latitude})`;
 
   try {
     const existing = await tmSchema()
@@ -217,7 +214,7 @@ export async function upsertUserPlaceFromSamples(input: {
       category: input.category ?? null,
       category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? 150,
-      center: centerGeoJson,
+      center: centerWkt,
     };
 
     if (existing.data?.id) {
@@ -257,10 +254,7 @@ export async function createUserPlace(input: {
   categoryId?: string | null;
   radiusMeters?: number;
 }): Promise<UserPlaceRow> {
-  const centerGeoJson = {
-    type: "Point",
-    coordinates: [input.longitude, input.latitude],
-  } as unknown as Json;
+  const centerWkt = `POINT(${input.longitude} ${input.latitude})`;
 
   try {
     const payload: Record<string, unknown> = {
@@ -269,8 +263,66 @@ export async function createUserPlace(input: {
       category: input.category ?? null,
       category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? 150,
-      center: centerGeoJson,
+      center: centerWkt,
     };
+
+    const { data, error } = await tmSchema()
+      .from("user_places")
+      .insert(payload)
+      .select(USER_PLACE_SELECT)
+      .single();
+
+    if (error) throw handleSupabaseError(error);
+    return data as UserPlaceRow;
+  } catch (error) {
+    throw error instanceof Error ? error : handleSupabaseError(error);
+  }
+}
+
+/**
+ * Create or update a user place from latitude/longitude coordinates.
+ * Used when we have coordinates but no raw samples.
+ */
+export async function upsertUserPlaceFromCoordinates(input: {
+  userId: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  category?: string | null;
+  categoryId?: string | null;
+  radiusMeters?: number;
+}): Promise<UserPlaceRow> {
+  const centerWkt = `POINT(${input.longitude} ${input.latitude})`;
+
+  try {
+    const existing = await tmSchema()
+      .from("user_places")
+      .select(USER_PLACE_SELECT)
+      .eq("user_id", input.userId)
+      .eq("label", input.label)
+      .maybeSingle();
+
+    if (existing.error) throw handleSupabaseError(existing.error);
+
+    const payload: Record<string, unknown> = {
+      user_id: input.userId,
+      label: input.label,
+      category: input.category ?? null,
+      category_id: input.categoryId ?? null,
+      radius_m: input.radiusMeters ?? 150,
+      center: centerWkt,
+    };
+
+    if (existing.data?.id) {
+      const { data, error } = await tmSchema()
+        .from("user_places")
+        .update(payload)
+        .eq("id", existing.data.id)
+        .select(USER_PLACE_SELECT)
+        .single();
+      if (error) throw handleSupabaseError(error);
+      return data as UserPlaceRow;
+    }
 
     const { data, error } = await tmSchema()
       .from("user_places")

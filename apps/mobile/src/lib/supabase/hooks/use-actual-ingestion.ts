@@ -297,8 +297,11 @@ export async function processActualIngestionWindow(
   } = input;
 
   if (!userId) {
+    console.log("🔥 [ActualIngestion] processWindow called but no userId!");
     return { skipped: true, reason: "no_user" };
   }
+
+  console.log(`🔥 [ActualIngestion] Starting processWindow for ${windowStart.toISOString()}`);
 
   // Step 1: Check if window is already locked
   try {
@@ -385,6 +388,17 @@ export async function processActualIngestionWindow(
 
     const locationEvents = segmentsToDerivedEvents(locationSegments);
 
+    // DEBUG: Log location events before reconciliation
+    if (__DEV__ && locationEvents.length > 0) {
+      console.log(`[ActualIngestion] Generated ${locationEvents.length} location events:`);
+      for (const evt of locationEvents) {
+        const kind = evt.meta?.kind;
+        const placeLabel = evt.meta?.place_label || 'unknown';
+        const duration = Math.round((evt.scheduledEnd.getTime() - evt.scheduledStart.getTime()) / 60000);
+        console.log(`  - ${kind} @ ${placeLabel}: ${duration} min`);
+      }
+    }
+
     // Step 4: Run priority-based reconciliation
     const reconciliationOps = computeReconciliationOpsWithPriority(
       existingEvents,
@@ -392,6 +406,20 @@ export async function processActualIngestionWindow(
       locationEvents,
       previousWindowEvents,
     );
+
+    // DEBUG: Log reconciliation operations
+    if (__DEV__) {
+      console.log(`[ActualIngestion] Reconciliation ops: insert=${reconciliationOps.inserts.length}, update=${reconciliationOps.updates.length}, delete=${reconciliationOps.deletes.length}, extend=${reconciliationOps.extensions.length}`);
+      if (reconciliationOps.inserts.length > 0) {
+        console.log('[ActualIngestion] Inserts:');
+        for (const insert of reconciliationOps.inserts) {
+          const kind = insert.event.meta?.kind;
+          const title = insert.event.title;
+          const duration = Math.round((insert.event.scheduledEnd.getTime() - insert.event.scheduledStart.getTime()) / 60000);
+          console.log(`  - ${kind}: "${title}" (${duration} min)`);
+        }
+      }
+    }
 
     // Execute reconciliation operations
     const { stats, errors } = await executeReconciliationOps(

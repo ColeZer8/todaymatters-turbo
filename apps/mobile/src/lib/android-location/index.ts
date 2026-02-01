@@ -34,6 +34,7 @@ export { ANDROID_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
 export {
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
+  enqueueAndroidLocationSamplesForUserAsync,
 } from "./queue";
 export { isAndroid14Plus, getAndroidApiLevel } from "./android-version";
 export {
@@ -382,19 +383,17 @@ export async function startAndroidBackgroundLocationAsync(): Promise<StartAndroi
     await Location.startLocationUpdatesAsync(
       ANDROID_BACKGROUND_LOCATION_TASK_NAME,
       {
-        accuracy: Location.Accuracy.Balanced,
-        // Trigger on significant movement (20 meters).
-        distanceInterval: 20,
-        // Request updates every 60 seconds minimum.
-        timeInterval: 60 * 1000,
-        // Deferred updates: batch location updates for more reliable delivery.
-        // Android will collect locations and deliver them in batches which is
-        // more battery-efficient and less likely to be killed by the OS.
-        deferredUpdatesInterval: 5 * 60 * 1000, // 5 minutes max deferral
-        deferredUpdatesDistance: 100, // or after 100 meters
-        // Show updates even when stationary (ensures we get periodic pings).
+        accuracy: Location.Accuracy.High,
+        // CONTINUOUS TRACKING: Favor frequent updates for reliability.
+        distanceInterval: 0,
+        // Time-based updates even when stationary.
+        timeInterval: 60 * 1000, // 1 minute
+        // Disable deferred batching to surface updates ASAP.
+        deferredUpdatesInterval: 0,
+        deferredUpdatesDistance: 0,
+        // ActivityType.Other allows updates even when stationary
         activityType: Location.ActivityType.Other,
-        // Foreground service is required for background reliability.
+        // Foreground service is required for background reliability
         foregroundService: {
           notificationTitle: "TodayMatters is tracking your day",
           notificationBody:

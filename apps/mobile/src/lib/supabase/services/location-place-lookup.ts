@@ -48,7 +48,15 @@ function extractLatLngFromGeoPoint(center: unknown): {
   latitude: number | null;
   longitude: number | null;
 } {
-  if (!center || typeof center !== "object") {
+  if (!center) return { latitude: null, longitude: null };
+  if (typeof center === "string") {
+    const match = center.match(/POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i);
+    if (match) {
+      return { longitude: Number(match[1]), latitude: Number(match[2]) };
+    }
+    return { latitude: null, longitude: null };
+  }
+  if (typeof center !== "object") {
     return { latitude: null, longitude: null };
   }
   const geo = center as { type?: string; coordinates?: number[] };
