@@ -133,3 +133,38 @@ Started: Sun Feb  1 22:23:14 CST 2026
   - Empty hour handling: returns summary with "No Activity Data" title
   - Upsert uses `onConflict: "user_id,hour_start"` to match unique constraint
 ---
+
+## Sun Feb 2 01:00:00 CST 2026 - DP-006
+- **Implemented:** Created `HourlySummaryCard` React Native component for CHARLIE layer UI
+- **Files changed:**
+  - `apps/mobile/src/components/organisms/HourlySummaryCard.tsx` (new file - 290 lines)
+  - `.ralph/prd.json` (marked DP-006 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Component at apps/mobile/src/components/organisms/HourlySummaryCard.tsx
+  - ✅ Uses StyleSheet styling consistent with app theme (matches Big3ProgressCard, ScheduleItem patterns)
+  - ✅ Displays hour time range (e.g., '9:00 AM - 10:00 AM') via formatHourRange()
+  - ✅ Shows primary place with icon (dynamic icon selection based on place label)
+  - ✅ Shows activity title and description
+  - ✅ Displays app breakdown with Smartphone icon and duration badges
+  - ✅ Shows confidence score as colored percentage badge with Activity icon
+  - ✅ Has 'Accurate' (ThumbsUp) and 'Needs Correction' (ThumbsDown) feedback buttons
+  - ✅ Has 'Edit' (Pencil) button for manual corrections
+  - ✅ Follows atomic design patterns (organism using atoms/molecules)
+  - ✅ TypeScript compiles without errors
+  - ✅ Lint passes without warnings
+- **Component Features:**
+  - `formatHourRange(hourStart)` - converts Date to "X:00 AM - Y:00 AM" format
+  - `getPlaceIcon(placeLabel)` - returns appropriate Lucide icon for place type
+  - `getConfidenceColor(score)` - green/orange/red color coding for confidence
+  - `ConfidenceBadge` - sub-component showing confidence percentage with accessibility label
+  - `AppBreakdownItem` - sub-component for individual app usage display
+  - Conditional rendering for feedback buttons (hidden after feedback provided)
+  - Feedback status display (shows "Marked as accurate" or "Correction submitted")
+- **Learnings for future iterations:**
+  - Organisms use StyleSheet.create() for styles (not NativeWind classes for complex components)
+  - Use lucide-react-native for icons: import specific icons to reduce bundle size
+  - Types imported from @/lib/supabase/services via index.ts exports
+  - Accessibility: use accessibilityLabel for screen reader support
+  - Conditional rendering with short-circuit evaluation for cleaner JSX
+  - Pre-existing lint warnings can be ignored if not in new files
+---
