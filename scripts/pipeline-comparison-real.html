@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TodayMatters Pipeline Comparison - Real Data</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 24px;
+      color: #fff;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .column {
+      background: #111;
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid #222;
+    }
+    .column-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #333;
+    }
+    .column-header .icon {
+      font-size: 24px;
+    }
+    .column-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .column-header .badge {
+      margin-left: auto;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge.bad { background: #ff4444; color: white; }
+    .badge.good { background: #22c55e; color: white; }
+    
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .hour-block {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 12px 16px;
+      border-left: 4px solid #333;
+    }
+    .hour-block.unknown { border-left-color: #666; background: #1a1a1a; }
+    .hour-block.sleep { border-left-color: #8b5cf6; background: #1a1a2a; }
+    .hour-block.leisure { border-left-color: #f59e0b; background: #1a1a1a; }
+    .hour-block.work { border-left-color: #3b82f6; background: #1a1a2a; }
+    .hour-block.spiritual { border-left-color: #a855f7; background: #1a1a2a; }
+    .hour-block.social { border-left-color: #ec4899; background: #1a1a2a; }
+    .hour-block.travel { border-left-color: #06b6d4; background: #1a1a2a; }
+    .hour-block.home { border-left-color: #22c55e; background: #1a1a2a; }
+    .hour-block.offline { border-left-color: #64748b; background: #151515; }
+    
+    .hour-time {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .hour-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hour-title .emoji { font-size: 16px; }
+    .confidence {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #333;
+      color: #aaa;
+    }
+    .confidence.high { background: #22c55e33; color: #22c55e; }
+    .confidence.medium { background: #f59e0b33; color: #f59e0b; }
+    .confidence.low { background: #ef444433; color: #ef4444; }
+    
+    .hour-details {
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+    .hour-details .apps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .app-tag {
+      background: #2a2a2a;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      color: #ccc;
+    }
+    
+    .problem-list {
+      margin-top: 8px;
+      padding: 8px;
+      background: #220000;
+      border-radius: 8px;
+      border: 1px solid #440000;
+    }
+    .problem-list li {
+      font-size: 11px;
+      color: #ff8888;
+      margin-left: 16px;
+      margin-bottom: 2px;
+    }
+    
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      background: #1a1a1a;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .stat-value.bad { color: #ef4444; }
+    .stat-value.good { color: #22c55e; }
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .duplicate-note {
+      background: #331111;
+      border: 1px solid #552222;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+      color: #ff9999;
+    }
+
+    .improvement-note {
+      background: #113311;
+      border: 1px solid #225522;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+      color: #99ff99;
+    }
+
+    .place-inference {
+      background: #1a2a1a;
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: #88cc88;
+    }
+    .place-inference strong { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <h1>📊 Pipeline Comparison - Feb 1-2, 2026</h1>
+  <p class="subtitle">User: Cole | Showing 6pm Feb 1 → 12pm Feb 2 (CST)</p>
+
+  <div class="container">
+    <!-- CURRENT PIPELINE -->
+    <div class="column">
+      <div class="column-header">
+        <span class="icon">😵</span>
+        <h2>Current Pipeline</h2>
+        <span class="badge bad">MESSY</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value bad">73</div>
+          <div class="stat-label">Total Events</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value bad">41</div>
+          <div class="stat-label">Duplicates</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value bad">0%</div>
+          <div class="stat-label">Places Labeled</div>
+        </div>
+      </div>
+
+      <div class="duplicate-note">
+        ⚠️ <strong>Major issues found:</strong> 41 duplicate/overlapping events, 
+        everything shows "Unknown Location", individual 1-3 second app sessions cluttering the view
+      </div>
+
+      <div class="timeline">
+        <!-- 6pm -->
+        <div class="hour-block unknown">
+          <div class="hour-time">6:00 PM - 6:30 PM</div>
+          <div class="hour-title">
+            <span class="emoji">❓</span>
+            Unknown Location - Offline
+            <span class="confidence low">50%</span>
+          </div>
+          <div class="hour-details">
+            8 location samples • No screen time recorded
+          </div>
+          <ul class="problem-list">
+            <li>3x duplicate "Sleep" events (same 30min block)</li>
+            <li>4x duplicate "Unknown Location" blocks</li>
+            <li>place_label: null (no place matching)</li>
+          </ul>
+        </div>
+
+        <!-- 6:30pm - 7:49pm -->
+        <div class="hour-block unknown">
+          <div class="hour-time">6:30 PM - 7:49 PM</div>
+          <div class="hour-title">
+            <span class="emoji">❓</span>
+            Unknown
+            <span class="confidence low">20%</span>
+          </div>
+          <div class="hour-details">
+            79 minute gap • "unknown_gap" type
+          </div>
+          <ul class="problem-list">
+            <li>5x duplicate "Unknown" events for same gap</li>
+            <li>No activity inference despite having data</li>
+          </ul>
+        </div>
+
+        <!-- 8pm - 9pm -->
+        <div class="hour-block unknown">
+          <div class="hour-time">8:00 PM - 11:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">🌍</span>
+            Out and about
+            <span class="confidence low">40-55%</span>
+          </div>
+          <div class="hour-details">
+            131 location samples • category: "unknown"
+          </div>
+          <ul class="problem-list">
+            <li>Vague "Out and about" label despite staying in same geohash</li>
+            <li>Screen time (Bible 23min, YouTube 12min) not integrated</li>
+          </ul>
+        </div>
+
+        <!-- Screen time blocks scattered -->
+        <div class="hour-block unknown">
+          <div class="hour-time">8:11 PM - 9:04 PM</div>
+          <div class="hour-title">
+            <span class="emoji">📱</span>
+            Screen Time (scattered)
+            <span class="confidence low">55%</span>
+          </div>
+          <div class="hour-details">
+            Top apps: Bible (23min), YouTube (12min), Slack (9min)
+          </div>
+          <ul class="problem-list">
+            <li>Shows as "Screen Time" not meaningful activity</li>
+            <li>Multiple overlapping screen time blocks</li>
+            <li>"Doom Scroll" label for YouTube (negative framing)</li>
+          </ul>
+        </div>
+
+        <!-- Many unknown gaps -->
+        <div class="hour-block unknown">
+          <div class="hour-time">9:44 PM - 11:13 PM</div>
+          <div class="hour-title">
+            <span class="emoji">❓</span>
+            Unknown (repeated)
+            <span class="confidence low">20%</span>
+          </div>
+          <div class="hour-details">
+            89 minute gap
+          </div>
+          <ul class="problem-list">
+            <li>6x duplicate "Unknown" events</li>
+            <li>Good location data exists but not used</li>
+          </ul>
+        </div>
+
+        <!-- 2am block - this one actually worked! -->
+        <div class="hour-block leisure">
+          <div class="hour-time">2:11 AM - 2:48 AM</div>
+          <div class="hour-title">
+            <span class="emoji">🎮</span>
+            Unknown Location - Leisure
+            <span class="confidence medium">50%</span>
+          </div>
+          <div class="hour-details">
+            Bible (23min), YouTube (12min), Google (1min)
+          </div>
+          <div class="place-inference">
+            ✅ This one worked! Intent: "Leisure" correctly identified (98% leisure score)
+          </div>
+        </div>
+
+        <!-- 2:48am onwards - granular chaos -->
+        <div class="hour-block unknown">
+          <div class="hour-time">2:48 AM - 3:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">📱</span>
+            Individual App Sessions
+            <span class="confidence">N/A</span>
+          </div>
+          <div class="hour-details">
+            Slack, TodayMatters, Gmail switching
+          </div>
+          <ul class="problem-list">
+            <li>24 individual screen_time events (1-83 seconds each)</li>
+            <li>Shows "One UI Home" (1 sec) as separate events</li>
+            <li>No session grouping</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEW PIPELINE -->
+    <div class="column">
+      <div class="column-header">
+        <span class="icon">✨</span>
+        <h2>New Pipeline (Proposed)</h2>
+        <span class="badge good">CLEAN</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value good">10</div>
+          <div class="stat-label">Hourly Summaries</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value good">0</div>
+          <div class="stat-label">Duplicates</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value good">100%</div>
+          <div class="stat-label">Places Inferred</div>
+        </div>
+      </div>
+
+      <div class="improvement-note">
+        ✅ <strong>Key improvements:</strong> One clean block per hour, 
+        place inference from geohash clustering, activity labels from app patterns,
+        confidence scores from data fusion
+      </div>
+
+      <div class="timeline">
+        <!-- 6pm -->
+        <div class="hour-block home">
+          <div class="hour-time">6:00 PM - 7:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">🏠</span>
+            Home - Rest
+            <span class="confidence high">94%</span>
+          </div>
+          <div class="hour-details">
+            38 location samples • geohash: djfq4n7 • radius: 38m
+          </div>
+          <div class="place-inference">
+            <strong>Place inference:</strong> Same geohash as overnight → likely Home
+          </div>
+        </div>
+
+        <!-- 7pm -->
+        <div class="hour-block home">
+          <div class="hour-time">7:00 PM - 8:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">🏠</span>
+            Home - Offline
+            <span class="confidence high">92%</span>
+          </div>
+          <div class="hour-details">
+            63 location samples • Very tight radius (16m) • No screen activity
+          </div>
+          <div class="place-inference">
+            <strong>Activity inference:</strong> No screen time + stationary = offline/rest
+          </div>
+        </div>
+
+        <!-- 8pm -->
+        <div class="hour-block spiritual">
+          <div class="hour-time">8:00 PM - 9:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">📖</span>
+            Home - Bible Study
+            <span class="confidence high">88%</span>
+          </div>
+          <div class="hour-details">
+            60 location samples • Bible app: 23min • YouTube: 12min
+          </div>
+          <div class="place-inference">
+            <strong>Activity inference:</strong> Bible app dominant → Spiritual/Study<br>
+            <strong>Context:</strong> YouTube likely sermon/worship content
+          </div>
+        </div>
+
+        <!-- 9pm -->
+        <div class="hour-block home">
+          <div class="hour-time">9:00 PM - 10:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">🏠</span>
+            Home - Light Activity
+            <span class="confidence medium">78%</span>
+          </div>
+          <div class="hour-details">
+            33 location samples • Slack: 9min • Some browsing
+          </div>
+          <div class="place-inference">
+            <strong>Activity inference:</strong> Mixed apps, no dominant category
+          </div>
+        </div>
+
+        <!-- 10pm-2am (sleep gap) -->
+        <div class="hour-block sleep">
+          <div class="hour-time">10:00 PM - 2:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">😴</span>
+            Home - Sleep
+            <span class="confidence high">91%</span>
+          </div>
+          <div class="hour-details">
+            No screen activity • Sparse location samples • Same geohash
+          </div>
+          <div class="place-inference">
+            <strong>Sleep inference:</strong> 4-hour gap, no activity, nighttime hours
+          </div>
+        </div>
+
+        <!-- 2am -->
+        <div class="hour-block spiritual">
+          <div class="hour-time">2:00 AM - 3:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">📖</span>
+            Home - Late Night Devotional
+            <span class="confidence high">92%</span>
+          </div>
+          <div class="hour-details">
+            14 location samples • Bible: 23min • YouTube: 12min
+          </div>
+          <div class="place-inference">
+            <strong>Activity inference:</strong> 98% leisure/spiritual pattern detected<br>
+            <strong>Apps:</strong> Bible (dominant), YouTube, Google Search
+          </div>
+        </div>
+
+        <!-- 3am -->
+        <div class="hour-block work">
+          <div class="hour-time">3:00 AM - 4:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">💼</span>
+            Home - Work Session
+            <span class="confidence high">89%</span>
+          </div>
+          <div class="hour-details">
+            83 location samples • Slack: 7min • TodayMatters: 2min • Gmail
+          </div>
+          <div class="place-inference">
+            <strong>Activity inference:</strong> Slack + Email + TodayMatters = Work<br>
+            <strong>Pattern:</strong> Rapid app switching = active communication
+          </div>
+        </div>
+
+        <!-- 4am -->
+        <div class="hour-block home">
+          <div class="hour-time">4:00 AM - 8:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">😴</span>
+            Home - Sleep
+            <span class="confidence medium">85%</span>
+          </div>
+          <div class="hour-details">
+            34 samples at 4am, then sparse • Same location
+          </div>
+          <div class="place-inference">
+            <strong>Sleep inference:</strong> Activity stops, location stable
+          </div>
+        </div>
+
+        <!-- 9am - different location! -->
+        <div class="hour-block travel">
+          <div class="hour-time">9:00 AM - 10:00 AM</div>
+          <div class="hour-title">
+            <span class="emoji">🚗</span>
+            Travel / Transit
+            <span class="confidence medium">72%</span>
+          </div>
+          <div class="hour-details">
+            3 samples • geohash: djfq4jq (DIFFERENT!) • radius: 1200m
+          </div>
+          <div class="place-inference">
+            <strong>Travel detection:</strong> Different geohash + large radius = movement<br>
+            <strong>With Google Maps API:</strong> Would show actual route/destination
+          </div>
+        </div>
+
+        <!-- 11am - back home -->
+        <div class="hour-block home">
+          <div class="hour-time">11:00 AM - 12:00 PM</div>
+          <div class="hour-title">
+            <span class="emoji">🏠</span>
+            Home - Returned
+            <span class="confidence high">95%</span>
+          </div>
+          <div class="hour-details">
+            3 samples • geohash: djfq4n7 (back to home) • radius: 1m
+          </div>
+          <div class="place-inference">
+            <strong>Return detection:</strong> Same geohash as established home location
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width: 1400px; margin: 40px auto; padding: 20px; background: #111; border-radius: 16px; border: 1px solid #222;">
+    <h3 style="margin-bottom: 15px;">📊 Data Analysis Summary</h3>
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+      <div>
+        <h4 style="color: #ef4444; margin-bottom: 10px;">Current Pipeline Problems</h4>
+        <ul style="color: #888; font-size: 13px; margin-left: 20px;">
+          <li>73 events for 18 hours = way too granular</li>
+          <li>41 duplicate/overlapping events</li>
+          <li>Every location shows "Unknown" (place_id always null)</li>
+          <li>Individual 1-3 second app events cluttering timeline</li>
+          <li>"Screen Time" labels instead of meaningful activities</li>
+          <li>Negative labels like "Doom Scroll" for entertainment</li>
+          <li>20% confidence on most "Unknown" gaps</li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="color: #22c55e; margin-bottom: 10px;">New Pipeline Solutions</h4>
+        <ul style="color: #888; font-size: 13px; margin-left: 20px;">
+          <li>10 hourly summaries = clean, scannable</li>
+          <li>Zero duplicates (one source of truth per hour)</li>
+          <li>Place inference from geohash clustering</li>
+          <li>Activity inference from app usage patterns</li>
+          <li>Sleep detection from gaps + time of day</li>
+          <li>Travel detection from geohash changes</li>
+          <li>78-95% confidence through data fusion</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px; padding: 15px; background: #1a2a1a; border-radius: 8px; border: 1px solid #225522;">
+      <h4 style="color: #22c55e; margin-bottom: 8px;">🗺️ What Google Maps API Will Add</h4>
+      <p style="color: #88cc88; font-size: 13px;">
+        Currently all places show as "Unknown" because there's no reverse geocoding. 
+        With the Google Maps API key you're adding:
+      </p>
+      <ul style="color: #88cc88; font-size: 13px; margin-left: 20px; margin-top: 8px;">
+        <li><strong>Home detection:</strong> "Home" instead of "Unknown Location (djfq4n7)"</li>
+        <li><strong>Venue names:</strong> "Starbucks on 5th" instead of coordinates</li>
+        <li><strong>Travel routes:</strong> "Driving to ACU" with actual route info</li>
+        <li><strong>Place categories:</strong> "Coffee Shop", "University", "Gym" auto-detected</li>
+      </ul>
+    </div>
+
+    <div style="margin-top: 20px; padding: 15px; background: #1a1a2a; border-radius: 8px; border: 1px solid #222255;">
+      <h4 style="color: #8b5cf6; margin-bottom: 8px;">🔮 Key Insight from Your Data</h4>
+      <p style="color: #a0a0ff; font-size: 13px;">
+        <strong>Geohash djfq4n7</strong> appears in 9 out of 10 hours — this is almost certainly your home.
+        The one different geohash (<strong>djfq4jq</strong>) at 9am with 1200m radius indicates you went somewhere 
+        and came back. The new pipeline would automatically learn this pattern and label appropriately.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

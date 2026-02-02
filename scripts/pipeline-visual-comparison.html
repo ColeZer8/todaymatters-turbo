@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TodayMatters Pipeline Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .comparison {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .column {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            width: 380px;
+            overflow: hidden;
+        }
+        .column-header {
+            padding: 20px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 18px;
+        }
+        .current .column-header {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .new .column-header {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+        .date-header {
+            padding: 15px 20px;
+            background: #fafafa;
+            border-bottom: 1px solid #eee;
+        }
+        .date-header h2 {
+            font-size: 24px;
+            color: #333;
+        }
+        .date-header .day {
+            color: #22c55e;
+            font-weight: 600;
+        }
+        .timeline {
+            padding: 10px;
+        }
+        .hour-row {
+            display: flex;
+            min-height: 80px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .hour-label {
+            width: 50px;
+            padding: 10px 5px;
+            color: #999;
+            font-size: 12px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .events {
+            flex: 1;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .event {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            border-left: 4px solid;
+        }
+        /* Current pipeline colors */
+        .event.unknown {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+        .event.travel {
+            background: #fef9c3;
+            border-color: #eab308;
+            color: #854d0e;
+        }
+        .event.screen-time {
+            background: #d1fae5;
+            border-color: #10b981;
+            color: #065f46;
+        }
+        .event.offline {
+            background: #f5f5f4;
+            border-color: #a8a29e;
+            color: #57534e;
+        }
+        /* New pipeline colors */
+        .event.deep-work {
+            background: #dbeafe;
+            border-color: #3b82f6;
+            color: #1e40af;
+        }
+        .event.commute {
+            background: #fef9c3;
+            border-color: #eab308;
+            color: #854d0e;
+        }
+        .event.sleep {
+            background: #ede9fe;
+            border-color: #8b5cf6;
+            color: #5b21b6;
+        }
+        .event.leisure {
+            background: #fce7f3;
+            border-color: #ec4899;
+            color: #9d174d;
+        }
+        .event.personal {
+            background: #ffedd5;
+            border-color: #f97316;
+            color: #9a3412;
+        }
+        .event.away {
+            background: #e0e7ff;
+            border-color: #6366f1;
+            color: #3730a3;
+        }
+        .event-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .event-subtitle {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        .event-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 10px;
+        }
+        .confidence {
+            background: rgba(0,0,0,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .confidence.high { color: #16a34a; }
+        .confidence.medium { color: #ca8a04; }
+        .confidence.low { color: #dc2626; }
+        .apps {
+            opacity: 0.7;
+        }
+        .question-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background: #f59e0b;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 16px;
+            font-size: 11px;
+            margin-right: 4px;
+        }
+        .legend {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .legend h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .improvements {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .improvements h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .improvements ul {
+            list-style: none;
+        }
+        .improvements li {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            gap: 10px;
+        }
+        .improvements li:last-child {
+            border-bottom: none;
+        }
+        .check {
+            color: #16a34a;
+            font-weight: bold;
+        }
+        .x {
+            color: #dc2626;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔄 TodayMatters Pipeline Comparison</h1>
+    <p class="subtitle">Monday, February 2, 2026 • User: Cole</p>
+
+    <div class="comparison">
+        <!-- CURRENT PIPELINE -->
+        <div class="column current">
+            <div class="column-header">❌ CURRENT OUTPUT</div>
+            <div class="date-header">
+                <h2>Monday, <span class="day">February 2</span></h2>
+            </div>
+            <div class="timeline">
+                <div class="hour-row">
+                    <div class="hour-label">4a</div>
+                    <div class="events">
+                        <div class="event offline">
+                            <div class="event-title">Unknown Location - Offline</div>
+                        </div>
+                        <div class="event unknown">
+                            <span class="question-icon">?</span>
+                            <span class="event-title">Unknown</span>
+                            <div class="event-subtitle">Tap to assign</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">5a</div>
+                    <div class="events">
+                        <div class="event travel">
+                            <div class="event-title">Travel</div>
+                            <div class="event-subtitle">transition</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">6a</div>
+                    <div class="events">
+                        <div class="event unknown">
+                            <span class="question-icon">?</span>
+                            <span class="event-title">Unknown</span>
+                            <div class="event-subtitle">Tap to assign</div>
+                        </div>
+                        <div class="event screen-time">
+                            <div class="event-title">Screen Time</div>
+                            <div class="event-subtitle">maps</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">7a</div>
+                    <div class="events">
+                        <div class="event screen-time" style="min-height: 60px;">
+                            <div class="event-title">Screen Time</div>
+                            <div class="event-subtitle">maps</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">8a</div>
+                    <div class="events">
+                        <div class="event unknown">
+                            <span class="question-icon">?</span>
+                            <span class="event-title">Unknown</span>
+                            <div class="event-subtitle">Tap to assign</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">9a</div>
+                    <div class="events">
+                        <div class="event travel">
+                            <div class="event-title">Travel</div>
+                            <div class="event-subtitle">transition</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">10a</div>
+                    <div class="events">
+                        <div class="event unknown">
+                            <span class="question-icon">?</span>
+                            <span class="event-title">Unknown</span>
+                            <div class="event-subtitle">Tap to assign</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW PIPELINE -->
+        <div class="column new">
+            <div class="column-header">✅ NEW PIPELINE OUTPUT</div>
+            <div class="date-header">
+                <h2>Monday, <span class="day">February 2</span></h2>
+            </div>
+            <div class="timeline">
+                <div class="hour-row">
+                    <div class="hour-label">4a</div>
+                    <div class="events">
+                        <div class="event sleep">
+                            <div class="event-title">🌙 Home - Sleep</div>
+                            <div class="event-subtitle">Low screen activity detected</div>
+                            <div class="event-meta">
+                                <span class="confidence high">92% confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">5a</div>
+                    <div class="events">
+                        <div class="event personal">
+                            <div class="event-title">🏠 Home - Morning Routine</div>
+                            <div class="event-subtitle">Waking up, low activity</div>
+                            <div class="event-meta">
+                                <span class="confidence high">85% confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">6a</div>
+                    <div class="events">
+                        <div class="event commute">
+                            <div class="event-title">🚗 Commute to Work</div>
+                            <div class="event-subtitle">Maps active, location moving</div>
+                            <div class="event-meta">
+                                <span class="confidence high">94% confidence</span>
+                                <span class="apps">📱 Maps 25m</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">7a</div>
+                    <div class="events">
+                        <div class="event commute">
+                            <div class="event-title">🚗 Commute (continued)</div>
+                            <div class="event-subtitle">In transit</div>
+                            <div class="event-meta">
+                                <span class="confidence high">91% confidence</span>
+                                <span class="apps">📱 Maps 35m</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">8a</div>
+                    <div class="events">
+                        <div class="event away">
+                            <div class="event-title">📍 ACU Campus - Arrived</div>
+                            <div class="event-subtitle">Settling in, low screen time</div>
+                            <div class="event-meta">
+                                <span class="confidence medium">78% confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">9a</div>
+                    <div class="events">
+                        <div class="event deep-work">
+                            <div class="event-title">📚 ACU - Class/Study</div>
+                            <div class="event-subtitle">Focused time, minimal distractions</div>
+                            <div class="event-meta">
+                                <span class="confidence high">88% confidence</span>
+                                <span class="apps">📱 Notes 12m</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hour-row">
+                    <div class="hour-label">10a</div>
+                    <div class="events">
+                        <div class="event deep-work">
+                            <div class="event-title">📚 ACU - Deep Work</div>
+                            <div class="event-subtitle">In class or studying</div>
+                            <div class="event-meta">
+                                <span class="confidence high">85% confidence</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <h3>🎨 New Pipeline Activity Types</h3>
+        <div class="legend-grid">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #dbeafe; border-color: #3b82f6;"></div>
+                <span>Deep Work / Focus</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #fef9c3; border-color: #eab308;"></div>
+                <span>Commute / Travel</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ede9fe; border-color: #8b5cf6;"></div>
+                <span>Sleep</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #fce7f3; border-color: #ec4899;"></div>
+                <span>Leisure / Entertainment</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ffedd5; border-color: #f97316;"></div>
+                <span>Personal Time</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #e0e7ff; border-color: #6366f1;"></div>
+                <span>Away / Offline Activity</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #d1fae5; border-color: #10b981;"></div>
+                <span>Meeting / Collaborative</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #fee2e2; border-color: #ef4444;"></div>
+                <span>Distracted Time</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="improvements">
+        <h3>📊 What's Different?</h3>
+        <ul>
+            <li><span class="x">❌</span> <strong>Current:</strong> "Unknown - Tap to assign" everywhere</li>
+            <li><span class="check">✅</span> <strong>New:</strong> Inferred activity type (14 categories)</li>
+            <li><span class="x">❌</span> <strong>Current:</strong> Generic "Travel/transition" labels</li>
+            <li><span class="check">✅</span> <strong>New:</strong> "Commute to Work" with destination</li>
+            <li><span class="x">❌</span> <strong>Current:</strong> No confidence indication</li>
+            <li><span class="check">✅</span> <strong>New:</strong> Confidence scores (78-94%)</li>
+            <li><span class="x">❌</span> <strong>Current:</strong> Screen time shown separately</li>
+            <li><span class="check">✅</span> <strong>New:</strong> App usage integrated into activity context</li>
+            <li><span class="x">❌</span> <strong>Current:</strong> No place labels on unknowns</li>
+            <li><span class="check">✅</span> <strong>New:</strong> "Home", "ACU Campus" place context</li>
+            <li><span class="x">❌</span> <strong>Current:</strong> No feedback loop</li>
+            <li><span class="check">✅</span> <strong>New:</strong> 👍👎 buttons, corrections saved for learning</li>
+        </ul>
+    </div>
+
+    <div class="improvements">
+        <h3>🔧 How It Works</h3>
+        <ul>
+            <li><strong>Location Matching:</strong> Same radius-based place matching as current</li>
+            <li><strong>Activity Inference:</strong> Rules-based (health > commute > apps > fallback)</li>
+            <li><strong>Confidence Score:</strong> (location_accuracy × 0.4) + (screen_consistency × 0.3) + (signal_consensus × 0.3)</li>
+            <li><strong>Hourly Aggregation:</strong> Multiple segments combined with weighted confidence</li>
+            <li><strong>Templates:</strong> "{Place} - {Activity}" with smart descriptions</li>
+            <li><strong>Learning Loop:</strong> User corrections stored with context for future AI training</li>
+        </ul>
+    </div>
+</body>
+</html>

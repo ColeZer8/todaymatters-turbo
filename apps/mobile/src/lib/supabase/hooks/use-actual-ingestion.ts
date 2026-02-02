@@ -39,6 +39,7 @@ import {
   processSegmentsWithCommutes,
   sessionizeWindow,
   applySleepDetection,
+  applyFuzzyLocationLabels,
   findHomePlace,
   sessionBlockToDerivedEvent,
   type SessionBlock,
@@ -70,6 +71,12 @@ import {
   type AppSummary,
   type Intent,
 } from "../services/app-categories";
+
+// Google Places (fuzzy reverse-geocoding labels)
+import { getFuzzyLocationLabel, isGooglePlacesAvailable } from "../services/google-places";
+
+// NEW PIPELINE: Hourly summaries (CHARLIE layer)
+import { processHourlySummary } from "../services/hourly-summaries";
 
 // User app category overrides (from calendar app-classification)
 import { fetchUserAppCategoryOverrides as fetchCalendarAppOverrides } from "../services/user-app-categories";
@@ -478,6 +485,11 @@ export async function processActualIngestionWindow(
       sleepSchedule ?? DEFAULT_SLEEP_SCHEDULE,
     );
 
+    // Apply fuzzy location labels (reverse geocoding) when available.
+    if (isGooglePlacesAvailable()) {
+      sessions = await applyFuzzyLocationLabels(sessions, getFuzzyLocationLabel);
+    }
+
     // Step 5.5: Handle session block extension and insertion
     // Instead of just inserting, we check if existing session blocks can be extended
     const extendedSessionIds: string[] = [];
@@ -717,6 +729,30 @@ export async function processActualIngestionWindow(
         locationFallback,
         ...stats,
       });
+    }
+
+    // =========================================================================
+    // NEW PIPELINE: Generate hourly summary (CHARLIE layer)
+    // This runs in parallel with the existing pipeline, writing to
+    // tm.hourly_summaries instead of tm.events. Eventually this will
+    // replace the messy events with clean hourly blocks.
+    // =========================================================================
+    try {
+      // Truncate window start to the hour
+      const hourStart = new Date(windowStart);
+      hourStart.setMinutes(0, 0, 0);
+      
+      // Process hourly summary for this hour
+      const summary = await processHourlySummary(userId, hourStart);
+      
+      if (__DEV__ && summary) {
+        console.log(`[ActualIngestion] ✨ NEW PIPELINE: Generated hourly summary: "${summary.title}" (${Math.round(summary.confidenceScore * 100)}% confidence)`);
+      }
+    } catch (error) {
+      // Non-fatal - new pipeline failure shouldn't break existing flow
+      if (__DEV__) {
+        console.warn("[ActualIngestion] NEW PIPELINE: Failed to generate hourly summary:", error);
+      }
     }
 
     return {

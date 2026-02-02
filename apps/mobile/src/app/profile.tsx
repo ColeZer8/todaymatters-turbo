@@ -617,6 +617,12 @@ export default function ProfileScreen() {
             onPress: () => router.push("/dev/screen-time"),
           },
           {
+            id: "dev-pipeline-test",
+            label: "🧪 Pipeline Test (AI Summaries)",
+            icon: Sparkles,
+            onPress: () => router.push("/dev/pipeline-test"),
+          },
+          {
             id: "dev-location-dashboard",
             label: "🧪 Location Samples (dev)",
             icon: Calendar,
