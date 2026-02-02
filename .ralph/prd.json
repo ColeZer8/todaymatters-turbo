@@ -1,0 +1,138 @@
+{
+  "projectName": "TodayMatters Data Pipeline",
+  "branchName": "ralph/data-pipeline-phase1",
+  "description": "Implement ALPHA/BRAVO/CHARLIE data pipeline for activity processing and hourly summaries",
+  "userStories": [
+    {
+      "id": "DP-001",
+      "title": "Create activity_segments table migration",
+      "description": "Create the tm.activity_segments table for the BRAVO layer. This stores enriched activity blocks derived from raw telemetry. See docs/data-pipeline-plan.md section 4.1 for the full schema. Include all indexes and RLS policies.",
+      "priority": 1,
+      "passes": true,
+      "acceptanceCriteria": [
+        "Migration file created in supabase/migrations/",
+        "Table has all columns from the plan (id, user_id, started_at, ended_at, hour_bucket, place_id, place_label, place_category, location_lat, location_lng, inferred_activity, activity_confidence, top_apps, total_screen_seconds, evidence, source_ids, created_at, updated_at)",
+        "Indexes created for user_hour and place lookups",
+        "RLS policy enables users to access only their own data",
+        "Migration runs without errors"
+      ]
+    },
+    {
+      "id": "DP-002",
+      "title": "Create hourly_summaries table migration",
+      "description": "Create the tm.hourly_summaries table for the CHARLIE layer. This stores user-facing hourly summaries with feedback capabilities. See docs/data-pipeline-plan.md section 4.2 for the full schema. Include all indexes, RLS policies, and unique constraint on user_id + hour_start.",
+      "priority": 2,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Migration file created in supabase/migrations/",
+        "Table has all columns from the plan including user_feedback, user_edits, locked_at, ai_generated",
+        "Unique constraint on (user_id, hour_start)",
+        "Indexes for user_date and unlocked summaries",
+        "RLS policy for user-only access",
+        "Migration runs without errors"
+      ]
+    },
+    {
+      "id": "DP-003",
+      "title": "Create activity_feedback table migration",
+      "description": "Create the tm.activity_feedback table for the feedback learning loop. This stores user corrections to enable the system to learn patterns. See docs/data-pipeline-plan.md section 4.3 for the schema.",
+      "priority": 3,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Migration file created in supabase/migrations/",
+        "Table links to hourly_summaries and activity_segments",
+        "Stores original vs corrected values",
+        "Has context_data JSONB for learning",
+        "RLS policy for user-only access",
+        "Migration runs without errors"
+      ]
+    },
+    {
+      "id": "DP-004",
+      "title": "Implement generateActivitySegments function",
+      "description": "Create the core BRAVO layer function that transforms ALPHA data (location samples, screen time sessions) into enriched activity segments. Follow the pseudocode in docs/data-pipeline-plan.md section 5.1. This should be purely algorithmic - no AI calls.",
+      "priority": 4,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Function created in apps/mobile/src/lib/supabase/services/activity-segments.ts",
+        "Fetches location samples and screen time sessions for a given hour",
+        "Uses existing generateLocationSegments from actual-ingestion.ts",
+        "Calculates app breakdown per segment",
+        "Implements inferActivityType with rules from the plan",
+        "Implements calculateConfidenceScore formula",
+        "Returns properly typed ActivitySegment[]",
+        "Has unit tests covering main scenarios",
+        "TypeScript compiles without errors"
+      ]
+    },
+    {
+      "id": "DP-005",
+      "title": "Implement generateHourlySummary function",
+      "description": "Create the CHARLIE layer function that aggregates BRAVO segments into user-facing hourly summaries. Follow pseudocode in docs/data-pipeline-plan.md section 5.2. Use template-based titles/descriptions (no AI for now).",
+      "priority": 5,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Function created in apps/mobile/src/lib/supabase/services/hourly-summaries.ts",
+        "Respects locked summaries (user edits)",
+        "Aggregates multiple segments into one summary",
+        "Generates template-based title (e.g., 'Office - Deep Work')",
+        "Generates template-based description",
+        "Calculates aggregate confidence score",
+        "Returns properly typed HourlySummary",
+        "TypeScript compiles without errors"
+      ]
+    },
+    {
+      "id": "DP-006",
+      "title": "Create HourlySummaryCard component",
+      "description": "Build the UI component for displaying hourly summaries. Match existing TodayMatters design patterns - use NativeWind, atomic design (this is an organism). Should show: time range, location, activity summary, app breakdown, confidence indicator, and feedback buttons.",
+      "priority": 6,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Component at apps/mobile/src/components/organisms/HourlySummaryCard.tsx",
+        "Uses NativeWind/Tailwind styling consistent with app theme",
+        "Displays hour time range (e.g., '9:00 AM - 10:00 AM')",
+        "Shows primary place with icon",
+        "Shows activity title and description",
+        "Displays app breakdown with icons/duration",
+        "Shows confidence score as percentage or indicator",
+        "Has 'Accurate' and 'Needs Correction' feedback buttons",
+        "Has 'Edit' button for manual corrections",
+        "Follows atomic design patterns in codebase",
+        "TypeScript compiles without errors"
+      ]
+    },
+    {
+      "id": "DP-007",
+      "title": "Create HourlySummaryList component",
+      "description": "Build a list/feed component that displays multiple HourlySummaryCards for a given day. Should show summaries in reverse chronological order (most recent hour first). Include loading and empty states.",
+      "priority": 7,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Component at apps/mobile/src/components/organisms/HourlySummaryList.tsx",
+        "Takes date as prop and fetches/displays summaries for that day",
+        "Uses FlatList or similar for performance",
+        "Shows loading skeleton while fetching",
+        "Shows empty state when no summaries exist",
+        "Groups by time with clear hour headers",
+        "Styling matches app theme",
+        "TypeScript compiles without errors"
+      ]
+    },
+    {
+      "id": "DP-008",
+      "title": "Implement feedback recording function",
+      "description": "Create the function to record user feedback (accurate/inaccurate) and corrections. This enables the learning loop. Follow pseudocode in docs/data-pipeline-plan.md section 5.3.",
+      "priority": 8,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Function in apps/mobile/src/lib/supabase/services/activity-feedback.ts",
+        "recordUserFeedback() updates hourly_summaries with feedback",
+        "Locks the summary after feedback (lockedAt timestamp)",
+        "If corrections provided, stores in activity_feedback table",
+        "Stores context_data for learning (hour, day of week, top apps)",
+        "TypeScript compiles without errors"
+      ]
+    }
+  ]
+}
