@@ -19,3 +19,4 @@ export * from "./user-places";
 export * from "./actual-evidence-events";
 export * from "./activity-categories";
 export * from "./daily-big3";
+export * from "./activity-segments";
