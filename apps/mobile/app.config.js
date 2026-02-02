@@ -80,7 +80,7 @@ export default {
     version: '1.0.2',
     ios: {
       bundleIdentifier: 'com.todaymatters.mobile',
-      buildNumber: '8',
+      buildNumber: '9',
       supportsTablet: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -97,7 +97,7 @@ export default {
     },
     android: {
       package: 'com.todaymatters.mobile',
-      versionCode: 8,
+      versionCode: 9,
       softwareKeyboardLayoutMode: 'resize',
       permissions: [
         'android.permission.RECORD_AUDIO',
