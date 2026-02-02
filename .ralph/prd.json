@@ -37,7 +37,7 @@
       "title": "Create activity_feedback table migration",
       "description": "Create the tm.activity_feedback table for the feedback learning loop. This stores user corrections to enable the system to learn patterns. See docs/data-pipeline-plan.md section 4.3 for the schema.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Migration file created in supabase/migrations/",
         "Table links to hourly_summaries and activity_segments",
