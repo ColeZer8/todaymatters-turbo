@@ -71,132 +71,34 @@ export default function PermissionsScreen() {
     useCallback(async (): Promise<boolean> => {
       if (Platform.OS !== "ios" && Platform.OS !== "android") return true;
 
-      const result =
-        Platform.OS === "ios"
-          ? await requestIosLocationPermissionsAsync()
-          : await requestAndroidLocationPermissionsAsync();
-
-      if (result.foreground === "granted" && result.background === "granted")
-        return true;
-
-      if (!result.hasNativeModule) {
-        Alert.alert(
-          "Location not available in this build",
-          Platform.OS === "android"
-            ? "This Android build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/emulator\n- Run: pnpm --filter mobile android:dev\n- Then run: pnpm dev -- --filter=mobile"
-            : "This iOS dev build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/simulator\n- Run: pnpm --filter mobile ios:dev\n- Then run: pnpm dev -- --filter=mobile",
-        );
-        return false;
-      }
-
-      const canAskAgain =
-        result.canAskAgainForeground || result.canAskAgainBackground;
-
-      Alert.alert(
-        "Location permission needed",
-        Platform.OS === "android"
-          ? "To compare your planned day to your actual day, please allow Location (including background). On some Android versions you may need to enable background location in Settings after granting while-in-use."
-          : "To compare your planned day to your actual day, please allow Location (Always). If iOS won’t re-prompt, open Settings and set Location to “Always”.",
-        canAskAgain
-          ? [{ text: "OK" }]
-          : [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Open Settings",
-                onPress: () => {
-                  void Linking.openSettings();
-                },
-              },
-            ],
-      );
-      return false;
-    }, []);
-
-  const ensureIosScreenTimePermissionIfNeeded =
-    useCallback(async (): Promise<boolean> => {
-      if (Platform.OS !== "ios") return true;
-      const support = getIosInsightsSupportStatus();
-      if (support !== "available") {
-        Alert.alert(
-          "Screen Time not available in this build",
-          support === "expoGo"
-            ? "Screen Time requires a custom dev client or production build (not Expo Go)."
-            : "This iOS build is missing the native insights module. Reinstall the native app and try again.",
-        );
-        return false;
-      }
-
-      const status = await getScreenTimeAuthorizationStatusSafeAsync();
-      if (status === "approved") return true;
-
-      const next = await requestScreenTimeAuthorizationSafeAsync();
-      if (next !== "approved") {
-        Alert.alert(
-          "Screen Time permission needed",
-          "Please allow Screen Time access, then retry.",
-        );
-        return false;
-      }
-
-      // Prime the cache so the background sync has something to upload.
-      // On iOS, we rely on the system report to populate our cached summary.
       try {
-        await presentScreenTimeReportSafeAsync("today");
-        const summary = await getCachedScreenTimeSummarySafeAsync("today");
-        if (summary && userId) {
-          const timezone =
-            Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
-          await syncIosScreenTimeSummary(userId, summary, timezone);
-        }
-      } catch (error) {
-        if (__DEV__) {
-          console.warn(
-            "[Permissions] Failed to prime Screen Time cache:",
-            error,
+        const result =
+          Platform.OS === "ios"
+            ? await requestIosLocationPermissionsAsync()
+            : await requestAndroidLocationPermissionsAsync();
+
+        if (result.foreground === "granted" && result.background === "granted")
+          return true;
+
+        if (!result.hasNativeModule) {
+          Alert.alert(
+            "Location not available in this build",
+            Platform.OS === "android"
+              ? "This Android build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/emulator\n- Run: pnpm --filter mobile android:dev\n- Then run: pnpm dev -- --filter=mobile"
+              : "This iOS dev build is missing the native location module.\n\nThis usually means you only restarted Metro (expo start) and did not reinstall the native app.\n\nFix:\n- Delete the app from your device/simulator\n- Run: pnpm --filter mobile ios:dev\n- Then run: pnpm dev -- --filter=mobile",
           );
+          return false;
         }
-      }
 
-      return true;
-    }, [userId]);
+        const canAskAgain =
+          result.canAskAgainForeground || result.canAskAgainBackground;
 
-  const ensureAndroidUsageAccessIfNeeded =
-    useCallback(async (): Promise<boolean> => {
-      if (Platform.OS !== "android") return true;
-      const support = getAndroidInsightsSupportStatus();
-      if (support !== "available") {
         Alert.alert(
-          "Screen Time not available in this build",
-          "Screen Time access requires the custom Android dev client. Rebuild the app, then try again.",
-        );
-        return false;
-      }
-
-      const status = await getUsageAccessAuthorizationStatusSafeAsync();
-      if (status === "authorized") return true;
-
-      // Open the specific Usage Access settings screen (not general Settings)
-      await openUsageAccessSettingsSafeAsync();
-      Alert.alert(
-        "Screen Time access required",
-        'Enable "Usage access" for TodayMatters in the settings screen that just opened, then return to the app.',
-      );
-      return false;
-    }, []);
-
-  const ensureAndroidNotificationsPermissionIfNeeded =
-    useCallback(async (): Promise<boolean> => {
-      if (Platform.OS !== "android") return true;
-      const result = await requestAndroidNotificationPermissionsAsync();
-      if (!result.required) return true;
-      if (result.status === "granted") return true;
-
-      const opened = await openAndroidNotificationSettingsAsync();
-      if (!opened) {
-        Alert.alert(
-          "Notifications permission needed",
-          "Please allow notifications so the background location service can keep running reliably.",
-          result.canAskAgain
+          "Location permission needed",
+          Platform.OS === "android"
+            ? "To compare your planned day to your actual day, please allow Location (including background). On some Android versions you may need to enable background location in Settings after granting while-in-use."
+            : "To compare your planned day to your actual day, please allow Location (Always). If iOS won't re-prompt, open Settings and set Location to 'Always'.",
+          canAskAgain
             ? [{ text: "OK" }]
             : [
                 { text: "Cancel", style: "cancel" },
@@ -208,32 +110,213 @@ export default function PermissionsScreen() {
                 },
               ],
         );
+        return false;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[Permissions] ensureLocationPermissionIfNeeded failed:",
+            error,
+          );
+        }
+        // Return false to indicate failure, but don't crash
+        Alert.alert(
+          "Permission Error",
+          "Unable to request location permission. Please try again or enable location in Settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => {
+                void Linking.openSettings();
+              },
+            },
+          ],
+        );
+        return false;
       }
-      return false;
+    }, []);
+
+  const ensureIosScreenTimePermissionIfNeeded =
+    useCallback(async (): Promise<boolean> => {
+      if (Platform.OS !== "ios") return true;
+
+      try {
+        const support = getIosInsightsSupportStatus();
+        if (support !== "available") {
+          Alert.alert(
+            "Screen Time not available in this build",
+            support === "expoGo"
+              ? "Screen Time requires a custom dev client or production build (not Expo Go)."
+              : "This iOS build is missing the native insights module. Reinstall the native app and try again.",
+          );
+          return false;
+        }
+
+        const status = await getScreenTimeAuthorizationStatusSafeAsync();
+        if (status === "approved") return true;
+
+        const next = await requestScreenTimeAuthorizationSafeAsync();
+        if (next !== "approved") {
+          Alert.alert(
+            "Screen Time permission needed",
+            "Please allow Screen Time access, then retry.",
+          );
+          return false;
+        }
+
+        // Prime the cache so the background sync has something to upload.
+        // On iOS, we rely on the system report to populate our cached summary.
+        try {
+          await presentScreenTimeReportSafeAsync("today");
+          const summary = await getCachedScreenTimeSummarySafeAsync("today");
+          if (summary && userId) {
+            const timezone =
+              Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+            await syncIosScreenTimeSummary(userId, summary, timezone);
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.warn(
+              "[Permissions] Failed to prime Screen Time cache:",
+              error,
+            );
+          }
+          // Non-fatal - permission was granted, cache priming is optional
+        }
+
+        return true;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[Permissions] ensureIosScreenTimePermissionIfNeeded failed:",
+            error,
+          );
+        }
+        // Return false to indicate failure, but don't crash
+        return false;
+      }
+    }, [userId]);
+
+  const ensureAndroidUsageAccessIfNeeded =
+    useCallback(async (): Promise<boolean> => {
+      if (Platform.OS !== "android") return true;
+
+      try {
+        const support = getAndroidInsightsSupportStatus();
+        if (support !== "available") {
+          Alert.alert(
+            "Screen Time not available in this build",
+            "Screen Time access requires the custom Android dev client. Rebuild the app, then try again.",
+          );
+          return false;
+        }
+
+        const status = await getUsageAccessAuthorizationStatusSafeAsync();
+        if (status === "authorized") return true;
+
+        // Open the specific Usage Access settings screen (not general Settings)
+        await openUsageAccessSettingsSafeAsync();
+        Alert.alert(
+          "Screen Time access required",
+          'Enable "Usage access" for TodayMatters in the settings screen that just opened, then return to the app.',
+        );
+        return false;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[Permissions] ensureAndroidUsageAccessIfNeeded failed:",
+            error,
+          );
+        }
+        // Return false to indicate failure, but don't crash
+        return false;
+      }
+    }, []);
+
+  const ensureAndroidNotificationsPermissionIfNeeded =
+    useCallback(async (): Promise<boolean> => {
+      if (Platform.OS !== "android") return true;
+
+      try {
+        const result = await requestAndroidNotificationPermissionsAsync();
+        if (!result.required) return true;
+        if (result.status === "granted") return true;
+
+        const opened = await openAndroidNotificationSettingsAsync();
+        if (!opened) {
+          Alert.alert(
+            "Notifications permission needed",
+            "Please allow notifications so the background location service can keep running reliably.",
+            result.canAskAgain
+              ? [{ text: "OK" }]
+              : [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Open Settings",
+                    onPress: () => {
+                      void Linking.openSettings();
+                    },
+                  },
+                ],
+          );
+        }
+        return false;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn(
+            "[Permissions] ensureAndroidNotificationsPermissionIfNeeded failed:",
+            error,
+          );
+        }
+        // Return false to indicate failure, but don't crash
+        return false;
+      }
     }, []);
 
   const promptBatteryOptimizationIfNeeded = useCallback(async (): Promise<void> => {
     if (Platform.OS !== "android") return;
-    // Show a dialog explaining why battery optimization should be disabled
-    Alert.alert(
-      "Improve Background Tracking",
-      "For reliable all-day location tracking, please disable battery optimization for TodayMatters.\n\nThis ensures the app can track your location even when running in the background.",
-      [
-        { text: "Skip", style: "cancel" },
-        {
-          text: "Open Settings",
-          onPress: async () => {
-            await openAndroidBatteryOptimizationSettingsAsync();
+    
+    try {
+      // Show a dialog explaining why battery optimization should be disabled
+      Alert.alert(
+        "Improve Background Tracking",
+        "For reliable all-day location tracking, please disable battery optimization for TodayMatters.\n\nThis ensures the app can track your location even when running in the background.",
+        [
+          { text: "Skip", style: "cancel" },
+          {
+            text: "Open Settings",
+            onPress: async () => {
+              try {
+                await openAndroidBatteryOptimizationSettingsAsync();
+              } catch (e) {
+                if (__DEV__) console.warn("[Permissions] Failed to open battery settings:", e);
+              }
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          "[Permissions] promptBatteryOptimizationIfNeeded failed:",
+          error,
+        );
+      }
+      // Non-fatal - battery optimization is optional
+    }
   }, []);
 
   const refreshNotificationStatus = useCallback(async () => {
     if (Platform.OS !== "android") return;
-    const status = await getAndroidNotificationPermissionStatusAsync();
-    setNotificationStatus(status);
+    try {
+      const status = await getAndroidNotificationPermissionStatusAsync();
+      setNotificationStatus(status);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn("[Permissions] refreshNotificationStatus failed:", error);
+      }
+      // Keep existing status if refresh fails
+    }
   }, []);
 
   useEffect(() => {
@@ -258,43 +341,76 @@ export default function PermissionsScreen() {
 
   const handleAllowAllToggle = useCallback(() => {
     void (async () => {
-      const nextValue = !allEnabled;
-      setAllPermissions(nextValue);
+      try {
+        const nextValue = !allEnabled;
+        setAllPermissions(nextValue);
 
-      // If enabling all, ensure iOS location permission is actually granted.
-      if (nextValue) {
-        const ok = await ensureLocationPermissionIfNeeded();
-        if (!ok) {
-          // Revert just the location toggle (others can remain enabled).
-          togglePermission("location");
-        } else {
-          // Start tracking immediately after permission is granted.
+        // If enabling all, ensure iOS location permission is actually granted.
+        if (nextValue) {
+          try {
+            const ok = await ensureLocationPermissionIfNeeded();
+            if (!ok) {
+              // Revert just the location toggle (others can remain enabled).
+              togglePermission("location");
+            } else {
+              // Start tracking immediately after permission is granted.
+              if (Platform.OS === "ios") {
+                void startIosBackgroundLocationAsync().catch((e) => {
+                  if (__DEV__) console.warn("[Permissions] Failed to start iOS background location:", e);
+                });
+              } else if (Platform.OS === "android") {
+                void startAndroidBackgroundLocationAsync().catch((e) => {
+                  if (__DEV__) console.warn("[Permissions] Failed to start Android background location:", e);
+                });
+                // Prompt for battery optimization after location tracking starts
+                try {
+                  await promptBatteryOptimizationIfNeeded();
+                } catch (e) {
+                  if (__DEV__) console.warn("[Permissions] Battery optimization prompt failed:", e);
+                }
+              }
+            }
+          } catch (e) {
+            if (__DEV__) console.warn("[Permissions] Location permission check failed:", e);
+            togglePermission("location");
+          }
+
+          if (Platform.OS === "android") {
+            try {
+              const notificationsOk =
+                await ensureAndroidNotificationsPermissionIfNeeded();
+              if (!notificationsOk) {
+                togglePermission("notifications");
+              }
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] Notifications permission check failed:", e);
+              togglePermission("notifications");
+            }
+          }
+
           if (Platform.OS === "ios") {
-            void startIosBackgroundLocationAsync();
+            try {
+              const appUsageOk = await ensureIosScreenTimePermissionIfNeeded();
+              if (!appUsageOk) togglePermission("appUsage");
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] iOS Screen Time permission check failed:", e);
+              togglePermission("appUsage");
+            }
           } else if (Platform.OS === "android") {
-            void startAndroidBackgroundLocationAsync();
-            // Prompt for battery optimization after location tracking starts
-            await promptBatteryOptimizationIfNeeded();
+            try {
+              const usageOk = await ensureAndroidUsageAccessIfNeeded();
+              if (!usageOk) {
+                togglePermission("appUsage");
+              }
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] Android usage access check failed:", e);
+              togglePermission("appUsage");
+            }
           }
         }
-
-        if (Platform.OS === "android") {
-          const notificationsOk =
-            await ensureAndroidNotificationsPermissionIfNeeded();
-          if (!notificationsOk) {
-            togglePermission("notifications");
-          }
-        }
-
-        if (Platform.OS === "ios") {
-          const appUsageOk = await ensureIosScreenTimePermissionIfNeeded();
-          if (!appUsageOk) togglePermission("appUsage");
-        } else if (Platform.OS === "android") {
-          const usageOk = await ensureAndroidUsageAccessIfNeeded();
-          if (!usageOk) {
-            togglePermission("appUsage");
-          }
-        }
+      } catch (e) {
+        if (__DEV__) console.error("[Permissions] handleAllowAllToggle failed:", e);
+        // Don't crash - user can still proceed with manually toggling permissions
       }
     })();
   }, [
@@ -311,38 +427,66 @@ export default function PermissionsScreen() {
   const handleTogglePermission = useCallback(
     (key: PermissionKey) => {
       void (async () => {
-        const currentlyEnabled = permissions[key];
-        const nextEnabled = !currentlyEnabled;
+        try {
+          const currentlyEnabled = permissions[key];
+          const nextEnabled = !currentlyEnabled;
 
-        if (key === "location" && nextEnabled) {
-          const ok = await ensureLocationPermissionIfNeeded();
-          if (!ok) return;
-          if (Platform.OS === "ios") {
-            void startIosBackgroundLocationAsync();
-          } else if (Platform.OS === "android") {
-            void startAndroidBackgroundLocationAsync();
-            // Prompt for battery optimization after location tracking starts
-            await promptBatteryOptimizationIfNeeded();
+          if (key === "location" && nextEnabled) {
+            try {
+              const ok = await ensureLocationPermissionIfNeeded();
+              if (!ok) return;
+              if (Platform.OS === "ios") {
+                void startIosBackgroundLocationAsync().catch((e) => {
+                  if (__DEV__) console.warn("[Permissions] Failed to start iOS background location:", e);
+                });
+              } else if (Platform.OS === "android") {
+                void startAndroidBackgroundLocationAsync().catch((e) => {
+                  if (__DEV__) console.warn("[Permissions] Failed to start Android background location:", e);
+                });
+                // Prompt for battery optimization after location tracking starts
+                try {
+                  await promptBatteryOptimizationIfNeeded();
+                } catch (e) {
+                  if (__DEV__) console.warn("[Permissions] Battery optimization prompt failed:", e);
+                }
+              }
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] Location toggle failed:", e);
+              return;
+            }
           }
-        }
 
-        if (key === "notifications" && nextEnabled) {
-          const ok = await ensureAndroidNotificationsPermissionIfNeeded();
-          if (!ok) return;
-          await refreshNotificationStatus();
-        }
-
-        if (key === "appUsage" && nextEnabled) {
-          if (Platform.OS === "ios") {
-            const ok = await ensureIosScreenTimePermissionIfNeeded();
-            if (!ok) return;
-          } else {
-            const ok = await ensureAndroidUsageAccessIfNeeded();
-            if (!ok) return;
+          if (key === "notifications" && nextEnabled) {
+            try {
+              const ok = await ensureAndroidNotificationsPermissionIfNeeded();
+              if (!ok) return;
+              await refreshNotificationStatus();
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] Notifications toggle failed:", e);
+              return;
+            }
           }
-        }
 
-        togglePermission(key);
+          if (key === "appUsage" && nextEnabled) {
+            try {
+              if (Platform.OS === "ios") {
+                const ok = await ensureIosScreenTimePermissionIfNeeded();
+                if (!ok) return;
+              } else {
+                const ok = await ensureAndroidUsageAccessIfNeeded();
+                if (!ok) return;
+              }
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] App usage toggle failed:", e);
+              return;
+            }
+          }
+
+          togglePermission(key);
+        } catch (e) {
+          if (__DEV__) console.error("[Permissions] handleTogglePermission failed:", e);
+          // Don't crash - just don't toggle the permission
+        }
       })();
     },
     [
@@ -363,35 +507,66 @@ export default function PermissionsScreen() {
 
   const handleContinue = () => {
     void (async () => {
-      // If user kept Location enabled, make sure we actually have system permissions before proceeding.
-      if (permissions.location) {
-        const ok = await ensureLocationPermissionIfNeeded();
-        if (!ok) {
-          // Keep the UI consistent: flip off the toggle if we couldn't obtain permission.
-          togglePermission("location");
-          return;
+      try {
+        // If user kept Location enabled, make sure we actually have system permissions before proceeding.
+        if (permissions.location) {
+          try {
+            const ok = await ensureLocationPermissionIfNeeded();
+            if (!ok) {
+              // Keep the UI consistent: flip off the toggle if we couldn't obtain permission.
+              togglePermission("location");
+              // Don't block continue - user can proceed without location
+            }
+          } catch (e) {
+            if (__DEV__) console.warn("[Permissions] Location check on continue failed:", e);
+            togglePermission("location");
+            // Don't block continue - user can proceed without location
+          }
         }
-      }
 
-      if (permissions.notifications && Platform.OS === "android") {
-        const ok = await ensureAndroidNotificationsPermissionIfNeeded();
-        if (!ok) {
-          togglePermission("notifications");
-          return;
+        if (permissions.notifications && Platform.OS === "android") {
+          try {
+            const ok = await ensureAndroidNotificationsPermissionIfNeeded();
+            if (!ok) {
+              togglePermission("notifications");
+              // Don't block continue - user can proceed without notifications
+            } else {
+              await refreshNotificationStatus();
+            }
+          } catch (e) {
+            if (__DEV__) console.warn("[Permissions] Notifications check on continue failed:", e);
+            togglePermission("notifications");
+            // Don't block continue
+          }
         }
-        await refreshNotificationStatus();
-      }
 
-      if (Platform.OS === "android" && permissions.appUsage) {
-        const ok = await ensureAndroidUsageAccessIfNeeded();
-        if (!ok) {
-          togglePermission("appUsage");
-          return;
+        if (Platform.OS === "android" && permissions.appUsage) {
+          try {
+            const ok = await ensureAndroidUsageAccessIfNeeded();
+            if (!ok) {
+              togglePermission("appUsage");
+              // Don't block continue - user can proceed without app usage
+            }
+          } catch (e) {
+            if (__DEV__) console.warn("[Permissions] App usage check on continue failed:", e);
+            togglePermission("appUsage");
+            // Don't block continue
+          }
         }
-      }
 
-      await savePermissions(permissions);
-      router.replace("/connect-google-services");
+        try {
+          await savePermissions(permissions);
+        } catch (e) {
+          if (__DEV__) console.warn("[Permissions] Failed to save permissions:", e);
+          // Continue anyway - permissions are saved locally
+        }
+
+        router.replace("/connect-google-services");
+      } catch (e) {
+        if (__DEV__) console.error("[Permissions] handleContinue failed:", e);
+        // Still navigate to avoid user being stuck
+        router.replace("/connect-google-services");
+      }
     })();
   };
 

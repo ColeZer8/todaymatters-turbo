@@ -175,8 +175,14 @@ export async function getScreenTimeAuthorizationStatusSafeAsync(): Promise<Scree
     if (support !== "available") return "unsupported";
     return await getScreenTimeAuthorizationStatusAsync();
   } catch (e) {
-    // Important: do NOT collapse native errors to "unsupported" (it hides stale dev-client/method mismatch issues).
-    throw e instanceof Error ? e : new Error(String(e));
+    // Return "unsupported" to prevent crashes - the caller should handle gracefully
+    if (__DEV__) {
+      console.warn(
+        "[ios-insights] getScreenTimeAuthorizationStatusSafeAsync failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+    return "unsupported";
   }
 }
 
@@ -186,7 +192,14 @@ export async function requestScreenTimeAuthorizationSafeAsync(): Promise<ScreenT
     if (support !== "available") return "unsupported";
     return await requestScreenTimeAuthorizationAsync();
   } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
+    // Return "denied" to prevent crashes - the caller should handle gracefully
+    if (__DEV__) {
+      console.warn(
+        "[ios-insights] requestScreenTimeAuthorizationSafeAsync failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+    return "denied";
   }
 }
 
@@ -210,6 +223,12 @@ export async function presentScreenTimeReportSafeAsync(
     if (support !== "available") return;
     await presentScreenTimeReportAsync(range);
   } catch (e) {
-    throw e instanceof Error ? e : new Error(String(e));
+    // Silently fail to prevent crashes - screen time report is optional
+    if (__DEV__) {
+      console.warn(
+        "[ios-insights] presentScreenTimeReportSafeAsync failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
   }
 }
