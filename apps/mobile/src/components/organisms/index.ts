@@ -34,3 +34,4 @@ export {
   HourlySummaryList,
   type HourlySummaryListProps,
 } from "./HourlySummaryList";
+export { PlaceInferenceTimeline } from "./PlaceInferenceTimeline";

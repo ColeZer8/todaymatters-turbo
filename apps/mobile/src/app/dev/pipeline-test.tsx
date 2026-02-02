@@ -2,20 +2,23 @@
  * Pipeline Test Screen
  *
  * Development screen to view and test the new CHARLIE layer hourly summaries.
+ * Now includes Place Inference Timeline that matches the HTML mockup.
  * Access via: /dev/pipeline-test
  */
 
 import { useState, useCallback } from "react";
 import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react-native";
-import { HourlySummaryList } from "@/components/organisms";
+import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList } from "lucide-react-native";
+import { HourlySummaryList, PlaceInferenceTimeline } from "@/components/organisms";
 import type { HourlySummary } from "@/lib/supabase/services";
 import {
   submitAccurateFeedback,
   submitInaccurateFeedback,
 } from "@/lib/supabase/services/activity-feedback";
 import { useAuthStore } from "@/stores";
+
+type ViewMode = "summaries" | "places";
 
 // ============================================================================
 // Helpers
@@ -62,6 +65,7 @@ export default function PipelineTestScreen() {
   const user = useAuthStore((s) => s.user);
   const [selectedDate, setSelectedDate] = useState(getTodayYmd());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>("places"); // Default to places view
 
   const userId = user?.id ?? "";
 
@@ -171,24 +175,79 @@ export default function PipelineTestScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* View Mode Toggle */}
+      <View style={styles.viewToggle}>
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
+            viewMode === "places" && styles.toggleButtonActive,
+          ]}
+          onPress={() => setViewMode("places")}
+        >
+          <MapPin size={14} color={viewMode === "places" ? "#FFFFFF" : "#64748B"} />
+          <Text
+            style={[
+              styles.toggleButtonText,
+              viewMode === "places" && styles.toggleButtonTextActive,
+            ]}
+          >
+            Place Inference
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
+            viewMode === "summaries" && styles.toggleButtonActive,
+          ]}
+          onPress={() => setViewMode("summaries")}
+        >
+          <LayoutList size={14} color={viewMode === "summaries" ? "#FFFFFF" : "#64748B"} />
+          <Text
+            style={[
+              styles.toggleButtonText,
+              viewMode === "summaries" && styles.toggleButtonTextActive,
+            ]}
+          >
+            CHARLIE Summaries
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Info Banner */}
       <View style={styles.infoBanner}>
         <Text style={styles.infoBannerText}>
-          🧪 This shows data from the <Text style={styles.bold}>new pipeline</Text>{" "}
-          (tm.hourly_summaries). Compare with the main calendar to see the difference.
+          {viewMode === "places" ? (
+            <>
+              🏠 <Text style={styles.bold}>Place Inference</Text> — Automatically detects
+              Home, Work, and frequent locations from your patterns. Tap any hour to set or confirm.
+            </>
+          ) : (
+            <>
+              🧪 This shows data from the <Text style={styles.bold}>new pipeline</Text>{" "}
+              (tm.hourly_summaries). Compare with the main calendar to see the difference.
+            </>
+          )}
         </Text>
       </View>
 
-      {/* Summary List */}
-      <HourlySummaryList
-        key={`${selectedDate}-${refreshKey}`}
-        date={selectedDate}
-        userId={userId}
-        onMarkAccurate={handleMarkAccurate}
-        onNeedsCorrection={handleNeedsCorrection}
-        onEdit={handleEdit}
-        contentContainerStyle={styles.listContent}
-      />
+      {/* Content based on view mode */}
+      {viewMode === "places" ? (
+        <PlaceInferenceTimeline
+          key={`places-${selectedDate}-${refreshKey}`}
+          userId={userId}
+          date={selectedDate}
+        />
+      ) : (
+        <HourlySummaryList
+          key={`summaries-${selectedDate}-${refreshKey}`}
+          date={selectedDate}
+          userId={userId}
+          onMarkAccurate={handleMarkAccurate}
+          onNeedsCorrection={handleNeedsCorrection}
+          onEdit={handleEdit}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -264,6 +323,36 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#94A3B8",
     marginTop: 2,
+  },
+  viewToggle: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 4,
+    backgroundColor: "rgba(148, 163, 184, 0.1)",
+    borderRadius: 10,
+    gap: 4,
+  },
+  toggleButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  toggleButtonActive: {
+    backgroundColor: "#2563EB",
+  },
+  toggleButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  toggleButtonTextActive: {
+    color: "#FFFFFF",
   },
   infoBanner: {
     marginHorizontal: 16,
