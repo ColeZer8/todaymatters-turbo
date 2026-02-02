@@ -75,7 +75,11 @@ import {
 // Google Places (fuzzy reverse-geocoding labels)
 import { getFuzzyLocationLabel, isGooglePlacesAvailable } from "../services/google-places";
 
-// NEW PIPELINE: Hourly summaries (CHARLIE layer)
+// NEW PIPELINE: Activity segments (BRAVO layer) and hourly summaries (CHARLIE layer)
+import {
+  generateActivitySegments,
+  saveActivitySegments,
+} from "../services/activity-segments";
 import { processHourlySummary } from "../services/hourly-summaries";
 
 // User app category overrides (from calendar app-classification)
@@ -732,17 +736,33 @@ export async function processActualIngestionWindow(
     }
 
     // =========================================================================
-    // NEW PIPELINE: Generate hourly summary (CHARLIE layer)
-    // This runs in parallel with the existing pipeline, writing to
-    // tm.hourly_summaries instead of tm.events. Eventually this will
+    // NEW PIPELINE: BRAVO layer (activity segments) + CHARLIE layer (summaries)
+    // This runs in parallel with the existing pipeline. Eventually this will
     // replace the messy events with clean hourly blocks.
+    //
+    // Flow: ALPHA (raw data) → BRAVO (activity_segments) → CHARLIE (hourly_summaries)
     // =========================================================================
     try {
       // Truncate window start to the hour
       const hourStart = new Date(windowStart);
       hourStart.setMinutes(0, 0, 0);
       
-      // Process hourly summary for this hour
+      // Step 1: Generate BRAVO layer segments from ALPHA data
+      const activitySegments = await generateActivitySegments(userId, hourStart);
+      
+      if (__DEV__) {
+        console.log(`[ActualIngestion] 🔷 NEW PIPELINE: Generated ${activitySegments.length} activity segments for hour ${hourStart.toISOString()}`);
+      }
+      
+      // Step 2: Save BRAVO segments to database
+      if (activitySegments.length > 0) {
+        const saved = await saveActivitySegments(activitySegments);
+        if (__DEV__) {
+          console.log(`[ActualIngestion] 🔷 NEW PIPELINE: Saved activity segments: ${saved ? 'success' : 'failed'}`);
+        }
+      }
+      
+      // Step 3: Generate CHARLIE layer summary (reads from BRAVO)
       const summary = await processHourlySummary(userId, hourStart);
       
       if (__DEV__ && summary) {
@@ -751,7 +771,7 @@ export async function processActualIngestionWindow(
     } catch (error) {
       // Non-fatal - new pipeline failure shouldn't break existing flow
       if (__DEV__) {
-        console.warn("[ActualIngestion] NEW PIPELINE: Failed to generate hourly summary:", error);
+        console.warn("[ActualIngestion] NEW PIPELINE: Failed to generate activity segments/summary:", error);
       }
     }
 
