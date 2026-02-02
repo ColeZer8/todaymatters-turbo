@@ -138,12 +138,15 @@ serve(async (req: Request) => {
     }
 
     const googleApiKeyResult = await getConfigValue("GOOGLE_MAPS_API_KEY");
-    const googleApiKey = googleApiKeyResult.value;
+    const fallbackGoogleApiKeyResult = await getConfigValue("DEV_GOOGLE_MAPS_API_KEY");
+    const googleApiKey = googleApiKeyResult.value ?? fallbackGoogleApiKeyResult.value;
     if (!googleApiKey) {
       return new Response(
         JSON.stringify({
           error: "Missing GOOGLE_MAPS_API_KEY",
-          hint: "Set Supabase secret GOOGLE_MAPS_API_KEY (Places API enabled).",
+          hint:
+            "Set Supabase secret GOOGLE_MAPS_API_KEY (Places API enabled). " +
+            "DEV_GOOGLE_MAPS_API_KEY is also accepted for dev.",
         }),
         {
           status: 500,

@@ -6,7 +6,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { ArrowLeft, MapPin } from "lucide-react-native";
+import { ArrowLeft, MapPin, Sparkles, Home, Briefcase, Pin } from "lucide-react-native";
 import { useAuthStore } from "@/stores";
 import { Card, GradientButton, Icon } from "@/components/atoms";
 import { BottomToolbar } from "@/components/organisms/BottomToolbar";
@@ -14,6 +14,11 @@ import { peekPendingLocationSamplesAsync } from "@/lib/ios-location/queue";
 import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
 import { fetchRecentLocationSamples } from "@/lib/supabase/services/location-samples";
 import { supabase, SUPABASE_ANON_KEY } from "@/lib/supabase/client";
+import {
+  inferPlacesFromHistory,
+  type InferredPlace,
+  type PlaceInferenceResult,
+} from "@/lib/supabase/services/place-inference";
 import type { IosLocationSample } from "@/lib/ios-location/types";
 import type { AndroidLocationSample } from "@/lib/android-location/types";
 
@@ -41,6 +46,11 @@ export default function DevLocationScreen() {
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [supabaseWarning, setSupabaseWarning] = useState<string | null>(null);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
+  
+  // Place Inference state
+  const [inferenceResult, setInferenceResult] = useState<PlaceInferenceResult | null>(null);
+  const [isInferenceLoading, setIsInferenceLoading] = useState(false);
+  const [inferenceError, setInferenceError] = useState<string | null>(null);
 
   const samplesToday = useMemo(() => {
     const start = new Date();
@@ -237,6 +247,48 @@ export default function DevLocationScreen() {
     }
   }, [buildLookupPoints, userId]);
 
+  const runPlaceInference = useCallback(async () => {
+    if (!userId) return;
+    setIsInferenceLoading(true);
+    setInferenceError(null);
+    try {
+      const result = await inferPlacesFromHistory(userId, 14);
+      setInferenceResult(result);
+    } catch (error) {
+      setInferenceError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsInferenceLoading(false);
+    }
+  }, [userId]);
+
+  const getInferenceIcon = (type: InferredPlace["inferredType"]) => {
+    switch (type) {
+      case "home":
+        return Home;
+      case "work":
+        return Briefcase;
+      case "frequent":
+        return Pin;
+      default:
+        return MapPin;
+    }
+  };
+
+  const getInferenceColor = (type: InferredPlace["inferredType"]) => {
+    switch (type) {
+      case "home":
+        return "#22C55E"; // green
+      case "work":
+        return "#3B82F6"; // blue
+      case "frequent":
+        return "#F59E0B"; // amber
+      default:
+        return "#6B7280"; // gray
+    }
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -354,6 +406,129 @@ export default function DevLocationScreen() {
                   <Text className="mt-2 text-xs text-amber-600">
                     {supabaseWarning}
                   </Text>
+                ) : null}
+              </Card>
+            </View>
+
+            {/* Place Inference Section */}
+            <View className="mt-5">
+              <Card className="border border-[#E6EAF2] shadow-sm shadow-[#0f172a0d]">
+                <View className="flex-row items-center gap-3">
+                  <View className="h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF3C7]">
+                    <Icon icon={Sparkles} size={20} color="#D97706" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[18px] font-bold text-text-primary">
+                      Place Inference
+                    </Text>
+                    <Text className="text-[12px] text-text-secondary">
+                      Auto-detect Home, Work, and frequent locations
+                    </Text>
+                  </View>
+                </View>
+
+                <View className="mt-4">
+                  <GradientButton
+                    label={
+                      isInferenceLoading
+                        ? "Analyzing patterns…"
+                        : "Run Place Inference (14 days)"
+                    }
+                    onPress={runPlaceInference}
+                    disabled={isInferenceLoading || !userId}
+                  />
+                </View>
+
+                {inferenceError ? (
+                  <Text className="mt-3 text-xs text-red-500">
+                    Error: {inferenceError}
+                  </Text>
+                ) : null}
+
+                {inferenceResult ? (
+                  <View className="mt-4">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-[12px] font-bold uppercase tracking-[0.12em] text-text-secondary">
+                        Results
+                      </Text>
+                      <Text className="text-[11px] text-text-tertiary">
+                        {inferenceResult.stats.hoursAnalyzed}h across{" "}
+                        {inferenceResult.stats.daysAnalyzed} days
+                      </Text>
+                    </View>
+
+                    {inferenceResult.inferredPlaces.length === 0 ? (
+                      <Text className="mt-3 text-[13px] text-text-tertiary">
+                        No places could be inferred. Need more location history.
+                      </Text>
+                    ) : (
+                      <View className="mt-3 gap-3">
+                        {inferenceResult.inferredPlaces.map((place, idx) => (
+                          <View
+                            key={`${place.geohash7}-${idx}`}
+                            className="rounded-xl border border-[#E6EAF2] bg-[#F9FAFB] p-3"
+                          >
+                            <View className="flex-row items-center gap-3">
+                              <View
+                                className="h-10 w-10 items-center justify-center rounded-xl"
+                                style={{
+                                  backgroundColor: `${getInferenceColor(place.inferredType)}15`,
+                                }}
+                              >
+                                <Icon
+                                  icon={getInferenceIcon(place.inferredType)}
+                                  size={18}
+                                  color={getInferenceColor(place.inferredType)}
+                                />
+                              </View>
+                              <View className="flex-1">
+                                <View className="flex-row items-center gap-2">
+                                  <Text className="text-[15px] font-semibold text-text-primary">
+                                    {place.suggestedLabel}
+                                  </Text>
+                                  <View
+                                    className="rounded-full px-2 py-0.5"
+                                    style={{
+                                      backgroundColor: `${getInferenceColor(place.inferredType)}20`,
+                                    }}
+                                  >
+                                    <Text
+                                      className="text-[10px] font-bold uppercase"
+                                      style={{
+                                        color: getInferenceColor(place.inferredType),
+                                      }}
+                                    >
+                                      {Math.round(place.confidence * 100)}%
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Text className="text-[12px] text-text-secondary">
+                                  {place.inferredType.charAt(0).toUpperCase() +
+                                    place.inferredType.slice(1)}{" "}
+                                  · {place.stats.totalHours}h total
+                                </Text>
+                              </View>
+                            </View>
+                            <Text className="mt-2 text-[11px] text-text-tertiary">
+                              {place.reasoning}
+                            </Text>
+                            {place.googlePlaceName &&
+                              place.googlePlaceName !== place.suggestedLabel && (
+                                <Text className="mt-1 text-[11px] text-text-tertiary">
+                                  Google: {place.googlePlaceName}
+                                </Text>
+                              )}
+                            {place.latitude && place.longitude && (
+                              <Text className="mt-1 text-[10px] font-mono text-text-tertiary">
+                                {place.latitude.toFixed(5)},{" "}
+                                {place.longitude.toFixed(5)}
+                              </Text>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 ) : null}
               </Card>
             </View>
