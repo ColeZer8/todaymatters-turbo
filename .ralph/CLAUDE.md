@@ -97,7 +97,19 @@ After completing a user story, check if ALL stories have `passes: true`.
 If ALL stories are complete and passing, reply with:
 <promise>COMPLETE</promise>
 
+Then run this command to notify Cole:
+```bash
+clawdbot gateway wake --text "RALPH COMPLETE: All 8 data pipeline stories finished! Check the branch ralph/data-pipeline-phase1" --mode now
+```
+
 If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+
+## Error Recovery
+
+If you encounter an error that blocks progress, run:
+```bash
+clawdbot gateway wake --text "RALPH STUCK: [brief description of the error]" --mode now
+```
 
 ## Important
 
