@@ -21,3 +21,4 @@ export * from "./activity-categories";
 export * from "./daily-big3";
 export * from "./activity-segments";
 export * from "./hourly-summaries";
+export * from "./activity-feedback";
