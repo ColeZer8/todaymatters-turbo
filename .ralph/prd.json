@@ -124,7 +124,7 @@
       "title": "Implement feedback recording function",
       "description": "Create the function to record user feedback (accurate/inaccurate) and corrections. This enables the learning loop. Follow pseudocode in docs/data-pipeline-plan.md section 5.3.",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Function in apps/mobile/src/lib/supabase/services/activity-feedback.ts",
         "recordUserFeedback() updates hourly_summaries with feedback",
