@@ -32,3 +32,21 @@ Started: Sun Feb  1 22:23:14 CST 2026
   - Use `pnpm run lint` to verify no new errors introduced
   - `tm.user_places` table is defined in `20260112_create_tm_location_samples.sql`
 ---
+
+## Sun Feb 1 23:05:00 CST 2026 - DP-002
+- **Implemented:** Created `tm.hourly_summaries` table migration for CHARLIE layer
+- **Files changed:**
+  - `supabase/migrations/20260201_create_tm_hourly_summaries.sql` (new file)
+  - `.ralph/prd.json` (marked DP-002 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Migration file created in supabase/migrations/
+  - ✅ Table has all columns from plan including user_feedback, user_edits, locked_at, ai_generated
+  - ✅ Unique constraint on (user_id, hour_start) via `constraint hourly_summaries_user_hour_unique`
+  - ✅ Indexes created: idx_hourly_summaries_user_date, idx_hourly_summaries_unlocked (partial), idx_hourly_summaries_user_hour
+  - ✅ RLS policies for select, insert, update, delete (users can only access own data)
+  - ✅ Lint check passes (no new errors)
+- **Learnings for future iterations:**
+  - Partial indexes use `where` clause (e.g., `where locked_at is null` for unlocked summaries)
+  - Unique constraints use `constraint` keyword in table definition rather than separate statement
+  - CHARLIE layer tables need more columns for user interaction (feedback, edits, locking)
+---

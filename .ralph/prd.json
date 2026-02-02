@@ -22,7 +22,7 @@
       "title": "Create hourly_summaries table migration",
       "description": "Create the tm.hourly_summaries table for the CHARLIE layer. This stores user-facing hourly summaries with feedback capabilities. See docs/data-pipeline-plan.md section 4.2 for the full schema. Include all indexes, RLS policies, and unique constraint on user_id + hour_start.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Migration file created in supabase/migrations/",
         "Table has all columns from the plan including user_feedback, user_edits, locked_at, ai_generated",
