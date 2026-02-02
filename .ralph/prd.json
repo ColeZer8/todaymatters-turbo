@@ -107,7 +107,7 @@
       "title": "Create HourlySummaryList component",
       "description": "Build a list/feed component that displays multiple HourlySummaryCards for a given day. Should show summaries in reverse chronological order (most recent hour first). Include loading and empty states.",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Component at apps/mobile/src/components/organisms/HourlySummaryList.tsx",
         "Takes date as prop and fetches/displays summaries for that day",

@@ -168,3 +168,38 @@ Started: Sun Feb  1 22:23:14 CST 2026
   - Conditional rendering with short-circuit evaluation for cleaner JSX
   - Pre-existing lint warnings can be ignored if not in new files
 ---
+
+## Sun Feb 2 01:30:00 CST 2026 - DP-007
+- **Implemented:** Created `HourlySummaryList` React Native component for displaying daily summaries
+- **Files changed:**
+  - `apps/mobile/src/components/organisms/HourlySummaryList.tsx` (new file - 340 lines)
+  - `apps/mobile/src/components/organisms/index.ts` (added exports for HourlySummaryCard and HourlySummaryList)
+  - `.ralph/prd.json` (marked DP-007 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Component at apps/mobile/src/components/organisms/HourlySummaryList.tsx
+  - ✅ Takes date as prop and fetches/displays summaries for that day via `fetchHourlySummariesForDate`
+  - ✅ Uses FlatList for performance with pull-to-refresh support
+  - ✅ Shows loading skeleton while fetching (3 skeleton cards)
+  - ✅ Shows empty state when no summaries exist (with Inbox icon and helpful message)
+  - ✅ Date header shows "Today", "Yesterday", or formatted date with summary count
+  - ✅ Styling matches app theme (StyleSheet, colors consistent with HourlySummaryCard)
+  - ✅ TypeScript compiles without errors
+  - ✅ Lint passes without warnings for new file
+- **Component Features:**
+  - `HourlySummaryListProps`: date (YYYY-MM-DD), userId, callbacks for feedback/edit
+  - `LoadingSkeleton` - shows 3 skeleton cards while loading
+  - `EmptyState` - shows when no summaries available
+  - `formatDateHeader(date)` - returns "Today"/"Yesterday" or "Jan 15"
+  - `formatDateForDisplay(date)` - returns "January 15, 2026" for empty state
+  - `RefreshControl` for pull-to-refresh functionality
+  - Error state handling with user-friendly message
+  - Optional `ListHeaderComponent` and `ListFooterComponent` props for flexibility
+- **Learnings for future iterations:**
+  - FlatList patterns: use `keyExtractor`, `renderItem` callbacks wrapped in `useCallback`
+  - RefreshControl component adds pull-to-refresh with `refreshing` and `onRefresh` props
+  - Loading skeletons should match the shape of the real content
+  - Empty states should explain why data might be missing and what generates it
+  - Export both component and its props type from organisms/index.ts for reuse
+  - ESLint catches unused imports - remove ActivityIndicator, Clock if not used
+  - Avoid unescaped entities in JSX Text - use "Could not" instead of "Couldn't"
+---
