@@ -11,6 +11,11 @@ Started: Sun Feb  1 22:23:14 CST 2026
 - Grant permissions at end: `grant select, insert, update, delete on tm.tablename to authenticated;`
 - Check constraints on numeric fields (e.g., confidence scores between 0 and 1)
 - JSONB columns should have default empty object/array: `default '{}'::jsonb` or `default '[]'::jsonb`
+- Service files access tm schema via `tmSchema()` helper: `supabase.schema("tm")`
+- Export new services from `apps/mobile/src/lib/supabase/services/index.ts`
+- Use `fetchUserAppCategoryOverridesForIntent` for user app category overrides
+- Screen time overlap queries: `.lt("started_at", end).gt("ended_at", start)`
+- Pre-existing TypeScript errors in codebase - verify new files with `grep` for file name in tsc output
 
 ---
 
@@ -49,4 +54,82 @@ Started: Sun Feb  1 22:23:14 CST 2026
   - Partial indexes use `where` clause (e.g., `where locked_at is null` for unlocked summaries)
   - Unique constraints use `constraint` keyword in table definition rather than separate statement
   - CHARLIE layer tables need more columns for user interaction (feedback, edits, locking)
+---
+
+## Sun Feb 1 23:25:00 CST 2026 - DP-003
+- **Implemented:** Created `tm.activity_feedback` table migration for feedback learning loop
+- **Files changed:**
+  - `supabase/migrations/20260201_create_tm_activity_feedback.sql` (new file)
+  - `.ralph/prd.json` (marked DP-003 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Migration file created in supabase/migrations/
+  - ✅ Table links to hourly_summaries and activity_segments (with ON DELETE SET NULL)
+  - ✅ Stores original vs corrected values (original_activity, corrected_activity, original_place_label, corrected_place_label, original_title, corrected_title)
+  - ✅ Has context_data JSONB for learning (default '{}'::jsonb)
+  - ✅ RLS policies for select, insert, update, delete (users can only access own data)
+  - ✅ Lint check passes (no new errors)
+- **Learnings for future iterations:**
+  - Feedback tables don't need an updated_at column since corrections are immutable records
+  - Partial indexes with `where column is not null` are useful for optional foreign keys
+  - context_data JSONB stores learning context: hour_of_day, day_of_week, top_apps, confidence
+---
+
+## Sun Feb 1 23:55:00 CST 2026 - DP-004
+- **Implemented:** Created `generateActivitySegments` function for BRAVO layer
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/activity-segments.ts` (new file - 700+ lines)
+  - `apps/mobile/src/lib/supabase/services/activity-segments.test.ts` (new file - 23 tests)
+  - `apps/mobile/src/lib/supabase/services/index.ts` (added export)
+  - `.ralph/prd.json` (marked DP-004 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Function created in apps/mobile/src/lib/supabase/services/activity-segments.ts
+  - ✅ Fetches location samples and screen time sessions for a given hour
+  - ✅ Uses existing generateLocationSegments from actual-ingestion.ts
+  - ✅ Calculates app breakdown per segment with category classification
+  - ✅ Implements inferActivityType with rules from the plan (14 activity types)
+  - ✅ Implements calculateConfidenceScore formula (location + screen + consensus)
+  - ✅ Returns properly typed ActivitySegment[]
+  - ✅ Has unit tests covering main scenarios (23 tests passing)
+  - ✅ TypeScript compiles without errors in new files
+- **Learnings for future iterations:**
+  - Service files in mobile app use `tmSchema()` helper to access tm schema: `supabase.schema("tm")`
+  - Use `fetchUserAppCategoryOverridesForIntent` for intent classification overrides
+  - `generateLocationSegments` and `mergeAdjacentSegments` are reusable from actual-ingestion.ts
+  - For screen time overlap queries, use `.lt("started_at", hourEnd).gt("ended_at", hourStart)`
+  - Activity inference priority: health data > commute > app usage > low screen time > fallback
+  - Pre-existing TypeScript errors exist (unrelated to new code) - grep for new file to verify
+  - Test file pattern: describe blocks for each function, nested describes for scenarios
+---
+
+## Sun Feb 2 00:25:00 CST 2026 - DP-005
+- **Implemented:** Created `generateHourlySummary` function for CHARLIE layer
+- **Files changed:**
+  - `apps/mobile/src/lib/supabase/services/hourly-summaries.ts` (new file - 500+ lines)
+  - `apps/mobile/src/lib/supabase/services/index.ts` (added export)
+  - `.ralph/prd.json` (marked DP-005 as passes: true)
+- **Acceptance Criteria Met:**
+  - ✅ Function created in apps/mobile/src/lib/supabase/services/hourly-summaries.ts
+  - ✅ Respects locked summaries (checks lockedAt before regenerating)
+  - ✅ Aggregates multiple segments into one summary via `aggregateSegments()`
+  - ✅ Generates template-based title (e.g., 'Office - Deep Work', 'Commute to Home')
+  - ✅ Generates template-based description (e.g., '30 min at Office. Figma (20m), Slack (10m)')
+  - ✅ Calculates aggregate confidence score (weighted by segment duration)
+  - ✅ Returns properly typed HourlySummary
+  - ✅ TypeScript compiles without errors
+- **Key Functions Implemented:**
+  - `generateHourlySummary(userId, hourStart)` - main function
+  - `aggregateSegments(segments)` - combines multiple segments into AggregatedData
+  - `calculateAggregateConfidence(segments)` - weighted average confidence
+  - `categorizeEvidenceStrength(segments)` - returns low/medium/high
+  - `generateTitleFromTemplate(aggregated)` - "Place - Activity" or "Commute to X"
+  - `generateTemplateDescription(aggregated)` - duration + top apps
+  - `fetchHourlySummary()`, `fetchHourlySummariesForDate()` - DB queries
+  - `saveHourlySummary()`, `updateHourlySummary()` - DB operations
+  - `processHourlySummary()` - convenience function (generate + save)
+- **Learnings for future iterations:**
+  - HourlySummary uses `localDate` as YYYY-MM-DD string for easy day-based queries
+  - Activity labels map: ACTIVITY_LABELS converts inferredActivity to human-readable text
+  - Commute special case: title is "Commute to {destination}" not "Place - Commute"
+  - Empty hour handling: returns summary with "No Activity Data" title
+  - Upsert uses `onConflict: "user_id,hour_start"` to match unique constraint
 ---

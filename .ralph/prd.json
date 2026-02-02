@@ -52,7 +52,7 @@
       "title": "Implement generateActivitySegments function",
       "description": "Create the core BRAVO layer function that transforms ALPHA data (location samples, screen time sessions) into enriched activity segments. Follow the pseudocode in docs/data-pipeline-plan.md section 5.1. This should be purely algorithmic - no AI calls.",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Function created in apps/mobile/src/lib/supabase/services/activity-segments.ts",
         "Fetches location samples and screen time sessions for a given hour",
@@ -70,7 +70,7 @@
       "title": "Implement generateHourlySummary function",
       "description": "Create the CHARLIE layer function that aggregates BRAVO segments into user-facing hourly summaries. Follow pseudocode in docs/data-pipeline-plan.md section 5.2. Use template-based titles/descriptions (no AI for now).",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Function created in apps/mobile/src/lib/supabase/services/hourly-summaries.ts",
         "Respects locked summaries (user edits)",
