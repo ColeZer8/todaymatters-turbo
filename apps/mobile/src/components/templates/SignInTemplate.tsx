@@ -57,8 +57,8 @@ export const SignInTemplate = ({
       <SafeAreaView className="flex-1">
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={isIos ? "padding" : undefined}
-          enabled={isIos}
+          behavior={isIos ? "padding" : "height"}
+          enabled
           keyboardVerticalOffset={0}
         >
           <ScrollView

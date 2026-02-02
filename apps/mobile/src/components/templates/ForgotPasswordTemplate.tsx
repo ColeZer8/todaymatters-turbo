@@ -50,8 +50,8 @@ export const ForgotPasswordTemplate = ({
       <SafeAreaView className="flex-1" style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
-          behavior={isIos ? "padding" : undefined}
-          enabled={isIos}
+          behavior={isIos ? "padding" : "height"}
+          enabled
           keyboardVerticalOffset={0}
         >
           <ScrollView

@@ -44,10 +44,15 @@ export const SetupStepLayout = ({
   const isIos = Platform.OS === "ios";
   const ScrollView = RNScrollView;
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const bottomInset = isAndroid ? 0 : insets.bottom;
-  const safeAreaEdges = isAndroid
-    ? ["top", "left", "right"]
-    : ["top", "left", "right", "bottom"];
+  // Use safe area insets for both platforms to handle navigation bar / home indicator
+  const bottomInset = insets.bottom;
+  // Include bottom edge for both platforms - SafeAreaView handles platform differences
+  const safeAreaEdges: ("top" | "left" | "right" | "bottom")[] = [
+    "top",
+    "left",
+    "right",
+    "bottom",
+  ];
 
   useEffect(() => {
     const showEvent = isIos ? "keyboardWillShow" : "keyboardDidShow";
@@ -64,10 +69,12 @@ export const SetupStepLayout = ({
     };
   }, [isIos]);
 
-  const shouldRenderFooter = !!footer && !isKeyboardVisible;
+  // Always render footer - let KeyboardAvoidingView handle positioning
+  const shouldRenderFooter = !!footer;
   // Pin footer across platforms so it stays fixed near bottom (no "riding up")
   const shouldPinFooter = shouldRenderFooter;
-  const keyboardBehavior = isIos ? "padding" : undefined;
+  // Use "padding" on iOS, "height" on Android for best keyboard avoidance behavior
+  const keyboardBehavior = isIos ? "padding" : "height";
 
   return (
     <LinearGradient
@@ -81,8 +88,8 @@ export const SetupStepLayout = ({
         <KeyboardAvoidingView
           style={styles.keyboardAvoid}
           behavior={keyboardBehavior}
-          enabled={isIos}
-          keyboardVerticalOffset={0}
+          enabled
+          keyboardVerticalOffset={isAndroid ? 0 : 0}
         >
           <View style={styles.container}>
             <ScrollView
