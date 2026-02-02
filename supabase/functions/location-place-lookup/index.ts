@@ -139,7 +139,8 @@ serve(async (req: Request) => {
 
     const googleApiKeyResult = await getConfigValue("GOOGLE_MAPS_API_KEY");
     const fallbackGoogleApiKeyResult = await getConfigValue("DEV_GOOGLE_MAPS_API_KEY");
-    const googleApiKey = googleApiKeyResult.value ?? fallbackGoogleApiKeyResult.value;
+    const lowercaseFallbackResult = await getConfigValue("dev_google_maps_api_key");
+    const googleApiKey = googleApiKeyResult.value ?? fallbackGoogleApiKeyResult.value ?? lowercaseFallbackResult.value;
     if (!googleApiKey) {
       return new Response(
         JSON.stringify({

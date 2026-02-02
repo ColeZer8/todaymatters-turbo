@@ -117,24 +117,34 @@ function extractLatLngFromCentroid(centroid: unknown): {
 // ============================================================================
 
 /** Minimum hours at a location to consider it for inference */
-const MIN_HOURS_FOR_INFERENCE = 3;
+const MIN_HOURS_FOR_INFERENCE = 1;
 
 /** Minimum overnight hours to infer as home */
-const MIN_OVERNIGHT_HOURS_FOR_HOME = 8;
+const MIN_OVERNIGHT_HOURS_FOR_HOME = 2;
 
 /** Minimum work hours to infer as work */
-const MIN_WORK_HOURS_FOR_WORK = 10;
+const MIN_WORK_HOURS_FOR_WORK = 3;
 
 /** Minimum distinct days to infer as frequent */
-const MIN_DAYS_FOR_FREQUENT = 3;
+const MIN_DAYS_FOR_FREQUENT = 2;
 
-/** Overnight hours range (10pm = 22, 6am = 6) */
+/** Overnight hours range (10pm = 22, 6am = 6) - LOCAL TIME */
 const OVERNIGHT_START_HOUR = 22;
 const OVERNIGHT_END_HOUR = 6;
 
-/** Work hours range (9am - 5pm) */
+/** Work hours range (9am - 5pm) - LOCAL TIME */
 const WORK_START_HOUR = 9;
 const WORK_END_HOUR = 17;
+
+/** Get local hour from a Date (handles timezone properly) */
+function getLocalHour(date: Date): number {
+  return date.getHours(); // Uses device's local timezone
+}
+
+/** Get local day of week from a Date */
+function getLocalDayOfWeek(date: Date): number {
+  return date.getDay(); // 0 = Sunday, 6 = Saturday
+}
 
 // ============================================================================
 // Core Functions
@@ -229,8 +239,8 @@ function buildGeohashClusters(
     if (!geohash7) continue;
 
     const hourStart = new Date(row.hour_start as string);
-    const hour = hourStart.getUTCHours();
-    const dayOfWeek = hourStart.getUTCDay(); // 0 = Sunday, 6 = Saturday
+    const hour = getLocalHour(hourStart);
+    const dayOfWeek = getLocalDayOfWeek(hourStart);
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isWeekday = !isWeekend;
 
@@ -314,117 +324,150 @@ function buildGeohashClusters(
 
 /**
  * Infer place types from geohash clusters.
+ * Uses smart heuristics matching the HTML mockup:
+ * - Dominant overnight geohash → Home
+ * - Dominant weekday work-hours geohash → Work  
+ * - Recurring locations → Frequent
  */
 function inferPlaceTypes(clusters: Map<string, GeohashCluster>): InferredPlace[] {
   const inferred: InferredPlace[] = [];
-
-  // Sort clusters by total hours descending
   const sortedClusters = [...clusters.values()].sort(
     (a, b) => b.totalHours - a.totalHours,
   );
 
-  // Track what we've already assigned (only one home, one work)
+  if (sortedClusters.length === 0) return [];
+
+  // Find the DOMINANT overnight location (most overnight hours = likely home)
+  const overnightClusters = sortedClusters
+    .filter((c) => c.overnightHours > 0)
+    .sort((a, b) => b.overnightHours - a.overnightHours);
+  
+  const dominantOvernightGeohash = overnightClusters[0]?.geohash7 ?? null;
+
+  // Find the DOMINANT work location (most work hours = likely work)
+  const workClusters = sortedClusters
+    .filter((c) => c.workHours > 0)
+    .sort((a, b) => b.workHours - a.workHours);
+  
+  const dominantWorkGeohash = workClusters[0]?.geohash7 ?? null;
+
+  // Track assignments
   let homeAssigned = false;
   let workAssigned = false;
 
   for (const cluster of sortedClusters) {
-    // Skip if too few hours
+    // Skip tiny clusters
     if (cluster.totalHours < MIN_HOURS_FOR_INFERENCE) continue;
 
-    // Skip if already has a user-defined place
-    if (cluster.existingPlaceLabel) {
-      inferred.push({
-        geohash7: cluster.geohash7,
-        inferredType: "unknown",
-        confidence: 1.0,
-        suggestedLabel: cluster.existingPlaceLabel,
-        reasoning: "Already has user-defined place label",
-        latitude: cluster.avgLatitude,
-        longitude: cluster.avgLongitude,
-        existingPlaceLabel: cluster.existingPlaceLabel,
-        googlePlaceName: cluster.googlePlaceName,
-        stats: {
-          totalHours: cluster.totalHours,
-          overnightHours: cluster.overnightHours,
-          workHours: cluster.workHours,
-          distinctDays: cluster.distinctDays,
-        },
-      });
-      continue;
-    }
-
-    // Try to infer type
     let inferredType: InferredPlaceType = "unknown";
     let confidence = 0;
-    let suggestedLabel = "Unknown Location";
+    let suggestedLabel = cluster.googlePlaceName || "Unknown Location";
     let reasoning = "";
 
-    // Check for HOME (highest overnight hours, not yet assigned)
-    if (
+    // Already has user-defined place
+    if (cluster.existingPlaceLabel) {
+      inferredType = "unknown"; // Keep their label, don't override type
+      confidence = 1.0;
+      suggestedLabel = cluster.existingPlaceLabel;
+      reasoning = "User-defined place";
+    }
+    // HOME: This is the dominant overnight location
+    else if (
+      !homeAssigned &&
+      cluster.geohash7 === dominantOvernightGeohash &&
+      cluster.overnightHours >= MIN_OVERNIGHT_HOURS_FOR_HOME
+    ) {
+      inferredType = "home";
+      const overnightRatio = cluster.overnightHours / Math.max(1, cluster.totalHours);
+      confidence = Math.min(0.95, 0.6 + overnightRatio * 0.35);
+      suggestedLabel = "Home";
+      reasoning = `Dominant overnight location: ${cluster.overnightHours}h overnight (${Math.round(overnightRatio * 100)}% of time here)`;
+      homeAssigned = true;
+    }
+    // HOME fallback: Any location with significant overnight hours
+    else if (
       !homeAssigned &&
       cluster.overnightHours >= MIN_OVERNIGHT_HOURS_FOR_HOME
     ) {
-      const overnightRatio = cluster.overnightHours / cluster.totalHours;
-      if (overnightRatio >= 0.3) {
-        inferredType = "home";
-        confidence = Math.min(0.95, 0.5 + overnightRatio * 0.5);
-        suggestedLabel = "Home";
-        reasoning = `${cluster.overnightHours}h overnight across ${cluster.distinctDays} days (${Math.round(overnightRatio * 100)}% overnight ratio)`;
-        homeAssigned = true;
-      }
+      inferredType = "home";
+      const overnightRatio = cluster.overnightHours / Math.max(1, cluster.totalHours);
+      confidence = Math.min(0.85, 0.5 + overnightRatio * 0.35);
+      suggestedLabel = "Home";
+      reasoning = `${cluster.overnightHours}h overnight across ${cluster.distinctDays} days`;
+      homeAssigned = true;
     }
-
-    // Check for WORK (highest work hours, not yet assigned)
-    if (
-      inferredType === "unknown" &&
+    // WORK: This is the dominant work-hours location
+    else if (
+      !workAssigned &&
+      cluster.geohash7 === dominantWorkGeohash &&
+      cluster.workHours >= MIN_WORK_HOURS_FOR_WORK
+    ) {
+      inferredType = "work";
+      const workRatio = cluster.workHours / Math.max(1, cluster.totalHours);
+      confidence = Math.min(0.90, 0.5 + workRatio * 0.4);
+      suggestedLabel = cluster.googlePlaceName || "Work";
+      reasoning = `Dominant work-hours location: ${cluster.workHours}h during 9am-5pm weekdays`;
+      workAssigned = true;
+    }
+    // WORK fallback: Any location with significant work hours
+    else if (
       !workAssigned &&
       cluster.workHours >= MIN_WORK_HOURS_FOR_WORK
     ) {
-      const workRatio = cluster.workHours / cluster.totalHours;
-      if (workRatio >= 0.3) {
-        inferredType = "work";
-        confidence = Math.min(0.9, 0.4 + workRatio * 0.5);
-        suggestedLabel = cluster.googlePlaceName || "Work";
-        reasoning = `${cluster.workHours}h during weekday work hours across ${cluster.distinctDays} days (${Math.round(workRatio * 100)}% work hours ratio)`;
-        workAssigned = true;
-      }
+      inferredType = "work";
+      const workRatio = cluster.workHours / Math.max(1, cluster.totalHours);
+      confidence = Math.min(0.80, 0.4 + workRatio * 0.4);
+      suggestedLabel = cluster.googlePlaceName || "Work";
+      reasoning = `${cluster.workHours}h during work hours across ${cluster.distinctDays} days`;
+      workAssigned = true;
     }
-
-    // Check for FREQUENT (visited multiple days)
-    if (
-      inferredType === "unknown" &&
-      cluster.distinctDays >= MIN_DAYS_FOR_FREQUENT
-    ) {
+    // FREQUENT: Visited multiple days
+    else if (cluster.distinctDays >= MIN_DAYS_FOR_FREQUENT) {
       inferredType = "frequent";
-      confidence = Math.min(0.7, 0.3 + cluster.distinctDays * 0.1);
+      confidence = Math.min(0.75, 0.35 + cluster.distinctDays * 0.1);
       suggestedLabel = cluster.googlePlaceName || "Frequent Location";
       reasoning = `Visited ${cluster.distinctDays} different days, ${cluster.totalHours}h total`;
     }
-
-    // Only add if we inferred something
-    if (inferredType !== "unknown" || cluster.totalHours >= 5) {
-      inferred.push({
-        geohash7: cluster.geohash7,
-        inferredType,
-        confidence,
-        suggestedLabel,
-        reasoning,
-        latitude: cluster.avgLatitude,
-        longitude: cluster.avgLongitude,
-        existingPlaceLabel: cluster.existingPlaceLabel,
-        googlePlaceName: cluster.googlePlaceName,
-        stats: {
-          totalHours: cluster.totalHours,
-          overnightHours: cluster.overnightHours,
-          workHours: cluster.workHours,
-          distinctDays: cluster.distinctDays,
-        },
-      });
+    // Show all other significant locations too
+    else if (cluster.totalHours >= 1) {
+      inferredType = "unknown";
+      confidence = Math.min(0.5, 0.2 + cluster.totalHours * 0.05);
+      suggestedLabel = cluster.googlePlaceName || "Location";
+      reasoning = `${cluster.totalHours}h total, ${cluster.distinctDays} day(s)`;
+      if (cluster.overnightHours > 0) {
+        reasoning += ` · ${cluster.overnightHours}h overnight`;
+      }
+      if (cluster.workHours > 0) {
+        reasoning += ` · ${cluster.workHours}h work hours`;
+      }
+    } else {
+      continue; // Skip very small clusters
     }
+
+    inferred.push({
+      geohash7: cluster.geohash7,
+      inferredType,
+      confidence,
+      suggestedLabel,
+      reasoning,
+      latitude: cluster.avgLatitude,
+      longitude: cluster.avgLongitude,
+      existingPlaceLabel: cluster.existingPlaceLabel,
+      googlePlaceName: cluster.googlePlaceName,
+      stats: {
+        totalHours: cluster.totalHours,
+        overnightHours: cluster.overnightHours,
+        workHours: cluster.workHours,
+        distinctDays: cluster.distinctDays,
+      },
+    });
   }
 
-  // Sort by confidence descending
-  return inferred.sort((a, b) => b.confidence - a.confidence);
+  // Sort by confidence descending, then by total hours
+  return inferred.sort((a, b) => {
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    return b.stats.totalHours - a.stats.totalHours;
+  });
 }
 
 /**

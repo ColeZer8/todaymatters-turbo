@@ -13,7 +13,7 @@ import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 import { peekPendingLocationSamplesAsync } from "@/lib/ios-location/queue";
 import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
 import { fetchRecentLocationSamples } from "@/lib/supabase/services/location-samples";
-import { supabase, SUPABASE_ANON_KEY } from "@/lib/supabase/client";
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/client";
 import {
   inferPlacesFromHistory,
   type InferredPlace,
@@ -192,7 +192,7 @@ export default function DevLocationScreen() {
     return points;
   }, [remoteSamplesToday, samplesToday]);
 
-  const runLocalPlaceLookup = useCallback(async () => {
+  const runPlaceLookup = useCallback(async () => {
     if (!userId) return;
     setLookupMessage(null);
     setIsLookupLoading(true);
@@ -212,7 +212,7 @@ export default function DevLocationScreen() {
       }
 
       const response = await fetch(
-        "http://localhost:54321/functions/v1/location-place-lookup",
+        `${SUPABASE_URL}/functions/v1/swift-task`,
         {
           method: "POST",
           headers: {
@@ -224,12 +224,24 @@ export default function DevLocationScreen() {
         },
       );
 
-      const payload = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let payload: unknown = null;
+      if (rawText) {
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          payload = null;
+        }
+      }
       if (!response.ok) {
+        const detail =
+          typeof payload?.error === "string"
+            ? payload.error
+            : typeof payload?.message === "string"
+              ? payload.message
+              : rawText;
         setLookupMessage(
-          `Lookup failed: ${response.status} ${
-            typeof payload?.error === "string" ? payload.error : ""
-          }`.trim(),
+          `Lookup failed: ${response.status} ${detail ?? ""}`.trim(),
         );
         return;
       }
@@ -380,9 +392,9 @@ export default function DevLocationScreen() {
                     label={
                       isLookupLoading
                         ? "Looking up places…"
-                        : "Lookup places (local)"
+                        : "Lookup places"
                     }
-                    onPress={runLocalPlaceLookup}
+                    onPress={runPlaceLookup}
                     disabled={isLookupLoading || !userId}
                   />
                 </View>

@@ -128,13 +128,13 @@ export async function ensureGooglePlaceNamesForDay(params: {
   }
 
   try {
-    const functionUrl = `${SUPABASE_URL}/functions/v1/location-place-lookup`;
+    const functionUrl = `${SUPABASE_URL}/functions/v1/swift-task`;
     if (__DEV__) {
       console.log("[LocationPlaceLookup] Calling:", functionUrl);
     }
 
     const { data, error } = await supabase.functions.invoke(
-      "location-place-lookup",
+      "swift-task",
       {
         body: { points },
       },
@@ -150,7 +150,7 @@ export async function ensureGooglePlaceNamesForDay(params: {
     return results.length > 0;
   } catch (error) {
     if (__DEV__) {
-      const functionUrl = `${SUPABASE_URL}/functions/v1/location-place-lookup`;
+      const functionUrl = `${SUPABASE_URL}/functions/v1/swift-task`;
       console.error("[LocationPlaceLookup] Failed:", {
         error,
         url: functionUrl,
