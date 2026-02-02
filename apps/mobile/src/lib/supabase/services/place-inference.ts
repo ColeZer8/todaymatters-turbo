@@ -267,12 +267,12 @@ function buildGeohashClusters(
     days.add(dayKey);
   }
 
-  for (const [geohash7, days] of daysByGeohash) {
+  Array.from(daysByGeohash.entries()).forEach(([geohash7, days]) => {
     const cluster = clusters.get(geohash7);
     if (cluster) {
       cluster.distinctDays = days.size;
     }
-  }
+  });
 
   return clusters;
 }

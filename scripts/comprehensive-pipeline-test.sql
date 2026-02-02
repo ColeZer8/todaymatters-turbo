@@ -180,9 +180,29 @@ SELECT
     radius_m,
     place_id,
     place_label,
-    place_category
+    place_category,
+    google_place_name,
+    google_place_vicinity,
+    google_place_types
 FROM tm.location_hourly
 WHERE user_id = 'b9ca3335-9929-4d54-a3fc-18883c5f3375'
   AND hour_start >= '2026-02-02 00:00:00+00'
   AND hour_start < '2026-02-03 00:00:00+00'
 ORDER BY hour_start;
+
+-- ============================================================================
+-- 10. GOOGLE PLACE CACHE (recent entries)
+-- ============================================================================
+SELECT
+    fetched_at AT TIME ZONE 'America/Chicago' as fetched_cst,
+    place_name,
+    place_vicinity,
+    place_types,
+    latitude,
+    longitude,
+    expires_at
+FROM tm.location_place_cache
+WHERE user_id = 'b9ca3335-9929-4d54-a3fc-18883c5f3375'
+  AND fetched_at >= '2026-02-02 00:00:00+00'
+  AND fetched_at < '2026-02-03 00:00:00+00'
+ORDER BY fetched_at DESC;

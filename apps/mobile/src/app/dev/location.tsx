@@ -13,6 +13,7 @@ import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 import { peekPendingLocationSamplesAsync } from "@/lib/ios-location/queue";
 import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
 import { fetchRecentLocationSamples } from "@/lib/supabase/services/location-samples";
+import { supabase, SUPABASE_ANON_KEY } from "@/lib/supabase/client";
 import type { IosLocationSample } from "@/lib/ios-location/types";
 import type { AndroidLocationSample } from "@/lib/android-location/types";
 
@@ -36,6 +37,8 @@ export default function DevLocationScreen() {
   const [remoteSamples, setRemoteSamples] = useState<LocationSample[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [supabaseWarning, setSupabaseWarning] = useState<string | null>(null);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
 
@@ -165,6 +168,75 @@ export default function DevLocationScreen() {
 
   const maxHourly = Math.max(...hourlyBuckets, 1);
 
+  const buildLookupPoints = useCallback(() => {
+    const dedupe = new Set<string>();
+    const points: Array<{ latitude: number; longitude: number }> = [];
+    const combined = [...remoteSamplesToday, ...samplesToday];
+    for (const sample of combined) {
+      const key = `${sample.latitude.toFixed(4)},${sample.longitude.toFixed(4)}`;
+      if (dedupe.has(key)) continue;
+      dedupe.add(key);
+      points.push({ latitude: sample.latitude, longitude: sample.longitude });
+      if (points.length >= 12) break;
+    }
+    return points;
+  }, [remoteSamplesToday, samplesToday]);
+
+  const runLocalPlaceLookup = useCallback(async () => {
+    if (!userId) return;
+    setLookupMessage(null);
+    setIsLookupLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setLookupMessage("Missing session token.");
+        return;
+      }
+
+      const points = buildLookupPoints();
+      if (points.length === 0) {
+        setLookupMessage("No samples available for lookup.");
+        return;
+      }
+
+      const response = await fetch(
+        "http://localhost:54321/functions/v1/location-place-lookup",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ points }),
+        },
+      );
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setLookupMessage(
+          `Lookup failed: ${response.status} ${
+            typeof payload?.error === "string" ? payload.error : ""
+          }`.trim(),
+        );
+        return;
+      }
+
+      const resultCount = Array.isArray(payload?.results)
+        ? payload.results.length
+        : 0;
+      setLookupMessage(`Lookup complete: ${resultCount} results.`);
+    } catch (error) {
+      setLookupMessage(
+        `Lookup error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setIsLookupLoading(false);
+    }
+  }, [buildLookupPoints, userId]);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -251,6 +323,22 @@ export default function DevLocationScreen() {
                     disabled={isLoading || !userId}
                   />
                 </View>
+                <View className="mt-3">
+                  <GradientButton
+                    label={
+                      isLookupLoading
+                        ? "Looking up places…"
+                        : "Lookup places (local)"
+                    }
+                    onPress={runLocalPlaceLookup}
+                    disabled={isLookupLoading || !userId}
+                  />
+                </View>
+                {lookupMessage ? (
+                  <Text className="mt-2 text-xs text-text-tertiary">
+                    {lookupMessage}
+                  </Text>
+                ) : null}
                 {lastRefreshAt ? (
                   <Text className="mt-2 text-xs text-text-tertiary">
                     Last refresh: {lastRefreshAt.toLocaleTimeString()}
