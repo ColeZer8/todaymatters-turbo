@@ -156,7 +156,7 @@ function toLocalDateString(date: Date): string {
 /**
  * Human-readable activity names.
  */
-const ACTIVITY_LABELS: Record<InferredActivityType, string> = {
+export const ACTIVITY_LABELS: Record<InferredActivityType, string> = {
   workout: "Workout",
   sleep: "Sleep",
   commute: "Commute",
@@ -176,7 +176,8 @@ const ACTIVITY_LABELS: Record<InferredActivityType, string> = {
 /**
  * Convert activity type to human-readable label.
  */
-function humanizeActivity(activity: InferredActivityType): string {
+export function humanizeActivity(activity: InferredActivityType | null): string {
+  if (!activity) return "Activity";
   return ACTIVITY_LABELS[activity] || "Activity";
 }
 

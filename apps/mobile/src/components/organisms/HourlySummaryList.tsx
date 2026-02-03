@@ -22,6 +22,7 @@ import { HourlySummaryCard } from "./HourlySummaryCard";
 import {
   type HourlySummary,
   fetchHourlySummariesForDate,
+  humanizeActivity,
 } from "@/lib/supabase/services";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -259,24 +260,63 @@ export const HourlySummaryList = ({
         const inferredPlace = geohash7 ? inferenceByGeohash.get(geohash7) || null : null;
 
         // Determine best place label:
-        // Priority: existing label > user place > google place > meaningful inference
+        // Priority: user-defined meaningful label > location_hourly place > google place > inference
         const inferredLabel = inferredPlace?.suggestedLabel;
         const hasMeaningfulInference = inferredLabel && 
           inferredLabel !== "Unknown Location" && 
           inferredLabel !== "Location" &&
           inferredLabel !== "Frequent Location";
 
-        let enrichedLabel = summary.primaryPlaceLabel;
-        if (!enrichedLabel) {
-          enrichedLabel = locData?.place_label  // User-defined place
+        // Check if summary has a MEANINGFUL user-defined label (not a placeholder)
+        const hasUserDefinedLabel = summary.primaryPlaceLabel && 
+          summary.primaryPlaceLabel !== "Unknown Location" &&
+          summary.primaryPlaceLabel !== "Location" &&
+          summary.primaryPlaceLabel !== "Unknown";
+
+        let enrichedLabel: string | null = null;
+
+        if (hasUserDefinedLabel) {
+          // User has explicitly labeled this - respect it
+          enrichedLabel = summary.primaryPlaceLabel;
+        } else {
+          // No meaningful label - apply enrichment priority
+          enrichedLabel = locData?.place_label  // User-defined place from location_hourly
             || (hasMeaningfulInference ? inferredLabel : null)  // Home/Work inference
             || locData?.google_place_name  // Google place (e.g. "Target")
-            || inferredLabel  // Any inference
+            || inferredLabel  // Any inference (Frequent Location, etc.)
             || null;
+        }
+
+        // Regenerate title if we have a better place label than what's in the DB
+        // The DB title may have "Unknown Location - Activity" baked in
+        let enrichedTitle = summary.title;
+        const activityLabel = humanizeActivity(summary.primaryActivity);
+        
+        // Check if the current title has "Unknown Location" that we can improve
+        const titleNeedsEnrichment = 
+          summary.title.includes("Unknown Location") ||
+          summary.title.includes("Unknown -") ||
+          summary.title === "No Activity Data";
+        
+        if (summary.primaryActivity === "commute") {
+          // Special case for commute - don't use place label in title
+          // The place during commute is transitional
+          if (enrichedLabel && enrichedLabel !== "Unknown Location") {
+            enrichedTitle = `Commute → ${enrichedLabel}`;
+          } else {
+            enrichedTitle = "In Transit";
+          }
+        } else if (enrichedLabel && enrichedLabel !== "Unknown Location" && titleNeedsEnrichment) {
+          // We have a good place label and title needs improvement
+          enrichedTitle = `${enrichedLabel} - ${activityLabel}`;
+        } else if (titleNeedsEnrichment) {
+          // No place label, but clean up "Unknown Location" from title
+          enrichedTitle = activityLabel;
         }
 
         const result: EnrichedSummary = {
           ...summary,
+          title: enrichedTitle,
           primaryPlaceLabel: enrichedLabel,
           inferredPlace,
           geohash7,
