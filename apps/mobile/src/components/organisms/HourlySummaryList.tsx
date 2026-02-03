@@ -30,6 +30,10 @@ import {
   type InferredPlace,
   type PlaceInferenceResult,
 } from "@/lib/supabase/services/place-inference";
+import {
+  generateInferenceDescription,
+  type InferenceContext,
+} from "@/lib/supabase/services/activity-inference-descriptions";
 
 // ============================================================================
 // Types
@@ -291,33 +295,65 @@ export const HourlySummaryList = ({
             || null;
         }
 
-        // Regenerate title if we have a better place label than what's in the DB
-        // The DB title may have "Unknown Location - Activity" baked in
+        // Regenerate title using smart inference
+        // The DB title may have "Unknown Location - Activity" or "Mixed Activity" baked in
         let enrichedTitle = summary.title;
-        const activityLabel = humanizeActivity(summary.primaryActivity);
         
-        // Check if the current title has "Unknown Location" that we can improve
+        // Check if the current title needs improvement
         const titleNeedsEnrichment = 
           summary.title.includes("Unknown Location") ||
           summary.title.includes("Unknown -") ||
           summary.title === "No Activity Data" ||
-          summary.title.includes("Mixed Activity");
+          summary.title.includes("Mixed Activity") ||
+          summary.primaryActivity === "mixed_activity";
         
-        if (summary.primaryActivity === "commute") {
-          // Special case for commute - show origin → destination
-          if (prevPlaceLabel && enrichedLabel && enrichedLabel !== "Unknown Location") {
-            enrichedTitle = `${prevPlaceLabel} → ${enrichedLabel}`;
-          } else if (enrichedLabel && enrichedLabel !== "Unknown Location") {
-            enrichedTitle = `Commute → ${enrichedLabel}`;
+        if (titleNeedsEnrichment) {
+          // Use smart inference to generate a better title
+          const inferenceCtx: InferenceContext = {
+            activity: summary.primaryActivity,
+            apps: summary.appBreakdown,
+            screenMinutes: summary.totalScreenMinutes,
+            hourOfDay: summary.hourOfDay,
+            placeLabel: enrichedLabel,
+            previousPlaceLabel: prevPlaceLabel,
+            inferredPlace,
+            locationSamples: locData?.sample_count || 0,
+            confidence: summary.confidenceScore,
+            previousGeohash: prevGeohash,
+            currentGeohash: geohash7,
+            locationRadius: locData?.radius_m || null,
+            googlePlaceTypes: locData?.google_place_types || null,
+          };
+          
+          const smartInference = generateInferenceDescription(inferenceCtx);
+          
+          if (summary.primaryActivity === "commute") {
+            // Special case for commute - show origin → destination
+            if (prevPlaceLabel && enrichedLabel && enrichedLabel !== "Unknown Location") {
+              enrichedTitle = `${prevPlaceLabel} → ${enrichedLabel}`;
+            } else if (enrichedLabel && enrichedLabel !== "Unknown Location") {
+              enrichedTitle = `Commute → ${enrichedLabel}`;
+            } else {
+              enrichedTitle = "In Transit";
+            }
+          } else if (smartInference) {
+            // Use the smart inference primary as the title
+            if (enrichedLabel && enrichedLabel !== "Unknown Location" && 
+                !smartInference.primary.toLowerCase().includes(enrichedLabel.toLowerCase())) {
+              // Add place to title if not already included
+              enrichedTitle = `${enrichedLabel} - ${smartInference.primary}`;
+            } else {
+              enrichedTitle = smartInference.primary;
+            }
           } else {
-            enrichedTitle = "In Transit";
+            // Fallback to basic activity label
+            const activityLabel = humanizeActivity(summary.primaryActivity);
+            if (enrichedLabel && enrichedLabel !== "Unknown Location") {
+              enrichedTitle = `${enrichedLabel} - ${activityLabel}`;
+            } else {
+              enrichedTitle = activityLabel;
+            }
           }
-        } else if (enrichedLabel && enrichedLabel !== "Unknown Location" && titleNeedsEnrichment) {
-          // We have a good place label and title needs improvement
-          enrichedTitle = `${enrichedLabel} - ${activityLabel}`;
-        } else if (titleNeedsEnrichment) {
-          // No place label, but clean up "Unknown Location" from title
-          enrichedTitle = activityLabel;
         }
 
         const result: EnrichedSummary = {
