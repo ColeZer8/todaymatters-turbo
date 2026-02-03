@@ -76,42 +76,6 @@ export interface PlaceInferenceResult {
 // Helpers
 // ============================================================================
 
-/**
- * Extract lat/lng from a PostGIS geography/geometry value.
- * Handles GeoJSON Point format and WKT POINT format.
- */
-function extractLatLngFromCentroid(centroid: unknown): {
-  latitude: number | null;
-  longitude: number | null;
-} {
-  if (!centroid) return { latitude: null, longitude: null };
-
-  // Handle WKT format: "POINT(longitude latitude)" or "SRID=4326;POINT(...)"
-  if (typeof centroid === "string") {
-    const match = centroid.match(
-      /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
-    );
-    if (match) {
-      return { longitude: Number(match[1]), latitude: Number(match[2]) };
-    }
-    return { latitude: null, longitude: null };
-  }
-
-  // Handle GeoJSON format: { type: "Point", coordinates: [lng, lat] }
-  if (typeof centroid === "object") {
-    const geo = centroid as { type?: string; coordinates?: number[] };
-    if (
-      geo.type === "Point" &&
-      Array.isArray(geo.coordinates) &&
-      geo.coordinates.length >= 2
-    ) {
-      return { latitude: geo.coordinates[1], longitude: geo.coordinates[0] };
-    }
-  }
-
-  return { latitude: null, longitude: null };
-}
-
 // ============================================================================
 // Constants
 // ============================================================================
@@ -179,7 +143,8 @@ export async function inferPlacesFromHistory(
       sample_count,
       place_id,
       place_label,
-      centroid,
+      centroid_latitude,
+      centroid_longitude,
       google_place_name
     `,
     )
@@ -228,7 +193,8 @@ function buildGeohashClusters(
     sample_count: unknown;
     place_id: unknown;
     place_label: unknown;
-    centroid: unknown;
+    centroid_latitude: unknown;
+    centroid_longitude: unknown;
     google_place_name: unknown;
   }>,
 ): Map<string, GeohashCluster> {
@@ -274,8 +240,9 @@ function buildGeohashClusters(
     if (isWorkHours) cluster.workHours += 1;
     if (isWeekend) cluster.weekendHours += 1;
 
-    // Track coordinates (extract from PostGIS centroid)
-    const { latitude: lat, longitude: lng } = extractLatLngFromCentroid(row.centroid);
+    // Track coordinates (use explicit columns from updated view)
+    const lat = typeof row.centroid_latitude === "number" ? row.centroid_latitude : null;
+    const lng = typeof row.centroid_longitude === "number" ? row.centroid_longitude : null;
     if (lat !== null && lng !== null) {
       if (cluster.avgLatitude === null) {
         cluster.avgLatitude = lat;

@@ -23,3 +23,4 @@ export * from "./activity-segments";
 export * from "./hourly-summaries";
 export * from "./activity-feedback";
 export * from "./place-inference";
+export * from "./activity-inference-descriptions";

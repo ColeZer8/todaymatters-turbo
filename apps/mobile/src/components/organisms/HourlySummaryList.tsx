@@ -4,9 +4,12 @@
  * Displays a list of hourly summaries for a given day using FlatList.
  * Shows summaries in reverse chronological order (most recent first).
  * Includes loading skeleton and empty states.
+ *
+ * Now integrates Place Inference data to show inferred places (Home, Work, etc.)
+ * when no user-defined place exists for an hour.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,12 +17,18 @@ import {
   StyleSheet,
   RefreshControl,
 } from "react-native";
-import { Calendar, Inbox } from "lucide-react-native";
+import { Calendar, Inbox, Sparkles } from "lucide-react-native";
 import { HourlySummaryCard } from "./HourlySummaryCard";
 import {
   type HourlySummary,
   fetchHourlySummariesForDate,
 } from "@/lib/supabase/services";
+import { supabase } from "@/lib/supabase/client";
+import {
+  inferPlacesFromHistory,
+  type InferredPlace,
+  type PlaceInferenceResult,
+} from "@/lib/supabase/services/place-inference";
 
 // ============================================================================
 // Types
@@ -143,6 +152,28 @@ function formatDateHeader(dateString: string): string {
 }
 
 // ============================================================================
+// Types for Place Inference Integration
+// ============================================================================
+
+interface LocationHourlyRow {
+  hour_start: string;
+  geohash7: string | null;
+  sample_count: number;
+  place_label: string | null;
+  google_place_name: string | null;
+  radius_m?: number | null;
+}
+
+/** Extended summary with inferred place data */
+interface EnrichedSummary extends HourlySummary {
+  inferredPlace?: InferredPlace | null;
+  geohash7?: string | null;
+  locationSamples?: number;
+  previousGeohash?: string | null;
+  locationRadius?: number | null;
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -156,17 +187,114 @@ export const HourlySummaryList = ({
   ListFooterComponent,
   contentContainerStyle,
 }: HourlySummaryListProps) => {
-  const [summaries, setSummaries] = useState<HourlySummary[]>([]);
+  const [summaries, setSummaries] = useState<EnrichedSummary[]>([]);
+  const [inferenceResult, setInferenceResult] = useState<PlaceInferenceResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch summaries on mount and when date changes
-  const fetchSummaries = useCallback(async () => {
+  // Fetch summaries + location data + place inference on mount and when date changes
+  const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchHourlySummariesForDate(userId, date);
-      setSummaries(data);
+
+      // 1. Fetch CHARLIE summaries
+      const charlieSummaries = await fetchHourlySummariesForDate(userId, date);
+
+      // 2. Fetch location hourly data to get geohash for each hour
+      const startOfDay = `${date}T00:00:00`;
+      const endOfDay = `${date}T23:59:59`;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: locationRows, error: locError } = await (supabase as any)
+        .schema("tm")
+        .from("location_hourly")
+        .select("hour_start, geohash7, sample_count, place_label, google_place_name, radius_m")
+        .eq("user_id", userId)
+        .gte("hour_start", startOfDay)
+        .lte("hour_start", endOfDay)
+        .order("hour_start", { ascending: true }) as { data: LocationHourlyRow[] | null; error: unknown };
+
+      if (locError && (locError as { code?: string })?.code !== "42P01") {
+        console.warn("[HourlySummaryList] Location fetch warning:", locError);
+      }
+
+      // 3. Run place inference (uses 14 days of history)
+      let inference: PlaceInferenceResult | null = null;
+      try {
+        inference = await inferPlacesFromHistory(userId, 14);
+        setInferenceResult(inference);
+      } catch (infErr) {
+        console.warn("[HourlySummaryList] Place inference warning:", infErr);
+      }
+
+      // 4. Build a map of hour -> location data
+      const locationByHour = new Map<string, LocationHourlyRow>();
+      for (const row of (locationRows || []) as unknown as LocationHourlyRow[]) {
+        // Normalize to just the hour for matching
+        const hourKey = new Date(row.hour_start).toISOString();
+        locationByHour.set(hourKey, row);
+      }
+
+      // 5. Build a map of geohash -> inferred place
+      const inferenceByGeohash = new Map<string, InferredPlace>();
+      if (inference) {
+        for (const place of inference.inferredPlaces) {
+          inferenceByGeohash.set(place.geohash7, place);
+        }
+      }
+
+      // 6. Enrich CHARLIE summaries with inferred place data
+      // Sort summaries by hour (ascending) first to track previous geohash
+      const sortedSummaries = [...charlieSummaries].sort(
+        (a, b) => a.hourStart.getTime() - b.hourStart.getTime()
+      );
+
+      // Build enriched summaries with previous geohash tracking
+      let prevGeohash: string | null = null;
+      const enrichedAsc: EnrichedSummary[] = sortedSummaries.map((summary) => {
+        const hourKey = summary.hourStart.toISOString();
+        const locData = locationByHour.get(hourKey);
+        const geohash7 = locData?.geohash7 || null;
+        const inferredPlace = geohash7 ? inferenceByGeohash.get(geohash7) || null : null;
+
+        // Determine best place label:
+        // Priority: existing label > user place > google place > meaningful inference
+        const inferredLabel = inferredPlace?.suggestedLabel;
+        const hasMeaningfulInference = inferredLabel && 
+          inferredLabel !== "Unknown Location" && 
+          inferredLabel !== "Location" &&
+          inferredLabel !== "Frequent Location";
+
+        let enrichedLabel = summary.primaryPlaceLabel;
+        if (!enrichedLabel) {
+          enrichedLabel = locData?.place_label  // User-defined place
+            || (hasMeaningfulInference ? inferredLabel : null)  // Home/Work inference
+            || locData?.google_place_name  // Google place (e.g. "Target")
+            || inferredLabel  // Any inference
+            || null;
+        }
+
+        const result: EnrichedSummary = {
+          ...summary,
+          primaryPlaceLabel: enrichedLabel,
+          inferredPlace,
+          geohash7,
+          locationSamples: locData?.sample_count || 0,
+          previousGeohash: prevGeohash,
+          locationRadius: locData?.radius_m || null,
+        };
+
+        // Update prev for next iteration
+        prevGeohash = geohash7;
+
+        return result;
+      });
+
+      // Reverse back to descending order for display
+      const enriched = enrichedAsc.reverse();
+
+      setSummaries(enriched);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load summaries";
       setError(message);
@@ -179,36 +307,54 @@ export const HourlySummaryList = ({
   // Initial load
   useEffect(() => {
     setIsLoading(true);
-    fetchSummaries().finally(() => setIsLoading(false));
-  }, [fetchSummaries]);
+    fetchData().finally(() => setIsLoading(false));
+  }, [fetchData]);
 
   // Pull to refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await fetchSummaries();
+    await fetchData();
     setIsRefreshing(false);
-  }, [fetchSummaries]);
+  }, [fetchData]);
 
-  // Render item
+  // Render item - now includes inference data
   const renderItem = useCallback(
-    ({ item }: { item: HourlySummary }) => (
+    ({ item }: { item: EnrichedSummary }) => (
       <HourlySummaryCard
         summary={item}
         onMarkAccurate={onMarkAccurate}
         onNeedsCorrection={onNeedsCorrection}
         onEdit={onEdit}
+        inferredPlace={item.inferredPlace}
+        locationSamples={item.locationSamples}
+        previousGeohash={item.previousGeohash}
+        currentGeohash={item.geohash7}
+        locationRadius={item.locationRadius}
       />
     ),
     [onMarkAccurate, onNeedsCorrection, onEdit],
   );
 
   // Key extractor
-  const keyExtractor = useCallback((item: HourlySummary) => item.id, []);
+  const keyExtractor = useCallback((item: EnrichedSummary) => item.id, []);
 
-  // List header with date
-  const renderListHeader = () => (
+  // Count inferred places being used
+  const inferredPlaceCount = useMemo(() => {
+    return summaries.filter(s => s.inferredPlace && !s.primaryPlaceId).length;
+  }, [summaries]);
+
+  // List header with date and inference summary
+  const renderListHeader = () => {
+    // Handle ListHeaderComponent which can be ComponentType or ReactElement
+    const HeaderContent = ListHeaderComponent 
+      ? typeof ListHeaderComponent === 'function' 
+        ? <ListHeaderComponent />
+        : ListHeaderComponent
+      : null;
+    
+    return (
     <View>
-      {ListHeaderComponent}
+      {HeaderContent}
       <View style={styles.dateHeader}>
         <View style={styles.dateIconContainer}>
           <Calendar size={16} color="#2563EB" />
@@ -220,8 +366,25 @@ export const HourlySummaryList = ({
           </Text>
         )}
       </View>
+      
+      {/* Place Inference Summary Banner */}
+      {inferenceResult && inferenceResult.inferredPlaces && inferenceResult.inferredPlaces.length > 0 && inferredPlaceCount > 0 && (
+        <View style={styles.inferenceBanner}>
+          <View style={styles.inferenceBannerHeader}>
+            <Sparkles size={14} color="#D97706" />
+            <Text style={styles.inferenceBannerTitle}>
+              Place Inference Active
+            </Text>
+          </View>
+          <Text style={styles.inferenceBannerText}>
+            {inferredPlaceCount} {inferredPlaceCount === 1 ? "hour" : "hours"} using inferred locations.
+            {inferenceResult.stats ? ` Analyzed ${inferenceResult.stats.hoursAnalyzed}h across ${inferenceResult.stats.daysAnalyzed} days.` : ""}
+          </Text>
+        </View>
+      )}
     </View>
   );
+  };
 
   // Loading state
   if (isLoading) {
@@ -247,7 +410,7 @@ export const HourlySummaryList = ({
   }
 
   return (
-    <FlatList
+    <FlatList<EnrichedSummary>
       data={summaries}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
@@ -304,6 +467,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#64748B",
+  },
+  // Inference banner styles
+  inferenceBanner: {
+    backgroundColor: "rgba(251, 191, 36, 0.1)",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.2)",
+  },
+  inferenceBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  inferenceBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400E",
+  },
+  inferenceBannerText: {
+    fontSize: 12,
+    color: "#A16207",
+    lineHeight: 16,
   },
   // Loading skeleton styles
   skeletonContainer: {

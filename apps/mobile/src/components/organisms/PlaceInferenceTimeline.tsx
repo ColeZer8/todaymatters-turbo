@@ -44,7 +44,8 @@ interface LocationHourlyRow {
   sample_count: number;
   place_label: string | null;
   google_place_name: string | null;
-  centroid: unknown;
+  centroid_latitude: number | null;
+  centroid_longitude: number | null;
 }
 
 interface HourlyBlock {
@@ -68,35 +69,6 @@ interface PlaceInferenceTimelineProps {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function extractLatLngFromCentroid(centroid: unknown): {
-  latitude: number | null;
-  longitude: number | null;
-} {
-  if (!centroid) return { latitude: null, longitude: null };
-
-  if (typeof centroid === "string") {
-    const match = centroid.match(
-      /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
-    );
-    if (match) {
-      return { longitude: Number(match[1]), latitude: Number(match[2]) };
-    }
-  }
-
-  if (typeof centroid === "object") {
-    const geo = centroid as { type?: string; coordinates?: number[] };
-    if (
-      geo.type === "Point" &&
-      Array.isArray(geo.coordinates) &&
-      geo.coordinates.length >= 2
-    ) {
-      return { latitude: geo.coordinates[1], longitude: geo.coordinates[0] };
-    }
-  }
-
-  return { latitude: null, longitude: null };
-}
 
 function formatHourLabel(date: Date): string {
   const hour = date.getHours();
@@ -175,12 +147,23 @@ function HourBlockCard({ block, onPress }: HourBlockCardProps) {
   const bgColor = getPlaceTypeBgColor(inferredType);
   
   // Determine what label to show
+  // Priority: user place > google place name > meaningful inference > fallback
+  const inferredLabel = block.inferredPlace?.suggestedLabel;
+  const hasMeaningfulInference = inferredLabel && 
+    inferredLabel !== "Unknown Location" && 
+    inferredLabel !== "Location" &&
+    inferredLabel !== "Frequent Location";
+  
   const displayLabel = block.userPlaceLabel 
-    || block.inferredPlace?.suggestedLabel 
-    || block.googlePlaceName 
+    || (hasMeaningfulInference ? inferredLabel : null)  // Home/Work take priority
+    || block.googlePlaceName  // Prefer actual Google place name (e.g. "Target")
+    || inferredLabel  // Fall back to any inference
     || "Unknown Location";
   
-  const isInferred = !block.userPlaceLabel && block.inferredPlace;
+  // Show "Inferred" badge only when displaying a meaningful inference (not Google name)
+  const isShowingInference = !block.userPlaceLabel && hasMeaningfulInference;
+  // Show "Google" indicator when displaying Google place name
+  const isShowingGoogle = !block.userPlaceLabel && !hasMeaningfulInference && !!block.googlePlaceName;
   const confidence = block.inferredPlace?.confidence ?? 0;
 
   return (
@@ -212,10 +195,16 @@ function HourBlockCard({ block, onPress }: HourBlockCardProps) {
         <View style={styles.placeInfo}>
           <View style={styles.placeLabelRow}>
             <Text style={[styles.placeLabel, { color }]}>{displayLabel}</Text>
-            {isInferred && (
+            {isShowingInference && (
               <View style={styles.inferredBadge}>
                 <Sparkles size={10} color="#F59E0B" />
                 <Text style={styles.inferredText}>Inferred</Text>
+              </View>
+            )}
+            {isShowingGoogle && (
+              <View style={[styles.inferredBadge, { backgroundColor: "rgba(59, 130, 246, 0.15)" }]}>
+                <MapPin size={10} color="#3B82F6" />
+                <Text style={[styles.inferredText, { color: "#3B82F6" }]}>Google</Text>
               </View>
             )}
             {block.userPlaceLabel && (
@@ -291,7 +280,7 @@ export function PlaceInferenceTimeline({
       const { data: rows, error: fetchError } = await supabase
         .schema("tm")
         .from("location_hourly")
-        .select("hour_start, geohash7, sample_count, place_label, google_place_name, centroid")
+        .select("hour_start, geohash7, sample_count, place_label, google_place_name, centroid_latitude, centroid_longitude")
         .eq("user_id", userId)
         .gte("hour_start", startOfDay)
         .lte("hour_start", endOfDay)
@@ -305,7 +294,9 @@ export function PlaceInferenceTimeline({
 
       // Build hourly blocks with inference lookups
       const blocks: HourlyBlock[] = (rows || []).map((row: LocationHourlyRow) => {
-        const { latitude, longitude } = extractLatLngFromCentroid(row.centroid);
+        // Use explicit lat/lng columns from the updated view
+        const latitude = row.centroid_latitude ?? null;
+        const longitude = row.centroid_longitude ?? null;
         const geohash7 = row.geohash7 || null;
         
         return {

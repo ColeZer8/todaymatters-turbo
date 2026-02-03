@@ -27,12 +27,19 @@ import {
   GraduationCap,
   Heart,
   Activity,
+  Sparkles,
 } from "lucide-react-native";
 import type {
   HourlySummary,
   SummaryAppBreakdown,
   EvidenceStrength,
 } from "@/lib/supabase/services";
+import type { InferredPlace } from "@/lib/supabase/services/place-inference";
+import {
+  generateInferenceDescription,
+  type InferenceContext,
+  type InferenceDescription,
+} from "@/lib/supabase/services/activity-inference-descriptions";
 
 // ============================================================================
 // Types
@@ -47,6 +54,16 @@ export interface HourlySummaryCardProps {
   onNeedsCorrection?: (summaryId: string) => void;
   /** Called when user wants to edit the summary */
   onEdit?: (summary: HourlySummary) => void;
+  /** Inferred place data (from place inference service) */
+  inferredPlace?: InferredPlace | null;
+  /** Number of location samples for this hour */
+  locationSamples?: number;
+  /** Previous hour's geohash (for travel detection) */
+  previousGeohash?: string | null;
+  /** Current hour's geohash */
+  currentGeohash?: string | null;
+  /** Location radius in meters */
+  locationRadius?: number | null;
 }
 
 // ============================================================================
@@ -71,7 +88,7 @@ function formatHourRange(hourStart: Date): string {
 }
 
 /**
- * Get an icon for a place category.
+ * Get an icon for a place category based on label text.
  */
 function getPlaceIcon(placeLabel: string | null): LucideIcon {
   if (!placeLabel) return MapPin;
@@ -91,6 +108,38 @@ function getPlaceIcon(placeLabel: string | null): LucideIcon {
   if (label.includes("building")) return Building2;
 
   return MapPin;
+}
+
+/**
+ * Get an icon for an inferred place type.
+ */
+function getPlaceIconForType(type: string | null): LucideIcon {
+  switch (type) {
+    case "home":
+      return Home;
+    case "work":
+      return Briefcase;
+    case "frequent":
+      return MapPin;
+    default:
+      return MapPin;
+  }
+}
+
+/**
+ * Get color for an inferred place type.
+ */
+function getPlaceTypeColor(type: string | null): string {
+  switch (type) {
+    case "home":
+      return "#22C55E"; // Green
+    case "work":
+      return "#3B82F6"; // Blue
+    case "frequent":
+      return "#F59E0B"; // Amber
+    default:
+      return "#6B7280"; // Gray
+  }
 }
 
 /**
@@ -178,8 +227,42 @@ export const HourlySummaryCard = ({
   onMarkAccurate,
   onNeedsCorrection,
   onEdit,
+  inferredPlace,
+  locationSamples,
+  previousGeohash,
+  currentGeohash,
+  locationRadius,
 }: HourlySummaryCardProps) => {
-  const PlaceIcon = getPlaceIcon(summary.primaryPlaceLabel);
+  // Determine if place is inferred (no user-defined place but we have inference)
+  const isPlaceInferred = !summary.primaryPlaceId && !!inferredPlace;
+  const placeLabel = summary.primaryPlaceLabel ?? "Unknown Location";
+
+  // Generate activity inference description
+  const inferenceContext: InferenceContext = {
+    activity: summary.primaryActivity,
+    apps: summary.appBreakdown,
+    screenMinutes: summary.totalScreenMinutes,
+    hourOfDay: summary.hourOfDay,
+    placeLabel: summary.primaryPlaceLabel,
+    inferredPlace,
+    locationSamples: locationSamples ?? 0,
+    confidence: summary.confidenceScore,
+    previousGeohash,
+    currentGeohash,
+    locationRadius,
+  };
+  const inferenceDescription = generateInferenceDescription(inferenceContext);
+  
+  // Get icon based on inferred type if available, otherwise use label matching
+  const PlaceIcon = isPlaceInferred && inferredPlace
+    ? getPlaceIconForType(inferredPlace.inferredType)
+    : getPlaceIcon(placeLabel);
+  
+  // Get color based on inferred type
+  const placeColor = isPlaceInferred && inferredPlace
+    ? getPlaceTypeColor(inferredPlace.inferredType)
+    : "#2563EB";
+
   const isLocked = !!summary.lockedAt;
   const hasUserFeedback = !!summary.userFeedback;
   const topApps = summary.appBreakdown.slice(0, 3).filter((a) => a.minutes >= 1);
@@ -200,12 +283,20 @@ export const HourlySummaryCard = ({
 
       {/* Location Row */}
       <View style={styles.locationRow}>
-        <View style={styles.placeIconContainer}>
-          <PlaceIcon size={18} color="#2563EB" />
+        <View style={[styles.placeIconContainer, { backgroundColor: `${placeColor}15` }]}>
+          <PlaceIcon size={18} color={placeColor} />
         </View>
-        <Text style={styles.placeLabel} numberOfLines={1}>
-          {summary.primaryPlaceLabel ?? "Unknown Location"}
-        </Text>
+        <View style={styles.placeLabelContainer}>
+          <Text style={[styles.placeLabel, { color: placeColor }]} numberOfLines={1}>
+            {placeLabel}
+          </Text>
+          {isPlaceInferred && (
+            <View style={styles.inferredBadge}>
+              <Sparkles size={10} color="#D97706" />
+              <Text style={styles.inferredBadgeText}>Inferred</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Title + Description */}
@@ -228,12 +319,53 @@ export const HourlySummaryCard = ({
         </View>
       )}
 
-      {/* Screen Time */}
-      {summary.totalScreenMinutes > 0 && (
+      {/* Screen Time + Location Samples */}
+      {(summary.totalScreenMinutes > 0 || (typeof locationSamples === 'number' && locationSamples > 0)) && (
         <View style={styles.screenTimeRow}>
-          <Smartphone size={12} color="#9CA3AF" />
-          <Text style={styles.screenTimeText}>
-            {summary.totalScreenMinutes} min screen time
+          {summary.totalScreenMinutes > 0 && (
+            <>
+              <Smartphone size={12} color="#9CA3AF" />
+              <Text style={styles.screenTimeText}>
+                {String(summary.totalScreenMinutes)} min screen time
+              </Text>
+            </>
+          )}
+          {typeof locationSamples === 'number' && locationSamples > 0 && (
+            <>
+              {summary.totalScreenMinutes > 0 && <Text style={styles.screenTimeDivider}>·</Text>}
+              <MapPin size={12} color="#9CA3AF" />
+              <Text style={styles.screenTimeText}>
+                {String(locationSamples)} location samples
+              </Text>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Activity Inference Description */}
+      {inferenceDescription && (
+        <View style={styles.activityInferenceContainer}>
+          <View style={styles.activityInferenceHeader}>
+            <Sparkles size={12} color="#2563EB" />
+            <Text style={styles.activityInferencePrimary}>
+              {inferenceDescription.primary}
+            </Text>
+          </View>
+          {inferenceDescription.secondary && (
+            <Text style={styles.activityInferenceSecondary}>
+              {inferenceDescription.secondary}
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Place Inference Reasoning (only show if different from activity inference) */}
+      {isPlaceInferred && inferredPlace?.reasoning && !inferenceDescription && (
+        <View style={styles.inferenceReasoningContainer}>
+          <Sparkles size={12} color="#D97706" />
+          <Text style={styles.inferenceReasoningText}>
+            <Text style={styles.inferenceReasoningLabel}>Place inference: </Text>
+            {inferredPlace.reasoning}
           </Text>
         </View>
       )}
@@ -358,11 +490,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  placeLabelContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   placeLabel: {
     fontSize: 14,
     fontWeight: "600",
     color: "#2563EB",
-    flex: 1,
+  },
+  inferredBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderRadius: 6,
+  },
+  inferredBadgeText: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#D97706",
   },
   title: {
     fontSize: 17,
@@ -420,10 +571,66 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     marginTop: 8,
+    flexWrap: "wrap",
   },
   screenTimeText: {
     fontSize: 12,
     color: "#9CA3AF",
+  },
+  screenTimeDivider: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginHorizontal: 4,
+  },
+  activityInferenceContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    backgroundColor: "rgba(37, 99, 235, 0.06)",
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(37, 99, 235, 0.15)",
+  },
+  activityInferenceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  activityInferencePrimary: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E40AF",
+  },
+  activityInferenceSecondary: {
+    marginTop: 4,
+    marginLeft: 18,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#3B82F6",
+  },
+  inferenceReasoningContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    backgroundColor: "rgba(251, 191, 36, 0.08)",
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(251, 191, 36, 0.2)",
+  },
+  inferenceReasoningText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#92400E",
+  },
+  inferenceReasoningLabel: {
+    fontWeight: "700",
   },
   feedbackSection: {
     flexDirection: "row",

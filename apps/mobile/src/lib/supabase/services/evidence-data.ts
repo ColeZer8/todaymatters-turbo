@@ -354,7 +354,17 @@ function extractLatLngFromCenter(center: unknown): {
 }
 
 function coerceLocationHourlyRow(row: Record<string, unknown>): LocationHourlyRow {
-  const latLng = extractLatLngFromCenter(row.centroid);
+  // Prefer direct lat/lng columns from view, fall back to parsing centroid
+  let latitude: number | null = typeof row.centroid_latitude === "number" ? row.centroid_latitude : null;
+  let longitude: number | null = typeof row.centroid_longitude === "number" ? row.centroid_longitude : null;
+  
+  // If direct columns are null, try parsing the centroid geography
+  if (latitude === null || longitude === null) {
+    const latLng = extractLatLngFromCenter(row.centroid);
+    latitude = latitude ?? latLng.latitude;
+    longitude = longitude ?? latLng.longitude;
+  }
+  
   return {
     user_id: String(row.user_id ?? ""),
     hour_start: String(row.hour_start ?? ""),
@@ -368,8 +378,8 @@ function coerceLocationHourlyRow(row: Record<string, unknown>): LocationHourlyRo
     place_category:
       typeof row.place_category === "string" ? row.place_category : null,
     centroid: row.centroid ?? null,
-    centroid_latitude: latLng.latitude,
-    centroid_longitude: latLng.longitude,
+    centroid_latitude: latitude,
+    centroid_longitude: longitude,
     google_place_id:
       typeof row.google_place_id === "string" ? row.google_place_id : null,
     google_place_name:

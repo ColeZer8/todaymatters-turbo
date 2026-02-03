@@ -156,17 +156,19 @@ serve(async (req: Request) => {
       );
     }
 
-    const uniqueByGeohash = new Map<string, PlaceLookupPoint>();
+    // Deduplicate points by rounded coordinates (avoid duplicate lookups for nearby points)
+    const uniquePoints = new Map<string, PlaceLookupPoint>();
     for (const p of points) {
-      const g = encodeGeohash(p.latitude, p.longitude, 7);
-      if (!uniqueByGeohash.has(g)) uniqueByGeohash.set(g, p);
+      // Round to ~11m precision for deduplication
+      const key = `${p.latitude.toFixed(4)},${p.longitude.toFixed(4)}`;
+      if (!uniquePoints.has(key)) uniquePoints.set(key, p);
     }
 
-    const geohashes = [...uniqueByGeohash.keys()];
     const nowIso = new Date().toISOString();
 
-    // 1) Read fresh cache (unless forced refresh)
-    const cachedByGeohash = new Map<
+    // 1) Read fresh cache using RPC for proximity matching (avoids JS/PostgreSQL geohash mismatch)
+    // We query cache entries within 150m of each point to match the view's join logic
+    const cachedByKey = new Map<
       string,
       {
         place_name: string;
@@ -174,28 +176,33 @@ serve(async (req: Request) => {
         place_vicinity: string | null;
         place_types: unknown;
         expires_at: string;
+        geohash7: string;
       }
     >();
 
     if (!forceRefresh) {
+      // Query all user's cached places and match client-side (simpler than N proximity queries)
       const { data: cachedRows, error: cacheError } = await supabase
         .schema("tm")
         .from("location_place_cache")
-        .select("geohash7, place_name, google_place_id, place_vicinity, place_types, expires_at")
-        .in("geohash7", geohashes)
+        .select("latitude, longitude, geohash7, place_name, google_place_id, place_vicinity, place_types, expires_at")
+        .eq("user_id", user.id)
         .gt("expires_at", nowIso);
 
       if (cacheError) {
         console.error("location-place-lookup: cache read error", cacheError);
       } else {
+        // Build a map of cached places by their coordinates
         for (const row of cachedRows ?? []) {
-          if (!row?.geohash7 || !row.place_name || !row.expires_at) continue;
-          cachedByGeohash.set(row.geohash7, {
+          if (!row?.place_name || !row.expires_at) continue;
+          const key = `${Number(row.latitude).toFixed(4)},${Number(row.longitude).toFixed(4)}`;
+          cachedByKey.set(key, {
             place_name: row.place_name,
             google_place_id: row.google_place_id ?? null,
             place_vicinity: row.place_vicinity ?? null,
             place_types: row.place_types,
             expires_at: row.expires_at,
+            geohash7: row.geohash7 ?? "",
           });
         }
       }
@@ -214,13 +221,13 @@ serve(async (req: Request) => {
       expires_at: string;
     }> = [];
 
-    const resolvedByGeohash = new Map<string, PlaceLookupResult>();
+    const resolvedByKey = new Map<string, PlaceLookupResult>();
 
-    for (const [geohash7, p] of uniqueByGeohash.entries()) {
-      const cached = cachedByGeohash.get(geohash7);
+    for (const [key, p] of uniquePoints.entries()) {
+      const cached = cachedByKey.get(key);
       if (cached) {
-        resolvedByGeohash.set(geohash7, {
-          geohash7,
+        resolvedByKey.set(key, {
+          geohash7: cached.geohash7,
           latitude: p.latitude,
           longitude: p.longitude,
           placeName: cached.place_name,
@@ -241,8 +248,8 @@ serve(async (req: Request) => {
       });
 
       if (!google) {
-        resolvedByGeohash.set(geohash7, {
-          geohash7,
+        resolvedByKey.set(key, {
+          geohash7: "", // Will be computed by PostgreSQL on insert
           latitude: p.latitude,
           longitude: p.longitude,
           placeName: null,
@@ -270,8 +277,10 @@ serve(async (req: Request) => {
         expires_at: expiresAt,
       });
 
-      resolvedByGeohash.set(geohash7, {
-        geohash7,
+      // Use JS geohash for the result (will be close enough for display purposes)
+      const jsGeohash = encodeGeohash(p.latitude, p.longitude, 7);
+      resolvedByKey.set(key, {
+        geohash7: jsGeohash,
         latitude: p.latitude,
         longitude: p.longitude,
         placeName: google.name,
@@ -284,21 +293,47 @@ serve(async (req: Request) => {
     }
 
     if (upserts.length > 0) {
-      const { error: upsertError } = await supabase
+      // Delete existing rows first, then insert fresh data
+      // This avoids the JS/PostgreSQL geohash mismatch issue with upsert
+      // We delete by rounded coordinates (same precision used for deduplication)
+      for (const row of upserts) {
+        const latRounded = Number(row.latitude.toFixed(4));
+        const lngRounded = Number(row.longitude.toFixed(4));
+        
+        // Delete any existing cache entry for this approximate location
+        const { error: deleteError } = await supabase
+          .schema("tm")
+          .from("location_place_cache")
+          .delete()
+          .eq("user_id", row.user_id)
+          .gte("latitude", latRounded - 0.0001)
+          .lte("latitude", latRounded + 0.0001)
+          .gte("longitude", lngRounded - 0.0001)
+          .lte("longitude", lngRounded + 0.0001);
+        
+        if (deleteError) {
+          console.error("location-place-lookup: cache delete error", deleteError);
+        }
+      }
+      
+      // Now insert fresh data
+      const { error: insertError } = await supabase
         .schema("tm")
         .from("location_place_cache")
-        .upsert(upserts, { onConflict: "user_id,geohash7" });
+        .insert(upserts);
 
-      if (upsertError) {
-        console.error("location-place-lookup: cache upsert error", upsertError);
+      if (insertError) {
+        console.error("location-place-lookup: cache insert error", insertError);
+      } else {
+        console.log(`location-place-lookup: cached ${upserts.length} new places`);
       }
     }
 
-    const results: PlaceLookupResult[] = geohashes.map((g) => {
-      const p = uniqueByGeohash.get(g)!;
+    const results: PlaceLookupResult[] = [...uniquePoints.keys()].map((key) => {
+      const p = uniquePoints.get(key)!;
       return (
-        resolvedByGeohash.get(g) ?? {
-          geohash7: g,
+        resolvedByKey.get(key) ?? {
+          geohash7: "",
           latitude: p.latitude,
           longitude: p.longitude,
           placeName: null,
@@ -362,50 +397,68 @@ async function fetchNearbyPlace(params: {
 }): Promise<{ placeId: string | null; name: string; vicinity: string | null; types: string[] | null } | null> {
   const { apiKey, latitude, longitude, radiusMeters } = params;
 
-  const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
-  url.searchParams.set("location", `${latitude},${longitude}`);
-  url.searchParams.set("radius", String(radiusMeters));
-  url.searchParams.set("rankby", "prominence");
-  url.searchParams.set("key", apiKey);
+  // Using Places API (New) - POST endpoint with JSON body
+  const url = "https://places.googleapis.com/v1/places:searchNearby";
 
-  const resp = await fetch(url.toString(), { method: "GET" });
+  const requestBody = {
+    locationRestriction: {
+      circle: {
+        center: {
+          latitude,
+          longitude,
+        },
+        radius: radiusMeters,
+      },
+    },
+    rankPreference: "POPULARITY",
+    maxResultCount: 10,
+  };
+
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.types,places.businessStatus",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
   if (!resp.ok) {
     const text = await resp.text();
     console.error("Google Places Nearby error:", resp.status, text);
     return null;
   }
+
   const data = (await resp.json()) as {
-    status?: string;
-    results?: Array<{
-      place_id?: string;
-      name?: string;
-      vicinity?: string;
+    places?: Array<{
+      id?: string;
+      displayName?: { text?: string };
+      formattedAddress?: string;
       types?: string[];
-      business_status?: string;
+      businessStatus?: string;
     }>;
-    error_message?: string;
+    error?: { message?: string };
   };
 
-  const status = typeof data.status === "string" ? data.status : "UNKNOWN";
-  if (status === "ZERO_RESULTS") return null;
-  if (status !== "OK") {
-    console.error("Google Places Nearby status:", status, data.error_message ?? "");
+  if (data.error) {
+    console.error("Google Places Nearby error:", data.error.message ?? "Unknown error");
     return null;
   }
 
-  const results = Array.isArray(data.results) ? data.results : [];
-  if (results.length === 0) return null;
+  const places = Array.isArray(data.places) ? data.places : [];
+  if (places.length === 0) return null;
 
   const best =
-    results.find((r) => r.business_status === "OPERATIONAL" && typeof r.name === "string") ??
-    results.find((r) => typeof r.name === "string") ??
+    places.find((r) => r.businessStatus === "OPERATIONAL" && r.displayName?.text) ??
+    places.find((r) => r.displayName?.text) ??
     null;
-  if (!best?.name) return null;
+  if (!best?.displayName?.text) return null;
 
   return {
-    placeId: typeof best.place_id === "string" ? best.place_id : null,
-    name: best.name,
-    vicinity: typeof best.vicinity === "string" ? best.vicinity : null,
+    placeId: typeof best.id === "string" ? best.id : null,
+    name: best.displayName.text,
+    vicinity: typeof best.formattedAddress === "string" ? best.formattedAddress : null,
     types: Array.isArray(best.types) ? best.types : null,
   };
 }

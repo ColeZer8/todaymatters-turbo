@@ -10,6 +10,9 @@
 import { supabase } from "../client";
 import { handleSupabaseError } from "../utils/error-handler";
 
+// Import for auto place lookup
+import type { PlaceLookupResult } from "./location-place-lookup";
+
 import {
   type EvidenceLocationSample,
   type ScreenTimeSessionRow,
@@ -21,6 +24,7 @@ import {
 import {
   generateLocationSegments,
   mergeAdjacentSegments,
+  processSegmentsWithCommutes,
   type LocationSegment,
 } from "./actual-ingestion";
 
@@ -644,8 +648,16 @@ export async function generateActivitySegments(
     hourEnd,
   );
 
-  // 3. Merge adjacent segments
-  const mergedSegments = mergeAdjacentSegments(locationSegments);
+  // 3. Process with commute detection (finds travel between places)
+  const segmentsWithCommutes = processSegmentsWithCommutes(
+    locationSegments,
+    locationSamples,
+    userPlaces,
+    hourStart,
+  );
+
+  // 4. Merge adjacent segments (after commute processing)
+  const mergedSegments = mergeAdjacentSegments(segmentsWithCommutes);
 
   // If no location segments, create a single segment for the hour
   // based on screen time data alone
@@ -904,4 +916,232 @@ export async function deleteActivitySegmentsForHour(
     }
     return false;
   }
+}
+
+/**
+ * Delete activity segments for an entire day.
+ */
+export async function deleteActivitySegmentsForDay(
+  userId: string,
+  dateYmd: string,
+): Promise<boolean> {
+  try {
+    const [year, month, day] = dateYmd.split("-").map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+    const { error } = await tmSchema()
+      .from("activity_segments")
+      .delete()
+      .eq("user_id", userId)
+      .gte("started_at", dayStart.toISOString())
+      .lt("started_at", dayEnd.toISOString());
+
+    if (error) throw handleSupabaseError(error);
+    return true;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[ActivitySegments] Failed to delete segments for day:", error);
+    }
+    return false;
+  }
+}
+
+/**
+ * Reprocess an entire day's activity segments with place lookups.
+ * 
+ * This will:
+ * 1. Delete existing activity segments for the day
+ * 2. Re-generate segments for each hour with new commute detection
+ * 3. Auto-lookup Google place names for each segment
+ * 4. Save the enriched segments
+ * 
+ * @returns Object with stats about what was processed
+ */
+export async function reprocessDayWithPlaceLookup(
+  userId: string,
+  dateYmd: string,
+  onProgress?: (message: string) => void,
+): Promise<{
+  success: boolean;
+  hoursProcessed: number;
+  segmentsCreated: number;
+  placesLookedUp: number;
+  error?: string;
+}> {
+  const stats = {
+    success: false,
+    hoursProcessed: 0,
+    segmentsCreated: 0,
+    placesLookedUp: 0,
+  };
+
+  try {
+    onProgress?.("Deleting old segments...");
+    
+    // 1. Delete existing segments for the day
+    await deleteActivitySegmentsForDay(userId, dateYmd);
+
+    // 2. Process each hour of the day
+    const [year, month, day] = dateYmd.split("-").map(Number);
+    const currentHour = new Date().getHours();
+    const isToday = dateYmd === getTodayYmd();
+    const maxHour = isToday ? currentHour : 23;
+
+    for (let hour = 0; hour <= maxHour; hour++) {
+      const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
+      
+      onProgress?.(`Processing hour ${hour}:00...`);
+
+      // Generate segments for this hour
+      const segments = await generateActivitySegments(userId, hourStart);
+      
+      if (segments.length > 0) {
+        // Enrich with place names
+        const enriched = await enrichSegmentsWithPlaceNames(segments);
+        const placesFound = enriched.filter((s, i) => 
+          s.placeLabel && !segments[i].placeLabel
+        ).length;
+        
+        // Save to database
+        await saveActivitySegments(enriched);
+        
+        stats.segmentsCreated += enriched.length;
+        stats.placesLookedUp += placesFound;
+      }
+      
+      stats.hoursProcessed++;
+    }
+
+    stats.success = true;
+    onProgress?.(`Done! ${stats.segmentsCreated} segments, ${stats.placesLookedUp} places looked up.`);
+    
+    return stats;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (__DEV__) {
+      console.error("[ActivitySegments] Reprocess failed:", error);
+    }
+    return { ...stats, error: message };
+  }
+}
+
+function getTodayYmd(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+// ============================================================================
+// Auto Place Lookup for Segments
+// ============================================================================
+
+/**
+ * Automatically lookup Google place names for segments that:
+ * 1. Have coordinates (locationLat, locationLng)
+ * 2. Don't have a placeLabel yet
+ * 
+ * This calls the location-place-lookup edge function to get place names
+ * from Google Places API and caches them.
+ * 
+ * @returns The segments with updated placeLabels where lookups succeeded
+ */
+export async function enrichSegmentsWithPlaceNames(
+  segments: ActivitySegment[],
+): Promise<ActivitySegment[]> {
+  // Find segments that need place lookup
+  const needsLookup = segments.filter(
+    (seg) => 
+      seg.locationLat != null && 
+      seg.locationLng != null && 
+      !seg.placeLabel &&
+      !seg.placeId  // Don't lookup if already matched to user place
+  );
+
+  if (needsLookup.length === 0) {
+    return segments;
+  }
+
+  // Deduplicate by rounded coordinates (avoid looking up same spot multiple times)
+  const dedupe = new Map<string, ActivitySegment>();
+  for (const seg of needsLookup) {
+    const key = `${seg.locationLat!.toFixed(4)},${seg.locationLng!.toFixed(4)}`;
+    if (!dedupe.has(key)) {
+      dedupe.set(key, seg);
+    }
+  }
+
+  const points = Array.from(dedupe.values()).map((seg) => ({
+    latitude: seg.locationLat!,
+    longitude: seg.locationLng!,
+  }));
+
+  if (__DEV__) {
+    console.log(`[ActivitySegments] 🔍 Looking up place names for ${points.length} unique locations`);
+  }
+
+  try {
+    // Call the edge function to lookup places
+    const { data, error } = await supabase.functions.invoke(
+      "location-place-lookup",
+      { body: { points } },
+    );
+
+    if (error) {
+      if (__DEV__) {
+        console.warn("[ActivitySegments] Place lookup failed:", error);
+      }
+      return segments;
+    }
+
+    const results = (data?.results ?? []) as PlaceLookupResult[];
+    
+    // Build a map of coords -> place name
+    const placeNameMap = new Map<string, string>();
+    for (const result of results) {
+      if (result.placeName) {
+        const key = `${result.latitude.toFixed(4)},${result.longitude.toFixed(4)}`;
+        placeNameMap.set(key, result.placeName);
+      }
+    }
+
+    if (__DEV__) {
+      console.log(`[ActivitySegments] ✅ Got ${placeNameMap.size} place names from lookup`);
+    }
+
+    // Update segments with looked up place names
+    return segments.map((seg) => {
+      if (seg.placeLabel || seg.placeId) return seg; // Already has label
+      if (seg.locationLat == null || seg.locationLng == null) return seg;
+
+      const key = `${seg.locationLat.toFixed(4)},${seg.locationLng.toFixed(4)}`;
+      const placeName = placeNameMap.get(key);
+
+      if (placeName) {
+        return { ...seg, placeLabel: placeName };
+      }
+      return seg;
+    });
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[ActivitySegments] Place lookup error:", error);
+    }
+    return segments;
+  }
+}
+
+/**
+ * Save activity segments with automatic place name lookup.
+ * This is the preferred method - it enriches segments with Google place names
+ * before saving them to the database.
+ */
+export async function saveActivitySegmentsWithPlaceLookup(
+  segments: ActivitySegment[],
+): Promise<boolean> {
+  if (segments.length === 0) return true;
+
+  // First, enrich with place names
+  const enriched = await enrichSegmentsWithPlaceNames(segments);
+
+  // Then save
+  return saveActivitySegments(enriched);
 }

@@ -78,7 +78,7 @@ import { getFuzzyLocationLabel, isGooglePlacesAvailable } from "../services/goog
 // NEW PIPELINE: Activity segments (BRAVO layer) and hourly summaries (CHARLIE layer)
 import {
   generateActivitySegments,
-  saveActivitySegments,
+  saveActivitySegmentsWithPlaceLookup,
 } from "../services/activity-segments";
 import { processHourlySummary } from "../services/hourly-summaries";
 
@@ -756,7 +756,7 @@ export async function processActualIngestionWindow(
       
       // Step 2: Save BRAVO segments to database
       if (activitySegments.length > 0) {
-        const saved = await saveActivitySegments(activitySegments);
+        const saved = await saveActivitySegmentsWithPlaceLookup(activitySegments);
         if (__DEV__) {
           console.log(`[ActualIngestion] 🔷 NEW PIPELINE: Saved activity segments: ${saved ? 'success' : 'failed'}`);
         }

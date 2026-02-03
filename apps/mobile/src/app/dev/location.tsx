@@ -12,13 +12,16 @@ import { Card, GradientButton, Icon } from "@/components/atoms";
 import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 import { peekPendingLocationSamplesAsync } from "@/lib/ios-location/queue";
 import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
+import { flushPendingLocationSamplesToSupabaseAsync } from "@/lib/ios-location";
+import { flushPendingAndroidLocationSamplesToSupabaseAsync } from "@/lib/android-location";
 import { fetchRecentLocationSamples } from "@/lib/supabase/services/location-samples";
-import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import {
   inferPlacesFromHistory,
   type InferredPlace,
   type PlaceInferenceResult,
 } from "@/lib/supabase/services/place-inference";
+import { fetchLocationHourlyForDay, type LocationHourlyRow } from "@/lib/supabase/services/evidence-data";
 import type { IosLocationSample } from "@/lib/ios-location/types";
 import type { AndroidLocationSample } from "@/lib/android-location/types";
 
@@ -51,6 +54,11 @@ export default function DevLocationScreen() {
   const [inferenceResult, setInferenceResult] = useState<PlaceInferenceResult | null>(null);
   const [isInferenceLoading, setIsInferenceLoading] = useState(false);
   const [inferenceError, setInferenceError] = useState<string | null>(null);
+  const [isFlushLoading, setIsFlushLoading] = useState(false);
+  const [flushMessage, setFlushMessage] = useState<string | null>(null);
+  
+  // Hourly data with place names from the view (includes google_place_name from cache)
+  const [hourlyData, setHourlyData] = useState<LocationHourlyRow[]>([]);
 
   const samplesToday = useMemo(() => {
     const start = new Date();
@@ -92,6 +100,19 @@ export default function DevLocationScreen() {
           sinceIso,
         });
         setRemoteSamples(remote);
+        
+        // Fetch hourly data with place names for today
+        const now = new Date();
+        const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const hourly = await fetchLocationHourlyForDay(userId, todayYmd);
+        setHourlyData(hourly);
+        if (__DEV__) {
+          console.log(`📍 Hourly data loaded: ${hourly.length} rows`);
+          hourly.slice(0, 3).forEach(r => {
+            const placeName = r.place_label || r.google_place_name || "(no name)";
+            console.log(`   - ${r.hour_start}: ${placeName}`);
+          });
+        }
       } catch (error) {
         if (__DEV__) {
           console.warn("📍 Location samples fetch failed:", error);
@@ -107,6 +128,30 @@ export default function DevLocationScreen() {
       setLastRefreshAt(new Date());
     }
   }, [userId]);
+
+  // Manual flush to Supabase
+  const flushToSupabase = useCallback(async () => {
+    if (!userId) return;
+    setIsFlushLoading(true);
+    setFlushMessage(null);
+    try {
+      const result = Platform.OS === "ios"
+        ? await flushPendingLocationSamplesToSupabaseAsync(userId)
+        : await flushPendingAndroidLocationSamplesToSupabaseAsync(userId);
+      
+      setFlushMessage(
+        `✅ Flushed: ${result.uploaded} uploaded, ${result.remaining} remaining in queue`
+      );
+      // Auto-refresh to show updated data
+      void refreshSamples();
+    } catch (error) {
+      setFlushMessage(
+        `❌ Flush error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsFlushLoading(false);
+    }
+  }, [userId, refreshSamples]);
 
   useEffect(() => {
     if (userId) void refreshSamples();
@@ -141,25 +186,45 @@ export default function DevLocationScreen() {
     return buckets;
   }, [remoteSamplesToday, samplesToday]);
 
+  // Build a map of hour -> place name from hourly data
+  const hourlyPlaceNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const row of hourlyData) {
+      const hourStart = new Date(row.hour_start);
+      const hour = hourStart.getHours();
+      const placeName = row.place_label || row.google_place_name || null;
+      if (placeName && !map.has(hour)) {
+        map.set(hour, placeName);
+      }
+    }
+    return map;
+  }, [hourlyData]);
+
   const hourlyBreakdown = useMemo(() => {
     const hourMaps = Array.from(
       { length: 24 },
-      () => new Map<string, { count: number; lastAt: string }>(),
+      () => new Map<string, { count: number; lastAt: string; coords: string }>(),
     );
 
     for (const sample of [...samplesToday, ...remoteSamplesToday]) {
       const date = new Date(sample.recorded_at);
       const hour = date.getHours();
       if (!Number.isFinite(hour) || hour < 0 || hour > 23) continue;
-      const key = `${sample.latitude.toFixed(4)}, ${sample.longitude.toFixed(4)}`;
+      
+      // Use place name from hourly data if available, otherwise fall back to coordinates
+      const placeName = hourlyPlaceNames.get(hour);
+      const coords = `${sample.latitude.toFixed(4)}, ${sample.longitude.toFixed(4)}`;
+      const key = placeName || coords;
+      
       const existing = hourMaps[hour].get(key);
       if (existing) {
         hourMaps[hour].set(key, {
           count: existing.count + 1,
           lastAt: sample.recorded_at,
+          coords: existing.coords,
         });
       } else {
-        hourMaps[hour].set(key, { count: 1, lastAt: sample.recorded_at });
+        hourMaps[hour].set(key, { count: 1, lastAt: sample.recorded_at, coords });
       }
     }
 
@@ -169,87 +234,138 @@ export default function DevLocationScreen() {
           label,
           count: data.count,
           lastAt: data.lastAt,
+          coords: data.coords,
         }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 4);
       return { hour, locations };
     });
-  }, [remoteSamplesToday, samplesToday]);
+  }, [remoteSamplesToday, samplesToday, hourlyPlaceNames]);
 
   const maxHourly = Math.max(...hourlyBuckets, 1);
-
-  const buildLookupPoints = useCallback(() => {
-    const dedupe = new Set<string>();
-    const points: Array<{ latitude: number; longitude: number }> = [];
-    const combined = [...remoteSamplesToday, ...samplesToday];
-    for (const sample of combined) {
-      const key = `${sample.latitude.toFixed(4)},${sample.longitude.toFixed(4)}`;
-      if (dedupe.has(key)) continue;
-      dedupe.add(key);
-      points.push({ latitude: sample.latitude, longitude: sample.longitude });
-      if (points.length >= 12) break;
-    }
-    return points;
-  }, [remoteSamplesToday, samplesToday]);
 
   const runPlaceLookup = useCallback(async () => {
     if (!userId) return;
     setLookupMessage(null);
     setIsLookupLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setLookupMessage("Missing session token.");
-        return;
-      }
+      setLookupMessage("Fetching hourly data...");
 
-      const points = buildLookupPoints();
-      if (points.length === 0) {
-        setLookupMessage("No samples available for lookup.");
-        return;
-      }
-
-      const response = await fetch(
-        `${SUPABASE_URL}/functions/v1/swift-task`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ points }),
-        },
-      );
-
-      const rawText = await response.text();
-      let payload: unknown = null;
-      if (rawText) {
-        try {
-          payload = JSON.parse(rawText);
-        } catch {
-          payload = null;
+      // Fetch hourly centroids for the past 7 days (these are what the view actually joins against)
+      const allHourlyRows: LocationHourlyRow[] = [];
+      const debugDays: string[] = [];
+      for (let daysAgo = 0; daysAgo < 7; daysAgo++) {
+        const date = new Date();
+        date.setDate(date.getDate() - daysAgo);
+        const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        const rows = await fetchLocationHourlyForDay(userId, ymd);
+        debugDays.push(`${ymd}: ${rows.length} rows`);
+        if (__DEV__) {
+          console.log(`📍 Hourly data for ${ymd}: ${rows.length} rows`);
+          rows.slice(0, 3).forEach(r => {
+            console.log(`   - ${r.hour_start}: place_label=${r.place_label}, google_place_name=${r.google_place_name}, lat=${r.centroid_latitude}`);
+          });
         }
+        allHourlyRows.push(...rows);
       }
-      if (!response.ok) {
-        const detail =
-          typeof payload?.error === "string"
-            ? payload.error
-            : typeof payload?.message === "string"
-              ? payload.message
-              : rawText;
+      
+      // Show debug info in UI
+      setLookupMessage(`Fetched hourly data:\n${debugDays.join(', ')}\nTotal: ${allHourlyRows.length} rows`);
+      
+      if (__DEV__) {
+        console.log(`📍 Total hourly rows: ${allHourlyRows.length}`);
+      }
+
+      // Filter to rows that need lookup (no place_label AND no google_place_name)
+      // and extract the hourly centroids
+      const dedupe = new Set<string>();
+      const points: Array<{ latitude: number; longitude: number }> = [];
+      
+      let skippedWithPlaceLabel = 0;
+      let skippedWithGoogleName = 0;
+      let skippedNoCoords = 0;
+      
+      for (const row of allHourlyRows) {
+        // Skip if already has a place name
+        if (row.place_label) {
+          skippedWithPlaceLabel++;
+          continue;
+        }
+        if (row.google_place_name) {
+          skippedWithGoogleName++;
+          continue;
+        }
+        
+        // Get centroid from hourly row
+        const lat = row.centroid_latitude;
+        const lng = row.centroid_longitude;
+        if (lat == null || lng == null) {
+          skippedNoCoords++;
+          continue;
+        }
+        
+        // Deduplicate by geohash7 (same precision as cache key)
+        const key = row.geohash7 ?? `${lat.toFixed(4)},${lng.toFixed(4)}`;
+        if (dedupe.has(key)) continue;
+        dedupe.add(key);
+        
+        points.push({ latitude: lat, longitude: lng });
+        if (points.length >= 50) break; // Limit to 50 unique locations
+      }
+      
+      if (__DEV__) {
+        console.log(`📍 Filter results: ${points.length} points to lookup`);
+        console.log(`   - Skipped (has place_label): ${skippedWithPlaceLabel}`);
+        console.log(`   - Skipped (has google_name): ${skippedWithGoogleName}`);
+        console.log(`   - Skipped (no coordinates): ${skippedNoCoords}`);
+      }
+
+      if (points.length === 0) {
         setLookupMessage(
-          `Lookup failed: ${response.status} ${detail ?? ""}`.trim(),
+          `No locations to lookup.\n` +
+          `Total hourly rows: ${allHourlyRows.length}\n` +
+          `Skipped (place_label): ${skippedWithPlaceLabel}\n` +
+          `Skipped (google_name): ${skippedWithGoogleName}\n` +
+          `Skipped (no coords): ${skippedNoCoords}\n` +
+          `User ID: ${userId}`
         );
         return;
       }
 
-      const resultCount = Array.isArray(payload?.results)
-        ? payload.results.length
-        : 0;
-      setLookupMessage(`Lookup complete: ${resultCount} results.`);
+      setLookupMessage(`Looking up ${points.length} points via edge function...`);
+
+      // Use supabase.functions.invoke() - same as the working pipeline
+      // This handles auth automatically and avoids manual token parsing issues
+      const { data, error } = await supabase.functions.invoke(
+        "location-place-lookup",
+        { body: { points } },
+      );
+
+      if (error) {
+        setLookupMessage(
+          `❌ Lookup failed: ${error.message}\n` +
+          `Points attempted: ${points.length}\n` +
+          `User ID: ${userId}`
+        );
+        return;
+      }
+
+      const results = Array.isArray(data?.results) ? data.results : [];
+      const googleResults = results.filter(
+        (r: unknown) => (r as { source?: string })?.source === "google_places_nearby"
+      ).length;
+      const cacheHits = results.filter(
+        (r: unknown) => (r as { source?: string })?.source === "cache"
+      ).length;
+      
+      setLookupMessage(
+        `✅ Lookup complete: ${results.length} locations processed (${googleResults} from Google, ${cacheHits} from cache).`
+      );
+      
+      // Auto-refresh samples to show updated place names
+      if (googleResults > 0) {
+        void refreshSamples();
+      }
     } catch (error) {
       setLookupMessage(
         `Lookup error: ${error instanceof Error ? error.message : String(error)}`,
@@ -257,7 +373,7 @@ export default function DevLocationScreen() {
     } finally {
       setIsLookupLoading(false);
     }
-  }, [buildLookupPoints, userId]);
+  }, [userId, refreshSamples]);
 
   const runPlaceInference = useCallback(async () => {
     if (!userId) return;
@@ -389,6 +505,18 @@ export default function DevLocationScreen() {
                 </View>
                 <View className="mt-3">
                   <GradientButton
+                    label={isFlushLoading ? "Flushing to Supabase…" : "Flush to Supabase"}
+                    onPress={flushToSupabase}
+                    disabled={isFlushLoading || !userId}
+                  />
+                </View>
+                {flushMessage ? (
+                  <Text className="mt-2 text-xs text-text-tertiary">
+                    {flushMessage}
+                  </Text>
+                ) : null}
+                <View className="mt-3">
+                  <GradientButton
                     label={
                       isLookupLoading
                         ? "Looking up places…"
@@ -408,6 +536,9 @@ export default function DevLocationScreen() {
                     Last refresh: {lastRefreshAt.toLocaleTimeString()}
                   </Text>
                 ) : null}
+                <Text className="mt-2 text-xs text-text-tertiary" selectable>
+                  User ID: {userId ?? "Not logged in"}
+                </Text>
 
                 {errorMessage ? (
                   <Text className="mt-3 text-xs text-red-500">
@@ -657,26 +788,42 @@ export default function DevLocationScreen() {
                 {[...samples, ...remoteSamples]
                   .slice(-50)
                   .reverse()
-                  .map((sample) => (
-                    <View
-                      key={sample.dedupe_key}
-                      className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]"
-                    >
-                      <Text className="text-xs text-text-tertiary">
-                        {formatTimestamp(sample.recorded_at)}
-                      </Text>
-                      <Text className="mt-1 text-sm font-semibold text-text-primary">
-                        {formatCoordinate(sample.latitude)},{" "}
-                        {formatCoordinate(sample.longitude)}
-                      </Text>
-                      <Text className="mt-1 text-xs text-text-secondary">
-                        {sample.accuracy_m != null
-                          ? `±${Math.round(sample.accuracy_m)}m`
-                          : "Accuracy n/a"}{" "}
-                        · {sample.source}
-                      </Text>
-                    </View>
-                  ))}
+                  .map((sample) => {
+                    const sampleHour = new Date(sample.recorded_at).getHours();
+                    const placeName = hourlyPlaceNames.get(sampleHour);
+                    return (
+                      <View
+                        key={sample.dedupe_key}
+                        className="rounded-2xl border border-[#E6EAF2] bg-white px-4 py-3 shadow-sm shadow-[#0f172a0d]"
+                      >
+                        <Text className="text-xs text-text-tertiary">
+                          {formatTimestamp(sample.recorded_at)}
+                        </Text>
+                        {placeName ? (
+                          <>
+                            <Text className="mt-1 text-sm font-semibold text-text-primary">
+                              {placeName}
+                            </Text>
+                            <Text className="mt-0.5 text-[10px] font-mono text-text-tertiary">
+                              {formatCoordinate(sample.latitude)},{" "}
+                              {formatCoordinate(sample.longitude)}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text className="mt-1 text-sm font-semibold text-text-primary">
+                            {formatCoordinate(sample.latitude)},{" "}
+                            {formatCoordinate(sample.longitude)}
+                          </Text>
+                        )}
+                        <Text className="mt-1 text-xs text-text-secondary">
+                          {sample.accuracy_m != null
+                            ? `±${Math.round(sample.accuracy_m)}m`
+                            : "Accuracy n/a"}{" "}
+                          · {sample.source}
+                        </Text>
+                      </View>
+                    );
+                  })}
               </View>
             </View>
           </ScrollView>

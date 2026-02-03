@@ -9,13 +9,14 @@
 import { useState, useCallback } from "react";
 import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList, Zap } from "lucide-react-native";
 import { HourlySummaryList, PlaceInferenceTimeline } from "@/components/organisms";
 import type { HourlySummary } from "@/lib/supabase/services";
 import {
   submitAccurateFeedback,
   submitInaccurateFeedback,
 } from "@/lib/supabase/services/activity-feedback";
+import { reprocessDayWithPlaceLookup } from "@/lib/supabase/services/activity-segments";
 import { useAuthStore } from "@/stores";
 
 type ViewMode = "summaries" | "places";
@@ -66,6 +67,8 @@ export default function PipelineTestScreen() {
   const [selectedDate, setSelectedDate] = useState(getTodayYmd());
   const [refreshKey, setRefreshKey] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>("places"); // Default to places view
+  const [isReprocessing, setIsReprocessing] = useState(false);
+  const [reprocessStatus, setReprocessStatus] = useState<string | null>(null);
 
   const userId = user?.id ?? "";
 
@@ -123,6 +126,52 @@ export default function PipelineTestScreen() {
     );
   }, []);
 
+  // Reprocess day with place lookups
+  const handleReprocessDay = useCallback(async () => {
+    if (!userId) return;
+    
+    Alert.alert(
+      "Reprocess Day",
+      `This will delete and regenerate all activity segments for ${formatDateDisplay(selectedDate)} with fresh place lookups.\n\nThis may take a moment.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reprocess",
+          style: "destructive",
+          onPress: async () => {
+            setIsReprocessing(true);
+            setReprocessStatus("Starting...");
+            
+            try {
+              const result = await reprocessDayWithPlaceLookup(
+                userId,
+                selectedDate,
+                (msg) => setReprocessStatus(msg),
+              );
+              
+              if (result.success) {
+                Alert.alert(
+                  "✅ Reprocess Complete",
+                  `Processed ${result.hoursProcessed} hours\n` +
+                  `Created ${result.segmentsCreated} segments\n` +
+                  `Looked up ${result.placesLookedUp} places`,
+                );
+                setRefreshKey((k) => k + 1);
+              } else {
+                Alert.alert("Error", result.error ?? "Unknown error");
+              }
+            } catch (error) {
+              Alert.alert("Error", error instanceof Error ? error.message : "Failed to reprocess");
+            } finally {
+              setIsReprocessing(false);
+              setReprocessStatus(null);
+            }
+          },
+        },
+      ],
+    );
+  }, [userId, selectedDate]);
+
   if (!userId) {
     return (
       <SafeAreaView style={styles.container}>
@@ -147,10 +196,26 @@ export default function PipelineTestScreen() {
           <Text style={styles.headerTitle}>Pipeline Test</Text>
           <Text style={styles.headerSubtitle}>CHARLIE Layer Summaries</Text>
         </View>
-        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
-          <RefreshCw size={20} color="#2563EB" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            onPress={handleReprocessDay} 
+            style={[styles.reprocessButton, isReprocessing && styles.buttonDisabled]}
+            disabled={isReprocessing}
+          >
+            <Zap size={18} color={isReprocessing ? "#94A3B8" : "#F59E0B"} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+            <RefreshCw size={20} color="#2563EB" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {/* Reprocess Status Banner */}
+      {isReprocessing && reprocessStatus && (
+        <View style={styles.reprocessBanner}>
+          <Text style={styles.reprocessBannerText}>⚡ {reprocessStatus}</Text>
+        </View>
+      )}
 
       {/* Date Navigation */}
       <View style={styles.dateNav}>
@@ -288,10 +353,36 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 2,
   },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   refreshButton: {
     padding: 8,
     borderRadius: 8,
     backgroundColor: "rgba(37, 99, 235, 0.08)",
+  },
+  reprocessButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  reprocessBanner: {
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(245, 158, 11, 0.3)",
+  },
+  reprocessBannerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#92400E",
+    textAlign: "center",
   },
   dateNav: {
     flexDirection: "row",
