@@ -60,10 +60,14 @@ export interface HourlySummaryCardProps {
   locationSamples?: number;
   /** Previous hour's geohash (for travel detection) */
   previousGeohash?: string | null;
+  /** Previous hour's place label (for travel descriptions) */
+  previousPlaceLabel?: string | null;
   /** Current hour's geohash */
   currentGeohash?: string | null;
   /** Location radius in meters */
   locationRadius?: number | null;
+  /** Google place types for this location */
+  googlePlaceTypes?: string[] | null;
 }
 
 // ============================================================================
@@ -230,8 +234,10 @@ export const HourlySummaryCard = ({
   inferredPlace,
   locationSamples,
   previousGeohash,
+  previousPlaceLabel,
   currentGeohash,
   locationRadius,
+  googlePlaceTypes,
 }: HourlySummaryCardProps) => {
   // Determine if place is inferred (no user-defined place but we have inference)
   const isPlaceInferred = !summary.primaryPlaceId && !!inferredPlace;
@@ -244,12 +250,14 @@ export const HourlySummaryCard = ({
     screenMinutes: summary.totalScreenMinutes,
     hourOfDay: summary.hourOfDay,
     placeLabel: summary.primaryPlaceLabel,
+    previousPlaceLabel,
     inferredPlace,
     locationSamples: locationSamples ?? 0,
     confidence: summary.confidenceScore,
     previousGeohash,
     currentGeohash,
     locationRadius,
+    googlePlaceTypes,
   };
   const inferenceDescription = generateInferenceDescription(inferenceContext);
   

@@ -27,6 +27,8 @@ export interface InferenceContext {
   hourOfDay: number;
   /** Place label (user-defined or inferred) */
   placeLabel: string | null;
+  /** Previous hour's place label (for travel descriptions) */
+  previousPlaceLabel?: string | null;
   /** Inferred place data */
   inferredPlace?: InferredPlace | null;
   /** Number of location samples */
@@ -39,6 +41,8 @@ export interface InferenceContext {
   currentGeohash?: string | null;
   /** Location radius in meters (large = movement) */
   locationRadius?: number | null;
+  /** Google place types for location (e.g., ["library", "point_of_interest"]) */
+  googlePlaceTypes?: string[] | null;
 }
 
 export interface InferenceDescription {
@@ -81,7 +85,9 @@ const ENTERTAINMENT_APPS = [
 
 const PRODUCTIVITY_APPS = [
   "notes", "reminders", "calendar", "todoist", "things", "bear",
-  "obsidian", "roam", "evernote"
+  "obsidian", "roam", "evernote", "mobile", "todaymatters", "today matters",
+  "notion", "docs", "sheets", "drive", "dropbox", "files", "safari", "chrome",
+  "browser", "kindle", "books", "reader", "pdf", "documents"
 ];
 
 function matchesCategory(appName: string, category: string[]): boolean {
@@ -222,17 +228,34 @@ export function generateInferenceDescription(
 // ============================================================================
 
 function detectTravel(context: InferenceContext): InferenceDescription | null {
-  const { previousGeohash, currentGeohash, locationRadius, activity, placeLabel, locationSamples } = context;
+  const { previousGeohash, currentGeohash, locationRadius, activity, placeLabel, previousPlaceLabel, locationSamples } = context;
 
   // Geohash changed = definitely moved
   if (previousGeohash && currentGeohash && previousGeohash !== currentGeohash) {
+    const origin = previousPlaceLabel && previousPlaceLabel !== "Unknown Location"
+      ? previousPlaceLabel
+      : null;
     const destination = placeLabel && placeLabel !== "Unknown Location"
       ? placeLabel
-      : "new location";
+      : null;
+    
+    // Build a nice travel description with actual place names
+    let travelDesc: string;
+    if (origin && destination) {
+      travelDesc = `Traveled from ${origin} to ${destination}`;
+    } else if (destination) {
+      travelDesc = `Arrived at ${destination}`;
+    } else if (origin) {
+      travelDesc = `Left ${origin}`;
+    } else {
+      travelDesc = `Location changed`;
+    }
     
     return {
-      primary: `Location changed → Travel detected`,
-      secondary: `Moved from previous location to ${destination}`,
+      primary: travelDesc,
+      secondary: origin && destination 
+        ? `Movement detected between locations`
+        : `Geohash change indicates travel`,
       iconHint: "travel",
     };
   }
@@ -240,8 +263,9 @@ function detectTravel(context: InferenceContext): InferenceDescription | null {
   // Large radius suggests movement within the hour
   if (locationRadius && locationRadius > 500) {
     const radiusKm = (locationRadius / 1000).toFixed(1);
+    const destination = placeLabel && placeLabel !== "Unknown Location" ? placeLabel : null;
     return {
-      primary: `Movement detected (${radiusKm}km radius)`,
+      primary: destination ? `In transit to ${destination}` : `Movement detected (${radiusKm}km radius)`,
       secondary: `Location samples spread across a wide area → likely in transit`,
       iconHint: "travel",
     };
@@ -249,8 +273,9 @@ function detectTravel(context: InferenceContext): InferenceDescription | null {
 
   // Activity type is commute
   if (activity === "commute") {
+    const destination = placeLabel && placeLabel !== "Unknown Location" ? placeLabel : null;
     return {
-      primary: `Commute/Transit activity detected`,
+      primary: destination ? `Commute to ${destination}` : `Commute/Transit detected`,
       secondary: locationSamples > 10
         ? `${locationSamples} location samples showing movement pattern`
         : `Movement pattern detected from location data`,
@@ -307,11 +332,141 @@ function detectSleep(context: InferenceContext): InferenceDescription | null {
 }
 
 // ============================================================================
+// Place-Based Activity Inference
+// ============================================================================
+
+/**
+ * Infer activity based on place type/name.
+ * Libraries, gyms, churches, etc. have strong activity signals.
+ */
+function inferActivityFromPlace(context: InferenceContext): InferenceDescription | null {
+  const { placeLabel, apps, screenMinutes, googlePlaceTypes } = context;
+  
+  if (!placeLabel || placeLabel === "Unknown Location") return null;
+  
+  const placeLower = placeLabel.toLowerCase();
+  const appCategories = categorizeApps(apps);
+  const { category: dominantCategory, percentage, topApp } = getDominantAppCategory(apps);
+  
+  // Library = productive/reading/work
+  if (placeLower.includes("library") || googlePlaceTypes?.includes("library")) {
+    const activity = dominantCategory === "work" || dominantCategory === "productivity"
+      ? "Productive work session"
+      : screenMinutes > 10 
+        ? "Reading/Study time"
+        : "Library visit";
+    
+    const secondary = apps.length > 0 && screenMinutes > 5
+      ? `At ${placeLabel} • ${topApp} (${apps[0]?.minutes}m)`
+      : `At ${placeLabel} • Likely reading or studying`;
+    
+    return {
+      primary: activity,
+      secondary,
+      iconHint: "work",
+    };
+  }
+  
+  // Gym/Fitness center = workout
+  if (placeLower.includes("gym") || placeLower.includes("fitness") || 
+      placeLower.includes("crossfit") || placeLower.includes("yoga") ||
+      googlePlaceTypes?.includes("gym") || googlePlaceTypes?.includes("health")) {
+    return {
+      primary: `Workout session`,
+      secondary: `At ${placeLabel}${screenMinutes < 10 ? " • Active exercise" : ""}`,
+      iconHint: "activity",
+    };
+  }
+  
+  // Church = spiritual
+  if (placeLower.includes("church") || placeLower.includes("chapel") ||
+      placeLower.includes("temple") || placeLower.includes("mosque") ||
+      googlePlaceTypes?.includes("church") || googlePlaceTypes?.includes("place_of_worship")) {
+    return {
+      primary: `Church/Worship time`,
+      secondary: `At ${placeLabel}`,
+      iconHint: "spiritual",
+    };
+  }
+  
+  // School/University = learning/productive
+  if (placeLower.includes("school") || placeLower.includes("university") ||
+      placeLower.includes("college") || placeLower.includes("campus") ||
+      googlePlaceTypes?.includes("school") || googlePlaceTypes?.includes("university")) {
+    const activity = dominantCategory === "work" || dominantCategory === "productivity"
+      ? "Study/Class session"
+      : "School/Campus time";
+    return {
+      primary: activity,
+      secondary: `At ${placeLabel}${topApp ? ` • ${topApp}` : ""}`,
+      iconHint: "work",
+    };
+  }
+  
+  // Coffee shop/Cafe = could be work or social
+  if (placeLower.includes("coffee") || placeLower.includes("cafe") ||
+      placeLower.includes("starbucks") || placeLower.includes("dunkin") ||
+      googlePlaceTypes?.includes("cafe")) {
+    const isProductive = appCategories.work > 10 || appCategories.productivity > 10;
+    return {
+      primary: isProductive ? `Working from café` : `Coffee break`,
+      secondary: `At ${placeLabel}${topApp && screenMinutes > 5 ? ` • ${topApp}` : ""}`,
+      iconHint: isProductive ? "work" : "activity",
+    };
+  }
+  
+  // Restaurant = dining/meal
+  if (placeLower.includes("restaurant") || placeLower.includes("grill") ||
+      placeLower.includes("kitchen") || placeLower.includes("diner") ||
+      placeLower.includes("cafe") || placeLower.includes("eatery") ||
+      googlePlaceTypes?.includes("restaurant") || googlePlaceTypes?.includes("food")) {
+    return {
+      primary: `Dining out`,
+      secondary: `At ${placeLabel}`,
+      iconHint: "activity",
+    };
+  }
+  
+  // Store/Shopping = errands
+  if (placeLower.includes("store") || placeLower.includes("market") ||
+      placeLower.includes("shop") || placeLower.includes("mall") ||
+      placeLower.includes("target") || placeLower.includes("walmart") ||
+      placeLower.includes("costco") || placeLower.includes("grocery") ||
+      googlePlaceTypes?.includes("store") || googlePlaceTypes?.includes("shopping_mall")) {
+    return {
+      primary: `Shopping/Errands`,
+      secondary: `At ${placeLabel}`,
+      iconHint: "activity",
+    };
+  }
+  
+  // Office/Work location
+  if (placeLower.includes("office") || placeLower.includes("work") ||
+      placeLower.includes("headquarters") || placeLower.includes("hq") ||
+      googlePlaceTypes?.includes("office")) {
+    const workApps = apps.filter(a => matchesCategory(a.displayName, WORK_APPS));
+    return {
+      primary: `Work session`,
+      secondary: workApps.length > 0 
+        ? `At ${placeLabel} • ${workApps.slice(0, 2).map(a => a.displayName).join(", ")}`
+        : `At ${placeLabel}`,
+      iconHint: "work",
+    };
+  }
+  
+  return null;
+}
+
+// ============================================================================
 // Activity-Based Descriptions
 // ============================================================================
 
 function generateActivityDescription(context: InferenceContext): InferenceDescription | null {
   const { activity, apps, screenMinutes, hourOfDay, placeLabel } = context;
+  
+  // First, try place-based inference (library, gym, church, etc.)
+  const placeBasedInference = inferActivityFromPlace(context);
+  if (placeBasedInference) return placeBasedInference;
   
   if (!activity) return null;
 
@@ -394,11 +549,8 @@ function generateActivityDescription(context: InferenceContext): InferenceDescri
       };
 
     case "mixed_activity":
-      return {
-        primary: `Mixed activity`,
-        secondary: generateMixedActivityReasoning(apps, screenMinutes, placeLabel),
-        iconHint: "activity",
-      };
+      // Try to infer a better activity from apps/place instead of "Mixed Activity"
+      return generateSmartMixedActivityDescription(context);
 
     default:
       return null;
@@ -583,31 +735,124 @@ function generateDistractedReasoning(apps: SummaryAppBreakdown[]): string {
   return `Multiple short app sessions → Scattered focus`;
 }
 
-function generateMixedActivityReasoning(
-  apps: SummaryAppBreakdown[],
-  screenMinutes: number,
-  placeLabel: string | null
-): string {
-  const parts: string[] = [];
-
-  if (screenMinutes > 0) {
-    parts.push(`${screenMinutes}m screen time`);
+/**
+ * Smart inference for "mixed_activity" - tries to determine a better label
+ * based on place context and app usage patterns.
+ */
+function generateSmartMixedActivityDescription(context: InferenceContext): InferenceDescription {
+  const { apps, screenMinutes, placeLabel, hourOfDay } = context;
+  const appCategories = categorizeApps(apps);
+  const { category: dominantCategory, percentage, topApp } = getDominantAppCategory(apps);
+  const timeContext = getTimeOfDayContext(hourOfDay);
+  const placeLower = placeLabel?.toLowerCase() ?? "";
+  
+  // Determine what they're likely doing based on place + apps
+  let inferredActivity: string;
+  let reasoning: string;
+  let iconHint: InferenceDescription["iconHint"] = "activity";
+  
+  // Strong app signal overrides place
+  if (dominantCategory && percentage >= 40) {
+    switch (dominantCategory) {
+      case "spiritual":
+        inferredActivity = "Devotional time";
+        reasoning = `${topApp} (${percentage}%) → Spiritual activity`;
+        iconHint = "spiritual";
+        break;
+      case "work":
+        inferredActivity = "Work session";
+        reasoning = `${topApp} (${percentage}%) → Productive work`;
+        iconHint = "work";
+        break;
+      case "productivity":
+        inferredActivity = "Productive time";
+        reasoning = `${topApp} (${percentage}%) → Focused activity`;
+        iconHint = "work";
+        break;
+      case "social":
+        inferredActivity = "Social time";
+        reasoning = `${topApp} (${percentage}%) → Messaging/social`;
+        iconHint = "social";
+        break;
+      case "entertainment":
+        inferredActivity = "Entertainment";
+        reasoning = `${topApp} (${percentage}%) → Media/entertainment`;
+        iconHint = "apps";
+        break;
+      case "fitness":
+        inferredActivity = "Fitness activity";
+        reasoning = `${topApp} active → Workout tracking`;
+        iconHint = "activity";
+        break;
+      default:
+        inferredActivity = "General activity";
+        reasoning = `${topApp} (${screenMinutes}m)`;
+    }
   }
-
-  if (apps.length > 0) {
-    const topApps = apps.slice(0, 2).map(a => a.displayName).join(", ");
-    parts.push(topApps);
+  // Place-based inference when no strong app signal
+  else if (placeLabel && placeLabel !== "Unknown Location") {
+    // Home = personal/leisure time
+    if (placeLower.includes("home")) {
+      if (screenMinutes > 20) {
+        inferredActivity = "Personal time at home";
+        reasoning = apps.length > 0 
+          ? `At home • ${apps.slice(0, 2).map(a => a.displayName).join(", ")}`
+          : `At home • ${screenMinutes}m screen time`;
+      } else if (screenMinutes === 0) {
+        inferredActivity = "Offline time at home";
+        reasoning = "At home • No screen activity";
+      } else {
+        inferredActivity = "Home time";
+        reasoning = `At home • Light phone usage`;
+      }
+      iconHint = "activity";
+    }
+    // Work location
+    else if (placeLower.includes("work") || placeLower.includes("office")) {
+      inferredActivity = "Work time";
+      reasoning = `At ${placeLabel}`;
+      iconHint = "work";
+    }
+    // Other named place
+    else {
+      if (screenMinutes > 10 && apps.length > 0) {
+        const isProductive = appCategories.work > 5 || appCategories.productivity > 5;
+        inferredActivity = isProductive ? `Productive time` : `Time at ${placeLabel}`;
+        reasoning = `At ${placeLabel} • ${apps.slice(0, 2).map(a => a.displayName).join(", ")}`;
+        iconHint = isProductive ? "work" : "activity";
+      } else {
+        inferredActivity = `Time at ${placeLabel}`;
+        reasoning = screenMinutes > 0 
+          ? `${screenMinutes}m screen time`
+          : `Offline activity at location`;
+        iconHint = "place";
+      }
+    }
   }
-
-  if (placeLabel && placeLabel !== "Unknown Location") {
-    parts.push(`at ${placeLabel}`);
+  // Fallback: time-of-day based inference
+  else {
+    if (screenMinutes === 0) {
+      inferredActivity = "Offline activity";
+      reasoning = "No screen time recorded";
+      iconHint = "activity";
+    } else if (isTypicalWorkHour(hourOfDay) && (appCategories.work > 5 || appCategories.productivity > 5)) {
+      inferredActivity = "Productive time";
+      reasoning = `${timeContext} • ${topApp || "various apps"}`;
+      iconHint = "work";
+    } else {
+      inferredActivity = "General activity";
+      reasoning = apps.length > 0 
+        ? `${apps.slice(0, 2).map(a => `${a.displayName} (${a.minutes}m)`).join(", ")}`
+        : `${screenMinutes}m screen time`;
+      iconHint = "apps";
+    }
   }
-
-  if (parts.length === 0) {
-    return "Various activities throughout the hour";
-  }
-
-  return parts.join(" • ");
+  
+  return {
+    primary: inferredActivity,
+    secondary: reasoning,
+    iconHint,
+  };
 }
 
 // ============================================================================

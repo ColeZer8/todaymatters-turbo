@@ -162,6 +162,7 @@ interface LocationHourlyRow {
   sample_count: number;
   place_label: string | null;
   google_place_name: string | null;
+  google_place_types?: string[] | null;
   radius_m?: number | null;
 }
 
@@ -171,7 +172,9 @@ interface EnrichedSummary extends HourlySummary {
   geohash7?: string | null;
   locationSamples?: number;
   previousGeohash?: string | null;
+  previousPlaceLabel?: string | null;
   locationRadius?: number | null;
+  googlePlaceTypes?: string[] | null;
 }
 
 // ============================================================================
@@ -210,7 +213,7 @@ export const HourlySummaryList = ({
       const { data: locationRows, error: locError } = await (supabase as any)
         .schema("tm")
         .from("location_hourly")
-        .select("hour_start, geohash7, sample_count, place_label, google_place_name, radius_m")
+        .select("hour_start, geohash7, sample_count, place_label, google_place_name, google_place_types, radius_m")
         .eq("user_id", userId)
         .gte("hour_start", startOfDay)
         .lte("hour_start", endOfDay)
@@ -251,8 +254,9 @@ export const HourlySummaryList = ({
         (a, b) => a.hourStart.getTime() - b.hourStart.getTime()
       );
 
-      // Build enriched summaries with previous geohash tracking
+      // Build enriched summaries with previous geohash and place label tracking
       let prevGeohash: string | null = null;
+      let prevPlaceLabel: string | null = null;
       const enrichedAsc: EnrichedSummary[] = sortedSummaries.map((summary) => {
         const hourKey = summary.hourStart.toISOString();
         const locData = locationByHour.get(hourKey);
@@ -296,12 +300,14 @@ export const HourlySummaryList = ({
         const titleNeedsEnrichment = 
           summary.title.includes("Unknown Location") ||
           summary.title.includes("Unknown -") ||
-          summary.title === "No Activity Data";
+          summary.title === "No Activity Data" ||
+          summary.title.includes("Mixed Activity");
         
         if (summary.primaryActivity === "commute") {
-          // Special case for commute - don't use place label in title
-          // The place during commute is transitional
-          if (enrichedLabel && enrichedLabel !== "Unknown Location") {
+          // Special case for commute - show origin → destination
+          if (prevPlaceLabel && enrichedLabel && enrichedLabel !== "Unknown Location") {
+            enrichedTitle = `${prevPlaceLabel} → ${enrichedLabel}`;
+          } else if (enrichedLabel && enrichedLabel !== "Unknown Location") {
             enrichedTitle = `Commute → ${enrichedLabel}`;
           } else {
             enrichedTitle = "In Transit";
@@ -322,11 +328,14 @@ export const HourlySummaryList = ({
           geohash7,
           locationSamples: locData?.sample_count || 0,
           previousGeohash: prevGeohash,
+          previousPlaceLabel: prevPlaceLabel,
           locationRadius: locData?.radius_m || null,
+          googlePlaceTypes: locData?.google_place_types || null,
         };
 
         // Update prev for next iteration
         prevGeohash = geohash7;
+        prevPlaceLabel = enrichedLabel;
 
         return result;
       });
@@ -368,8 +377,10 @@ export const HourlySummaryList = ({
         inferredPlace={item.inferredPlace}
         locationSamples={item.locationSamples}
         previousGeohash={item.previousGeohash}
+        previousPlaceLabel={item.previousPlaceLabel}
         currentGeohash={item.geohash7}
         locationRadius={item.locationRadius}
+        googlePlaceTypes={item.googlePlaceTypes}
       />
     ),
     [onMarkAccurate, onNeedsCorrection, onEdit],
