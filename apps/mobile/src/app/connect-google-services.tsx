@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, InteractionManager, View } from "react-native";
+import { ActivityIndicator, InteractionManager, Platform, View } from "react-native";
 import { useRouter, useRootNavigationState } from "expo-router";
 import { ConnectGoogleServicesTemplate } from "@/components/templates/ConnectGoogleServicesTemplate";
 import {
@@ -141,8 +141,27 @@ export default function ConnectGoogleServicesScreen() {
           "Missing access token. Please sign in again and retry.",
         );
       }
-      await startGoogleServicesOAuth(selectedServices, accessToken);
-      // We intentionally do not navigate here; the deep-link callback will drive state updates.
+      const result = await startGoogleServicesOAuth(selectedServices, accessToken);
+      
+      // Android only: With openBrowserAsync, user sees success page in browser and manually closes it.
+      // When browser is dismissed, check if connection actually succeeded.
+      // iOS uses openAuthSessionAsync with deep link redirect, so this is handled by the OAuth callback.
+      if (Platform.OS === "android" && (result.type === "cancel" || result.type === "dismiss")) {
+        if (__DEV__) {
+          console.log("🔗 [Android] Browser dismissed, checking connection status...");
+        }
+        // Give backend a moment to process the OAuth callback
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        
+        // Check if services are now connected
+        const nowConnected = await fetchConnectedGoogleServices(accessToken);
+        if (nowConnected.length > 0) {
+          setFetchedConnectedServices(nowConnected);
+          if (__DEV__) {
+            console.log("🔗 [Android] Services connected after browser dismiss:", nowConnected);
+          }
+        }
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error

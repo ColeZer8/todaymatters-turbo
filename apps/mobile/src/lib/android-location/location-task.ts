@@ -52,6 +52,14 @@ function normalizeRaw(value: unknown): Json | null {
   }
 }
 
+/**
+ * Maximum accepted accuracy in meters for location samples.
+ * Samples with worse accuracy are rejected to prevent inaccurate place matching.
+ * 50m is a reasonable threshold - typical GPS accuracy is 5-20m outdoors,
+ * and samples worse than 50m are likely from cell towers or poor conditions.
+ */
+const MAX_ACCEPTED_ACCURACY_M = 50;
+
 function toSample(
   location: RawLocationObject,
 ): Omit<AndroidLocationSample, "dedupe_key"> | null {
@@ -63,6 +71,16 @@ function toSample(
   const lng = location.coords.longitude;
   if (lat < -90 || lat > 90) return null;
   if (lng < -180 || lng > 180) return null;
+
+  // FIX #1: Reject low-accuracy samples at ingestion
+  // This prevents bad GPS readings from polluting place matching
+  const accuracy = normalizeNonNegative(location.coords.accuracy);
+  if (accuracy !== null && accuracy > MAX_ACCEPTED_ACCURACY_M) {
+    if (__DEV__) {
+      console.log(`📍 [filter] Rejected sample with accuracy ${accuracy}m (max: ${MAX_ACCEPTED_ACCURACY_M}m)`);
+    }
+    return null;
+  }
 
   const recorded_at = new Date(location.timestamp).toISOString();
   const coords = location.coords;

@@ -22,6 +22,8 @@ import {
   getMovementState,
   recordLastSyncTime,
   captureAndroidLocationSampleNowAsync,
+  getAndroidNotificationPermissionStatusAsync,
+  isAndroidBackgroundLocationRunningAsync,
 } from "@/lib/android-location";
 import type { MovementState } from "@/lib/android-location";
 // Supabase config for native uploads
@@ -72,6 +74,9 @@ const MOVING_QUEUE_THRESHOLD = 12;
 /** Polling interval to check queue size on Android (60 seconds). */
 const QUEUE_CHECK_INTERVAL_MS = 60 * 1000;
 
+/** Watchdog interval while app is open/active (3 minutes). */
+const ANDROID_WATCHDOG_INTERVAL_MS = 3 * 60 * 1000;
+
 
 function getSyncIntervalForState(state: MovementState): number {
   return state === "stationary"
@@ -100,6 +105,7 @@ export function useLocationSamplesSync(
   const lastAuthedUserIdRef = useRef<string | null>(null);
   const isFlushingRef = useRef(false);
   const retryAttemptsRef = useRef(0);
+  const isWatchdogRunningRef = useRef(false);
 
   // Start/stop background tracking based on authentication.
   useEffect(() => {
@@ -257,6 +263,124 @@ export function useLocationSamplesSync(
       }
       lastAuthedUserIdRef.current = null;
     }
+  }, [isAuthenticated, userId]);
+
+  // Android watchdog: if the OS kills background updates, restart when app becomes active.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    if (!isAuthenticated || !userId) return;
+
+    let isCancelled = false;
+
+    const tick = async (trigger: "init" | "foreground" | "interval") => {
+      if (isCancelled) return;
+      if (isWatchdogRunningRef.current) return;
+      isWatchdogRunningRef.current = true;
+      try {
+        const running = await isAndroidBackgroundLocationRunningAsync().catch(
+          () => false,
+        );
+        if (running) return;
+
+        // Only attempt restart when we *should* be able to run background ingestion.
+        // This avoids churn when permissions/services were revoked.
+        const canIngest = await isLocationAvailableForIngestion().catch(
+          () => false,
+        );
+        if (!canIngest) {
+          await logError(
+            ErrorCategory.PERMISSION_DENIED,
+            "Android watchdog: background task not running (cannot ingest)",
+            { trigger },
+          );
+          return;
+        }
+
+        const notifications = await getAndroidNotificationPermissionStatusAsync()
+          .catch(() => ({ status: "undetermined" as const, required: false }));
+
+        const startResult = await startAndroidBackgroundLocationAsync();
+        if (startResult.ok) {
+          if (__DEV__) {
+            console.log(
+              `📍 [watchdog] Restarted Android background location (${trigger})`,
+            );
+          }
+          return;
+        }
+
+        await logError(
+          ErrorCategory.TASK_START_FAILED,
+          "Android watchdog: failed to restart background location task",
+          {
+            trigger,
+            reason: startResult.reason,
+            detail: startResult.detail,
+            notificationsStatus: notifications.status,
+            notificationsRequired: notifications.required,
+          },
+        );
+
+        // If the foreground-service task can't start for non-permission reasons,
+        // ensure the native WorkManager fallback is scheduled (best-effort).
+        if (
+          startResult.reason !== "fg_denied" &&
+          startResult.reason !== "bg_denied" &&
+          startResult.reason !== "services_disabled" &&
+          BackgroundLocation
+        ) {
+          try {
+            const tracking = await BackgroundLocation.isTracking().catch(
+              () => ({ isTracking: false as const }),
+            );
+            if (!tracking.isTracking) {
+              await BackgroundLocation.startLocationTracking(userId, 15);
+              if (__DEV__) {
+                console.log(
+                  `📍 [watchdog] Scheduled WorkManager fallback (${trigger})`,
+                );
+              }
+            }
+          } catch (e) {
+            await logError(
+              ErrorCategory.TASK_START_FAILED,
+              "Android watchdog: failed to schedule WorkManager fallback",
+              {
+                trigger,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
+          }
+        }
+      } finally {
+        isWatchdogRunningRef.current = false;
+      }
+    };
+
+    // Run once on mount (while authenticated).
+    tick("init");
+
+    const appStateListener = AppState.addEventListener(
+      "change",
+      (state: AppStateStatus) => {
+        if (state === "active") {
+          tick("foreground");
+        }
+      },
+    );
+
+    // Periodic checks while app is open. This doesn't help when the app is killed,
+    // but it does prevent long "stuck off" periods during active use.
+    const intervalId = setInterval(() => {
+      if (AppState.currentState !== "active") return;
+      tick("interval");
+    }, ANDROID_WATCHDOG_INTERVAL_MS);
+
+    return () => {
+      isCancelled = true;
+      appStateListener.remove();
+      clearInterval(intervalId);
+    };
   }, [isAuthenticated, userId]);
 
   // Android: Listen for token refresh and update native Supabase config

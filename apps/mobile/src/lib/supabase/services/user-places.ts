@@ -2,6 +2,12 @@ import { supabase } from "../client";
 import { handleSupabaseError } from "../utils/error-handler";
 import type { Json } from "../database.types";
 
+/**
+ * Default radius in meters for new user places.
+ * Reduced from 150m to 100m to prevent matching places user drove near.
+ */
+const DEFAULT_PLACE_RADIUS_M = 100;
+
 interface LocationSampleRow {
   latitude: number;
   longitude: number;
@@ -213,7 +219,7 @@ export async function upsertUserPlaceFromSamples(input: {
       label: input.label,
       category: input.category ?? null,
       category_id: input.categoryId ?? null,
-      radius_m: input.radiusMeters ?? 150,
+      radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
     };
 
@@ -262,7 +268,7 @@ export async function createUserPlace(input: {
       label: input.label,
       category: input.category ?? null,
       category_id: input.categoryId ?? null,
-      radius_m: input.radiusMeters ?? 150,
+      radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
     };
 
@@ -309,7 +315,7 @@ export async function upsertUserPlaceFromCoordinates(input: {
       label: input.label,
       category: input.category ?? null,
       category_id: input.categoryId ?? null,
-      radius_m: input.radiusMeters ?? 150,
+      radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
     };
 

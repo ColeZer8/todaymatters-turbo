@@ -353,23 +353,38 @@ export const startGoogleServicesOAuth = async (
     console.log("🔗 Opening Google OAuth URL:", redirectUrl);
   }
 
-  // Use Expo's auth session (official guidance) so iOS/Android handle redirects back to the app reliably.
-  const returnUrl = Linking.createURL("oauth/google");
-  const result = await WebBrowser.openAuthSessionAsync(redirectUrl, returnUrl);
-
-  if (__DEV__) {
-    console.log("🔗 Google OAuth web session result:", result);
+  /**
+   * Platform-specific OAuth handling:
+   * 
+   * iOS: Use openAuthSessionAsync - works correctly with deep link redirects
+   * 
+   * Android: Use openBrowserAsync because:
+   * 1. Backend shows success HTML page at /callback instead of redirecting to deep link
+   * 2. openAuthSessionAsync waits for a redirect that never comes, causing stuck screen
+   * 3. User sees success page in browser, manually closes, app checks connection status
+   * 
+   * When Universal Links (iOS) / App Links (Android) are implemented in production,
+   * both platforms can use openAuthSessionAsync with proper redirect handling.
+   */
+  let result: WebBrowser.WebBrowserAuthSessionResult;
+  
+  if (Platform.OS === "ios") {
+    // iOS: Use auth session with deep link redirect
+    const returnUrl = Linking.createURL("oauth/google");
+    result = await WebBrowser.openAuthSessionAsync(redirectUrl, returnUrl);
+  } else {
+    // Android: Use browser async, check connection status after dismiss
+    const browserResult = await WebBrowser.openBrowserAsync(redirectUrl);
+    // Map WebBrowserResult to WebBrowserAuthSessionResult format
+    result = {
+      type: browserResult.type === "opened" ? "dismiss" : browserResult.type,
+    } as WebBrowser.WebBrowserAuthSessionResult;
   }
 
-  /**
-   * IMPORTANT (iOS): ASWebAuthenticationSession can return `cancel` (error 1) even when the user
-   * completes the flow, because the system dismisses the session when our app is foregrounded.
-   *
-   * The true source of truth for completion is our deep-link handler (`todaymatters://oauth/google/...`),
-   * which updates `useGoogleServicesOAuthStore`.
-   *
-   * So we do NOT treat cancel/dismiss as an error here.
-   */
+  if (__DEV__) {
+    console.log("🔗 Google OAuth result:", { platform: Platform.OS, result });
+  }
+
   return result;
 };
 

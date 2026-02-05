@@ -49,6 +49,9 @@ enable_confirmations = false
 [functions.home-brief]
 verify_jwt = true
 
+[functions.location-place-lookup]
+verify_jwt = false
+
 
 
 

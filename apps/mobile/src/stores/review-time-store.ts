@@ -6,6 +6,7 @@ export type ReviewCategoryId = "faith" | "family" | "work" | "health" | "other";
 export type ReviewBlockSource =
   | "screen_time"
   | "location"
+  | "commute"
   | "workout"
   | "unknown";
 

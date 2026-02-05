@@ -40,6 +40,7 @@ import {
   type InferenceContext,
   type InferenceDescription,
 } from "@/lib/supabase/services/activity-inference-descriptions";
+import type { ActivitySegment } from "@/lib/supabase/services/activity-segments";
 
 // ============================================================================
 // Types
@@ -68,6 +69,8 @@ export interface HourlySummaryCardProps {
   locationRadius?: number | null;
   /** Google place types for this location */
   googlePlaceTypes?: string[] | null;
+  /** Activity segments for this hour (granular time breakdown) */
+  segments?: ActivitySegment[];
 }
 
 // ============================================================================
@@ -238,6 +241,7 @@ export const HourlySummaryCard = ({
   currentGeohash,
   locationRadius,
   googlePlaceTypes,
+  segments,
 }: HourlySummaryCardProps) => {
   // Determine if place is inferred (no user-defined place but we have inference)
   const isPlaceInferred = !summary.primaryPlaceId && !!inferredPlace;
@@ -375,6 +379,39 @@ export const HourlySummaryCard = ({
             <Text style={styles.inferenceReasoningLabel}>Place inference: </Text>
             {inferredPlace.reasoning}
           </Text>
+        </View>
+      )}
+
+      {/* Time Breakdown (Activity Segments) */}
+      {segments && segments.length > 0 && (
+        <View style={styles.segmentsSection}>
+          <View style={styles.segmentsHeader}>
+            <Clock size={12} color="#64748B" />
+            <Text style={styles.segmentsHeaderText}>Time Breakdown</Text>
+          </View>
+          {segments.map((seg, idx) => {
+            const startTime = seg.startedAt.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            const endTime = seg.endedAt.toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+            const durationMin = Math.round((seg.endedAt.getTime() - seg.startedAt.getTime()) / 60000);
+            const isCommute = seg.inferredActivity === "commute" || seg.placeCategory === "commute";
+            const label = isCommute ? "🚗 Traveling" : (seg.placeLabel ?? "Activity");
+            
+            return (
+              <View key={seg.id ?? idx} style={styles.segmentRow}>
+                <Text style={styles.segmentTime}>{startTime} - {endTime}</Text>
+                <Text style={styles.segmentLabel} numberOfLines={1}>{label}</Text>
+                <Text style={styles.segmentDuration}>{durationMin}m</Text>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -701,5 +738,53 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 6,
     backgroundColor: "rgba(148,163,184,0.08)",
+  },
+  // Segments section styles
+  segmentsSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(148,163,184,0.2)",
+  },
+  segmentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  segmentsHeaderText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  segmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(148,163,184,0.06)",
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  segmentTime: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    width: 110,
+  },
+  segmentLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#1E293B",
+  },
+  segmentDuration: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    minWidth: 30,
+    textAlign: "right",
   },
 });

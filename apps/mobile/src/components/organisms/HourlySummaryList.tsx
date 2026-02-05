@@ -34,6 +34,10 @@ import {
   generateInferenceDescription,
   type InferenceContext,
 } from "@/lib/supabase/services/activity-inference-descriptions";
+import {
+  fetchActivitySegmentsForHour,
+  type ActivitySegment,
+} from "@/lib/supabase/services/activity-segments";
 
 // ============================================================================
 // Types
@@ -179,6 +183,7 @@ interface EnrichedSummary extends HourlySummary {
   previousPlaceLabel?: string | null;
   locationRadius?: number | null;
   googlePlaceTypes?: string[] | null;
+  segments?: ActivitySegment[];
 }
 
 // ============================================================================
@@ -252,7 +257,23 @@ export const HourlySummaryList = ({
         }
       }
 
-      // 6. Enrich CHARLIE summaries with inferred place data
+      // 6. Fetch activity segments for each hour (for time breakdown display)
+      const segmentsByHour = new Map<string, ActivitySegment[]>();
+      try {
+        // Fetch segments for all hours in parallel
+        const segmentPromises = charlieSummaries.map(async (summary) => {
+          const segments = await fetchActivitySegmentsForHour(userId, summary.hourStart);
+          return { hourKey: summary.hourStart.toISOString(), segments };
+        });
+        const segmentResults = await Promise.all(segmentPromises);
+        for (const { hourKey, segments } of segmentResults) {
+          segmentsByHour.set(hourKey, segments);
+        }
+      } catch (segErr) {
+        console.warn("[HourlySummaryList] Segment fetch warning:", segErr);
+      }
+
+      // 7. Enrich CHARLIE summaries with inferred place data + segments
       // Sort summaries by hour (ascending) first to track previous geohash
       const sortedSummaries = [...charlieSummaries].sort(
         (a, b) => a.hourStart.getTime() - b.hourStart.getTime()
@@ -356,6 +377,9 @@ export const HourlySummaryList = ({
           }
         }
 
+        // Get activity segments for this hour
+        const hourSegments = segmentsByHour.get(hourKey) || [];
+
         const result: EnrichedSummary = {
           ...summary,
           title: enrichedTitle,
@@ -367,6 +391,7 @@ export const HourlySummaryList = ({
           previousPlaceLabel: prevPlaceLabel,
           locationRadius: locData?.radius_m || null,
           googlePlaceTypes: locData?.google_place_types || null,
+          segments: hourSegments,
         };
 
         // Update prev for next iteration
@@ -402,7 +427,7 @@ export const HourlySummaryList = ({
     setIsRefreshing(false);
   }, [fetchData]);
 
-  // Render item - now includes inference data
+  // Render item - now includes inference data + activity segments
   const renderItem = useCallback(
     ({ item }: { item: EnrichedSummary }) => (
       <HourlySummaryCard
@@ -417,6 +442,7 @@ export const HourlySummaryList = ({
         currentGeohash={item.geohash7}
         locationRadius={item.locationRadius}
         googlePlaceTypes={item.googlePlaceTypes}
+        segments={item.segments}
       />
     ),
     [onMarkAccurate, onNeedsCorrection, onEdit],

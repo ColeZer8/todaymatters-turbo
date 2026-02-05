@@ -1,5 +1,9 @@
 {
   "android": {
     "package": "com.colezer8.todaymattersturbo"
+  },
+  "ios": {
+    "bundleIdentifier": "com.colezer8.todaymattersturbo",
+    "appleTeamId": "XUF36G5828"
   }
 }

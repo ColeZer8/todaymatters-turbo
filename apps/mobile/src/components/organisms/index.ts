@@ -35,3 +35,11 @@ export {
   type HourlySummaryListProps,
 } from "./HourlySummaryList";
 export { PlaceInferenceTimeline } from "./PlaceInferenceTimeline";
+export {
+  ActivitySegmentCard,
+  type ActivitySegmentCardProps,
+} from "./ActivitySegmentCard";
+export {
+  ActivitySegmentTimeline,
+  type ActivitySegmentTimelineProps,
+} from "./ActivitySegmentTimeline";

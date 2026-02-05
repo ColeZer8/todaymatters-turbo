@@ -14,7 +14,7 @@ export interface PlaceLookupResult {
   googlePlaceId: string | null;
   vicinity: string | null;
   types: string[] | null;
-  source: "cache" | "google_places_nearby" | "none";
+  source: "cache" | "google_places_nearby" | "reverse_geocode" | "none";
   expiresAt: string | null;
 }
 
@@ -129,18 +129,89 @@ export async function ensureGooglePlaceNamesForDay(params: {
 
   try {
     const functionUrl = `${SUPABASE_URL}/functions/v1/location-place-lookup`;
+    
+    // Get the current session to debug auth state
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    
     if (__DEV__) {
-      console.log("[LocationPlaceLookup] Calling:", functionUrl);
+      // Parse the token to see expiration
+      let tokenExpiry = "unknown";
+      let tokenUserId = "unknown";
+      let isExpired = false;
+      const token = sessionData?.session?.access_token;
+      if (token) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            tokenExpiry = payload.exp ? new Date(payload.exp * 1000).toISOString() : "unknown";
+            tokenUserId = payload.sub ?? "unknown";
+            isExpired = payload.exp ? payload.exp * 1000 < Date.now() : false;
+          }
+        } catch {
+          tokenExpiry = "parse-error";
+        }
+      }
+      
+      console.log("[LocationPlaceLookup] Session state before call:", {
+        url: functionUrl,
+        hasSession: !!sessionData?.session,
+        hasAccessToken: !!token,
+        tokenLength: token?.length ?? 0,
+        sessionExpiresAt: sessionData?.session?.expires_at 
+          ? new Date((sessionData.session.expires_at as number) * 1000).toISOString() 
+          : null,
+        userId: sessionData?.session?.user?.id ?? null,
+        tokenUserId,
+        tokenExpiry,
+        isExpired,
+        sessionError: sessionError?.message ?? null,
+      });
+      
+      // CRITICAL: If token is expired or missing, log a clear warning
+      if (!token) {
+        console.error("[LocationPlaceLookup] ⚠️ NO ACCESS TOKEN! Function call will likely fail.");
+      } else if (isExpired) {
+        console.error("[LocationPlaceLookup] ⚠️ TOKEN IS EXPIRED! Function call will likely fail.");
+      }
     }
 
+    // Get the access token to pass explicitly (workaround for potential auth header issues)
+    const accessToken = sessionData?.session?.access_token;
+    
+    // Call the function with explicit Authorization header as backup
+    const invokeOptions: Parameters<typeof supabase.functions.invoke>[1] = {
+      body: { points },
+    };
+    
+    // Explicitly include the Authorization header to ensure it's passed
+    if (accessToken) {
+      invokeOptions.headers = {
+        Authorization: `Bearer ${accessToken}`,
+      };
+    }
+    
     const { data, error } = await supabase.functions.invoke(
       "location-place-lookup",
-      {
-        body: { points },
-      },
+      invokeOptions,
     );
 
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      // Enhanced error logging to capture the actual response
+      if (__DEV__) {
+        console.error("[LocationPlaceLookup] Function error:", {
+          name: error.name,
+          message: error.message,
+          // @ts-expect-error - FunctionsHttpError has context property
+          context: error.context,
+          // @ts-expect-error - accessing potential response body
+          responseBody: typeof error.context?.body === "string" 
+            ? error.context.body 
+            : JSON.stringify(error.context),
+        });
+      }
+      throw handleSupabaseError(error);
+    }
     const resp = data as Partial<PlaceLookupResponse> | null;
     const results = Array.isArray(resp?.results) ? resp?.results : [];
 
@@ -151,15 +222,121 @@ export async function ensureGooglePlaceNamesForDay(params: {
   } catch (error) {
     if (__DEV__) {
       const functionUrl = `${SUPABASE_URL}/functions/v1/location-place-lookup`;
-      console.error("[LocationPlaceLookup] Failed:", {
+      // Try to get more details about the error
+      const errorDetails: Record<string, unknown> = {
         error,
         url: functionUrl,
         supabaseUrl: SUPABASE_URL,
         message: error instanceof Error ? error.message : String(error),
-      });
+        name: error instanceof Error ? error.name : "unknown",
+      };
+      // Check for FunctionsHttpError properties
+      if (error && typeof error === "object") {
+        const errObj = error as Record<string, unknown>;
+        if (errObj.context) errorDetails.context = errObj.context;
+        if (errObj.code) errorDetails.code = errObj.code;
+        if (errObj.status) errorDetails.status = errObj.status;
+      }
+      console.error("[LocationPlaceLookup] Failed:", errorDetails);
     }
     // Don't mark as ensured on error - allow retry on next call
     return false;
+  }
+}
+
+/**
+ * Debug function to test the location-place-lookup edge function.
+ * Call this from the dev screen to diagnose auth issues.
+ * 
+ * @returns Debug information about the function call
+ */
+export async function debugTestLocationPlaceLookup(): Promise<{
+  success: boolean;
+  sessionInfo: Record<string, unknown>;
+  functionResult?: unknown;
+  error?: string;
+}> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  
+  const token = sessionData?.session?.access_token;
+  let tokenInfo: Record<string, unknown> = {};
+  
+  if (token) {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        tokenInfo = {
+          sub: payload.sub,
+          exp: payload.exp,
+          iat: payload.iat,
+          role: payload.role,
+          expiresAt: payload.exp ? new Date(payload.exp * 1000).toISOString() : "unknown",
+          isExpired: payload.exp ? payload.exp * 1000 < Date.now() : false,
+        };
+      }
+    } catch {
+      tokenInfo = { parseError: true };
+    }
+  }
+  
+  const sessionInfo = {
+    hasSession: !!sessionData?.session,
+    hasAccessToken: !!token,
+    tokenLength: token?.length ?? 0,
+    sessionExpiresAt: sessionData?.session?.expires_at,
+    userId: sessionData?.session?.user?.id ?? null,
+    sessionError: sessionError?.message ?? null,
+    tokenInfo,
+  };
+  
+  console.log("[LocationPlaceLookup] Debug test - session info:", sessionInfo);
+  
+  if (!token) {
+    return {
+      success: false,
+      sessionInfo,
+      error: "No access token available",
+    };
+  }
+  
+  // Test with a simple point (Times Square, NYC)
+  const testPoints = [{ latitude: 40.758, longitude: -73.9855 }];
+  
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "location-place-lookup",
+      {
+        body: { points: testPoints },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    
+    if (error) {
+      console.error("[LocationPlaceLookup] Debug test - function error:", error);
+      return {
+        success: false,
+        sessionInfo,
+        error: `Function error: ${error.message}`,
+        functionResult: { errorName: error.name, errorMessage: error.message },
+      };
+    }
+    
+    console.log("[LocationPlaceLookup] Debug test - success:", data);
+    return {
+      success: true,
+      sessionInfo,
+      functionResult: data,
+    };
+  } catch (e) {
+    console.error("[LocationPlaceLookup] Debug test - exception:", e);
+    return {
+      success: false,
+      sessionInfo,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 
@@ -189,6 +366,7 @@ export function coercePlaceLookupResults(value: unknown): PlaceLookupResult[] {
       source:
         r.source === "cache" ||
         r.source === "google_places_nearby" ||
+        r.source === "reverse_geocode" ||
         r.source === "none"
           ? r.source
           : "none",

@@ -137,8 +137,12 @@ interface SampleGroup {
 // Constants
 // ============================================================================
 
-/** Default radius in meters for user place matching */
-const DEFAULT_PLACE_RADIUS_M = 150;
+/** 
+ * Default radius in meters for user place matching.
+ * FIX #3: Reduced from 150m to 100m to prevent matching places user drove near.
+ * 100m is reasonable for suburban areas; urban areas might benefit from 75m.
+ */
+const DEFAULT_PLACE_RADIUS_M = 100;
 
 /** Minimum percentage of samples that must match a place for the segment to be labeled as that place */
 const PLACE_MATCH_THRESHOLD = 0.7;
@@ -148,6 +152,13 @@ const MIN_COMMUTE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
 
 /** Maximum movement speed in m/s to be considered stationary (walking pace ~1.4 m/s) */
 const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
+
+/**
+ * FIX #2: Minimum dwell time in milliseconds required to tag a location.
+ * Prevents "drive-by" scenarios where user passes near a place but doesn't stop.
+ * 5 minutes is long enough to filter driving, short enough to capture quick stops.
+ */
+const MIN_DWELL_TIME_MS = 5 * 60 * 1000; // 5 minutes
 
 /** Minimum total distance traveled to consider as movement */
 const MIN_COMMUTE_DISTANCE_M = 200; // 200 meters
@@ -410,6 +421,9 @@ export function generateLocationSegments(
   windowStart: Date,
   windowEnd: Date,
 ): LocationSegment[] {
+  // DEBUG: Log function entry
+  console.log(`📍 [generateLocationSegments] Called with ${locationSamples.length} samples, window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}`);
+  
   if (locationSamples.length === 0) {
     return [];
   }
@@ -421,7 +435,8 @@ export function generateLocationSegments(
     (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
   );
 
-  // Group consecutive samples by their matched place
+  // Group consecutive samples by their matched place OR by coordinate proximity
+  // This ensures we create separate segments even when locations aren't user-defined places
   const groups: SampleGroup[] = [];
   let currentGroup: SampleGroup | null = null;
 
@@ -441,17 +456,45 @@ export function generateLocationSegments(
         placeId: currentPlaceId,
         place: matchedPlace,
       };
-    } else if (currentGroup.placeId === currentPlaceId) {
-      // Same place - extend current group
-      currentGroup.samples.push(sample);
     } else {
-      // Different place - finalize current group and start new one
-      groups.push(currentGroup);
-      currentGroup = {
-        samples: [sample],
-        placeId: currentPlaceId,
-        place: matchedPlace,
-      };
+      // Check if we should continue the current group or start a new one
+      const sameUserPlace = currentGroup.placeId === currentPlaceId && currentPlaceId !== null;
+      
+      // For samples without user place matches, check coordinate proximity
+      // If the sample is >200m from the group's centroid, start a new group
+      let sameCoordinateCluster = false;
+      let distanceFromCentroid = 0;
+      if (currentPlaceId === null && currentGroup.placeId === null) {
+        const groupCentroid = calculateCentroid(currentGroup.samples);
+        distanceFromCentroid = haversineDistance(
+          groupCentroid.latitude,
+          groupCentroid.longitude,
+          sample.latitude,
+          sample.longitude,
+        );
+        // 200m threshold for considering it the same location cluster
+        sameCoordinateCluster = distanceFromCentroid < 200;
+        
+        // DEBUG: Log when distance is significant
+        if (distanceFromCentroid > 100) {
+          console.log(`📍 [CLUSTER DEBUG] Distance from centroid: ${Math.round(distanceFromCentroid)}m, sameCluster: ${sameCoordinateCluster}, sample: (${sample.latitude}, ${sample.longitude}), centroid: (${groupCentroid.latitude}, ${groupCentroid.longitude})`);
+        }
+      }
+
+      if (sameUserPlace || sameCoordinateCluster) {
+        // Same place or same coordinate cluster - extend current group
+        currentGroup.samples.push(sample);
+      } else {
+        // DEBUG: Log when starting new group
+        console.log(`📍 [CLUSTER DEBUG] Starting NEW group! sameUserPlace: ${sameUserPlace}, sameCoordinateCluster: ${sameCoordinateCluster}, distance: ${Math.round(distanceFromCentroid)}m`);
+        // Different place/cluster - finalize current group and start new one
+        groups.push(currentGroup);
+        currentGroup = {
+          samples: [sample],
+          placeId: currentPlaceId,
+          place: matchedPlace,
+        };
+      }
     }
   }
 
@@ -461,7 +504,8 @@ export function generateLocationSegments(
   }
 
   // Convert groups to segments, applying the 70% threshold
-  for (const group of groups) {
+  for (let groupIdx = 0; groupIdx < groups.length; groupIdx++) {
+    const group = groups[groupIdx];
     if (group.samples.length === 0) continue;
 
     // Find the dominant place in this group (may differ from initial grouping)
@@ -470,8 +514,14 @@ export function generateLocationSegments(
     // Calculate segment boundaries
     const firstSample = group.samples[0];
     const lastSample = group.samples[group.samples.length - 1];
-    const segmentStart = new Date(firstSample.recorded_at);
-    const segmentEnd = new Date(lastSample.recorded_at);
+    const rawSegmentStart = new Date(firstSample.recorded_at);
+    const rawSegmentEnd = new Date(lastSample.recorded_at);
+    
+    // Use actual sample timestamps for segment boundaries
+    // This preserves accurate duration data instead of inflating to fill windows.
+    // Gaps between segments will be handled by commute detection or shown as gaps.
+    const segmentStart = rawSegmentStart;
+    const segmentEnd = rawSegmentEnd;
 
     // Clamp to window boundaries
     const clampedStart = new Date(Math.max(segmentStart.getTime(), windowStart.getTime()));
@@ -479,6 +529,16 @@ export function generateLocationSegments(
 
     // Skip if segment is invalid after clamping
     if (clampedStart >= clampedEnd) {
+      continue;
+    }
+
+    // FIX #2: Skip segments shorter than minimum dwell time
+    // This prevents "drive-by" scenarios where user passes near a place
+    const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
+    if (segmentDurationMs < MIN_DWELL_TIME_MS) {
+      if (__DEV__) {
+        console.log(`📍 [filter] Skipping segment at ${place?.label ?? 'unknown'} - duration ${Math.round(segmentDurationMs / 1000 / 60)}min < ${MIN_DWELL_TIME_MS / 1000 / 60}min minimum`);
+      }
       continue;
     }
 
@@ -511,6 +571,12 @@ export function generateLocationSegments(
     });
   }
 
+  // DEBUG: Log results
+  console.log(`📍 [generateLocationSegments] Created ${groups.length} groups, ${segments.length} segments`);
+  for (const seg of segments) {
+    console.log(`📍 [generateLocationSegments] Segment: ${seg.start.toISOString()} - ${seg.end.toISOString()}, place: ${seg.placeLabel ?? 'unknown'}, coords: (${seg.latitude}, ${seg.longitude})`);
+  }
+
   return segments;
 }
 
@@ -538,7 +604,25 @@ export function mergeAdjacentSegments(
     const gap = next.start.getTime() - current.end.getTime();
 
     // Merge if same place and gap is small enough
-    if (current.placeId === next.placeId && gap <= maxGapMs) {
+    // For segments without placeId (null), also check coordinate proximity
+    let shouldMerge = false;
+    if (gap <= maxGapMs) {
+      if (current.placeId !== null && current.placeId === next.placeId) {
+        // Both have same non-null placeId
+        shouldMerge = true;
+      } else if (current.placeId === null && next.placeId === null) {
+        // Both unknown - check if coordinates are close (< 200m)
+        const distance = haversineDistance(
+          current.latitude,
+          current.longitude,
+          next.latitude,
+          next.longitude,
+        );
+        shouldMerge = distance < 200;
+      }
+    }
+    
+    if (shouldMerge) {
       // Extend current segment
       current = {
         ...current,

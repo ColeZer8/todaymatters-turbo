@@ -30,11 +30,6 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  dirname,
-  fromFileUrl,
-  join,
-} from "https://deno.land/std@0.168.0/path/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,9 +37,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const FUNCTION_DIR = dirname(fromFileUrl(import.meta.url));
-// /supabase/functions/location-place-lookup -> /supabase/functions -> /supabase -> project root
-const PROJECT_ROOT = join(FUNCTION_DIR, "..", "..", "..");
+// Lazy-computed project root - only used for local dev .env reading
+// In deployed Supabase edge runtime, we use Deno.env (secrets)
+let _projectRoot: string | null = null;
+function getProjectRoot(): string {
+  if (_projectRoot !== null) return _projectRoot;
+  try {
+    if (!import.meta.url.startsWith("file://")) {
+      _projectRoot = "";
+      return _projectRoot;
+    }
+    const url = new URL(import.meta.url);
+    const parts = url.pathname.split("/");
+    parts.pop(); // index.ts
+    parts.pop(); // location-place-lookup
+    parts.pop(); // functions
+    parts.pop(); // supabase
+    _projectRoot = parts.join("/") || "/";
+  } catch {
+    _projectRoot = "";
+  }
+  return _projectRoot;
+}
 
 interface PlaceLookupPoint {
   latitude: number;
@@ -58,7 +72,7 @@ interface PlaceLookupRequest {
   forceRefresh?: boolean;
 }
 
-type PlaceLookupSource = "cache" | "google_places_nearby" | "none";
+type PlaceLookupSource = "cache" | "google_places_nearby" | "reverse_geocode" | "none";
 
 interface PlaceLookupResult {
   geohash7: string;
@@ -122,7 +136,7 @@ serve(async (req: Request) => {
 
     const body = (await req.json()) as Partial<PlaceLookupRequest>;
     const rawPoints = Array.isArray(body?.points) ? body?.points : [];
-    const radiusMeters = clampNumber(body?.radiusMeters, 1, 500, 150);
+    const radiusMeters = clampNumber(body?.radiusMeters, 1, 1000, 500);
     const ttlDays = clampNumber(body?.ttlDays, 1, 365, 180);
     const forceRefresh = Boolean(body?.forceRefresh);
 
@@ -219,6 +233,7 @@ serve(async (req: Request) => {
       place_types: unknown;
       fetched_at: string;
       expires_at: string;
+      source: string;
     }> = [];
 
     const resolvedByKey = new Map<string, PlaceLookupResult>();
@@ -275,6 +290,7 @@ serve(async (req: Request) => {
         place_types: google.types,
         fetched_at: fetchedAt,
         expires_at: expiresAt,
+        source: google.source,
       });
 
       // Use JS geohash for the result (will be close enough for display purposes)
@@ -287,7 +303,7 @@ serve(async (req: Request) => {
         googlePlaceId: google.placeId,
         vicinity: google.vicinity,
         types: Array.isArray(google.types) ? google.types : null,
-        source: "google_places_nearby",
+        source: google.source,
         expiresAt,
       });
     }
@@ -389,12 +405,20 @@ function coerceStringArray(value: unknown): string[] | null {
   return out.length > 0 ? out : null;
 }
 
+interface PlaceLookupApiResult {
+  placeId: string | null;
+  name: string;
+  vicinity: string | null;
+  types: string[] | null;
+  source: "google_places_nearby" | "reverse_geocode";
+}
+
 async function fetchNearbyPlace(params: {
   apiKey: string;
   latitude: number;
   longitude: number;
   radiusMeters: number;
-}): Promise<{ placeId: string | null; name: string; vicinity: string | null; types: string[] | null } | null> {
+}): Promise<PlaceLookupApiResult | null> {
   const { apiKey, latitude, longitude, radiusMeters } = params;
 
   // Using Places API (New) - POST endpoint with JSON body
@@ -410,7 +434,7 @@ async function fetchNearbyPlace(params: {
         radius: radiusMeters,
       },
     },
-    rankPreference: "POPULARITY",
+    rankPreference: "DISTANCE",
     maxResultCount: 10,
   };
 
@@ -427,7 +451,8 @@ async function fetchNearbyPlace(params: {
   if (!resp.ok) {
     const text = await resp.text();
     console.error("Google Places Nearby error:", resp.status, text);
-    return null;
+    // Fall back to reverse geocoding
+    return fetchReverseGeocode({ apiKey, latitude, longitude });
   }
 
   const data = (await resp.json()) as {
@@ -443,24 +468,116 @@ async function fetchNearbyPlace(params: {
 
   if (data.error) {
     console.error("Google Places Nearby error:", data.error.message ?? "Unknown error");
-    return null;
+    return fetchReverseGeocode({ apiKey, latitude, longitude });
   }
 
   const places = Array.isArray(data.places) ? data.places : [];
-  if (places.length === 0) return null;
+  
+  // If no POI results, fall back to reverse geocoding
+  if (places.length === 0) {
+    console.log(`No POIs found at ${latitude},${longitude} - falling back to reverse geocoding`);
+    return fetchReverseGeocode({ apiKey, latitude, longitude });
+  }
 
   const best =
     places.find((r) => r.businessStatus === "OPERATIONAL" && r.displayName?.text) ??
     places.find((r) => r.displayName?.text) ??
     null;
-  if (!best?.displayName?.text) return null;
+  
+  if (!best?.displayName?.text) {
+    return fetchReverseGeocode({ apiKey, latitude, longitude });
+  }
 
   return {
     placeId: typeof best.id === "string" ? best.id : null,
     name: best.displayName.text,
     vicinity: typeof best.formattedAddress === "string" ? best.formattedAddress : null,
     types: Array.isArray(best.types) ? best.types : null,
+    source: "google_places_nearby",
   };
+}
+
+/**
+ * Reverse geocoding fallback - get neighborhood/area name when no POIs found.
+ * Returns "Near [Neighborhood]" or "Near [City]" style labels.
+ */
+async function fetchReverseGeocode(params: {
+  apiKey: string;
+  latitude: number;
+  longitude: number;
+}): Promise<PlaceLookupApiResult | null> {
+  const { apiKey, latitude, longitude } = params;
+
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("latlng", `${latitude},${longitude}`);
+    url.searchParams.set("key", apiKey);
+    url.searchParams.set("result_type", "neighborhood|sublocality|locality");
+
+    const resp = await fetch(url.toString());
+    if (!resp.ok) {
+      console.error("Reverse geocode HTTP error:", resp.status);
+      return null;
+    }
+
+    const data = (await resp.json()) as {
+      status: string;
+      error_message?: string;
+      results?: Array<{
+        address_components: Array<{
+          long_name: string;
+          short_name: string;
+          types: string[];
+        }>;
+        formatted_address: string;
+      }>;
+    };
+
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      console.error("Reverse geocode error:", data.error_message ?? data.status);
+      return null;
+    }
+
+    if (!data.results || data.results.length === 0) {
+      return null;
+    }
+
+    // Extract the most useful area name
+    let neighborhood: string | null = null;
+    let city: string | null = null;
+
+    for (const result of data.results) {
+      for (const component of result.address_components) {
+        if (
+          component.types.includes("neighborhood") ||
+          component.types.includes("sublocality_level_1") ||
+          component.types.includes("sublocality")
+        ) {
+          if (!neighborhood) neighborhood = component.long_name;
+        }
+        if (
+          component.types.includes("locality") ||
+          component.types.includes("administrative_area_level_3")
+        ) {
+          if (!city) city = component.long_name;
+        }
+      }
+    }
+
+    const areaName = neighborhood || city;
+    if (!areaName) return null;
+
+    return {
+      placeId: null,
+      name: `Near ${areaName}`,
+      vicinity: data.results[0]?.formatted_address ?? null,
+      types: ["reverse_geocode_area"],
+      source: "reverse_geocode",
+    };
+  } catch (error) {
+    console.error("Reverse geocode exception:", error);
+    return null;
+  }
 }
 
 // Minimal geohash encoder (no deps) for precision 1..12.
@@ -522,11 +639,16 @@ async function getConfigValue(
   }
 
   // Local-testing fallback: read from .env files in repo (ignored in git).
-  // In deployed edge runtime, this will typically fail and we fall back to missing.
+  // In deployed edge runtime, PROJECT_ROOT is empty so this is skipped.
+  const projectRoot = getProjectRoot();
+  if (!projectRoot) {
+    return { value: null, source: "missing" };
+  }
+
   const candidates = [
-    join(PROJECT_ROOT, ".env"),
-    join(PROJECT_ROOT, "supabase", ".env"),
-    join(PROJECT_ROOT, "apps", "mobile", ".env"),
+    `${projectRoot}/.env`,
+    `${projectRoot}/supabase/.env`,
+    `${projectRoot}/apps/mobile/.env`,
   ];
 
   for (const path of candidates) {

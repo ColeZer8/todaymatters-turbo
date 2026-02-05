@@ -2,6 +2,12 @@ import type { EvidenceBundle } from "@/lib/supabase/services/evidence-data";
 import type { ScheduledEvent } from "@/stores";
 import type { TimeBlock } from "@/stores/review-time-store";
 import { getReadableAppName } from "@/lib/app-names";
+import {
+  generateLocationSegments,
+  processSegmentsWithCommutes,
+  mergeAdjacentSegments,
+  type LocationSegment,
+} from "@/lib/supabase/services/actual-ingestion";
 
 interface BuildReviewTimeBlocksInput {
   ymd: string;
@@ -10,6 +16,8 @@ interface BuildReviewTimeBlocksInput {
 }
 
 const MIN_SESSION_GAP_MINUTES = 15;
+/** Minimum segment duration in minutes to be shown in timeline */
+const MIN_SEGMENT_DURATION_MINUTES = 5;
 
 export function buildReviewTimeBlocks({
   ymd,
@@ -78,6 +86,138 @@ export function buildReviewTimeBlocks({
 }
 
 function buildLocationBlocks(
+  dayStart: Date,
+  evidence: EvidenceBundle,
+): TimeBlock[] {
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  // Try using raw location samples for precise timestamps and travel detection
+  if (evidence.locationSamples && evidence.locationSamples.length > 0) {
+    return buildLocationBlocksFromSamples(dayStart, dayEnd, evidence);
+  }
+
+  // Fall back to hourly data if no raw samples available
+  return buildLocationBlocksFromHourly(dayStart, evidence);
+}
+
+/**
+ * Build location blocks from raw GPS samples with travel/commute detection.
+ * This gives us precise start/end times and detects travel between locations.
+ */
+function buildLocationBlocksFromSamples(
+  dayStart: Date,
+  dayEnd: Date,
+  evidence: EvidenceBundle,
+): TimeBlock[] {
+  const blocks: TimeBlock[] = [];
+
+  // Convert evidence samples to the format expected by generateLocationSegments
+  const samples = evidence.locationSamples.map((s) => ({
+    recorded_at: s.recorded_at,
+    latitude: s.latitude,
+    longitude: s.longitude,
+  }));
+
+  // Generate location segments from raw samples
+  const rawSegments = generateLocationSegments(
+    samples,
+    evidence.userPlaces,
+    dayStart,
+    dayEnd,
+  );
+
+  // Process segments with commute detection (finds travel between places)
+  const segmentsWithCommutes = processSegmentsWithCommutes(
+    rawSegments,
+    samples,
+    evidence.userPlaces,
+    dayStart,
+  );
+
+  // Merge adjacent segments at the same place
+  const mergedSegments = mergeAdjacentSegments(segmentsWithCommutes);
+
+  // Convert segments to TimeBlocks
+  for (const segment of mergedSegments) {
+    const startMinutes = Math.floor(
+      (segment.start.getTime() - dayStart.getTime()) / 60_000,
+    );
+    const endMinutes = Math.ceil(
+      (segment.end.getTime() - dayStart.getTime()) / 60_000,
+    );
+    const duration = Math.max(1, endMinutes - startMinutes);
+
+    // Skip very short segments (less than MIN_SEGMENT_DURATION_MINUTES)
+    if (duration < MIN_SEGMENT_DURATION_MINUTES) continue;
+
+    // Skip segments outside day boundaries
+    if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
+
+    const isCommute = segment.meta.kind === "commute";
+    const locationLabel = isCommute
+      ? "Travel"
+      : segment.placeLabel ||
+        getGooglePlaceNameForSegment(segment, evidence) ||
+        "Unknown location";
+
+    // Build description with travel annotation if present
+    let description = "";
+    if (isCommute) {
+      const destLabel = segment.meta.destination_place_label;
+      description = destLabel ? `To ${destLabel}` : "In transit";
+    } else if (segment.meta.travel_annotation) {
+      description = segment.meta.travel_annotation;
+    } else {
+      description = segment.meta.place_label ?? "";
+    }
+
+    blocks.push({
+      id: `loc_${segment.sourceId}`,
+      sourceId: segment.sourceId,
+      source: isCommute ? "commute" : "location",
+      title: locationLabel,
+      description,
+      duration,
+      startMinutes: Math.max(0, startMinutes),
+      startTime: formatMinutesToTime(Math.max(0, startMinutes)),
+      endTime: formatMinutesToTime(Math.min(24 * 60, startMinutes + duration)),
+      location: locationLabel,
+      activityDetected: isCommute ? "Traveling" : undefined,
+    });
+  }
+
+  return blocks;
+}
+
+/**
+ * Try to find a Google place name from hourly data that matches this segment.
+ */
+function getGooglePlaceNameForSegment(
+  segment: LocationSegment,
+  evidence: EvidenceBundle,
+): string | null {
+  // Find hourly data that overlaps with this segment's time
+  for (const hourly of evidence.locationHourly) {
+    const hourStart = new Date(hourly.hour_start);
+    const hourEnd = new Date(hourStart);
+    hourEnd.setHours(hourEnd.getHours() + 1);
+
+    // Check if segment overlaps with this hour
+    if (segment.start < hourEnd && segment.end > hourStart) {
+      if (hourly.google_place_name) {
+        return hourly.google_place_name;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Build location blocks from hourly aggregated data (fallback).
+ * Used when raw samples aren't available.
+ */
+function buildLocationBlocksFromHourly(
   dayStart: Date,
   evidence: EvidenceBundle,
 ): TimeBlock[] {
@@ -274,7 +414,7 @@ function formatMinutesToTime(totalMinutes: number): string {
 }
 
 function ymdToDate(ymd: string): Date {
-  const match = ymd.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const match = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return new Date();
   const year = Number(match[1]);
   const month = Number(match[2]) - 1;

@@ -659,23 +659,29 @@ export async function generateActivitySegments(
   // 4. Merge adjacent segments (after commute processing)
   const mergedSegments = mergeAdjacentSegments(segmentsWithCommutes);
 
-  // If no location segments, create a single segment for the hour
-  // based on screen time data alone
+  // If no location segments, create a single segment based on screen time data alone
+  // Use actual screen time boundaries instead of full hour
   if (mergedSegments.length === 0 && screenSessions.length > 0) {
+    // Calculate actual time boundaries from screen sessions
+    const sessionStarts = screenSessions.map((s) => new Date(s.started_at).getTime());
+    const sessionEnds = screenSessions.map((s) => new Date(s.ended_at).getTime());
+    const actualStart = new Date(Math.min(...sessionStarts));
+    const actualEnd = new Date(Math.max(...sessionEnds));
+
     const appBreakdown = calculateAppBreakdown(
       screenSessions,
-      hourStart,
-      hourEnd,
+      actualStart,
+      actualEnd,
       userAppOverrides,
     );
 
     if (appBreakdown.length > 0) {
-      const healthContext = buildHealthDataContext(healthWorkouts, hourStart, hourEnd);
+      const healthContext = buildHealthDataContext(healthWorkouts, actualStart, actualEnd);
       const inferredActivity = inferActivityType({
         placeCategory: null,
         appBreakdown,
-        timeOfDay: getHourOfDay(hourStart),
-        dayOfWeek: getDayOfWeek(hourStart),
+        timeOfDay: getHourOfDay(actualStart),
+        dayOfWeek: getDayOfWeek(actualStart),
         healthData: healthContext,
       });
 
@@ -690,8 +696,8 @@ export async function generateActivitySegments(
         {
           id: generateUuid(),
           userId,
-          startedAt: hourStart,
-          endedAt: hourEnd,
+          startedAt: actualStart,
+          endedAt: actualEnd,
           hourBucket: floorToHour(hourStart),
           placeId: null,
           placeLabel: null,
@@ -803,6 +809,30 @@ export async function saveActivitySegments(
   if (segments.length === 0) return true;
 
   try {
+    // Get unique hour buckets and userId from segments
+    const userId = segments[0].userId;
+    const hourBuckets = [...new Set(segments.map((s) => s.hourBucket.toISOString()))];
+
+    // Delete existing segments for these hours first (prevents duplicates)
+    for (const hourBucket of hourBuckets) {
+      const hourStart = new Date(hourBucket);
+      const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+
+      const { error: deleteError } = await tmSchema()
+        .from("activity_segments")
+        .delete()
+        .eq("user_id", userId)
+        .gte("started_at", hourStart.toISOString())
+        .lt("started_at", hourEnd.toISOString());
+
+      if (deleteError) {
+        if (__DEV__) {
+          console.warn("[ActivitySegments] Failed to delete old segments:", deleteError);
+        }
+        // Continue anyway - insert may still work
+      }
+    }
+
     const rows = segments.map((seg) => ({
       id: seg.id,
       user_id: seg.userId,
@@ -822,9 +852,10 @@ export async function saveActivitySegments(
       source_ids: seg.sourceIds,
     }));
 
+    // Use insert instead of upsert since we deleted first
     const { error } = await tmSchema()
       .from("activity_segments")
-      .upsert(rows, { onConflict: "id" });
+      .insert(rows);
 
     if (error) throw handleSupabaseError(error);
     return true;
@@ -886,6 +917,64 @@ export async function fetchActivitySegmentsForHour(
   } catch (error) {
     if (__DEV__) {
       console.warn("[ActivitySegments] Failed to fetch segments:", error);
+    }
+    return [];
+  }
+}
+
+/**
+ * Fetch all activity segments for a specific date.
+ * Returns segments in chronological order with actual start/end times.
+ */
+export async function fetchActivitySegmentsForDate(
+  userId: string,
+  dateYmd: string, // "YYYY-MM-DD"
+): Promise<ActivitySegment[]> {
+  try {
+    const [year, month, day] = dateYmd.split("-").map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0);
+
+    const { data, error } = await tmSchema()
+      .from("activity_segments")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("started_at", dayStart.toISOString())
+      .lt("started_at", dayEnd.toISOString())
+      .order("started_at", { ascending: true });
+
+    if (error) {
+      if (error.code === "PGRST204" || error.code === "42P01") {
+        return [];
+      }
+      throw handleSupabaseError(error);
+    }
+
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      userId: row.user_id as string,
+      startedAt: new Date(row.started_at as string),
+      endedAt: new Date(row.ended_at as string),
+      hourBucket: new Date(row.hour_bucket as string),
+      placeId: (row.place_id as string) ?? null,
+      placeLabel: (row.place_label as string) ?? null,
+      placeCategory: (row.place_category as string) ?? null,
+      locationLat: (row.location_lat as number) ?? null,
+      locationLng: (row.location_lng as number) ?? null,
+      inferredActivity: row.inferred_activity as InferredActivityType,
+      activityConfidence: row.activity_confidence as number,
+      topApps: (row.top_apps as AppBreakdownItem[]) ?? [],
+      totalScreenSeconds: (row.total_screen_seconds as number) ?? 0,
+      evidence: (row.evidence as SegmentEvidence) ?? {
+        locationSamples: 0,
+        screenSessions: 0,
+        hasHealthData: false,
+      },
+      sourceIds: (row.source_ids as string[]) ?? [],
+    }));
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("[ActivitySegments] Failed to fetch segments for date:", error);
     }
     return [];
   }
@@ -1107,12 +1196,14 @@ export async function enrichSegmentsWithPlaceNames(
   segments: ActivitySegment[],
 ): Promise<ActivitySegment[]> {
   // Find segments that need place lookup
+  // Skip commute/traveling segments - no need to lookup places while moving
   const needsLookup = segments.filter(
     (seg) => 
       seg.locationLat != null && 
       seg.locationLng != null && 
       !seg.placeLabel &&
-      !seg.placeId  // Don't lookup if already matched to user place
+      !seg.placeId &&  // Don't lookup if already matched to user place
+      seg.placeCategory !== "commute"  // Don't lookup for traveling segments
   );
 
   if (needsLookup.length === 0) {
@@ -1138,10 +1229,26 @@ export async function enrichSegmentsWithPlaceNames(
   }
 
   try {
+    // Get the current session to pass Authorization header explicitly
+    // (workaround for potential auth header injection issues)
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    
     // Call the edge function to lookup places
+    const invokeOptions: Parameters<typeof supabase.functions.invoke>[1] = {
+      body: { points },
+    };
+    
+    // Explicitly include the Authorization header
+    if (accessToken) {
+      invokeOptions.headers = {
+        Authorization: `Bearer ${accessToken}`,
+      };
+    }
+    
     const { data, error } = await supabase.functions.invoke(
       "location-place-lookup",
-      { body: { points } },
+      invokeOptions,
     );
 
     if (error) {

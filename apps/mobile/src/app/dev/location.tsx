@@ -22,6 +22,7 @@ import {
   type PlaceInferenceResult,
 } from "@/lib/supabase/services/place-inference";
 import { fetchLocationHourlyForDay, type LocationHourlyRow } from "@/lib/supabase/services/evidence-data";
+import { debugTestLocationPlaceLookup } from "@/lib/supabase/services/location-place-lookup";
 import type { IosLocationSample } from "@/lib/ios-location/types";
 import type { AndroidLocationSample } from "@/lib/android-location/types";
 
@@ -59,6 +60,10 @@ export default function DevLocationScreen() {
   
   // Hourly data with place names from the view (includes google_place_name from cache)
   const [hourlyData, setHourlyData] = useState<LocationHourlyRow[]>([]);
+  
+  // Debug test state
+  const [isDebugTestLoading, setIsDebugTestLoading] = useState(false);
+  const [debugTestResult, setDebugTestResult] = useState<string | null>(null);
 
   const samplesToday = useMemo(() => {
     const start = new Date();
@@ -351,19 +356,30 @@ export default function DevLocationScreen() {
       }
 
       const results = Array.isArray(data?.results) ? data.results : [];
-      const googleResults = results.filter(
+      const poiResults = results.filter(
         (r: unknown) => (r as { source?: string })?.source === "google_places_nearby"
+      ).length;
+      const reverseGeocodeResults = results.filter(
+        (r: unknown) => (r as { source?: string })?.source === "reverse_geocode"
       ).length;
       const cacheHits = results.filter(
         (r: unknown) => (r as { source?: string })?.source === "cache"
       ).length;
+      const noResults = results.filter(
+        (r: unknown) => (r as { source?: string })?.source === "none"
+      ).length;
       
-      setLookupMessage(
-        `✅ Lookup complete: ${results.length} locations processed (${googleResults} from Google, ${cacheHits} from cache).`
-      );
+      // Build detailed status message
+      const parts: string[] = [`✅ Lookup complete: ${results.length} locations processed`];
+      if (poiResults > 0) parts.push(`📍 ${poiResults} POIs found`);
+      if (reverseGeocodeResults > 0) parts.push(`🗺️ ${reverseGeocodeResults} areas (reverse geocode)`);
+      if (cacheHits > 0) parts.push(`💾 ${cacheHits} from cache`);
+      if (noResults > 0) parts.push(`⚠️ ${noResults} no results`);
+      
+      setLookupMessage(parts.join('\n'));
       
       // Auto-refresh samples to show updated place names
-      if (googleResults > 0) {
+      if (poiResults > 0 || reverseGeocodeResults > 0) {
         void refreshSamples();
       }
     } catch (error) {
@@ -390,6 +406,22 @@ export default function DevLocationScreen() {
       setIsInferenceLoading(false);
     }
   }, [userId]);
+
+  // Debug test for edge function auth
+  const runDebugTest = useCallback(async () => {
+    setIsDebugTestLoading(true);
+    setDebugTestResult(null);
+    try {
+      const result = await debugTestLocationPlaceLookup();
+      setDebugTestResult(JSON.stringify(result, null, 2));
+    } catch (error) {
+      setDebugTestResult(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsDebugTestLoading(false);
+    }
+  }, []);
 
   const getInferenceIcon = (type: InferredPlace["inferredType"]) => {
     switch (type) {
@@ -530,6 +562,24 @@ export default function DevLocationScreen() {
                   <Text className="mt-2 text-xs text-text-tertiary">
                     {lookupMessage}
                   </Text>
+                ) : null}
+                <View className="mt-3">
+                  <GradientButton
+                    label={
+                      isDebugTestLoading
+                        ? "Running debug test…"
+                        : "🔧 Debug Auth Test"
+                    }
+                    onPress={runDebugTest}
+                    disabled={isDebugTestLoading}
+                  />
+                </View>
+                {debugTestResult ? (
+                  <View className="mt-2 rounded-lg bg-gray-100 p-3">
+                    <Text className="text-xs font-mono text-text-tertiary" selectable>
+                      {debugTestResult}
+                    </Text>
+                  </View>
                 ) : null}
                 {lastRefreshAt ? (
                   <Text className="mt-2 text-xs text-text-tertiary">
