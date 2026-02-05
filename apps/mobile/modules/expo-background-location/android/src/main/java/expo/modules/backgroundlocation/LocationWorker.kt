@@ -34,11 +34,44 @@ class LocationWorker(
 
     override suspend fun doWork(): Result {
         Log.d(TAG, "Worker: Starting location collection")
-        
-        // Set foreground to keep service alive
-        setForeground(createForegroundInfo())
 
         try {
+            // On Android 13+ a foreground service notification requires POST_NOTIFICATIONS.
+            // If it's denied, starting foreground work can crash with a Permission Denial.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val notificationsGranted =
+                    ActivityCompat.checkSelfPermission(
+                        applicationContext,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    ) == PackageManager.PERMISSION_GRANTED
+
+                if (!notificationsGranted) {
+                    Log.w(TAG, "Worker: Missing POST_NOTIFICATIONS permission; skipping foreground work")
+                    return Result.success(workDataOf("skipped" to "missing_notifications_permission"))
+                }
+            }
+
+            // Starting a *location* foreground service can be denied/crash if location permission
+            // is not granted yet. Check upfront before calling setForeground(...).
+            val fineGranted =
+                ActivityCompat.checkSelfPermission(
+                    applicationContext,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+            val coarseGranted =
+                ActivityCompat.checkSelfPermission(
+                    applicationContext,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+            if (!fineGranted && !coarseGranted) {
+                Log.w(TAG, "Worker: Missing location permission; skipping")
+                return Result.success(workDataOf("skipped" to "missing_location_permission"))
+            }
+
+            // Set foreground to keep service alive (after permission checks).
+            setForeground(createForegroundInfo())
+
             // Get userId from input data or stored config
             val userId = inputData.getString("userId") 
                 ?: SupabaseConfig.getUserId(applicationContext) 

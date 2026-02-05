@@ -69,7 +69,10 @@ import {
   getAndroidLocationDiagnostics,
   openAndroidBatteryOptimizationSettingsAsync,
 } from "@/lib/android-location";
-import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
+import {
+  captureIosLocationSampleNowAsync,
+  requestIosLocationPermissionsAsync,
+} from "@/lib/ios-location";
 import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
 import appConfig from "@/lib/config";
 
@@ -232,25 +235,50 @@ export default function ProfileScreen() {
   }, [user?.id]);
 
   const handleDevCaptureLocationNow = useCallback(async () => {
-    if (Platform.OS !== "android") {
-      Alert.alert("Location", "This tool is Android-only.");
-      return;
-    }
     if (!user?.id) return;
-    const result = await captureAndroidLocationSampleNowAsync(user.id, {
-      flushToSupabase: true,
-    });
-    if (!result.ok) {
+
+    if (Platform.OS === "ios") {
+      const result = await captureIosLocationSampleNowAsync(user.id, {
+        flushToSupabase: true,
+      });
+      if ("reason" in result) {
+        const hint =
+          result.reason === "no_native_module"
+            ? "\n\nHint: this usually means the iOS app needs reinstalling (dev client missing ExpoLocation)."
+            : result.reason === "services_disabled"
+              ? "\n\nHint: enable Location Services in iOS Settings."
+              : result.reason === "fg_denied"
+                ? "\n\nHint: run “Request Location (dev)” or set Location to “While Using” in Settings."
+                : "";
+        Alert.alert("Capture location failed", `${result.reason}${hint}`);
+        return;
+      }
       Alert.alert(
-        "Capture location failed",
-        `${result.reason}${result.detail ? `\n\n${result.detail}` : ""}`,
+        "Captured location sample",
+        `Enqueued: ${result.enqueued}\nUploaded: ${result.uploaded ?? 0}\nRemaining: ${result.remaining ?? 0}`,
       );
       return;
     }
-    Alert.alert(
-      "Captured location sample",
-      `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`,
-    );
+
+    if (Platform.OS === "android") {
+      const result = await captureAndroidLocationSampleNowAsync(user.id, {
+        flushToSupabase: true,
+      });
+      if ("reason" in result) {
+        Alert.alert(
+          "Capture location failed",
+          `${result.reason}${result.detail ? `\n\n${result.detail}` : ""}`,
+        );
+        return;
+      }
+      Alert.alert(
+        "Captured location sample",
+        `Enqueued: ${result.enqueued}\nPending after enqueue: ${result.pendingAfterEnqueue}\nUploaded: ${result.uploaded ?? 0}\nRemaining after flush: ${result.remainingAfterFlush ?? 0}`,
+      );
+      return;
+    }
+
+    Alert.alert("Location", "Unsupported platform.");
   }, [user?.id]);
 
   const { processWindow, getPreviousWindow } = useActualIngestion({

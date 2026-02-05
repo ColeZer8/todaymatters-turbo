@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { IOS_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
 import {
+  enqueueLocationSamplesForUserAsync,
   peekPendingLocationSamplesAsync,
   removePendingLocationSamplesByKeyAsync,
 } from "./queue";
@@ -24,6 +25,31 @@ export function getIosLocationSupportStatus(): IosLocationSupportStatus {
   return "available";
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function normalizeNonNegative(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  return value >= 0 ? value : null;
+}
+
+function normalizeHeadingDeg(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value < 0) return null; // iOS commonly uses -1 for "unknown"
+  const normalized = value % 360;
+  return normalized >= 360 ? 0 : normalized;
+}
+
+function normalizeRaw(value: unknown): IosLocationSample["raw"] {
+  if (value == null) return null;
+  try {
+    return JSON.parse(JSON.stringify(value)) as IosLocationSample["raw"];
+  } catch {
+    return null;
+  }
+}
+
 async function loadExpoLocationAsync(): Promise<
   typeof import("expo-location") | null
 > {
@@ -34,6 +60,58 @@ async function loadExpoLocationAsync(): Promise<
   } catch {
     return null;
   }
+}
+
+type RawLocationObject = {
+  timestamp: number;
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+    altitude?: number | null;
+    speed?: number | null;
+    heading?: number | null;
+  };
+  mocked?: boolean;
+};
+
+function toSample(
+  location: RawLocationObject,
+  sourceMeta: { collected_via: "foreground_poll" | "background_task" },
+): Omit<IosLocationSample, "dedupe_key"> | null {
+  if (!isFiniteNumber(location.timestamp)) return null;
+  if (!isFiniteNumber(location.coords.latitude)) return null;
+  if (!isFiniteNumber(location.coords.longitude)) return null;
+
+  const lat = location.coords.latitude;
+  const lng = location.coords.longitude;
+
+  if (lat < -90 || lat > 90) return null;
+  if (lng < -180 || lng > 180) return null;
+
+  const recorded_at = new Date(location.timestamp).toISOString();
+  const coords = location.coords;
+
+  const is_mocked =
+    typeof location.mocked === "boolean" ? (location.mocked ?? null) : null;
+
+  return {
+    recorded_at,
+    latitude: lat,
+    longitude: lng,
+    accuracy_m: normalizeNonNegative(coords.accuracy),
+    altitude_m: isFiniteNumber(coords.altitude) ? coords.altitude : null,
+    speed_mps: normalizeNonNegative(coords.speed),
+    heading_deg: normalizeHeadingDeg(coords.heading),
+    is_mocked,
+    // IMPORTANT: Supabase currently constrains `source` to "background".
+    source: "background",
+    raw: normalizeRaw({
+      ...sourceMeta,
+      timestamp: location.timestamp,
+      coords,
+    }),
+  };
 }
 
 export async function requestIosLocationPermissionsAsync(): Promise<{
@@ -151,6 +229,67 @@ export async function stopIosBackgroundLocationAsync(): Promise<void> {
   );
   if (!started) return;
   await Location.stopLocationUpdatesAsync(IOS_BACKGROUND_LOCATION_TASK_NAME);
+}
+
+/**
+ * Foreground fallback: capture a single location sample while app is open.
+ *
+ * Why: iOS background tasks are unavailable in Expo Go, and many users grant
+ * "When In Use" but not "Always". This ensures iOS can still collect samples.
+ */
+export async function captureIosLocationSampleNowAsync(
+  userId: string,
+  options: { flushToSupabase?: boolean } = {},
+): Promise<
+  | { ok: true; enqueued: number; uploaded?: number; remaining?: number }
+  | {
+      ok: false;
+      reason:
+        | "not_ios"
+        | "no_native_module"
+        | "services_disabled"
+        | "fg_denied"
+        | "error";
+    }
+> {
+  if (Platform.OS !== "ios") return { ok: false, reason: "not_ios" };
+
+  const Location = await loadExpoLocationAsync();
+  if (!Location) return { ok: false, reason: "no_native_module" };
+
+  const servicesEnabled = await Location.hasServicesEnabledAsync();
+  if (!servicesEnabled) return { ok: false, reason: "services_disabled" };
+
+  // IMPORTANT: Don't auto-request permissions here. Onboarding should drive prompts.
+  const fg = await Location.getForegroundPermissionsAsync();
+  if (fg.status !== "granted") return { ok: false, reason: "fg_denied" };
+
+  try {
+    const location = (await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    })) as unknown as RawLocationObject;
+
+    const sample = toSample(location, { collected_via: "foreground_poll" });
+    if (!sample) return { ok: false, reason: "error" };
+
+    const enqueueResult = await enqueueLocationSamplesForUserAsync(userId, [
+      sample,
+    ]);
+
+    if (options.flushToSupabase) {
+      const flush = await flushPendingLocationSamplesToSupabaseAsync(userId);
+      return {
+        ok: true,
+        enqueued: enqueueResult.enqueued,
+        uploaded: flush.uploaded,
+        remaining: flush.remaining,
+      };
+    }
+
+    return { ok: true, enqueued: enqueueResult.enqueued };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
 }
 
 export async function flushPendingLocationSamplesToSupabaseAsync(

@@ -160,12 +160,12 @@ export async function isLocationAvailableForIngestion(): Promise<boolean> {
     );
   }
   
-  // On iOS, still use expo-location (need both foreground and background)
+  // On iOS, we can still ingest location while the app is open with "When In Use".
+  // Background tracking (Always) is still required for collecting when the app is closed.
   return (
     status.hasModule &&
     status.servicesEnabled &&
-    status.foregroundGranted &&
-    status.backgroundGranted
+    status.foregroundGranted
   );
 }
 

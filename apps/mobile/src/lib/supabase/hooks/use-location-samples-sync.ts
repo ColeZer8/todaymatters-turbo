@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 import { AppState, AppStateStatus, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "@/stores";
+import { isLocationAvailableForIngestion } from "@/lib/location-permission";
 import {
+  captureIosLocationSampleNowAsync,
   flushPendingLocationSamplesToSupabaseAsync,
   startIosBackgroundLocationAsync,
   stopIosBackgroundLocationAsync,
@@ -46,7 +48,7 @@ try {
 /** Max consecutive start failures before backing off until next app foreground. */
 const MAX_RETRY_ATTEMPTS = 3;
 
-/** Foreground location collection interval (fallback when background task fails). */
+/** Foreground location collection interval (fallback when background isn't running). */
 const FOREGROUND_LOCATION_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 const LAST_AUTHED_USER_ID_KEY = "tm:lastAuthedUserId";
@@ -144,7 +146,7 @@ export function useLocationSamplesSync(
         };
 
         // Configure Supabase first, then start tracking
-        configureNativeSupabase().then(() => {
+        configureNativeSupabase().then(async () => {
           // Foreground service (expo-location) for continuous background updates.
           // Falls back to WorkManager if foreground service cannot start.
           startAndroidBackgroundLocationAsync()
@@ -158,26 +160,49 @@ export function useLocationSamplesSync(
               console.warn(
                 `📍 [android] Foreground service start failed: ${result.reason}`,
               );
+
+              // If permissions/services are denied/disabled, do NOT fall back to WorkManager.
+              // WorkManager uses a location foreground service too and can crash when denied.
+              if (result.reason === "fg_denied" || result.reason === "bg_denied" || result.reason === "services_disabled") {
+                return;
+              }
+
               if (!BackgroundLocation) {
                 console.warn("📍 [native] BackgroundLocation not available");
                 return;
               }
-              return BackgroundLocation.startLocationTracking(userId, 15).then(
-                () => {
-                  console.log("📍 [native] WorkManager location tracking started");
-                },
-              );
+
+              return isLocationAvailableForIngestion().then((canStart) => {
+                if (!canStart) {
+                  console.warn(
+                    "📍 [native] Skipping WorkManager fallback: location not available for ingestion",
+                  );
+                  return;
+                }
+                return BackgroundLocation.startLocationTracking(userId, 15).then(
+                  () => {
+                    console.log(
+                      "📍 [native] WorkManager location tracking started",
+                    );
+                  },
+                );
+              });
             })
             .catch((e) => {
               console.error(
                 "📍 [android] Foreground service start failed:",
                 e,
               );
-              if (BackgroundLocation) {
-                BackgroundLocation.startLocationTracking(userId, 15).catch((err) => {
+              // Don't blindly fall back on unexpected errors; require permissions first.
+              if (!BackgroundLocation) return;
+              isLocationAvailableForIngestion()
+                .then((canStart) => {
+                  if (!canStart) return;
+                  return BackgroundLocation.startLocationTracking(userId, 15);
+                })
+                .catch((err) => {
                   console.error("📍 [native] WorkManager start failed:", err);
                 });
-              }
             });
         });
       }
@@ -278,15 +303,18 @@ export function useLocationSamplesSync(
         const result = await captureAndroidLocationSampleNowAsync(userId, {
           flushToSupabase: true, // Immediately upload to Supabase
         });
-        
-        if (result.ok && __DEV__) {
-          console.log(
-            `📍 [foreground] Location collected: enqueued=${result.enqueued}, uploaded=${result.uploaded ?? 0}`,
-          );
-        } else if (!result.ok && __DEV__) {
-          console.warn(
-            `📍 [foreground] Location collection failed: ${result.reason}`,
-          );
+
+        if (__DEV__) {
+          if (result.ok) {
+            console.log(
+              `📍 [foreground] Location collected: enqueued=${result.enqueued}, uploaded=${result.uploaded ?? 0}`,
+            );
+          } else {
+            const reason = "reason" in result ? result.reason : "unknown";
+            console.warn(
+              `📍 [foreground] Location collection failed: ${reason}`,
+            );
+          }
         }
       } catch (error) {
         if (__DEV__) {
@@ -307,6 +335,58 @@ export function useLocationSamplesSync(
       (state: AppStateStatus) => {
         if (state === "active") {
           collectAndSaveLocation();
+        }
+      },
+    );
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+      appStateListener.remove();
+    };
+  }, [isAuthenticated, userId]);
+
+  // iOS: simple fixed-interval flush.
+  // iOS: foreground fallback collection (works in Expo Go and with When-In-Use permission).
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    if (!isAuthenticated || !userId) return;
+
+    let isCancelled = false;
+    let lastFailureLogAt = 0;
+    const FAILURE_LOG_THROTTLE_MS = 60_000;
+
+    const capture = async () => {
+      if (isCancelled) return;
+      try {
+        const result = await captureIosLocationSampleNowAsync(userId);
+        if (__DEV__ && result.ok && result.enqueued > 0) {
+          console.log(`📍 [ios] captured ${result.enqueued} location sample(s)`);
+        }
+        if (__DEV__ && "reason" in result) {
+          const now = Date.now();
+          if (now - lastFailureLogAt >= FAILURE_LOG_THROTTLE_MS) {
+            lastFailureLogAt = now;
+            console.warn(`📍 [ios] location capture skipped: ${result.reason}`);
+          }
+        }
+      } catch (e) {
+        if (__DEV__) {
+          console.warn("📍 [ios] foreground location capture failed:", e);
+        }
+      }
+    };
+
+    // Capture immediately, then periodically while app is open.
+    capture();
+    const intervalId = setInterval(capture, FOREGROUND_LOCATION_INTERVAL_MS);
+
+    // Also capture when app comes back to foreground.
+    const appStateListener = AppState.addEventListener(
+      "change",
+      (state: AppStateStatus) => {
+        if (state === "active") {
+          capture();
         }
       },
     );
@@ -382,7 +462,16 @@ export function useLocationSamplesSync(
         if (drainPendingSamples) {
           const nativeSamples = await drainPendingSamples(userId, 500);
           if (nativeSamples.length > 0) {
-            await enqueueAndroidLocationSamplesForUserAsync(userId, nativeSamples);
+            // Native samples carry `raw: unknown | null`, but our queue expects `Json | null`.
+            // TodayMatters doesn't currently use `raw`, so normalize to null for safety.
+            const normalizedSamples = nativeSamples.map((s) => ({
+              ...s,
+              raw: null,
+            }));
+            await enqueueAndroidLocationSamplesForUserAsync(
+              userId,
+              normalizedSamples,
+            );
             if (__DEV__) {
               console.log(
                 `📍 drained ${nativeSamples.length} background samples from native store`,

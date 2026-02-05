@@ -967,6 +967,7 @@ export async function reprocessDayWithPlaceLookup(
   hoursProcessed: number;
   segmentsCreated: number;
   placesLookedUp: number;
+  summariesGenerated: number;
   error?: string;
 }> {
   const stats = {
@@ -974,19 +975,58 @@ export async function reprocessDayWithPlaceLookup(
     hoursProcessed: 0,
     segmentsCreated: 0,
     placesLookedUp: 0,
+    summariesGenerated: 0,
   };
 
   try {
-    onProgress?.("Deleting old segments...");
+    onProgress?.("Deleting old segments and summaries...");
     
     // 1. Delete existing segments for the day
     await deleteActivitySegmentsForDay(userId, dateYmd);
+
+    // Also delete existing hourly summaries for the day that are not locked.
+    // Locked summaries represent user edits/confirmations and should not be overwritten.
+    try {
+      const { error } = await tmSchema()
+        .from("hourly_summaries")
+        .delete()
+        .eq("user_id", userId)
+        .eq("local_date", dateYmd)
+        .is("locked_at", null);
+
+      if (error) throw handleSupabaseError(error);
+    } catch (error) {
+      // Non-fatal - keep going, we'll upsert summaries for hours we can process.
+      if (__DEV__) {
+        console.warn(
+          "[ActivitySegments] Failed to delete hourly summaries for day:",
+          error,
+        );
+      }
+    }
 
     // 2. Process each hour of the day
     const [year, month, day] = dateYmd.split("-").map(Number);
     const currentHour = new Date().getHours();
     const isToday = dateYmd === getTodayYmd();
     const maxHour = isToday ? currentHour : 23;
+
+    // Lazy import to avoid creating a module dependency loop at load time.
+    // If this fails, we'll still reprocess segments (useful for debugging).
+    let processHourlySummary:
+      | ((userId: string, hourStart: Date) => Promise<unknown>)
+      | null = null;
+    try {
+      const mod = await import("./hourly-summaries");
+      processHourlySummary = mod.processHourlySummary;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn(
+          "[ActivitySegments] Failed to load hourly summaries service for reprocess:",
+          error,
+        );
+      }
+    }
 
     for (let hour = 0; hour <= maxHour; hour++) {
       const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
@@ -1009,12 +1049,30 @@ export async function reprocessDayWithPlaceLookup(
         stats.segmentsCreated += enriched.length;
         stats.placesLookedUp += placesFound;
       }
+
+      // Generate + save CHARLIE hourly summary for this hour (reads from BRAVO).
+      if (processHourlySummary) {
+        try {
+          const summary = await processHourlySummary(userId, hourStart);
+          if (summary) stats.summariesGenerated++;
+        } catch (error) {
+          // Non-fatal - segment regen is still valuable for debugging.
+          if (__DEV__) {
+            console.warn(
+              "[ActivitySegments] Failed to generate hourly summary during reprocess:",
+              error,
+            );
+          }
+        }
+      }
       
       stats.hoursProcessed++;
     }
 
     stats.success = true;
-    onProgress?.(`Done! ${stats.segmentsCreated} segments, ${stats.placesLookedUp} places looked up.`);
+    onProgress?.(
+      `Done! ${stats.segmentsCreated} segments, ${stats.placesLookedUp} places looked up, ${stats.summariesGenerated} summaries generated.`,
+    );
     
     return stats;
   } catch (error) {

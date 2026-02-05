@@ -154,7 +154,8 @@ export default function PipelineTestScreen() {
                   "✅ Reprocess Complete",
                   `Processed ${result.hoursProcessed} hours\n` +
                   `Created ${result.segmentsCreated} segments\n` +
-                  `Looked up ${result.placesLookedUp} places`,
+                  `Looked up ${result.placesLookedUp} places\n` +
+                  `Generated ${result.summariesGenerated ?? 0} summaries`,
                 );
                 setRefreshKey((k) => k + 1);
               } else {
