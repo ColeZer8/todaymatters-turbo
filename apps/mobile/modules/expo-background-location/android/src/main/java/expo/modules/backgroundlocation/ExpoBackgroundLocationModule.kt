@@ -1,6 +1,11 @@
 package expo.modules.backgroundlocation
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -50,25 +55,47 @@ class ExpoBackgroundLocationModule : Module() {
             }
         }
 
+        /**
+         * Start persistent foreground location tracking.
+         * This starts a foreground service that runs continuously until stopped.
+         */
         AsyncFunction("startLocationTracking") { userId: String, intervalMinutes: Int, promise: Promise ->
             try {
+                // Start the persistent foreground service
+                LocationForegroundService.start(context, userId, intervalMinutes)
+                
+                // Also schedule WorkManager as a backup (in case service is killed without restart)
                 scheduleLocationWorker(userId, intervalMinutes)
+                
                 promise.resolve(mapOf("success" to true))
             } catch (e: Exception) {
                 promise.reject("START_FAILED", e.message, e)
             }
         }
 
+        /**
+         * Stop location tracking and clear all configs.
+         */
         AsyncFunction("stopLocationTracking") { promise: Promise ->
             try {
+                // Stop the foreground service
+                LocationForegroundService.stop(context)
+                
+                // Cancel WorkManager backup
                 cancelLocationWorker()
+                
+                // Clear Supabase config
                 SupabaseConfig.clearConfig(context)
+                
                 promise.resolve(mapOf("success" to true))
             } catch (e: Exception) {
                 promise.reject("STOP_FAILED", e.message, e)
             }
         }
 
+        /**
+         * Trigger a one-time location collection.
+         */
         AsyncFunction("runOneTimeLocationWorker") { userId: String, promise: Promise ->
             try {
                 enqueueOneTimeLocationWorker(userId)
@@ -78,15 +105,50 @@ class ExpoBackgroundLocationModule : Module() {
             }
         }
 
+        /**
+         * Check if tracking is currently active.
+         */
         AsyncFunction("isTracking") { promise: Promise ->
             try {
-                val isTracking = isWorkerScheduled()
-                promise.resolve(mapOf("isTracking" to isTracking))
+                // Check if foreground service is running (primary check)
+                val serviceRunning = LocationForegroundService.shouldBeRunning(context)
+                // Also check WorkManager (backup check)
+                val workerScheduled = isWorkerScheduled()
+                
+                promise.resolve(mapOf("isTracking" to (serviceRunning || workerScheduled)))
             } catch (e: Exception) {
                 promise.reject("CHECK_FAILED", e.message, e)
             }
         }
 
+        /**
+         * Check if the app is exempt from battery optimization.
+         */
+        AsyncFunction("isBatteryOptimizationDisabled") { promise: Promise ->
+            try {
+                val isDisabled = isBatteryOptimizationDisabled()
+                promise.resolve(mapOf("isDisabled" to isDisabled))
+            } catch (e: Exception) {
+                promise.reject("CHECK_BATTERY_FAILED", e.message, e)
+            }
+        }
+
+        /**
+         * Open battery optimization settings for this app.
+         * User must manually disable battery optimization for persistent tracking.
+         */
+        AsyncFunction("requestBatteryOptimizationExemption") { promise: Promise ->
+            try {
+                openBatteryOptimizationSettings()
+                promise.resolve(mapOf("success" to true))
+            } catch (e: Exception) {
+                promise.reject("BATTERY_SETTINGS_FAILED", e.message, e)
+            }
+        }
+
+        /**
+         * Drain pending location samples from local storage.
+         */
         AsyncFunction("drainPendingSamples") { userId: String, limit: Int, promise: Promise ->
             try {
                 val drained = PendingLocationStore.drainSamples(context, userId, limit)
@@ -96,6 +158,9 @@ class ExpoBackgroundLocationModule : Module() {
             }
         }
 
+        /**
+         * Peek pending location samples without draining.
+         */
         AsyncFunction("peekPendingSamples") { userId: String, limit: Int, promise: Promise ->
             try {
                 val peeked = PendingLocationStore.peekSamples(context, userId, limit)
@@ -105,6 +170,9 @@ class ExpoBackgroundLocationModule : Module() {
             }
         }
 
+        /**
+         * Get count of pending location samples.
+         */
         AsyncFunction("getPendingCount") { userId: String, promise: Promise ->
             try {
                 val count = PendingLocationStore.getPendingCount(context, userId)
@@ -127,6 +195,39 @@ class ExpoBackgroundLocationModule : Module() {
         }
     }
 
+    /**
+     * Check if battery optimization is disabled for this app.
+     */
+    private fun isBatteryOptimizationDisabled(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            return powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        }
+        return true // Pre-M devices don't have this restriction
+    }
+
+    /**
+     * Open battery optimization settings.
+     * On API 23+, this opens directly to the app's battery settings.
+     */
+    private fun openBatteryOptimizationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        } else {
+            Intent(Settings.ACTION_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }
+        context.startActivity(intent)
+    }
+
+    /**
+     * Schedule WorkManager as a backup mechanism.
+     * This ensures location collection happens even if the service is killed.
+     */
     private fun scheduleLocationWorker(userId: String, intervalMinutes: Int) {
         // Ensure minimum interval of 15 minutes (WorkManager constraint)
         val interval = maxOf(intervalMinutes, 15).toLong()
@@ -140,7 +241,7 @@ class ExpoBackgroundLocationModule : Module() {
         WorkManager.getInstance(context)
             .enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP, // Keep existing if already scheduled
+                ExistingPeriodicWorkPolicy.UPDATE, // Update to pick up new interval
                 workRequest
             )
     }

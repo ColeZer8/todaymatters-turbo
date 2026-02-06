@@ -227,3 +227,46 @@ export async function getPendingCount(userId: string): Promise<number> {
   const result = await ExpoBackgroundLocationModule.getPendingCount(userId);
   return typeof result?.count === "number" ? result.count : 0;
 }
+
+/**
+ * Check if battery optimization is disabled for this app (Android only).
+ * When battery optimization is enabled, Android may kill background services.
+ * For reliable background location tracking, battery optimization should be disabled.
+ * 
+ * @returns Promise that resolves with true if battery optimization is disabled
+ */
+export async function isBatteryOptimizationDisabled(): Promise<boolean> {
+  if (
+    typeof (ExpoBackgroundLocationModule as { isBatteryOptimizationDisabled?: unknown })
+      .isBatteryOptimizationDisabled !== "function"
+  ) {
+    // Not supported on this platform, assume it's fine
+    return true;
+  }
+  const result = await ExpoBackgroundLocationModule.isBatteryOptimizationDisabled();
+  return result?.isDisabled === true;
+}
+
+/**
+ * Request battery optimization exemption (Android only).
+ * This opens the system settings where the user can disable battery optimization
+ * for this app. This is required for reliable background location tracking.
+ * 
+ * Note: This function opens the settings page but does NOT wait for the user
+ * to make a choice. You should call isBatteryOptimizationDisabled() after
+ * the user returns to check if they granted the exemption.
+ */
+export async function requestBatteryOptimizationExemption(): Promise<void> {
+  if (
+    typeof (ExpoBackgroundLocationModule as { requestBatteryOptimizationExemption?: unknown })
+      .requestBatteryOptimizationExemption !== "function"
+  ) {
+    if (__DEV__) {
+      console.warn(
+        "📍 [native] requestBatteryOptimizationExemption unavailable — not supported on this platform.",
+      );
+    }
+    return;
+  }
+  await ExpoBackgroundLocationModule.requestBatteryOptimizationExemption();
+}

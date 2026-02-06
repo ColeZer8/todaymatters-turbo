@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import appConfig, { readBooleanEnv } from "@/lib/config";
+import { supabase } from "@/lib/supabase/client";
 
 export type GoogleService = "google-calendar" | "google-gmail";
 
@@ -104,8 +105,6 @@ export const buildGoogleServicesOAuthUrl = (
 const looksLikeGoogleOAuthUrl = (url: string): boolean => {
   try {
     const parsed = new URL(url);
-    // The consent screen should be on accounts.google.com (or occasionally other google hosts).
-    // counts.google.com is NOT a valid OAuth start target; opening it produces confusing errors.
     const host = parsed.hostname.toLowerCase();
     if (host === "counts.google.com") return false;
     if (host.endsWith(".google.com") || host === "accounts.google.com") {
@@ -122,19 +121,10 @@ const looksLikeGoogleOAuthUrl = (url: string): boolean => {
 };
 
 const toCanonicalGoogleOAuthAuthUrl = (url: string): string => {
-  /**
-   * PRODUCTION-GRADE: Always prefer the canonical OAuth endpoint:
-   *   https://accounts.google.com/o/oauth2/v2/auth
-   *
-   * Google sometimes returns an internal `/signin/identifier` URL that *contains*
-   * all the real OAuth params. Opening internal pages (or legacy consent URLs) is
-   * fragile on mobile and can lead to counts.google.com 400/500.
-   */
   try {
     const parsed = new URL(url);
     if (parsed.hostname.toLowerCase() !== "accounts.google.com") return url;
 
-    // If it's already the canonical endpoint, keep it.
     if (
       parsed.pathname.startsWith("/o/oauth2") ||
       parsed.pathname.startsWith("/oauth2")
@@ -163,7 +153,6 @@ const toCanonicalGoogleOAuthAuthUrl = (url: string): string => {
       if (value) authUrl.searchParams.set(key, value);
     }
 
-    // If required params are missing, fall back to original.
     if (
       !authUrl.searchParams.get("client_id") ||
       !authUrl.searchParams.get("redirect_uri") ||
@@ -198,7 +187,6 @@ const ensureSelectAccountPrompt = (url: string): string => {
     ].join(" ");
     parsed.searchParams.set("prompt", normalizedPrompt);
 
-    // Avoid forcing a specific account so the chooser can appear.
     parsed.searchParams.delete("login_hint");
 
     if (ALLOW_ANY_GOOGLE_ACCOUNT) {
@@ -214,14 +202,12 @@ const ensureSelectAccountPrompt = (url: string): string => {
 const getRedirectUrlFromOAuthStartResponse = (
   response: Response,
 ): string | null => {
-  // Prefer explicit redirect location (what the backend should return).
   const location =
     response.headers.get("location") ?? response.headers.get("Location");
   if (location) {
     return toCanonicalGoogleOAuthAuthUrl(location);
   }
 
-  // Some runtimes follow redirects and hide Location. If so, only accept URLs that look like Google OAuth.
   const url = typeof response.url === "string" ? response.url : "";
   if (url && looksLikeGoogleOAuthUrl(url)) {
     return toCanonicalGoogleOAuthAuthUrl(url);
@@ -230,10 +216,72 @@ const getRedirectUrlFromOAuthStartResponse = (
   return null;
 };
 
+/**
+ * Check if Google services are connected by querying the source_accounts table in Supabase.
+ * This is the recommended approach per backend team until Universal Links are implemented.
+ * 
+ * Note: source_accounts table may not be in local TypeScript types yet, so we use
+ * a generic query approach.
+ */
+export const checkGoogleConnectionFromSupabase = async (
+  userId: string,
+): Promise<{ connected: boolean; services: GoogleService[]; email?: string } | null> => {
+  try {
+    if (__DEV__) {
+      console.log("🔗 Checking Google connection in Supabase for user:", userId);
+    }
+
+    // Use generic query since source_accounts may not be in local types yet
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("source_accounts")
+      .select("enabled_services, account_identifier")
+      .eq("user_id", userId)
+      .eq("provider", "google")
+      .single();
+
+    if (error || !data) {
+      if (__DEV__) {
+        console.log("🔗 No Google connection found in Supabase:", error?.message);
+      }
+      return null;
+    }
+
+    // Parse enabled_services - could be array or comma-separated string
+    let services: GoogleService[] = [];
+    const enabledServices = data.enabled_services;
+    if (enabledServices) {
+      if (Array.isArray(enabledServices)) {
+        services = parseServicesParam(enabledServices.join(","));
+      } else if (typeof enabledServices === "string") {
+        services = parseServicesParam(enabledServices);
+      }
+    }
+
+    if (__DEV__) {
+      console.log("🔗 Google connection found:", {
+        services,
+        email: data.account_identifier,
+      });
+    }
+
+    return {
+      connected: true,
+      services,
+      email: data.account_identifier ?? undefined,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.warn("🔗 Error checking Google connection:", error);
+    }
+    return null;
+  }
+};
+
 export const startGoogleServicesOAuth = async (
   services: GoogleService[],
   accessToken: string,
-): Promise<WebBrowser.WebBrowserAuthSessionResult> => {
+): Promise<WebBrowser.WebBrowserResult> => {
   if (!accessToken) {
     throw new Error("Missing access token. Please sign in again and retry.");
   }
@@ -256,7 +304,6 @@ export const startGoogleServicesOAuth = async (
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
-      // In RN this may still follow redirects; we handle both cases.
       redirect: "manual",
     } as RequestInit);
   } catch (error) {
@@ -274,34 +321,11 @@ export const startGoogleServicesOAuth = async (
   if (__DEV__) {
     const location =
       response.headers.get("location") ?? response.headers.get("Location");
-    const finalUrl = location || response.url || "";
-
-    // Parse and log OAuth parameters for debugging
-    let oauthParams: Record<string, string> = {};
-    try {
-      const urlObj = new URL(finalUrl);
-      urlObj.searchParams.forEach((value, key) => {
-        oauthParams[key] = value;
-      });
-    } catch {
-      // URL parsing failed, skip param extraction
-    }
 
     console.log("🔗 Google Services OAuth start response:", {
       status: response.status,
       url: response.url,
       location,
-      oauthParams:
-        Object.keys(oauthParams).length > 0
-          ? {
-              prompt: oauthParams.prompt,
-              hd: oauthParams.hd,
-              client_id: oauthParams.client_id?.substring(0, 20) + "...",
-              redirect_uri: oauthParams.redirect_uri,
-              scope: oauthParams.scope,
-              response_type: oauthParams.response_type,
-            }
-          : null,
     });
   }
 
@@ -328,21 +352,6 @@ export const startGoogleServicesOAuth = async (
     redirectUrl = ensureSelectAccountPrompt(redirectUrl);
   }
 
-  if (__DEV__) {
-    try {
-      const urlObj = new URL(redirectUrl);
-      const params: Record<string, string | null> = {
-        prompt: urlObj.searchParams.get("prompt"),
-        login_hint: urlObj.searchParams.get("login_hint"),
-        hd: urlObj.searchParams.get("hd"),
-        authuser: urlObj.searchParams.get("authuser"),
-      };
-      console.log("🔗 Final Google OAuth URL params:", params);
-    } catch {
-      // ignore URL parse errors in dev logging
-    }
-  }
-
   if (!looksLikeGoogleOAuthUrl(redirectUrl)) {
     throw new Error(
       "Failed to start Google connection (unexpected redirect URL). Please contact the backend team to verify the Google OAuth URL generation.",
@@ -350,39 +359,20 @@ export const startGoogleServicesOAuth = async (
   }
 
   if (__DEV__) {
-    console.log("🔗 Opening Google OAuth URL:", redirectUrl);
+    console.log("🔗 Opening Google OAuth URL with openBrowserAsync:", redirectUrl);
   }
 
-  /**
-   * Platform-specific OAuth handling:
-   * 
-   * iOS: Use openAuthSessionAsync - works correctly with deep link redirects
-   * 
-   * Android: Use openBrowserAsync because:
-   * 1. Backend shows success HTML page at /callback instead of redirecting to deep link
-   * 2. openAuthSessionAsync waits for a redirect that never comes, causing stuck screen
-   * 3. User sees success page in browser, manually closes, app checks connection status
-   * 
-   * When Universal Links (iOS) / App Links (Android) are implemented in production,
-   * both platforms can use openAuthSessionAsync with proper redirect handling.
-   */
-  let result: WebBrowser.WebBrowserAuthSessionResult;
-  
-  if (Platform.OS === "ios") {
-    // iOS: Use auth session with deep link redirect
-    const returnUrl = Linking.createURL("oauth/google");
-    result = await WebBrowser.openAuthSessionAsync(redirectUrl, returnUrl);
-  } else {
-    // Android: Use browser async, check connection status after dismiss
-    const browserResult = await WebBrowser.openBrowserAsync(redirectUrl);
-    // Map WebBrowserResult to WebBrowserAuthSessionResult format
-    result = {
-      type: browserResult.type === "opened" ? "dismiss" : browserResult.type,
-    } as WebBrowser.WebBrowserAuthSessionResult;
-  }
+  // Use openBrowserAsync instead of openAuthSessionAsync
+  // openAuthSessionAsync waits for a redirect that won't come (backend shows HTML page)
+  // openBrowserAsync just opens browser and returns when dismissed
+  // After dismiss, caller should check Supabase source_accounts table for connection status
+  const result = await WebBrowser.openBrowserAsync(redirectUrl, {
+    dismissButtonStyle: "close",
+    showTitle: true,
+  });
 
   if (__DEV__) {
-    console.log("🔗 Google OAuth result:", { platform: Platform.OS, result });
+    console.log("🔗 Google OAuth browser result:", { platform: Platform.OS, result });
   }
 
   return result;
@@ -453,76 +443,4 @@ export const handleGoogleServicesOAuthCallback = (
   return () => {
     subscription.remove();
   };
-};
-
-/**
- * Fetches the list of currently connected Google services from the backend.
- * @param accessToken Supabase access token for authentication
- * @returns Array of connected Google services, or empty array if none are connected
- */
-export const fetchConnectedGoogleServices = async (
-  accessToken: string,
-): Promise<GoogleService[]> => {
-  if (!accessToken) {
-    throw new Error("Missing access token. Please sign in again and retry.");
-  }
-
-  const baseUrl = resolveOAuthBaseUrl();
-  const statusUrl = `${trimTrailingSlash(baseUrl)}/oauth2/google/status`;
-
-  if (__DEV__) {
-    console.log("🔗 Fetching connected Google services:", {
-      url: statusUrl,
-      baseUrl,
-    });
-  }
-
-  try {
-    const response = await fetch(statusUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        "Not authorized to check Google services status. Please sign in again and retry.",
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch connected services (HTTP ${response.status}).`,
-      );
-    }
-
-    const data = await response.json();
-    const servicesParam = data.services ?? data.connected_services ?? null;
-    const services = parseServicesParam(servicesParam);
-
-    if (__DEV__) {
-      console.log("🔗 Connected Google services:", services);
-    }
-
-    return services;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Not authorized")) {
-      throw error;
-    }
-    if (error instanceof Error && error.message.includes("HTTP")) {
-      throw error;
-    }
-    // If the endpoint doesn't exist yet, return empty array (graceful degradation)
-    if (__DEV__) {
-      console.error("⚠️ Could not fetch connected Google services:", {
-        error,
-        url: statusUrl,
-        baseUrl,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-    return [];
-  }
 };

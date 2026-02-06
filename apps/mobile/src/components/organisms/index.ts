@@ -33,6 +33,7 @@ export {
 export {
   HourlySummaryList,
   type HourlySummaryListProps,
+  type EnrichedSummary,
 } from "./HourlySummaryList";
 export { PlaceInferenceTimeline } from "./PlaceInferenceTimeline";
 export {
@@ -43,3 +44,12 @@ export {
   ActivitySegmentTimeline,
   type ActivitySegmentTimelineProps,
 } from "./ActivitySegmentTimeline";
+export {
+  LocationBlockCard,
+  type LocationBlockCardProps,
+} from "./LocationBlockCard";
+export {
+  LocationBlockList,
+  type LocationBlockListProps,
+} from "./LocationBlockList";
+export { TimelineBlockSection } from "./TimelineBlockSection";

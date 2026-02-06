@@ -4,7 +4,7 @@ import { useRouter, useRootNavigationState } from "expo-router";
 import { ConnectGoogleServicesTemplate } from "@/components/templates/ConnectGoogleServicesTemplate";
 import {
   startGoogleServicesOAuth,
-  fetchConnectedGoogleServices,
+  checkGoogleConnectionFromSupabase,
   type GoogleService,
 } from "@/lib/google-services-oauth";
 import { useAuthStore, useGoogleServicesOAuthStore } from "@/stores";
@@ -23,6 +23,7 @@ export default function ConnectGoogleServicesScreen() {
   const accessToken = useAuthStore(
     (state) => state.session?.access_token ?? null,
   );
+  const userId = useAuthStore((state) => state.session?.user?.id ?? null);
 
   const isProcessingOAuth = useGoogleServicesOAuthStore(
     (state) => state.isProcessing,
@@ -41,10 +42,9 @@ export default function ConnectGoogleServicesScreen() {
   const [fetchedConnectedServices, setFetchedConnectedServices] = useState<
     GoogleService[]
   >([]);
-  const [isLoadingConnected, setIsLoadingConnected] = useState(false);
   const [hasAttemptedConnection, setHasAttemptedConnection] = useState(false);
 
-  // Combine OAuth result (from recent connection) with fetched services (from backend)
+  // Combine OAuth result (from deep link callback) with fetched services (from Supabase)
   const connectedServices = useMemo(() => {
     const fromOAuth = oauthResult?.success ? (oauthResult.services ?? []) : [];
     // Merge and deduplicate
@@ -65,34 +65,30 @@ export default function ConnectGoogleServicesScreen() {
     }
   }, [isAuthenticated, isNavigationReady, router]);
 
-  // Fetch currently connected services from backend on mount and after successful OAuth
+  // Check for existing Google connection on mount
   useEffect(() => {
-    if (!isAuthenticated || !accessToken) return;
+    if (!isAuthenticated || !userId) return;
 
     let cancelled = false;
-    setIsLoadingConnected(true);
     (async () => {
       try {
-        const services = await fetchConnectedGoogleServices(accessToken);
-        if (!cancelled) {
-          setFetchedConnectedServices(services);
+        const connection = await checkGoogleConnectionFromSupabase(userId);
+        if (!cancelled && connection?.connected && connection.services.length > 0) {
+          setFetchedConnectedServices(connection.services);
+          setHasAttemptedConnection(true);
         }
       } catch (error) {
         if (__DEV__ && !cancelled) {
-          console.warn("⚠️ Could not fetch connected Google services:", error);
+          console.warn("⚠️ Could not check Google connection:", error);
         }
-        // Don't show error to user - graceful degradation
-      } finally {
-        if (!cancelled) {
-          setIsLoadingConnected(false);
-        }
+        // Don't show error - graceful degradation
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, accessToken, oauthResult?.success]);
+  }, [isAuthenticated, userId]);
 
   useEffect(() => {
     if (!oauthResult) return;
@@ -132,34 +128,53 @@ export default function ConnectGoogleServicesScreen() {
 
   const handleConnect = useCallback(async () => {
     if (selectedServices.length === 0) return;
+    if (!userId) {
+      setErrorMessage("User not authenticated. Please sign in again.");
+      return;
+    }
+    
     setHasAttemptedConnection(true);
     setErrorMessage(null);
     setIsConnecting(true);
+    
     try {
       if (!accessToken) {
         throw new Error(
           "Missing access token. Please sign in again and retry.",
         );
       }
-      const result = await startGoogleServicesOAuth(selectedServices, accessToken);
       
-      // Android only: With openBrowserAsync, user sees success page in browser and manually closes it.
-      // When browser is dismissed, check if connection actually succeeded.
-      // iOS uses openAuthSessionAsync with deep link redirect, so this is handled by the OAuth callback.
-      if (Platform.OS === "android" && (result.type === "cancel" || result.type === "dismiss")) {
-        if (__DEV__) {
-          console.log("🔗 [Android] Browser dismissed, checking connection status...");
-        }
+      // Open browser for OAuth (uses openBrowserAsync per Michael's recommendation)
+      const result = await startGoogleServicesOAuth(selectedServices, accessToken);
+
+      if (__DEV__) {
+        console.log("🔗 OAuth browser closed, checking connection status...", {
+          result,
+          platform: Platform.OS,
+        });
+      }
+
+      // Browser was dismissed - check if OAuth actually completed
+      // Per Michael: query Supabase source_accounts table directly
+      if (result.type === "dismiss" || result.type === "cancel" || result.type === "opened") {
         // Give backend a moment to process the OAuth callback
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Check Supabase for connection status
+        const connection = await checkGoogleConnectionFromSupabase(userId);
         
-        // Check if services are now connected
-        const nowConnected = await fetchConnectedGoogleServices(accessToken);
-        if (nowConnected.length > 0) {
-          setFetchedConnectedServices(nowConnected);
+        if (connection?.connected && connection.services.length > 0) {
           if (__DEV__) {
-            console.log("🔗 [Android] Services connected after browser dismiss:", nowConnected);
+            console.log("🔗 Google connection verified:", connection);
           }
+          setFetchedConnectedServices(connection.services);
+          setErrorMessage(null);
+        } else {
+          // User closed browser before completing OAuth
+          if (__DEV__) {
+            console.log("🔗 No Google connection found after browser dismiss");
+          }
+          // Don't show error - user might have intentionally cancelled
         }
       }
     } catch (error) {
@@ -171,7 +186,7 @@ export default function ConnectGoogleServicesScreen() {
     } finally {
       setIsConnecting(false);
     }
-  }, [selectedServices, accessToken]);
+  }, [selectedServices, accessToken, userId]);
 
   const handleContinue = useCallback(() => {
     clearOAuthResult();
@@ -214,7 +229,6 @@ export default function ConnectGoogleServicesScreen() {
       onRetryConnection={handleRetryConnection}
       onSkip={handleSkip}
       onBack={() => router.replace("/permissions")}
-      // key to ensure updated "connected services" state fully refreshes selection UI if needed
       key={`connect-google-${connectedServicesKey}`}
     />
   );

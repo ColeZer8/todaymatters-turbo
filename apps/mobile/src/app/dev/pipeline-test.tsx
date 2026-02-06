@@ -9,9 +9,11 @@
 import { useState, useCallback } from "react";
 import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList, Zap } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList, Zap, Layers } from "lucide-react-native";
 import { HourlySummaryList, PlaceInferenceTimeline } from "@/components/organisms";
+import { LocationBlockList } from "@/components/organisms/LocationBlockList";
 import type { HourlySummary } from "@/lib/supabase/services";
+import type { LocationBlock } from "@/lib/types/location-block";
 import {
   submitAccurateFeedback,
   submitInaccurateFeedback,
@@ -19,7 +21,7 @@ import {
 import { reprocessDayWithPlaceLookup } from "@/lib/supabase/services/activity-segments";
 import { useAuthStore } from "@/stores";
 
-type ViewMode = "summaries" | "places";
+type ViewMode = "blocks" | "summaries" | "places";
 
 // ============================================================================
 // Helpers
@@ -66,7 +68,7 @@ export default function PipelineTestScreen() {
   const user = useAuthStore((s) => s.user);
   const [selectedDate, setSelectedDate] = useState(getTodayYmd());
   const [refreshKey, setRefreshKey] = useState(0);
-  const [viewMode, setViewMode] = useState<ViewMode>("places"); // Default to places view
+  const [viewMode, setViewMode] = useState<ViewMode>("blocks"); // Default to location blocks view
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessStatus, setReprocessStatus] = useState<string | null>(null);
 
@@ -123,6 +125,48 @@ export default function PipelineTestScreen() {
     Alert.alert(
       "Edit Summary",
       `Editing: ${summary.title}\n\nThis would open an edit modal in the full implementation.`,
+    );
+  }, []);
+
+  // Block-level feedback handlers
+  const handleBlockMarkAccurate = useCallback(
+    async (summaryIds: string[]) => {
+      try {
+        await Promise.all(
+          summaryIds.map((id) => submitAccurateFeedback(userId, id)),
+        );
+        Alert.alert("Feedback Submitted", "Marked as accurate. Thank you!");
+        setRefreshKey((k) => k + 1);
+      } catch (error) {
+        Alert.alert("Error", "Failed to submit feedback");
+        if (__DEV__) console.error(error);
+      }
+    },
+    [userId],
+  );
+
+  const handleBlockNeedsCorrection = useCallback(
+    async (summaryIds: string[]) => {
+      try {
+        await Promise.all(
+          summaryIds.map((id) =>
+            submitInaccurateFeedback(userId, id, "needs_review"),
+          ),
+        );
+        Alert.alert("Feedback Submitted", "Marked for correction. We'll improve!");
+        setRefreshKey((k) => k + 1);
+      } catch (error) {
+        Alert.alert("Error", "Failed to submit feedback");
+        if (__DEV__) console.error(error);
+      }
+    },
+    [userId],
+  );
+
+  const handleBlockEdit = useCallback((block: LocationBlock) => {
+    Alert.alert(
+      "Edit Block",
+      `Editing: ${block.locationLabel}\n${block.summaryIds.length} hour(s)\n\nThis would open a block edit modal in the full implementation.`,
     );
   }, []);
 
@@ -246,6 +290,23 @@ export default function PipelineTestScreen() {
         <TouchableOpacity
           style={[
             styles.toggleButton,
+            viewMode === "blocks" && styles.toggleButtonActive,
+          ]}
+          onPress={() => setViewMode("blocks")}
+        >
+          <Layers size={14} color={viewMode === "blocks" ? "#FFFFFF" : "#64748B"} />
+          <Text
+            style={[
+              styles.toggleButtonText,
+              viewMode === "blocks" && styles.toggleButtonTextActive,
+            ]}
+          >
+            Location Blocks
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.toggleButton,
             viewMode === "places" && styles.toggleButtonActive,
           ]}
           onPress={() => setViewMode("places")}
@@ -257,7 +318,7 @@ export default function PipelineTestScreen() {
               viewMode === "places" && styles.toggleButtonTextActive,
             ]}
           >
-            Place Inference
+            Places
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -274,7 +335,7 @@ export default function PipelineTestScreen() {
               viewMode === "summaries" && styles.toggleButtonTextActive,
             ]}
           >
-            CHARLIE Summaries
+            Hourly
           </Text>
         </TouchableOpacity>
       </View>
@@ -282,7 +343,12 @@ export default function PipelineTestScreen() {
       {/* Info Banner */}
       <View style={styles.infoBanner}>
         <Text style={styles.infoBannerText}>
-          {viewMode === "places" ? (
+          {viewMode === "blocks" ? (
+            <>
+              📍 <Text style={styles.bold}>Location Blocks</Text> — Groups your day by
+              location. Consecutive hours at the same place merge into a single block.
+            </>
+          ) : viewMode === "places" ? (
             <>
               🏠 <Text style={styles.bold}>Place Inference</Text> — Automatically detects
               Home, Work, and frequent locations from your patterns. Tap any hour to set or confirm.
@@ -297,7 +363,17 @@ export default function PipelineTestScreen() {
       </View>
 
       {/* Content based on view mode */}
-      {viewMode === "places" ? (
+      {viewMode === "blocks" ? (
+        <LocationBlockList
+          key={`blocks-${selectedDate}-${refreshKey}`}
+          date={selectedDate}
+          userId={userId}
+          onMarkAccurate={handleBlockMarkAccurate}
+          onNeedsCorrection={handleBlockNeedsCorrection}
+          onEdit={handleBlockEdit}
+          contentContainerStyle={styles.listContent}
+        />
+      ) : viewMode === "places" ? (
         <PlaceInferenceTimeline
           key={`places-${selectedDate}-${refreshKey}`}
           userId={userId}

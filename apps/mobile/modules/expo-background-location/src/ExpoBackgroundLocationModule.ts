@@ -1,14 +1,6 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-export interface StartResult {
-  success: boolean;
-}
-
-export interface StopResult {
-  success: boolean;
-}
-
-export interface OneTimeResult {
+export interface SuccessResult {
   success: boolean;
 }
 
@@ -24,14 +16,39 @@ export interface CountResult {
   count: number;
 }
 
+export interface ConfiguredResult {
+  configured: boolean;
+}
+
+export interface BatteryOptimizationResult {
+  isDisabled: boolean;
+}
+
 declare class ExpoBackgroundLocationModule extends NativeModule {
-  startLocationTracking(userId: string, intervalMinutes: number): Promise<StartResult>;
-  stopLocationTracking(): Promise<StopResult>;
-  runOneTimeLocationWorker(userId: string): Promise<OneTimeResult>;
+  // Supabase configuration
+  configureSupabase(
+    supabaseUrl: string,
+    anonKey: string,
+    jwtToken: string,
+    userId: string
+  ): Promise<SuccessResult>;
+  updateJwtToken(jwtToken: string): Promise<SuccessResult>;
+  isSupabaseConfigured(): Promise<ConfiguredResult>;
+
+  // Location tracking
+  startLocationTracking(userId: string, intervalMinutes: number): Promise<SuccessResult>;
+  stopLocationTracking(): Promise<SuccessResult>;
+  runOneTimeLocationWorker(userId: string): Promise<SuccessResult>;
   isTracking(): Promise<TrackingStatus>;
+
+  // Pending samples
   drainPendingSamples(userId: string, limit: number): Promise<DrainResult>;
   peekPendingSamples(userId: string, limit: number): Promise<DrainResult>;
   getPendingCount(userId: string): Promise<CountResult>;
+
+  // Battery optimization (Android only)
+  isBatteryOptimizationDisabled(): Promise<BatteryOptimizationResult>;
+  requestBatteryOptimizationExemption(): Promise<SuccessResult>;
 }
 
 // Load the native module

@@ -175,7 +175,7 @@ interface LocationHourlyRow {
 }
 
 /** Extended summary with inferred place data */
-interface EnrichedSummary extends HourlySummary {
+export interface EnrichedSummary extends HourlySummary {
   inferredPlace?: InferredPlace | null;
   geohash7?: string | null;
   locationSamples?: number;

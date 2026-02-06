@@ -114,6 +114,10 @@ export default {
         'android.permission.ACCESS_BACKGROUND_LOCATION',
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_LOCATION',
+        // For restarting location service after device reboot
+        'android.permission.RECEIVE_BOOT_COMPLETED',
+        // For requesting battery optimization exemption
+        'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
       ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',

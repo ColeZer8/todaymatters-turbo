@@ -33,7 +33,23 @@ class LocationWorker(
         LocationServices.getFusedLocationProviderClient(context)
 
     override suspend fun doWork(): Result {
-        Log.d(TAG, "Worker: Starting location collection")
+        Log.d(TAG, "Worker: Starting location collection (backup mechanism)")
+        
+        // Check if foreground service should be running but isn't
+        // If so, restart it (this handles cases where it was killed)
+        if (LocationForegroundService.shouldBeRunning(applicationContext)) {
+            val userId = LocationForegroundService.getStoredUserId(applicationContext)
+            if (!userId.isNullOrBlank()) {
+                Log.d(TAG, "Worker: Foreground service should be running, restarting it")
+                LocationForegroundService.start(
+                    applicationContext,
+                    userId,
+                    LocationForegroundService.getStoredInterval(applicationContext)
+                )
+                // Let the service handle location collection
+                return Result.success(workDataOf("action" to "restarted_service"))
+            }
+        }
 
         try {
             // On Android 13+ a foreground service notification requires POST_NOTIFICATIONS.
