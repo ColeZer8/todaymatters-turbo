@@ -278,6 +278,41 @@ export const checkGoogleConnectionFromSupabase = async (
   }
 };
 
+/**
+ * Remove the user's Google connection from Supabase (source_accounts).
+ * Used for testing the connect flow again (e.g. on Android). Only safe to call
+ * when the backend allows this user to delete their own row (RLS).
+ */
+export const disconnectGoogleFromSupabase = async (
+  userId: string,
+): Promise<{ ok: boolean; error?: string }> => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("source_accounts")
+      .delete()
+      .eq("user_id", userId)
+      .eq("provider", "google");
+
+    if (error) {
+      if (__DEV__) {
+        console.warn("🔗 Disconnect Google failed:", error.message);
+      }
+      return { ok: false, error: error.message };
+    }
+    if (__DEV__) {
+      console.log("🔗 Google connection removed for user:", userId);
+    }
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (__DEV__) {
+      console.warn("🔗 Disconnect Google error:", message);
+    }
+    return { ok: false, error: message };
+  }
+};
+
 export const startGoogleServicesOAuth = async (
   services: GoogleService[],
   accessToken: string,
@@ -289,14 +324,44 @@ export const startGoogleServicesOAuth = async (
   const oauthUrl = buildGoogleServicesOAuthUrl(services);
 
   if (__DEV__) {
-    console.log("🔗 Google Services OAuth start request:", {
+    console.log("🔗 Google Services OAuth start:", {
+      platform: Platform.OS,
       url: oauthUrl,
-      baseUrl: resolveOAuthBaseUrl(),
       services,
     });
   }
 
-  // Backend requires Authorization header; we must request the redirect URL first.
+  // ============================================================
+  // ANDROID: Use Michael's exact approach
+  // Open the backend URL directly in browser, let browser handle redirects
+  // Pass access_token as query param since browser can't send Authorization header
+  // After user closes browser, caller checks Supabase for connection status
+  // ============================================================
+  if (Platform.OS === "android") {
+    // Add access token as query parameter for browser-based auth
+    // Backend needs to support ?access_token=... for browser flows (can't send Authorization header)
+    const androidOauthUrl = `${oauthUrl}&access_token=${encodeURIComponent(accessToken)}`;
+    
+    if (__DEV__) {
+      console.log("🔗 [Android] Opening OAuth URL directly with openBrowserAsync:", androidOauthUrl);
+    }
+
+    const result = await WebBrowser.openBrowserAsync(androidOauthUrl, {
+      dismissButtonStyle: "close",
+      showTitle: true,
+    });
+
+    if (__DEV__) {
+      console.log("🔗 [Android] Browser result:", result);
+    }
+
+    return result;
+  }
+
+  // ============================================================
+  // iOS: Fetch redirect URL with auth header, then open Google OAuth URL
+  // This works because iOS ASWebAuthenticationSession handles it gracefully
+  // ============================================================
   let response: Response;
   try {
     response = await fetch(oauthUrl, {
@@ -308,10 +373,9 @@ export const startGoogleServicesOAuth = async (
     } as RequestInit);
   } catch (error) {
     if (__DEV__) {
-      console.error("🔗 Google Services OAuth fetch failed:", {
+      console.error("🔗 [iOS] OAuth fetch failed:", {
         error,
         url: oauthUrl,
-        baseUrl: resolveOAuthBaseUrl(),
         message: error instanceof Error ? error.message : String(error),
       });
     }
@@ -321,10 +385,8 @@ export const startGoogleServicesOAuth = async (
   if (__DEV__) {
     const location =
       response.headers.get("location") ?? response.headers.get("Location");
-
-    console.log("🔗 Google Services OAuth start response:", {
+    console.log("🔗 [iOS] OAuth start response:", {
       status: response.status,
-      url: response.url,
       location,
     });
   }
@@ -348,10 +410,6 @@ export const startGoogleServicesOAuth = async (
     );
   }
 
-  if (Platform.OS === "android") {
-    redirectUrl = ensureSelectAccountPrompt(redirectUrl);
-  }
-
   if (!looksLikeGoogleOAuthUrl(redirectUrl)) {
     throw new Error(
       "Failed to start Google connection (unexpected redirect URL). Please contact the backend team to verify the Google OAuth URL generation.",
@@ -359,20 +417,16 @@ export const startGoogleServicesOAuth = async (
   }
 
   if (__DEV__) {
-    console.log("🔗 Opening Google OAuth URL with openBrowserAsync:", redirectUrl);
+    console.log("🔗 [iOS] Opening Google OAuth URL with openBrowserAsync:", redirectUrl);
   }
 
-  // Use openBrowserAsync instead of openAuthSessionAsync
-  // openAuthSessionAsync waits for a redirect that won't come (backend shows HTML page)
-  // openBrowserAsync just opens browser and returns when dismissed
-  // After dismiss, caller should check Supabase source_accounts table for connection status
   const result = await WebBrowser.openBrowserAsync(redirectUrl, {
     dismissButtonStyle: "close",
     showTitle: true,
   });
 
   if (__DEV__) {
-    console.log("🔗 Google OAuth browser result:", { platform: Platform.OS, result });
+    console.log("🔗 [iOS] Browser result:", result);
   }
 
   return result;

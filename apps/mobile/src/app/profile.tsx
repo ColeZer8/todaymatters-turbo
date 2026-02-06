@@ -8,6 +8,7 @@ import {
   ListChecks,
   LogOut,
   LucideIcon,
+  Mail,
   MapPin,
   Trash2,
   MessageCircle,
@@ -74,6 +75,7 @@ import {
   requestIosLocationPermissionsAsync,
 } from "@/lib/ios-location";
 import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
+import { disconnectGoogleFromSupabase } from "@/lib/google-services-oauth";
 import appConfig from "@/lib/config";
 
 // Start with empty values - will load from Supabase if authenticated
@@ -478,7 +480,27 @@ export default function ProfileScreen() {
   const handleDevAutoAssignReview = useCallback(() => {
     requestAutoAssignAll();
     router.push("/review-time");
-  }, [    requestAutoAssignAll, router]);
+  }, [requestAutoAssignAll, router]);
+
+  const handleDevDisconnectGoogle = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const { ok, error } = await disconnectGoogleFromSupabase(user.id);
+      if (ok) {
+        Alert.alert(
+          "Disconnected",
+          "Google (email/calendar) connection removed. You can reconnect from onboarding or Connect Google screen.",
+        );
+      } else {
+        Alert.alert("Disconnect failed", error ?? "Could not disconnect Google.");
+      }
+    } catch (e) {
+      Alert.alert(
+        "Disconnect failed",
+        e instanceof Error ? e.message : "Could not disconnect Google.",
+      );
+    }
+  }, [user?.id]);
 
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
@@ -721,6 +743,12 @@ export default function ProfileScreen() {
             label: "🧪 Auto-Assign Review (AI)",
             icon: Calendar,
             onPress: handleDevAutoAssignReview,
+          },
+          {
+            id: "dev-disconnect-google",
+            label: "🧪 Disconnect Google (testing)",
+            icon: Mail,
+            onPress: handleDevDisconnectGoogle,
           },
           {
             id: "dev-check-update",
