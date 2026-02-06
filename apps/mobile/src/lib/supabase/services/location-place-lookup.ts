@@ -6,6 +6,16 @@ export interface PlaceLookupPoint {
   longitude: number;
 }
 
+export interface PlaceCandidate {
+  placeName: string;
+  googlePlaceId: string | null;
+  vicinity: string | null;
+  types: string[] | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
+  distanceMeters: number | null;
+}
+
 export interface PlaceLookupResult {
   geohash7: string;
   latitude: number;
@@ -16,6 +26,12 @@ export interface PlaceLookupResult {
   types: string[] | null;
   source: "cache" | "google_places_nearby" | "reverse_geocode" | "none";
   expiresAt: string | null;
+  // Place's actual location for distance verification
+  placeLatitude: number | null;
+  placeLongitude: number | null;
+  distanceMeters: number | null;
+  // Alternative places the user can choose from
+  alternatives: PlaceCandidate[] | null;
 }
 
 interface PlaceLookupResponse {
@@ -340,6 +356,24 @@ export async function debugTestLocationPlaceLookup(): Promise<{
   }
 }
 
+function coercePlaceCandidate(item: unknown): PlaceCandidate | null {
+  if (!item || typeof item !== "object") return null;
+  const r = item as Record<string, unknown>;
+  const placeName = typeof r.placeName === "string" ? r.placeName : null;
+  if (!placeName) return null;
+  return {
+    placeName,
+    googlePlaceId: typeof r.googlePlaceId === "string" ? r.googlePlaceId : null,
+    vicinity: typeof r.vicinity === "string" ? r.vicinity : null,
+    types: Array.isArray(r.types)
+      ? r.types.filter((t) => typeof t === "string")
+      : null,
+    placeLatitude: typeof r.placeLatitude === "number" ? r.placeLatitude : null,
+    placeLongitude: typeof r.placeLongitude === "number" ? r.placeLongitude : null,
+    distanceMeters: typeof r.distanceMeters === "number" ? r.distanceMeters : null,
+  };
+}
+
 export function coercePlaceLookupResults(value: unknown): PlaceLookupResult[] {
   if (!value || typeof value !== "object") return [];
   const obj = value as Record<string, unknown>;
@@ -352,6 +386,16 @@ export function coercePlaceLookupResults(value: unknown): PlaceLookupResult[] {
     const geohash7 = typeof r.geohash7 === "string" ? r.geohash7 : "";
     const point = normalizePoint(r);
     if (!geohash7 || !point) continue;
+    
+    // Parse alternatives array
+    let alternatives: PlaceCandidate[] | null = null;
+    if (Array.isArray(r.alternatives)) {
+      const parsed = r.alternatives
+        .map(coercePlaceCandidate)
+        .filter((a): a is PlaceCandidate => a !== null);
+      alternatives = parsed.length > 0 ? parsed : null;
+    }
+    
     out.push({
       geohash7,
       latitude: point.latitude,
@@ -371,6 +415,11 @@ export function coercePlaceLookupResults(value: unknown): PlaceLookupResult[] {
           ? r.source
           : "none",
       expiresAt: typeof r.expiresAt === "string" ? r.expiresAt : null,
+      // NEW fields
+      placeLatitude: typeof r.placeLatitude === "number" ? r.placeLatitude : null,
+      placeLongitude: typeof r.placeLongitude === "number" ? r.placeLongitude : null,
+      distanceMeters: typeof r.distanceMeters === "number" ? r.distanceMeters : null,
+      alternatives,
     });
   }
   return out;

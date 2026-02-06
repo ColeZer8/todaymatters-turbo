@@ -2,13 +2,43 @@ import * as QueryParams from "expo-auth-session/build/QueryParams";
 import * as Linking from "expo-linking";
 import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 import { supabase } from "./client";
 import type { Session } from "@supabase/supabase-js";
 
 // Required for web OAuth flows
 WebBrowser.maybeCompleteAuthSession();
 
-const redirectTo = makeRedirectUri();
+/**
+ * Generate OAuth redirect URI.
+ * 
+ * IMPORTANT: We use an explicit scheme-based redirect to avoid platform differences.
+ * makeRedirectUri() can return different formats on iOS vs Android (e.g., package name
+ * on Android), which may not be in Supabase's allowed redirect URLs list.
+ * 
+ * Using the explicit scheme ensures consistency and avoids "invalid redirect" errors.
+ */
+const getOAuthRedirectUri = (): string => {
+  // Always use the app scheme for consistency across platforms
+  // This MUST be added to Supabase Dashboard → Authentication → Redirect URLs
+  const schemeRedirect = "todaymatters://auth/callback";
+  
+  if (__DEV__) {
+    // In development, makeRedirectUri may be more appropriate for Expo Go
+    // But for dev client builds, use scheme redirect
+    const devRedirect = makeRedirectUri();
+    console.log("🔗 OAuth Redirect URIs:", {
+      scheme: schemeRedirect,
+      makeRedirectUri: devRedirect,
+      platform: Platform.OS,
+      usingScheme: true, // Always use scheme for production builds
+    });
+  }
+  
+  return schemeRedirect;
+};
+
+const redirectTo = getOAuthRedirectUri();
 
 /**
  * Creates a session from a URL containing OAuth callback parameters or email confirmation tokens.
@@ -78,15 +108,47 @@ export const createSessionFromUrl = async (
 export const performOAuth = async (
   provider: "google" | "apple" | "github",
 ): Promise<void> => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
+  if (__DEV__) {
+    console.log("🔐 Starting OAuth flow:", {
+      provider,
       redirectTo,
-      skipBrowserRedirect: true,
-    },
-  });
+      platform: Platform.OS,
+    });
+  }
+
+  let data;
+  let error;
+  
+  try {
+    const result = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
+    });
+    data = result.data;
+    error = result.error;
+  } catch (networkError) {
+    if (__DEV__) {
+      console.error("🔐 Network error during OAuth initiation:", {
+        error: networkError,
+        message: networkError instanceof Error ? networkError.message : String(networkError),
+      });
+    }
+    throw new Error("Unable to connect. Please check your internet connection and try again.");
+  }
 
   if (error) {
+    if (__DEV__) {
+      console.error("🔐 Supabase OAuth error:", {
+        message: error.message,
+        status: (error as { status?: number })?.status,
+        code: (error as { code?: string })?.code,
+        provider,
+        redirectTo,
+      });
+    }
     // Improve error messages for OAuth provider issues
     if (error.message.includes("provider is not enabled")) {
       const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
@@ -94,14 +156,51 @@ export const performOAuth = async (
         `${providerName} sign-in is not enabled. Please use email/password or contact support.`,
       );
     }
+    // Handle redirect URL errors specifically
+    if (error.message.includes("redirect") || error.message.includes("callback")) {
+      throw new Error(
+        `OAuth configuration error. The redirect URL may not be configured properly. Please contact support.`,
+      );
+    }
     throw error;
   }
 
   if (!data?.url) {
+    if (__DEV__) {
+      console.error("🔐 No OAuth URL returned:", { data });
+    }
     throw new Error("No OAuth URL returned from Supabase");
   }
 
-  const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (__DEV__) {
+    console.log("🔐 Opening OAuth browser:", {
+      urlHost: new URL(data.url).host,
+      redirectTo,
+    });
+  }
+
+  let res;
+  try {
+    res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  } catch (browserError) {
+    if (__DEV__) {
+      console.error("🔐 Browser session error:", {
+        error: browserError,
+        message: browserError instanceof Error ? browserError.message : String(browserError),
+        platform: Platform.OS,
+      });
+    }
+    throw new Error(
+      `Failed to open sign-in browser. ${Platform.OS === "android" ? "Please ensure Chrome is installed and updated." : "Please try again."}`
+    );
+  }
+
+  if (__DEV__) {
+    console.log("🔐 OAuth browser result:", {
+      type: res.type,
+      hasUrl: "url" in res && !!res.url,
+    });
+  }
 
   if (res.type === "success") {
     const { url } = res;

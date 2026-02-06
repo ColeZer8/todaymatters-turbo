@@ -13,6 +13,14 @@ import { handleSupabaseError } from "../utils/error-handler";
 // Import for auto place lookup
 import type { PlaceLookupResult } from "./location-place-lookup";
 
+// Import for distance verification and confidence scoring
+import {
+  haversineDistance,
+  scorePlaceConfidence,
+  formatPlaceName,
+  PLACE_MAX_FUZZY_DISTANCE_M,
+} from "./place-confidence";
+
 import {
   type EvidenceLocationSample,
   type ScreenTimeSessionRow,
@@ -123,6 +131,15 @@ export interface ActivitySegment {
   evidence: SegmentEvidence;
   /** Source IDs from ALPHA layer */
   sourceIds: string[];
+  // === Place Confidence Fields (for client-side distance verification) ===
+  /** Distance in meters from segment centroid to the labeled place */
+  placeDistanceM?: number;
+  /** Confidence score (0-1) for the place label */
+  placeConfidenceScore?: number;
+  /** Confidence level for the place label */
+  placeConfidenceLevel?: "high" | "medium" | "low" | "very_low";
+  /** Whether the place label is fuzzy (uses "Near X" format) */
+  placeFuzzy?: boolean;
 }
 
 /**
@@ -1260,31 +1277,90 @@ export async function enrichSegmentsWithPlaceNames(
 
     const results = (data?.results ?? []) as PlaceLookupResult[];
     
-    // Build a map of coords -> place name
-    const placeNameMap = new Map<string, string>();
+    // Build a map of coords -> FULL result (not just name)
+    // We need lat/lng from the result to calculate distance
+    const placeResultMap = new Map<string, PlaceLookupResult>();
     for (const result of results) {
       if (result.placeName) {
         const key = `${result.latitude.toFixed(4)},${result.longitude.toFixed(4)}`;
-        placeNameMap.set(key, result.placeName);
+        placeResultMap.set(key, result);
       }
     }
 
     if (__DEV__) {
-      console.log(`[ActivitySegments] ✅ Got ${placeNameMap.size} place names from lookup`);
+      console.log(`[ActivitySegments] ✅ Got ${placeResultMap.size} place results from lookup`);
     }
 
-    // Update segments with looked up place names
+    // Update segments with looked up place names + DISTANCE VERIFICATION
     return segments.map((seg) => {
       if (seg.placeLabel || seg.placeId) return seg; // Already has label
       if (seg.locationLat == null || seg.locationLng == null) return seg;
 
       const key = `${seg.locationLat.toFixed(4)},${seg.locationLng.toFixed(4)}`;
-      const placeName = placeNameMap.get(key);
+      const result = placeResultMap.get(key);
 
-      if (placeName) {
-        return { ...seg, placeLabel: placeName };
+      if (!result?.placeName) {
+        return seg;
       }
-      return seg;
+
+      // ========== DISTANCE VERIFICATION (FIX FOR MIS-TAGGING) ==========
+      // Calculate distance from segment centroid to the returned place
+      const distanceM = haversineDistance(
+        seg.locationLat,
+        seg.locationLng,
+        result.latitude,
+        result.longitude,
+      );
+
+      // Calculate dwell time for confidence scoring
+      const dwellTimeMs = seg.endedAt.getTime() - seg.startedAt.getTime();
+
+      // Check if this is a reverse geocode result (area label)
+      const isReverseGeocode = result.source === "reverse_geocode" ||
+        (result.placeName?.startsWith("Near ") ?? false);
+
+      // Score the confidence of this place match
+      const confidence = scorePlaceConfidence({
+        distanceM,
+        dwellTimeMs,
+        sampleCount: seg.evidence.locationSamples,
+        isReverseGeocode,
+        placeTypes: result.types,
+      });
+
+      if (__DEV__) {
+        console.log(
+          `[PlaceVerify] ${result.placeName}: ${Math.round(distanceM)}m from segment ` +
+          `(score: ${confidence.score.toFixed(2)}, level: ${confidence.level}, ` +
+          `show: ${confidence.shouldShow}, fuzzy: ${confidence.useFuzzyFormat}) - ${confidence.reasoning}`,
+        );
+      }
+
+      // Apply confidence-based decisions
+      if (!confidence.shouldShow) {
+        // Confidence too low - don't use this label
+        if (__DEV__) {
+          console.log(`[PlaceVerify] ❌ Rejecting "${result.placeName}" - confidence too low`);
+        }
+        return seg;
+      }
+
+      // Format the place name (may add "Near" prefix)
+      const formattedName = formatPlaceName(result.placeName, confidence.useFuzzyFormat);
+
+      if (__DEV__ && confidence.useFuzzyFormat && !isReverseGeocode) {
+        console.log(`[PlaceVerify] ⚠️ Using fuzzy format: "${result.placeName}" → "${formattedName}"`);
+      }
+
+      return {
+        ...seg,
+        placeLabel: formattedName,
+        // Add confidence fields for potential UI use
+        placeDistanceM: Math.round(distanceM),
+        placeConfidenceScore: confidence.score,
+        placeConfidenceLevel: confidence.level,
+        placeFuzzy: confidence.useFuzzyFormat,
+      };
     });
   } catch (error) {
     if (__DEV__) {
