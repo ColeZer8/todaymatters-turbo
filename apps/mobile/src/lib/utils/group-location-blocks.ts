@@ -68,12 +68,16 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
   allSegments.sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
 
   // -- Time range --
+  // Use raw segment timestamps (derived from GPS recorded_at) for precise
+  // block boundaries. Only fall back to hour buckets when no segments exist.
+  const blockHourStart = first.hourStart;
+  const lastHourEnd = new Date(last.hourStart.getTime() + 60 * 60 * 1000);
+
   const startTime =
     allSegments.length > 0
       ? new Date(Math.min(...allSegments.map((s) => s.startedAt.getTime())))
       : first.hourStart;
 
-  const lastHourEnd = new Date(last.hourStart.getTime() + 60 * 60 * 1000);
   const endTime =
     allSegments.length > 0
       ? new Date(Math.max(...allSegments.map((s) => s.endedAt.getTime())))
@@ -133,18 +137,24 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
     }
   }
 
-  // Build sessions from segment-level data
+  // Build sessions from segment-level data (clamped to actual block range)
+  const blockStartMs = startTime.getTime();
+  const blockEndMs = endTime.getTime();
   for (const seg of allSegments) {
     if (!seg.topApps) continue;
     for (const segApp of seg.topApps) {
       if (segApp.seconds < 60) continue;
       const entry = appMap.get(segApp.appId);
       if (entry) {
-        entry.sessions.push({
-          startTime: seg.startedAt,
-          endTime: seg.endedAt,
-          minutes: Math.round(segApp.seconds / 60),
-        });
+        const sessStart = new Date(Math.max(seg.startedAt.getTime(), blockStartMs));
+        const sessEnd = new Date(Math.min(seg.endedAt.getTime(), blockEndMs));
+        if (sessEnd > sessStart) {
+          entry.sessions.push({
+            startTime: sessStart,
+            endTime: sessEnd,
+            minutes: Math.round(segApp.seconds / 60),
+          });
+        }
       }
     }
   }

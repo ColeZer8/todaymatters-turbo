@@ -56,12 +56,26 @@ import { fetchCommunicationEventsForDay } from "@/lib/supabase/services/communic
 // Types
 // ============================================================================
 
+export type TimelineFilterValue = "actual" | "scheduled" | "both";
+
+export interface EventPressContext {
+  allBlockEvents: TimelineEvent[];
+  locationLabel: string;
+  geohash7: string | null;
+}
+
 export interface LocationBlockListProps {
   date: string;
   userId: string;
+  /** Filter timeline events: actual-only, scheduled-only, or both */
+  filter?: TimelineFilterValue;
   onMarkAccurate?: (summaryIds: string[]) => void;
   onNeedsCorrection?: (summaryIds: string[]) => void;
   onEdit?: (block: LocationBlock) => void;
+  /** Callback when a timeline event row is pressed */
+  onEventPress?: (event: TimelineEvent, context: EventPressContext) => void;
+  /** Callback when a location banner is pressed */
+  onBannerPress?: (block: LocationBlock) => void;
   ListHeaderComponent?: React.ComponentType | React.ReactElement | null;
   ListFooterComponent?: React.ComponentType | React.ReactElement | null;
   contentContainerStyle?: object;
@@ -172,9 +186,12 @@ function floorToHour(date: Date): Date {
 export const LocationBlockList = ({
   date,
   userId,
+  filter = "both",
   onMarkAccurate,
   onNeedsCorrection,
   onEdit,
+  onEventPress: onEventPressProp,
+  onBannerPress,
   ListHeaderComponent,
   ListFooterComponent,
   contentContainerStyle,
@@ -480,28 +497,52 @@ export const LocationBlockList = ({
     setIsRefreshing(false);
   }, [fetchData]);
 
-  // Event press handler
-  const handleEventPress = useCallback((event: TimelineEvent) => {
-    setSelectedEvent(event);
-    setShowDetail(true);
-  }, []);
-
   const handleCloseDetail = useCallback(() => {
     setShowDetail(false);
     setSelectedEvent(null);
   }, []);
 
-  // Render item
+  // Apply filter to a block's timeline events
+  const applyFilter = useCallback(
+    (block: LocationBlock): LocationBlock => {
+      if (filter === "both" || !block.timelineEvents) return block;
+      const filtered = block.timelineEvents.filter((e) => {
+        if (filter === "actual") return e.kind !== "scheduled";
+        if (filter === "scheduled") return e.kind === "scheduled" || e.kind === "meeting";
+        return true;
+      });
+      return { ...block, timelineEvents: filtered };
+    },
+    [filter],
+  );
+
+  // Render item — passes block context alongside event for overlap/location editing
   const renderItem = useCallback(
-    ({ item }: { item: LocationBlock }) => (
-      <TimelineBlockSection
-        block={item}
-        isToday={isToday}
-        currentMinutes={currentMinutes}
-        onEventPress={handleEventPress}
-      />
-    ),
-    [isToday, currentMinutes, handleEventPress],
+    ({ item }: { item: LocationBlock }) => {
+      const filteredBlock = applyFilter(item);
+      const handleBlockEventPress = (event: TimelineEvent) => {
+        if (onEventPressProp) {
+          onEventPressProp(event, {
+            allBlockEvents: filteredBlock.timelineEvents ?? [],
+            locationLabel: item.locationLabel,
+            geohash7: item.geohash7,
+          });
+        } else {
+          setSelectedEvent(event);
+          setShowDetail(true);
+        }
+      };
+      return (
+        <TimelineBlockSection
+          block={filteredBlock}
+          isToday={isToday}
+          currentMinutes={currentMinutes}
+          onEventPress={handleBlockEventPress}
+          onBannerPress={onBannerPress}
+        />
+      );
+    },
+    [isToday, currentMinutes, onEventPressProp, onBannerPress, applyFilter],
   );
 
   const keyExtractor = useCallback(
@@ -513,6 +554,15 @@ export const LocationBlockList = ({
   const inferredBlockCount = useMemo(() => {
     return blocks.filter((b) => b.isPlaceInferred).length;
   }, [blocks]);
+
+  // When filtering to "scheduled" only, hide blocks with no matching events
+  const displayBlocks = useMemo(() => {
+    if (filter === "both") return blocks;
+    return blocks.filter((b) => {
+      const filtered = applyFilter(b);
+      return (filtered.timelineEvents?.length ?? 0) > 0;
+    });
+  }, [blocks, filter, applyFilter]);
 
   // List header
   const renderListHeader = () => {
@@ -621,7 +671,7 @@ export const LocationBlockList = ({
   return (
     <>
       <FlatList<LocationBlock>
-        data={blocks}
+        data={displayBlocks}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListHeaderComponent={renderListHeader}

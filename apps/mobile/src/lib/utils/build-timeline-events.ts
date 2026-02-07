@@ -136,6 +136,12 @@ function buildAppEvents(block: LocationBlock): TimelineEvent[] {
     }
 
     for (const session of merged) {
+      // Cap duration at actual time span to prevent over-counting from overlapping sessions
+      const timeSpanMinutes = Math.round(
+        (session.endTime.getTime() - session.startTime.getTime()) / 60_000,
+      );
+      const cappedMinutes = Math.min(session.minutes, Math.max(1, timeSpanMinutes));
+
       events.push({
         id: `app-${app.appId}-${session.startTime.getTime()}`,
         kind: "app",
@@ -143,7 +149,7 @@ function buildAppEvents(block: LocationBlock): TimelineEvent[] {
         title: app.displayName,
         startTime: session.startTime,
         endTime: session.endTime,
-        durationMinutes: session.minutes,
+        durationMinutes: cappedMinutes,
         appCategory: app.category,
         productivity: getProductivityFlag(app.category),
         isPast: true, // will be updated later
@@ -280,13 +286,41 @@ function buildCalendarEvents(
     }
   }
 
+  // Build a list of non-derived actual events for fallback title matching
+  const unmatchedActuals = actual.filter(
+    (a) => !isDerivedEvent(a) && !actualByPlannedId.has(
+      typeof a.meta?.plannedEventId === "string" ? a.meta.plannedEventId : "__none__",
+    ),
+  );
+
+  // Track which actual event IDs have been consumed (by ID match or title match)
+  const consumedActualIds = new Set<string>();
+
   for (const planned_ev of planned) {
     // Skip derived planned events (defensive — unlikely but safe)
     if (isDerivedEvent(planned_ev)) continue;
 
     const { start, end } = scheduledEventToDate(planned_ev, ymd);
     const durationMin = Math.max(1, planned_ev.duration);
-    const matchingActual = actualByPlannedId.get(planned_ev.id);
+
+    // First try matching by plannedEventId
+    let matchingActual = actualByPlannedId.get(planned_ev.id);
+
+    // Fallback: match by title + overlapping time range
+    if (!matchingActual) {
+      const plannedStartMs = start.getTime();
+      const plannedEndMs = end.getTime();
+      matchingActual = unmatchedActuals.find((act) => {
+        if (consumedActualIds.has(act.id)) return false;
+        if (act.title !== planned_ev.title) return false;
+        const { start: aStart, end: aEnd } = scheduledEventToDate(act, ymd);
+        return aStart.getTime() < plannedEndMs && aEnd.getTime() > plannedStartMs;
+      });
+    }
+
+    if (matchingActual) {
+      consumedActualIds.add(matchingActual.id);
+    }
 
     events.push({
       id: `cal-${planned_ev.id}`,
@@ -307,20 +341,15 @@ function buildCalendarEvents(
   }
 
   // Also add actual events that have no planned counterpart
-  const usedActualIds = new Set(actualByPlannedId.values());
+  const usedActualIds = new Set([
+    ...consumedActualIds,
+    ...[...actualByPlannedId.values()].map((v) => v.id),
+  ]);
   for (const act of actual) {
     // Skip derived/pipeline events — they aren't real calendar meetings
     if (isDerivedEvent(act)) continue;
 
-    if (
-      [...usedActualIds].some((used) => used.id === act.id)
-    )
-      continue;
-    // Check if we already have this as a planned event match
-    const alreadyMatched = events.some(
-      (e) => e.actualEvent?.id === act.id,
-    );
-    if (alreadyMatched) continue;
+    if (usedActualIds.has(act.id)) continue;
 
     const { start, end } = scheduledEventToDate(act, ymd);
     events.push({
@@ -377,8 +406,12 @@ export function filterCommEventsToTimeRange(
   return events.filter((e) => {
     const ts = e.scheduled_start ?? e.created_at;
     if (!ts) return false;
-    const t = new Date(ts).getTime();
-    return t >= startMs && t < endMs;
+    const evStartMs = new Date(ts).getTime();
+    const endStr = e.scheduled_end;
+    const evEndMs = endStr
+      ? new Date(endStr).getTime()
+      : evStartMs + 5 * 60_000;
+    return evStartMs < endMs && evEndMs > startMs;
   });
 }
 
@@ -391,9 +424,10 @@ export function filterScheduledToTimeRange(
   const startMs = start.getTime();
   const endMs = end.getTime();
   return events.filter((e) => {
-    const { start: evStart } = scheduledEventToDate(e, ymd);
-    const t = evStart.getTime();
-    return t >= startMs && t < endMs;
+    const { start: evStart, end: evEnd } = scheduledEventToDate(e, ymd);
+    const evStartMs = evStart.getTime();
+    const evEndMs = evEnd.getTime();
+    return evStartMs < endMs && evEndMs > startMs;
   });
 }
 

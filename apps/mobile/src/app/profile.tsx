@@ -5,6 +5,7 @@ import {
   Briefcase,
   Calendar,
   CreditCard,
+  Layers,
   ListChecks,
   LogOut,
   LucideIcon,
@@ -572,6 +573,12 @@ export default function ProfileScreen() {
 
   // Personalization settings - edit onboarding preferences
   const personalizationItems = [
+    {
+      id: "activity-timeline",
+      label: "Activity Timeline",
+      icon: Layers,
+      onPress: () => router.push("/activity-timeline"),
+    },
     {
       id: "personalization",
       label: "Personalization",

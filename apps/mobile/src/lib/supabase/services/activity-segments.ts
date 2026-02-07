@@ -677,13 +677,13 @@ export async function generateActivitySegments(
   const mergedSegments = mergeAdjacentSegments(segmentsWithCommutes);
 
   // If no location segments, create a single segment based on screen time data alone
-  // Use actual screen time boundaries instead of full hour
+  // Use actual screen time boundaries, clamped to the hour window
   if (mergedSegments.length === 0 && screenSessions.length > 0) {
-    // Calculate actual time boundaries from screen sessions
+    // Calculate actual time boundaries from screen sessions, clamped to hour window
     const sessionStarts = screenSessions.map((s) => new Date(s.started_at).getTime());
     const sessionEnds = screenSessions.map((s) => new Date(s.ended_at).getTime());
-    const actualStart = new Date(Math.min(...sessionStarts));
-    const actualEnd = new Date(Math.max(...sessionEnds));
+    const actualStart = new Date(Math.max(Math.min(...sessionStarts), hourStart.getTime()));
+    const actualEnd = new Date(Math.min(Math.max(...sessionEnds), hourEnd.getTime()));
 
     const appBreakdown = calculateAppBreakdown(
       screenSessions,

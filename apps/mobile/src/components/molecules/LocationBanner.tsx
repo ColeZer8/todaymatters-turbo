@@ -5,7 +5,7 @@
  * solid-color background matching the location type.
  */
 
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import { formatTimeRange, formatDuration } from "@/lib/utils/time-format";
@@ -18,6 +18,7 @@ interface LocationBannerProps {
   startTime: Date;
   endTime: Date;
   durationMinutes: number;
+  onPress?: () => void;
 }
 
 export const LocationBanner = ({
@@ -28,11 +29,12 @@ export const LocationBanner = ({
   startTime,
   endTime,
   durationMinutes,
+  onPress,
 }: LocationBannerProps) => {
   const timeStr = formatTimeRange(startTime, endTime);
   const durStr = formatDuration(durationMinutes);
 
-  return (
+  const content = (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <Icon icon={icon} size={20} color={textColor} />
       <View style={styles.textCol}>
@@ -43,6 +45,16 @@ export const LocationBanner = ({
       </View>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+        {content}
+      </Pressable>
+    );
+  }
+
+  return content;
 };
 
 const styles = StyleSheet.create({

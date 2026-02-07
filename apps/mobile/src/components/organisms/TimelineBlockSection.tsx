@@ -19,6 +19,7 @@ interface TimelineBlockSectionProps {
   isToday: boolean;
   currentMinutes: number;
   onEventPress: (event: TimelineEvent) => void;
+  onBannerPress?: (block: LocationBlock) => void;
 }
 
 export const TimelineBlockSection = ({
@@ -26,6 +27,7 @@ export const TimelineBlockSection = ({
   isToday,
   currentMinutes,
   onEventPress,
+  onBannerPress,
 }: TimelineBlockSectionProps) => {
   const events = block.timelineEvents ?? [];
   const pastEvents = events.filter((e) => e.isPast);
@@ -55,6 +57,7 @@ export const TimelineBlockSection = ({
         startTime={block.startTime}
         endTime={block.endTime}
         durationMinutes={block.durationMinutes}
+        onPress={onBannerPress ? () => onBannerPress(block) : undefined}
       />
 
       <View style={styles.eventList}>
