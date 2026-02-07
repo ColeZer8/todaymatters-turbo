@@ -11,7 +11,6 @@ import {
   View,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   Alert,
   Modal,
@@ -33,6 +32,7 @@ import {
   EventEditModal,
   type EventUpdates,
 } from "@/components/molecules/EventEditModal";
+import { LocationEditSection } from "@/components/molecules/LocationEditSection";
 import { reprocessDayWithPlaceLookup } from "@/lib/supabase/services/activity-segments";
 import {
   fetchPlannedCalendarEventsForDay,
@@ -279,18 +279,25 @@ export default function ActivityTimelineScreen() {
 
   // Location rename -> persist via location-labels service
   const handleLocationRename = useCallback(
-    (geohash7: string, newLabel: string, alwaysUse: boolean) => {
+    (geohash7: string, newLabel: string, alwaysUse: boolean, category?: string | null, radiusM?: number) => {
       if (!userId || !alwaysUse) return;
-      saveLocationLabel(userId, geohash7, newLabel).catch((err) => {
+      saveLocationLabel(userId, geohash7, newLabel, {
+        category: category ?? undefined,
+        radius_m: radiusM,
+        latitude: editContext?.latitude ?? undefined,
+        longitude: editContext?.longitude ?? undefined,
+      }).catch((err) => {
         if (__DEV__) console.warn("Failed to save location label:", err);
       });
     },
-    [userId],
+    [userId, editContext],
   );
 
   // Block rename modal state
   const [renameBlock, setRenameBlock] = useState<LocationBlock | null>(null);
   const [renameText, setRenameText] = useState("");
+  const [renameCategory, setRenameCategory] = useState<string | null>(null);
+  const [renameRadius, setRenameRadius] = useState(100);
   const [isSavingRename, setIsSavingRename] = useState(false);
 
   // Banner press -> open block rename modal
@@ -299,6 +306,8 @@ export default function ActivityTimelineScreen() {
       if (!userId) return;
       setRenameBlock(block);
       setRenameText(block.locationLabel);
+      setRenameCategory(null);
+      setRenameRadius(100);
     },
     [userId],
   );
@@ -306,13 +315,22 @@ export default function ActivityTimelineScreen() {
   const handleCloseRename = useCallback(() => {
     setRenameBlock(null);
     setRenameText("");
+    setRenameCategory(null);
+    setRenameRadius(100);
   }, []);
 
   const handleSaveRename = useCallback(async () => {
     if (!renameBlock?.geohash7 || !renameText.trim() || !userId) return;
     setIsSavingRename(true);
     try {
-      await saveLocationLabel(userId, renameBlock.geohash7, renameText.trim());
+      const lat = renameBlock.inferredPlace?.latitude ?? undefined;
+      const lng = renameBlock.inferredPlace?.longitude ?? undefined;
+      await saveLocationLabel(userId, renameBlock.geohash7, renameText.trim(), {
+        category: renameCategory ?? undefined,
+        radius_m: renameRadius,
+        latitude: lat,
+        longitude: lng,
+      });
       handleRefresh();
       handleCloseRename();
     } catch (err) {
@@ -321,7 +339,7 @@ export default function ActivityTimelineScreen() {
     } finally {
       setIsSavingRename(false);
     }
-  }, [renameBlock, renameText, userId, handleRefresh, handleCloseRename]);
+  }, [renameBlock, renameText, renameCategory, renameRadius, userId, handleRefresh, handleCloseRename]);
 
   // Render future events section as list footer — show on today and future dates
   const isFutureDate = useMemo(() => selectedDate > getTodayYmd(), [selectedDate]);
@@ -427,6 +445,8 @@ export default function ActivityTimelineScreen() {
         allBlockEvents={editContext?.allBlockEvents}
         locationLabel={editContext?.locationLabel}
         geohash7={editContext?.geohash7}
+        latitude={editContext?.latitude}
+        longitude={editContext?.longitude}
       />
 
       {/* FAB — Add Event */}
@@ -457,16 +477,20 @@ export default function ActivityTimelineScreen() {
                   {formatBlockTimeRange(renameBlock)} · {renameBlock.durationMinutes} min
                 </Text>
               )}
-              <TextInput
-                style={styles.renameInput}
-                value={renameText}
-                onChangeText={setRenameText}
-                placeholder="Location name"
-                placeholderTextColor="#94A3B8"
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleSaveRename}
-                selectTextOnFocus
+              <LocationEditSection
+                currentLabel={renameText}
+                geohash7={renameBlock?.geohash7 ?? null}
+                latitude={renameBlock?.inferredPlace?.latitude ?? null}
+                longitude={renameBlock?.inferredPlace?.longitude ?? null}
+                userId={userId}
+                alwaysUse={true}
+                selectedCategory={renameCategory}
+                selectedRadius={renameRadius}
+                onLabelChange={setRenameText}
+                onAlwaysUseChange={() => {}}
+                onCategoryChange={setRenameCategory}
+                onRadiusChange={setRenameRadius}
+                hideAlwaysUseToggle
               />
               <View style={styles.renameActions}>
                 <Pressable style={styles.renameCancelBtn} onPress={handleCloseRename}>
@@ -647,18 +671,8 @@ const styles = StyleSheet.create({
     color: "#64748B",
     marginBottom: 16,
   },
-  renameInput: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: "#0F172A",
-    marginBottom: 20,
-  },
   renameActions: {
+    marginTop: 20,
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,

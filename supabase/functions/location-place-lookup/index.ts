@@ -144,6 +144,37 @@ async function fetchReverseGeocode(params: { apiKey: string; latitude: number; l
   } catch (error) { console.error("Reverse geocode exception:", error); return null; }
 }
 
+// Types that indicate a real, recognizable business/POI
+const QUALITY_PLACE_TYPES = new Set([
+  "cafe", "restaurant", "gym", "bar", "library", "park",
+  "shopping_mall", "store", "supermarket", "church", "museum",
+  "hospital", "doctor", "pharmacy", "bank", "lodging",
+  "university", "school", "airport", "train_station", "bus_station",
+  "bakery", "hair_care", "spa", "beauty_salon", "movie_theater",
+  "bowling_alley", "night_club", "gas_station", "post_office",
+  "fire_station", "police", "courthouse", "veterinary_care",
+  "transit_station", "subway_station", "light_rail_station",
+  "parking", "car_dealer", "car_rental", "car_repair", "car_wash",
+  "clothing_store", "convenience_store", "department_store",
+  "electronics_store", "furniture_store", "hardware_store",
+  "home_goods_store", "jewelry_store", "pet_store", "shoe_store",
+  "amusement_park", "aquarium", "art_gallery", "casino", "zoo",
+  "fitness_center", "coffee_shop", "shopping_center",
+]);
+
+// Types that are too generic to identify a meaningful place (residential noise)
+const GENERIC_ONLY_TYPES = new Set([
+  "point_of_interest", "establishment", "premise", "subpremise",
+  "street_address", "route", "geocode", "political",
+  "plus_code", "natural_feature", "floor", "room",
+]);
+
+function isJunkResult(types: string[] | null | undefined): boolean {
+  if (!types || types.length === 0) return true;
+  if (types.some((t) => QUALITY_PLACE_TYPES.has(t))) return false;
+  return types.every((t) => GENERIC_ONLY_TYPES.has(t));
+}
+
 async function fetchNearbyPlace(params: { apiKey: string; latitude: number; longitude: number; radiusMeters: number }): Promise<PlaceLookupApiResult | null> {
   const { apiKey, latitude, longitude, radiusMeters } = params;
   const url = "https://places.googleapis.com/v1/places:searchNearby";
@@ -159,7 +190,7 @@ async function fetchNearbyPlace(params: { apiKey: string; latitude: number; long
   const places = Array.isArray(data.places) ? data.places : [];
   if (places.length === 0) { console.log(`No POIs found at ${latitude},${longitude} - falling back to reverse geocoding`); return fetchReverseGeocode({ apiKey, latitude, longitude }); }
   
-  const placesWithDistance = places.filter((r) => r.displayName?.text).map((r) => {
+  const placesWithDistance = places.filter((r) => r.displayName?.text && !isJunkResult(r.types)).map((r) => {
     const placeLat = r.location?.latitude ?? null;
     const placeLng = r.location?.longitude ?? null;
     const distance = (placeLat != null && placeLng != null) ? haversineDistance(latitude, longitude, placeLat, placeLng) : Infinity;

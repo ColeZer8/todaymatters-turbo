@@ -260,6 +260,26 @@ function haversineDistance(
 // API Key Access
 // ============================================================================
 
+// Types that are too generic to identify a meaningful place (residential noise)
+const GENERIC_ONLY_TYPES = new Set([
+  "point_of_interest", "establishment", "premise", "subpremise",
+  "street_address", "route", "geocode", "political",
+  "plus_code", "natural_feature", "floor", "room",
+]);
+
+/**
+ * Check if a Google Places result is "junk" — a generic listing with no
+ * recognizable business type (e.g., a random home business in a neighborhood).
+ * Returns true if ALL types are generic-only and none match PRIORITY_TYPES.
+ */
+function isJunkResult(types: string[]): boolean {
+  if (types.length === 0) return true;
+  // If any type is in our priority list, it's a real POI
+  if (types.some((t) => PRIORITY_TYPES.includes(t))) return false;
+  // If all types are generic-only, it's junk
+  return types.every((t) => GENERIC_ONLY_TYPES.has(t));
+}
+
 /**
  * Get the Google Places API key from environment.
  * Returns null if not configured.
@@ -376,6 +396,8 @@ export async function fetchNearbyPlaces(
           iconUrl: place.icon,
         };
       })
+      // Filter out junk results (generic residential listings)
+      .filter((s) => !isJunkResult(s.types))
       // Sort by priority type first, then by distance
       .sort((a, b) => {
         const aPriority = getPriorityScore(a.types);
@@ -541,6 +563,14 @@ export function getBestSuggestion(
  */
 export function isGooglePlacesAvailable(): boolean {
   return getGooglePlacesApiKey() !== null;
+}
+
+/**
+ * Get the Google API key for use in Static Maps URLs, etc.
+ * Returns null if not configured.
+ */
+export function getGoogleApiKey(): string | null {
+  return getGooglePlacesApiKey();
 }
 
 // ============================================================================

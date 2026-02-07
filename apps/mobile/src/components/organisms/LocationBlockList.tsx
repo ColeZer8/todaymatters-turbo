@@ -62,6 +62,8 @@ export interface EventPressContext {
   allBlockEvents: TimelineEvent[];
   locationLabel: string;
   geohash7: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface LocationBlockListProps {
@@ -522,10 +524,18 @@ export const LocationBlockList = ({
       const filteredBlock = applyFilter(item);
       const handleBlockEventPress = (event: TimelineEvent) => {
         if (onEventPressProp) {
+          const lat = item.inferredPlace?.latitude
+            ?? item.segments?.find(s => s.locationLat != null)?.locationLat
+            ?? null;
+          const lng = item.inferredPlace?.longitude
+            ?? item.segments?.find(s => s.locationLng != null)?.locationLng
+            ?? null;
           onEventPressProp(event, {
             allBlockEvents: filteredBlock.timelineEvents ?? [],
             locationLabel: item.locationLabel,
             geohash7: item.geohash7,
+            latitude: lat,
+            longitude: lng,
           });
         } else {
           setSelectedEvent(event);

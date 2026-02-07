@@ -849,6 +849,8 @@ export type Database = {
           description: string | null;
           scheduled_start: string | null;
           scheduled_end: string | null;
+          sent_at: string | null;
+          received_at: string | null;
           meta: Json;
           created_at: string;
           updated_at: string;
@@ -861,6 +863,8 @@ export type Database = {
           description?: string | null;
           scheduled_start?: string | null;
           scheduled_end?: string | null;
+          sent_at?: string | null;
+          received_at?: string | null;
           meta?: Json;
           created_at?: string;
           updated_at?: string;
@@ -873,6 +877,8 @@ export type Database = {
           description?: string | null;
           scheduled_start?: string | null;
           scheduled_end?: string | null;
+          sent_at?: string | null;
+          received_at?: string | null;
           meta?: Json;
           created_at?: string;
           updated_at?: string;

@@ -33,10 +33,10 @@ export async function fetchGmailEmailEvents(
     const { data, error } = await supabase
       .schema("tm")
       .from("events")
-      .select("id,user_id,type,title,meta,created_at,updated_at")
+      .select("id,user_id,type,title,meta,sent_at,received_at,created_at,updated_at")
       .eq("user_id", userId)
       .eq("type", "email")
-      .order("created_at", { ascending: false })
+      .order("sent_at", { ascending: false, nullsFirst: false })
       .limit(limit);
 
     if (error) throw handleSupabaseError(error);
@@ -51,10 +51,10 @@ export async function fetchGmailEmailEvents(
     if (typeof sinceHours === "number" && Number.isFinite(sinceHours)) {
       const cutoff = Date.now() - sinceHours * 60 * 60 * 1000;
       filtered = filtered.filter((row) => {
-        const created = row.created_at
-          ? new Date(row.created_at).getTime()
-          : NaN;
-        return Number.isFinite(created) && created >= cutoff;
+        // Prefer actual email timestamp over sync time
+        const ts = row.sent_at ?? row.received_at ?? row.created_at;
+        const time = ts ? new Date(ts).getTime() : NaN;
+        return Number.isFinite(time) && time >= cutoff;
       });
     }
 

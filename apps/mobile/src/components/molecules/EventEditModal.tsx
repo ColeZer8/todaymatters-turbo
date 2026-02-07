@@ -15,7 +15,6 @@ import {
   Platform,
   TextInput,
   Alert,
-  Switch,
   StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,10 +28,10 @@ import {
   Globe,
   MessageSquare,
   ChevronRight,
-  MapPin,
   type LucideIcon,
 } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
+import { LocationEditSection } from "./LocationEditSection";
 import { formatTimeShort, formatDuration, formatTimeRange } from "@/lib/utils/time-format";
 import type { TimelineEvent } from "@/lib/types/timeline-event";
 import { EVENT_KIND_COLORS, UNPRODUCTIVE_TINT } from "@/lib/types/timeline-event";
@@ -63,11 +62,13 @@ export interface EventEditModalProps {
   visible: boolean;
   onClose: () => void;
   onSave: (eventId: string, updates: EventUpdates) => void;
-  onLocationRename?: (geohash7: string, newLabel: string, alwaysUse: boolean) => void;
+  onLocationRename?: (geohash7: string, newLabel: string, alwaysUse: boolean, category?: string | null, radiusM?: number) => void;
   userId?: string;
   allBlockEvents?: TimelineEvent[];
   locationLabel?: string;
   geohash7?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 // ============================================================================
@@ -99,6 +100,8 @@ export const EventEditModal = ({
   allBlockEvents,
   locationLabel,
   geohash7,
+  latitude,
+  longitude,
 }: EventEditModalProps) => {
   const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -127,6 +130,8 @@ export const EventEditModal = ({
   // Location editing state
   const [editedLocation, setEditedLocation] = useState("");
   const [alwaysUseLocation, setAlwaysUseLocation] = useState(false);
+  const [locationCategory, setLocationCategory] = useState<string | null>(null);
+  const [locationRadius, setLocationRadius] = useState(100);
 
   // Reset state when event changes
   useEffect(() => {
@@ -141,6 +146,8 @@ export const EventEditModal = ({
       setSubcategories([]);
       setEditedLocation(locationLabel ?? "");
       setAlwaysUseLocation(false);
+      setLocationCategory(null);
+      setLocationRadius(100);
     }
   }, [event, locationLabel]);
 
@@ -248,7 +255,7 @@ export const EventEditModal = ({
 
     // Handle location rename
     if (alwaysUseLocation && geohash7 && editedLocation && onLocationRename) {
-      onLocationRename(geohash7, editedLocation, true);
+      onLocationRename(geohash7, editedLocation, true, locationCategory, locationRadius);
     }
 
     if (categoryChanged) {
@@ -604,31 +611,20 @@ export const EventEditModal = ({
             {/* Location */}
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>LOCATION</Text>
-              <View style={styles.card}>
-                <View style={styles.locationRow}>
-                  <Icon icon={MapPin} size={18} color="#94A3B8" />
-                  <TextInput
-                    style={styles.locationInput}
-                    value={editedLocation}
-                    onChangeText={setEditedLocation}
-                    placeholder="Location name..."
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-                {geohash7 && (
-                  <>
-                    <View style={styles.divider} />
-                    <View style={styles.alwaysUseRow}>
-                      <Text style={styles.alwaysUseLabel}>Always use this name</Text>
-                      <Switch
-                        value={alwaysUseLocation}
-                        onValueChange={setAlwaysUseLocation}
-                        trackColor={{ false: "#D1D1D6", true: "#34C759" }}
-                      />
-                    </View>
-                  </>
-                )}
-              </View>
+              <LocationEditSection
+                currentLabel={editedLocation}
+                geohash7={geohash7 ?? null}
+                latitude={latitude ?? null}
+                longitude={longitude ?? null}
+                userId={userId ?? ""}
+                alwaysUse={alwaysUseLocation}
+                selectedCategory={locationCategory}
+                selectedRadius={locationRadius}
+                onLabelChange={setEditedLocation}
+                onAlwaysUseChange={setAlwaysUseLocation}
+                onCategoryChange={setLocationCategory}
+                onRadiusChange={setLocationRadius}
+              />
             </View>
 
             {/* Save Button */}
@@ -873,32 +869,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#94A3B8",
     padding: 16,
-  },
-
-  // Location
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    gap: 10,
-  },
-  locationInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#111827",
-    paddingVertical: 12,
-  },
-  alwaysUseRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  alwaysUseLabel: {
-    fontSize: 15,
-    color: "#64748B",
   },
 
   // Save button

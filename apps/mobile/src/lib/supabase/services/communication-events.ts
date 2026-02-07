@@ -49,12 +49,12 @@ export async function fetchCommunicationEventsForDay(
       .eq("user_id", userId)
       .in("type", [...COMM_EVENT_TYPES])
       .or(
-        `scheduled_start.gte.${dayStartIso},created_at.gte.${dayStartIso}`,
+        `sent_at.gte.${dayStartIso},received_at.gte.${dayStartIso},scheduled_start.gte.${dayStartIso},created_at.gte.${dayStartIso}`,
       )
       .or(
-        `scheduled_start.lt.${dayEndIso},created_at.lt.${dayEndIso}`,
+        `sent_at.lt.${dayEndIso},received_at.lt.${dayEndIso},scheduled_start.lt.${dayEndIso},created_at.lt.${dayEndIso}`,
       )
-      .order("scheduled_start", { ascending: true, nullsFirst: false })
+      .order("sent_at", { ascending: true, nullsFirst: true })
       .limit(200);
 
     if (error) throw handleSupabaseError(error);

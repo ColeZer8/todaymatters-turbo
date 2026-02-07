@@ -172,7 +172,8 @@ function buildCommEvents(
   const events: TimelineEvent[] = [];
 
   for (const row of commRows) {
-    const startStr = row.scheduled_start ?? row.created_at;
+    // Prefer actual email timestamp over sync time
+    const startStr = row.sent_at ?? row.received_at ?? row.scheduled_start ?? row.created_at;
     if (!startStr) continue;
     const start = new Date(startStr);
     if (Number.isNaN(start.getTime())) continue;
@@ -404,7 +405,8 @@ export function filterCommEventsToTimeRange(
   const startMs = start.getTime();
   const endMs = end.getTime();
   return events.filter((e) => {
-    const ts = e.scheduled_start ?? e.created_at;
+    // Prefer actual email timestamp over sync time
+    const ts = e.sent_at ?? e.received_at ?? e.scheduled_start ?? e.created_at;
     if (!ts) return false;
     const evStartMs = new Date(ts).getTime();
     const endStr = e.scheduled_end;

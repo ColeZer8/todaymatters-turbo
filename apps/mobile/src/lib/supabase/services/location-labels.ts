@@ -61,6 +61,7 @@ export async function saveLocationLabel(
     category?: string;
     latitude?: number;
     longitude?: number;
+    radius_m?: number;
   },
 ): Promise<void> {
   const category = options?.category ?? null;
@@ -82,6 +83,10 @@ export async function saveLocationLabel(
       category,
       geohash7,
     };
+
+    if (options?.radius_m != null && Number.isFinite(options.radius_m)) {
+      payload.radius_m = options.radius_m;
+    }
 
     // Include spatial center if coordinates were provided
     if (
