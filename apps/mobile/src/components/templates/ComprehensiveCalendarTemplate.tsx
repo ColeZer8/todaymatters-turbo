@@ -173,6 +173,11 @@ const getSessionBlockStyleKey = (event: CalendarEvent): string => {
   if (meta?.kind === "commute" || meta?.intent === "commute") {
     return "commute";
   }
+  // BRAVO/CHARLIE location blocks — use the event's category directly
+  // (locationCategoryToEventCategory already mapped it correctly)
+  if (meta?.kind === "location_block" || meta?.kind === "travel") {
+    return event.category;
+  }
   return event.category;
 };
 
@@ -198,6 +203,36 @@ const buildSessionBlockSubtitle = (event: CalendarEvent): string | null => {
     .join(" · ");
 };
 
+/**
+ * Build a subtitle for BRAVO/CHARLIE location-block events.
+ * Shows top apps if available, otherwise the activity inference description.
+ */
+const buildLocationBlockSubtitle = (event: CalendarEvent): string | null => {
+  const meta = event.meta;
+  const kind = meta?.kind;
+  // Only handle location blocks and travel blocks from the new pipeline
+  if (kind !== "location_block" && kind !== "travel") return null;
+
+  // Show top apps if available (same format as session blocks)
+  const summary = meta?.summary;
+  if (summary && summary.length > 0) {
+    return summary
+      .slice(0, 3)
+      .map((item) => {
+        const mins = Math.round(item.seconds / 60);
+        return mins >= 60
+          ? `${item.label} ${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}m` : ""}`
+          : `${item.label} ${mins}m`;
+      })
+      .join(" · ");
+  }
+
+  // Fall back to the event description (activity inference)
+  if (event.description) return event.description;
+
+  return null;
+};
+
 const TimeEventBlock = ({
   event,
   visibleUntilMinutes,
@@ -217,8 +252,10 @@ const TimeEventBlock = ({
   const shouldRender = visibleDuration > 0;
   const { top, height } = getPosition(eventStart, visibleDuration || 1);
 
-  // Determine if this is a session block and get appropriate styles
+  // Determine if this is a session block or location block and get appropriate styles
   const isSessionBlock = event.meta?.kind === "session_block";
+  const isLocationBlock =
+    event.meta?.kind === "location_block" || event.meta?.kind === "travel";
   const styleKey = getSessionBlockStyleKey(event);
   const catStyles = CATEGORY_STYLES[styleKey] || CATEGORY_STYLES.work;
 
@@ -230,8 +267,13 @@ const TimeEventBlock = ({
 
   // Get session block subtitle (top apps)
   const sessionSubtitle = buildSessionBlockSubtitle(event);
-  const hasPlaceLabel = isSessionBlock && event.meta?.place_label;
-  const isFuzzyLocation = isSessionBlock && event.meta?.fuzzy_location === true;
+  // Get location block subtitle (top apps / inference)
+  const locationSubtitle = buildLocationBlockSubtitle(event);
+  const hasPlaceLabel =
+    (isSessionBlock || isLocationBlock) && event.meta?.place_label;
+  const isFuzzyLocation =
+    (isSessionBlock || isLocationBlock) &&
+    event.meta?.fuzzy_location === true;
 
   if (!shouldRender) {
     return null;
@@ -324,9 +366,9 @@ const TimeEventBlock = ({
       ]}
     >
       <View style={styles.eventContent}>
-        {/* Location icon for session blocks with place label */}
+        {/* Location icon for session/location blocks with place label */}
         {/* Use MapPinOff for fuzzy locations to indicate approximate location */}
-        {isSessionBlock && hasPlaceLabel && !isTiny && (
+        {(isSessionBlock || isLocationBlock) && hasPlaceLabel && !isTiny && (
           <Icon
             icon={isFuzzyLocation ? MapPinOff : MapPin}
             size={10}
@@ -365,8 +407,17 @@ const TimeEventBlock = ({
           {sessionSubtitle}
         </Text>
       )}
-      {/* Regular event description (non-session blocks) */}
-      {!isSessionBlock && maxDescriptionLines > 0 && event.description && (
+      {/* Location block subtitle: top apps / inference description */}
+      {isLocationBlock && locationSubtitle && maxDescriptionLines > 0 && (
+        <Text
+          numberOfLines={Math.min(maxDescriptionLines, 2)}
+          style={[styles.eventDescription, { color: catStyles.text, opacity: 0.8 }]}
+        >
+          {locationSubtitle}
+        </Text>
+      )}
+      {/* Regular event description (non-session & non-location blocks) */}
+      {!isSessionBlock && !isLocationBlock && maxDescriptionLines > 0 && event.description && (
         <Text
           numberOfLines={maxDescriptionLines}
           style={[styles.eventDescription, { color: catStyles.text }]}
@@ -382,6 +433,8 @@ interface ComprehensiveCalendarTemplateProps {
   selectedDate: Date;
   plannedEvents: ScheduledEvent[];
   actualEvents: ScheduledEvent[];
+  /** When true, shows a subtle loading indicator in the Actual column */
+  actualEventsLoading?: boolean;
   onPrevDay: () => void;
   onNextDay: () => void;
   onAddEvent: (column?: "planned" | "actual", startMinutes?: number) => void;
@@ -419,6 +472,7 @@ export const ComprehensiveCalendarTemplate = ({
   selectedDate,
   plannedEvents,
   actualEvents,
+  actualEventsLoading = false,
   onPrevDay,
   onNextDay,
   onAddEvent,
@@ -755,31 +809,58 @@ export const ComprehensiveCalendarTemplate = ({
                   </View>
                   <View style={styles.columnDivider} />
                   <View style={styles.column}>
-                    {actualEvents.map((event) => (
-                      <TimeEventBlock
-                        key={event.id}
-                        event={event}
-                        visibleUntilMinutes={actualVisibleUntil}
-                        enableReviewTimeShortcut={false}
-                        onPress={() => {
-                          // Default: navigate to actual-adjust
-                          router.push({
-                            pathname: "/actual-adjust",
-                            params: {
-                              id: event.id,
-                              title: event.title,
-                              description: event.description,
-                              category: event.category,
-                              startMinutes: String(event.startMinutes),
-                              duration: String(event.duration),
-                              meta: event.meta
-                                ? JSON.stringify(event.meta)
-                                : undefined,
-                            },
-                          });
-                        }}
-                      />
-                    ))}
+                    {actualEventsLoading && actualEvents.length === 0 ? (
+                      /* Skeleton shimmer while BRAVO/CHARLIE data loads */
+                      <>
+                        {[
+                          { top: 6 * HOUR_HEIGHT, h: 2.5 * HOUR_HEIGHT },
+                          { top: 9 * HOUR_HEIGHT, h: 1.5 * HOUR_HEIGHT },
+                          { top: 11 * HOUR_HEIGHT, h: 3 * HOUR_HEIGHT },
+                          { top: 15 * HOUR_HEIGHT, h: 2 * HOUR_HEIGHT },
+                        ].map((s, i) => (
+                          <View
+                            key={`skel-${i}`}
+                            style={{
+                              position: "absolute",
+                              top: s.top,
+                              height: s.h,
+                              left: 3,
+                              right: 3,
+                              backgroundColor: "rgba(148,163,184,0.08)",
+                              borderRadius: 6,
+                              borderLeftWidth: 3,
+                              borderLeftColor: "rgba(148,163,184,0.2)",
+                            }}
+                          />
+                        ))}
+                      </>
+                    ) : (
+                      actualEvents.map((event) => (
+                        <TimeEventBlock
+                          key={event.id}
+                          event={event}
+                          visibleUntilMinutes={actualVisibleUntil}
+                          enableReviewTimeShortcut={false}
+                          onPress={() => {
+                            // Default: navigate to actual-adjust
+                            router.push({
+                              pathname: "/actual-adjust",
+                              params: {
+                                id: event.id,
+                                title: event.title,
+                                description: event.description,
+                                category: event.category,
+                                startMinutes: String(event.startMinutes),
+                                duration: String(event.duration),
+                                meta: event.meta
+                                  ? JSON.stringify(event.meta)
+                                  : undefined,
+                              },
+                            });
+                          }}
+                        />
+                      ))
+                    )}
                   </View>
 
                   {/* Shadow block for dragging new event */}

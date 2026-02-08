@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert } from "react-native";
+import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity, Alert, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft, ChevronRight, RefreshCw, MapPin, LayoutList, Zap, Layers } from "lucide-react-native";
 import { HourlySummaryList, PlaceInferenceTimeline } from "@/components/organisms";
@@ -19,7 +19,7 @@ import {
   submitInaccurateFeedback,
 } from "@/lib/supabase/services/activity-feedback";
 import { reprocessDayWithPlaceLookup } from "@/lib/supabase/services/activity-segments";
-import { useAuthStore } from "@/stores";
+import { useAuthStore, useDevFlagsStore } from "@/stores";
 
 type ViewMode = "blocks" | "summaries" | "places";
 
@@ -58,6 +58,54 @@ function addDays(dateYmd: string, days: number): string {
   date.setDate(date.getDate() + days);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
+
+// ============================================================================
+// Feature Flag Toggle
+// ============================================================================
+
+function FeatureFlagToggle() {
+  const useNewPipeline = useDevFlagsStore((s) => s.useNewLocationPipeline);
+  const toggle = useDevFlagsStore((s) => s.toggleNewLocationPipeline);
+
+  return (
+    <View style={flagStyles.container}>
+      <View style={flagStyles.row}>
+        <View style={flagStyles.labelCol}>
+          <Text style={flagStyles.label}>BRAVO/CHARLIE Pipeline</Text>
+          <Text style={flagStyles.sublabel}>
+            {useNewPipeline ? "Active — location blocks" : "Off — legacy pipeline"}
+          </Text>
+        </View>
+        <Switch
+          value={useNewPipeline}
+          onValueChange={toggle}
+          trackColor={{ false: "#CBD5E1", true: "#86EFAC" }}
+          thumbColor={useNewPipeline ? "#22C55E" : "#94A3B8"}
+        />
+      </View>
+    </View>
+  );
+}
+
+const flagStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.2)",
+    padding: 12,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  labelCol: { flex: 1, marginRight: 12 },
+  label: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
+  sublabel: { fontSize: 11, color: "#64748B", marginTop: 2 },
+});
 
 // ============================================================================
 // Main Component
@@ -361,6 +409,9 @@ export default function PipelineTestScreen() {
           )}
         </Text>
       </View>
+
+      {/* Feature Flag Toggle */}
+      <FeatureFlagToggle />
 
       {/* Content based on view mode */}
       {viewMode === "blocks" ? (

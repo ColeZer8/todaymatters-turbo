@@ -18,6 +18,9 @@ import {
   Church,
   GraduationCap,
   Heart,
+  Footprints,
+  Bike,
+  Navigation,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -60,6 +63,22 @@ export function getPlaceIconForType(type: string | null): LucideIcon {
       return MapPin;
     default:
       return MapPin;
+  }
+}
+
+/**
+ * Get an icon for travel blocks based on movement type.
+ */
+export function getTravelIcon(movementType?: string | null): LucideIcon {
+  switch (movementType) {
+    case "walking":
+      return Footprints;
+    case "cycling":
+      return Bike;
+    case "driving":
+      return Car;
+    default:
+      return Navigation;
   }
 }
 

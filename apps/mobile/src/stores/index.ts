@@ -42,3 +42,4 @@ export {
   selectHasHydrated as selectInitiativesHasHydrated,
 } from "./initiatives-store";
 export type { Initiative, Milestone } from "./initiatives-store";
+export { useDevFlagsStore } from "./dev-flags-store";

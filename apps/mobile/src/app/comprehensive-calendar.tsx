@@ -11,7 +11,9 @@ import {
   useAuthStore,
   useOnboardingStore,
   useUserPreferencesStore,
+  useDevFlagsStore,
 } from "@/stores";
+import type { ScheduledEvent } from "@/stores";
 import {
   getIosInsightsSupportStatus,
   getCachedScreenTimeSummarySafeAsync,
@@ -53,8 +55,17 @@ import { fetchUserDataPreferences } from "@/lib/supabase/services/user-preferenc
 import { DEFAULT_USER_PREFERENCES } from "@/stores/user-preferences-store";
 import { supabase } from "@/lib/supabase/client";
 import { formatLocalIso } from "@/lib/calendar/local-time";
+import { useLocationBlocksForDay } from "@/lib/hooks/use-location-blocks-for-day";
+import { locationBlocksToScheduledEvents } from "@/lib/calendar/location-blocks-to-events";
 
 export default function ComprehensiveCalendarScreen() {
+  // ── Feature flag ──────────────────────────────────────────────────────
+  // When true, the Actual column is populated from the BRAVO/CHARLIE
+  // location-block pipeline instead of the old buildActualDisplayEvents()
+  // monster.  Toggle via dev settings or the useDevFlagsStore.
+  const USE_NEW_LOCATION_PIPELINE = useDevFlagsStore(
+    (s) => s.useNewLocationPipeline,
+  );
   const router = useRouter();
   const [status, setStatus] =
     useState<ScreenTimeAuthorizationStatus>("unsupported");
@@ -102,6 +113,17 @@ export default function ComprehensiveCalendarScreen() {
   const removeActualEvent = useEventsStore((s) => s.removeActualEvent);
   const derivedActualEvents = useEventsStore((s) => s.derivedActualEvents);
   const [patternIndex, setPatternIndex] = useState<PatternIndex | null>(null);
+
+  // ── New BRAVO/CHARLIE location-block pipeline ──────────────────────────
+  const {
+    blocks: locationBlocks,
+    isLoading: blocksLoading,
+    refresh: refreshBlocks,
+  } = useLocationBlocksForDay({
+    userId: userId ?? "",
+    date: selectedDateYmd,
+    enabled: USE_NEW_LOCATION_PIPELINE && !!userId,
+  });
 
   const handleCalendarSyncError = useCallback((error: Error) => {
     if (__DEV__) {
@@ -482,8 +504,24 @@ export default function ComprehensiveCalendarScreen() {
       },
       () => {
         void refreshVerification();
+        if (USE_NEW_LOCATION_PIPELINE) void refreshBlocks();
       },
     );
+    // Listen for CHARLIE hourly_summaries changes (new pipeline)
+    if (USE_NEW_LOCATION_PIPELINE) {
+      channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "tm",
+          table: "hourly_summaries",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void refreshBlocks();
+        },
+      );
+    }
     channel.subscribe();
     return () => {
       void channel.unsubscribe();
@@ -491,6 +529,7 @@ export default function ComprehensiveCalendarScreen() {
   }, [
     loadPlannedForDay,
     refreshActualEventsForSelectedDay,
+    refreshBlocks,
     refreshVerification,
     selectedDateYmd,
     setPlannedEventsForDate,
@@ -563,6 +602,7 @@ export default function ComprehensiveCalendarScreen() {
       (nextAppState: AppStateStatus) => {
         if (nextAppState !== "active") return;
         void refreshActualEventsForSelectedDay();
+        if (USE_NEW_LOCATION_PIPELINE) void refreshBlocks();
       },
     );
     return () => {
@@ -577,6 +617,7 @@ export default function ComprehensiveCalendarScreen() {
     if (!userId) return;
     const interval = setInterval(() => {
       void refreshActualEventsForSelectedDay();
+      if (USE_NEW_LOCATION_PIPELINE) void refreshBlocks();
     }, 30 * 60_000); // 30 minutes
     return () => clearInterval(interval);
   }, [refreshActualEventsForSelectedDay, userId]);
@@ -602,6 +643,24 @@ export default function ComprehensiveCalendarScreen() {
   const allowAutoSuggestions = userPreferences.autoSuggestEvents;
 
   const combinedActualEvents = useMemo(() => {
+    // ── NEW pipeline: BRAVO/CHARLIE location blocks ──────────────────────
+    if (USE_NEW_LOCATION_PIPELINE) {
+      // User-created / user-edited actual events always take priority
+      const userActualEvents = displayActualEvents.filter(
+        (e) =>
+          e.meta?.source === "user" ||
+          e.meta?.source === "actual_adjust",
+      );
+
+      return locationBlocksToScheduledEvents({
+        blocks: locationBlocks,
+        ymd: selectedDateYmd,
+        plannedEvents,
+        userActualEvents,
+      });
+    }
+
+    // ── OLD pipeline (legacy — kept for rollback) ────────────────────────
     return buildActualDisplayEvents({
       ymd: selectedDateYmd,
       plannedEvents,
@@ -618,6 +677,7 @@ export default function ComprehensiveCalendarScreen() {
       allowAutoSuggestions,
     });
   }, [
+    locationBlocks,
     actualBlocks,
     appCategoryOverrides,
     derivedActualEvents,
@@ -634,6 +694,7 @@ export default function ComprehensiveCalendarScreen() {
   ]);
 
   useEffect(() => {
+    if (USE_NEW_LOCATION_PIPELINE) return; // Old pipeline only
     if (!userId) return;
     if (!actualBlocks || actualBlocks.length === 0) return;
     const fingerprint = actualBlocks
@@ -677,8 +738,9 @@ export default function ComprehensiveCalendarScreen() {
     userId,
   ]);
 
-  // Automatically sync derived actual events to Supabase
+  // Automatically sync derived actual events to Supabase (old pipeline only)
   useEffect(() => {
+    if (USE_NEW_LOCATION_PIPELINE) return; // Old pipeline only
     if (!userId || USE_MOCK_CALENDAR) return;
     if (!combinedActualEvents || combinedActualEvents.length === 0) return;
 
@@ -752,6 +814,7 @@ export default function ComprehensiveCalendarScreen() {
       selectedDate={selectedDate}
       plannedEvents={plannedEvents}
       actualEvents={combinedActualEvents}
+      actualEventsLoading={USE_NEW_LOCATION_PIPELINE && blocksLoading}
       onPrevDay={() => {
         const prev = new Date(selectedDate);
         prev.setDate(prev.getDate() - 1);

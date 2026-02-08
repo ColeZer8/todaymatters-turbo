@@ -1,3 +1,7 @@
+// DEPRECATED: Use location-blocks-to-events.ts + use-location-blocks-for-day.ts instead.
+// This file is kept as a fallback reference for the legacy pipeline.
+// The new BRAVO/CHARLIE location-block pipeline replaces this 3400+ line monster.
+
 import type {
   CalendarEventMeta,
   ScheduledEvent,
@@ -195,6 +199,11 @@ interface LocationReplacementContext {
   userPlaces?: UserPlaceRow[];
 }
 
+/**
+ * @deprecated Use `locationBlocksToScheduledEvents()` from `location-blocks-to-events.ts`
+ * combined with `useLocationBlocksForDay()` hook instead. This function is part of the
+ * legacy actual-event derivation pipeline and will be removed in a future release.
+ */
 export function buildActualDisplayEvents({
   ymd,
   plannedEvents,

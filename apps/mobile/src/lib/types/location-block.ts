@@ -11,6 +11,7 @@ import type {
   ActivitySegment,
   InferredActivityType,
 } from "@/lib/supabase/services/activity-segments";
+import type { MovementType } from "@/lib/supabase/services/actual-ingestion";
 import type { InferredPlace } from "@/lib/supabase/services/place-inference";
 import type { InferenceDescription } from "@/lib/supabase/services/activity-inference-descriptions";
 import type { TimelineEvent } from "@/lib/types/timeline-event";
@@ -49,6 +50,10 @@ export interface LocationBlock {
   id: string;
   /** Whether this is a stationary block or a travel block. */
   type: LocationBlockType;
+  /** Movement type for travel blocks (walking, cycling, driving). */
+  movementType?: MovementType | null;
+  /** Approximate distance traveled in meters (travel blocks). */
+  distanceM?: number | null;
 
   // -- Location --
   /** Location label (e.g., "Home", "Work", "In Transit"). */

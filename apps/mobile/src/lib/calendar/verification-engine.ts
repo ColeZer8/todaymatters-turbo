@@ -633,6 +633,10 @@ export function verifyPlannedEvents(
 /**
  * Generate actual calendar blocks from evidence data.
  * This creates standalone blocks for activities detected but not planned.
+ *
+ * @deprecated Use `verifyPlannedAgainstBlocks()` from `simple-verification.ts`
+ * combined with location blocks from `useLocationBlocksForDay()` hook instead.
+ * This function is part of the legacy verification pipeline.
  */
 export function generateActualBlocks(
   evidence: EvidenceBundle,

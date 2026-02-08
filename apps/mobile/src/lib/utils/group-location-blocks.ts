@@ -91,25 +91,49 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
   const isTravel = first.primaryActivity === "commute";
   const blockType = isTravel ? "travel" : "stationary";
 
-  // -- Location label --
+  // -- Movement type & distance for travel blocks --
+  let movementType: "walking" | "cycling" | "driving" | "unknown" | null = null;
+  let distanceM: number | null = null;
+  if (isTravel) {
+    const commuteSegments = allSegments.filter(
+      (s) => s.inferredActivity === "commute" || s.placeCategory === "commute",
+    );
+    // Pick the dominant movement type from commute segments
+    for (const seg of commuteSegments) {
+      if (seg.movementType && seg.movementType !== "unknown") {
+        movementType = seg.movementType;
+        break;
+      }
+    }
+    if (!movementType && commuteSegments.length > 0) {
+      movementType = commuteSegments[0].movementType ?? null;
+    }
+    // Sum distances from commute segments
+    const totalDist = commuteSegments.reduce(
+      (sum, s) => sum + (s.distanceM ?? 0),
+      0,
+    );
+    if (totalDist > 0) distanceM = totalDist;
+  }
+
+  // -- Location label (movement-type-aware for travel) --
   let locationLabel = first.primaryPlaceLabel ?? "Unknown Location";
   if (isTravel) {
-    // Build "Origin -> Destination" label for travel
-    const origin =
-      group[0].previousPlaceLabel ??
-      allSegments[0]?.placeLabel ??
-      null;
     const destination =
       allSegments.length > 0
         ? allSegments[allSegments.length - 1].placeLabel
         : last.primaryPlaceLabel;
 
-    if (origin && destination && destination !== "Unknown Location") {
-      locationLabel = `${origin} → ${destination}`;
-    } else if (destination && destination !== "Unknown Location") {
-      locationLabel = `Travel → ${destination}`;
+    const verb =
+      movementType === "walking" ? "Walking"
+      : movementType === "cycling" ? "Cycling"
+      : movementType === "driving" ? "Driving"
+      : "Travel";
+
+    if (destination && destination !== "Unknown Location") {
+      locationLabel = `${verb} → ${destination}`;
     } else {
-      locationLabel = "In Transit";
+      locationLabel = movementType && movementType !== "unknown" ? verb : "In Transit";
     }
   }
 
@@ -240,6 +264,8 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
   return {
     id: first.id,
     type: blockType,
+    movementType,
+    distanceM,
     locationLabel,
     locationCategory: first.inferredPlace?.inferredType ?? null,
     inferredPlace,

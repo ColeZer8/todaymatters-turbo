@@ -32,8 +32,10 @@ import {
 import {
   generateLocationSegments,
   mergeAdjacentSegments,
+  filterShortSegments,
   processSegmentsWithCommutes,
   type LocationSegment,
+  type MovementType,
 } from "./actual-ingestion";
 
 import {
@@ -131,6 +133,10 @@ export interface ActivitySegment {
   evidence: SegmentEvidence;
   /** Source IDs from ALPHA layer */
   sourceIds: string[];
+  /** Movement type for commute segments (walking, cycling, driving) */
+  movementType?: MovementType | null;
+  /** Approximate distance traveled in meters (commute segments) */
+  distanceM?: number | null;
   // === Place Confidence Fields (for client-side distance verification) ===
   /** Distance in meters from segment centroid to the labeled place */
   placeDistanceM?: number;
@@ -644,6 +650,7 @@ function buildHealthDataContext(
 export async function generateActivitySegments(
   userId: string,
   hourStart: Date,
+  options?: { skipDwellFilter?: boolean },
 ): Promise<ActivitySegment[]> {
   const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
 
@@ -663,6 +670,7 @@ export async function generateActivitySegments(
     userPlaces,
     hourStart,
     hourEnd,
+    options,
   );
 
   // 3. Process with commute detection (finds travel between places)
@@ -806,6 +814,8 @@ export async function generateActivitySegments(
         segment.sourceId,
         ...overlappingSessions.map((s) => s.id),
       ],
+      movementType: segment.meta.movement_type ?? null,
+      distanceM: segment.meta.distance_m ?? null,
     });
   }
 
@@ -1054,14 +1064,113 @@ export async function deleteActivitySegmentsForDay(
 }
 
 /**
+ * Merge adjacent ActivitySegments that share the same place across hour boundaries.
+ * Sorts by startedAt, then merges consecutive segments at the same place/coordinate cluster.
+ */
+function mergeAdjacentActivitySegments(
+  segments: ActivitySegment[],
+  maxGapMs: number = 5 * 60 * 1000,
+): ActivitySegment[] {
+  if (segments.length <= 1) return segments;
+
+  const sorted = [...segments].sort(
+    (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
+  );
+
+  const merged: ActivitySegment[] = [];
+  let current = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+    const gap = next.startedAt.getTime() - current.endedAt.getTime();
+
+    let shouldMerge = false;
+    if (gap <= maxGapMs) {
+      if (current.placeId !== null && current.placeId === next.placeId) {
+        shouldMerge = true;
+      } else if (
+        current.placeId === null &&
+        next.placeId === null &&
+        current.locationLat !== null &&
+        current.locationLng !== null &&
+        next.locationLat !== null &&
+        next.locationLng !== null
+      ) {
+        const distance = haversineDistance(
+          current.locationLat,
+          current.locationLng,
+          next.locationLat,
+          next.locationLng,
+        );
+        shouldMerge = distance < 200;
+      }
+    }
+
+    if (shouldMerge) {
+      // Merge: extend current segment to cover both
+      current = {
+        ...current,
+        endedAt: next.endedAt,
+        totalScreenSeconds: current.totalScreenSeconds + next.totalScreenSeconds,
+        evidence: {
+          locationSamples:
+            current.evidence.locationSamples + next.evidence.locationSamples,
+          screenSessions:
+            current.evidence.screenSessions + next.evidence.screenSessions,
+          hasHealthData:
+            current.evidence.hasHealthData || next.evidence.hasHealthData,
+        },
+        sourceIds: [...current.sourceIds, ...next.sourceIds],
+        // Keep the higher confidence
+        activityConfidence: Math.max(
+          current.activityConfidence,
+          next.activityConfidence,
+        ),
+        // Merge top apps (deduplicate, sum seconds, keep top 5)
+        topApps: mergeTopApps(current.topApps, next.topApps),
+      };
+    } else {
+      merged.push(current);
+      current = next;
+    }
+  }
+
+  merged.push(current);
+  return merged;
+}
+
+/**
+ * Merge two top-app lists: sum seconds for duplicate appIds, keep top 5.
+ */
+function mergeTopApps(
+  a: AppBreakdownItem[],
+  b: AppBreakdownItem[],
+): AppBreakdownItem[] {
+  const map = new Map<string, AppBreakdownItem>();
+  for (const item of [...a, ...b]) {
+    const existing = map.get(item.appId);
+    if (existing) {
+      existing.seconds += item.seconds;
+    } else {
+      map.set(item.appId, { ...item });
+    }
+  }
+  return [...map.values()]
+    .sort((x, y) => y.seconds - x.seconds)
+    .slice(0, 5);
+}
+
+/**
  * Reprocess an entire day's activity segments with place lookups.
- * 
+ *
  * This will:
  * 1. Delete existing activity segments for the day
- * 2. Re-generate segments for each hour with new commute detection
- * 3. Auto-lookup Google place names for each segment
- * 4. Save the enriched segments
- * 
+ * 2. Re-generate segments for each hour (dwell filter deferred)
+ * 3. Merge segments across hour boundaries to prevent time-snapping
+ * 4. Apply dwell-time filter on merged results
+ * 5. Auto-lookup Google place names for each segment
+ * 6. Save the enriched segments
+ *
  * @returns Object with stats about what was processed
  */
 export async function reprocessDayWithPlaceLookup(
@@ -1134,35 +1243,64 @@ export async function reprocessDayWithPlaceLookup(
       }
     }
 
+    // Collect all segments across all hours with dwell filter deferred,
+    // so that short segments at hour boundaries aren't prematurely discarded.
+    const allDaySegments: ActivitySegment[] = [];
+
     for (let hour = 0; hour <= maxHour; hour++) {
       const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
-      
+
       onProgress?.(`Processing hour ${hour}:00...`);
 
-      // Generate segments for this hour
-      const segments = await generateActivitySegments(userId, hourStart);
-      
-      if (segments.length > 0) {
-        // Enrich with place names
-        const enriched = await enrichSegmentsWithPlaceNames(segments);
-        const placesFound = enriched.filter((s, i) => 
-          s.placeLabel && !segments[i].placeLabel
-        ).length;
-        
-        // Save to database
-        await saveActivitySegments(enriched);
-        
-        stats.segmentsCreated += enriched.length;
-        stats.placesLookedUp += placesFound;
-      }
+      // Generate segments for this hour WITHOUT dwell filtering
+      const segments = await generateActivitySegments(userId, hourStart, {
+        skipDwellFilter: true,
+      });
+      allDaySegments.push(...segments);
 
-      // Generate + save CHARLIE hourly summary for this hour (reads from BRAVO).
+      stats.hoursProcessed++;
+    }
+
+    // Merge adjacent segments across hour boundaries (same place / close coords)
+    onProgress?.("Merging cross-hour segments...");
+    const mergedSegments = mergeAdjacentActivitySegments(allDaySegments);
+
+    // Now apply dwell-time filter on the merged result
+    const filteredSegments = mergedSegments.filter((seg) => {
+      const durationMs = seg.endedAt.getTime() - seg.startedAt.getTime();
+      if (durationMs < 5 * 60 * 1000) {
+        if (__DEV__) {
+          console.log(
+            `📍 [reprocess] Removing merged segment at ${seg.placeLabel ?? "unknown"} - duration ${Math.round(durationMs / 1000 / 60)}min < 5min minimum`,
+          );
+        }
+        return false;
+      }
+      return true;
+    });
+
+    // Enrich with place names and save
+    if (filteredSegments.length > 0) {
+      onProgress?.("Looking up place names...");
+      const enriched = await enrichSegmentsWithPlaceNames(filteredSegments);
+      const placesFound = enriched.filter(
+        (s, i) => s.placeLabel && !filteredSegments[i].placeLabel,
+      ).length;
+
+      await saveActivitySegments(enriched);
+
+      stats.segmentsCreated += enriched.length;
+      stats.placesLookedUp += placesFound;
+    }
+
+    // Generate CHARLIE hourly summaries per hour (reads from saved BRAVO segments)
+    for (let hour = 0; hour <= maxHour; hour++) {
+      const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
       if (processHourlySummary) {
         try {
           const summary = await processHourlySummary(userId, hourStart);
           if (summary) stats.summariesGenerated++;
         } catch (error) {
-          // Non-fatal - segment regen is still valuable for debugging.
           if (__DEV__) {
             console.warn(
               "[ActivitySegments] Failed to generate hourly summary during reprocess:",
@@ -1171,8 +1309,6 @@ export async function reprocessDayWithPlaceLookup(
           }
         }
       }
-      
-      stats.hoursProcessed++;
     }
 
     stats.success = true;

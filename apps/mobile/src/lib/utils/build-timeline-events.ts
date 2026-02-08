@@ -15,6 +15,7 @@ import type {
 import type { TmEventRow } from "@/lib/supabase/services/communication-events";
 import type { ScheduledEvent } from "@/stores";
 import { formatDuration } from "@/lib/utils/time-format";
+import { getBestEmailTimestamp } from "@/lib/communication/communication-utils";
 
 // ============================================================================
 // Helpers
@@ -172,8 +173,8 @@ function buildCommEvents(
   const events: TimelineEvent[] = [];
 
   for (const row of commRows) {
-    // Prefer actual email timestamp over sync time
-    const startStr = row.sent_at ?? row.received_at ?? row.scheduled_start ?? row.created_at;
+    // Prefer actual email timestamp (DB columns → Gmail internalDate → Date header → sync time)
+    const startStr = getBestEmailTimestamp(row) ?? row.scheduled_start ?? row.created_at;
     if (!startStr) continue;
     const start = new Date(startStr);
     if (Number.isNaN(start.getTime())) continue;
@@ -406,7 +407,7 @@ export function filterCommEventsToTimeRange(
   const endMs = end.getTime();
   return events.filter((e) => {
     // Prefer actual email timestamp over sync time
-    const ts = e.sent_at ?? e.received_at ?? e.scheduled_start ?? e.created_at;
+    const ts = getBestEmailTimestamp(e) ?? e.scheduled_start ?? e.created_at;
     if (!ts) return false;
     const evStartMs = new Date(ts).getTime();
     const endStr = e.scheduled_end;

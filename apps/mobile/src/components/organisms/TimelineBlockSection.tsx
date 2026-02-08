@@ -8,7 +8,7 @@
 import { View, StyleSheet } from "react-native";
 import type { LocationBlock } from "@/lib/types/location-block";
 import type { TimelineEvent } from "@/lib/types/timeline-event";
-import { getPlaceIcon } from "@/lib/utils/place-icons";
+import { getPlaceIcon, getTravelIcon } from "@/lib/utils/place-icons";
 import { getLocationBannerColor } from "@/lib/utils/place-icons";
 import { LocationBanner } from "@/components/molecules/LocationBanner";
 import { TimelineEventRow } from "@/components/molecules/TimelineEventRow";
@@ -34,7 +34,9 @@ export const TimelineBlockSection = ({
   const futureEvents = events.filter((e) => !e.isPast);
 
   const bannerColors = getLocationBannerColor(block);
-  const icon = getPlaceIcon(block.locationLabel);
+  const icon = block.type === "travel"
+    ? getTravelIcon(block.movementType)
+    : getPlaceIcon(block.locationLabel);
 
   // Determine if the red "now" line belongs in this block
   const blockStartMin =
@@ -57,6 +59,7 @@ export const TimelineBlockSection = ({
         startTime={block.startTime}
         endTime={block.endTime}
         durationMinutes={block.durationMinutes}
+        distanceM={block.distanceM}
         onPress={onBannerPress ? () => onBannerPress(block) : undefined}
       />
 

@@ -18,7 +18,14 @@ interface LocationBannerProps {
   startTime: Date;
   endTime: Date;
   durationMinutes: number;
+  /** Optional distance in meters for travel blocks. */
+  distanceM?: number | null;
   onPress?: () => void;
+}
+
+function formatDistance(meters: number): string {
+  const miles = meters / 1609.344;
+  return miles < 0.1 ? `${Math.round(meters)} ft` : `${miles.toFixed(1)} mi`;
 }
 
 export const LocationBanner = ({
@@ -29,10 +36,12 @@ export const LocationBanner = ({
   startTime,
   endTime,
   durationMinutes,
+  distanceM,
   onPress,
 }: LocationBannerProps) => {
   const timeStr = formatTimeRange(startTime, endTime);
   const durStr = formatDuration(durationMinutes);
+  const distStr = distanceM && distanceM > 0 ? formatDistance(distanceM) : null;
 
   const content = (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -40,7 +49,7 @@ export const LocationBanner = ({
       <View style={styles.textCol}>
         <Text style={[styles.label, { color: textColor }]}>{locationLabel}</Text>
         <Text style={[styles.meta, { color: textColor }]}>
-          {timeStr} · {durStr}
+          {timeStr} · {durStr}{distStr ? ` · ${distStr}` : ""}
         </Text>
       </View>
     </View>

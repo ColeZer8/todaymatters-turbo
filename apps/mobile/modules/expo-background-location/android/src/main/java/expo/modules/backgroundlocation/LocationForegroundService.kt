@@ -27,7 +27,11 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import org.json.JSONObject
 import java.time.Instant
-import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
 /**
@@ -40,8 +44,8 @@ class LocationForegroundService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private val executor = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     private var userId: String = ""
     private var intervalMinutes: Int = 15
@@ -85,14 +89,14 @@ class LocationForegroundService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "Service onDestroy")
         stopForegroundTracking()
-        executor.shutdown()
+        serviceScope.cancel()
         super.onDestroy()
     }
 
     private fun startForegroundTracking() {
         if (isRunning) {
             Log.d(TAG, "Already running, updating notification")
-            updateNotification()
+            updateNotification("Tracking your location")
             return
         }
 
@@ -198,7 +202,7 @@ class LocationForegroundService : Service() {
     private fun handleNewLocation(location: Location) {
         Log.d(TAG, "New location: lat=${location.latitude}, lng=${location.longitude}")
         
-        executor.execute {
+        serviceScope.launch {
             try {
                 val recordedAtMs = if (location.time > 0) location.time else System.currentTimeMillis()
                 val sampleJson = JSONObject().apply {
@@ -227,7 +231,7 @@ class LocationForegroundService : Service() {
                         }
                         
                         updateNotification("Last update: ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-                        return@execute
+                        return@launch
                     }
                 }
 

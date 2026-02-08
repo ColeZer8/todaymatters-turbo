@@ -87,6 +87,47 @@ export function getInitialsFromName(name: string): string {
   return `${first}${last}`;
 }
 
+/**
+ * Extract the best available timestamp for an email event.
+ * Priority: sent_at > received_at > meta.raw.internalDate > Date header > created_at
+ */
+export function getBestEmailTimestamp(row: {
+  sent_at?: string | null;
+  received_at?: string | null;
+  created_at?: string | null;
+  meta?: unknown;
+}): string | null {
+  // 1. DB columns populated by sync
+  if (row.sent_at) return row.sent_at;
+  if (row.received_at) return row.received_at;
+
+  // 2. Gmail API internalDate (epoch milliseconds as string)
+  if (row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)) {
+    const raw = (row.meta as Record<string, unknown>).raw;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const internalDate = (raw as Record<string, unknown>).internalDate;
+      if (typeof internalDate === "string" && /^\d+$/.test(internalDate)) {
+        const d = new Date(Number(internalDate));
+        if (!Number.isNaN(d.getTime())) return d.toISOString();
+      }
+      if (typeof internalDate === "number" && Number.isFinite(internalDate)) {
+        const d = new Date(internalDate);
+        if (!Number.isNaN(d.getTime())) return d.toISOString();
+      }
+    }
+
+    // 3. Gmail "Date" header
+    const dateHeader = getGmailHeaderValue(row.meta, "Date");
+    if (dateHeader) {
+      const d = new Date(dateHeader);
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+  }
+
+  // 4. Fallback to DB created_at
+  return row.created_at ?? null;
+}
+
 export function formatCommunicationTime(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);

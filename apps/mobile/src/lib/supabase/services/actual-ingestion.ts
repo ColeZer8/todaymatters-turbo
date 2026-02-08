@@ -97,9 +97,28 @@ export interface LocationSegment {
     destination_place_label?: string | null;
     /** Distance traveled in meters (approximate) */
     distance_m?: number;
+    /** Classified movement type for commute segments */
+    movement_type?: MovementType;
     /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
     fuzzy_location?: boolean;
   };
+}
+
+/** Classification of how the user moved between locations */
+export type MovementType = "walking" | "cycling" | "driving" | "unknown";
+
+/**
+ * Classify movement type based on average speed.
+ * Walking: < 2.5 m/s (~5.5 mph)
+ * Cycling: 2.5-8.0 m/s (~5.5-18 mph)
+ * Driving: > 8.0 m/s (~18 mph)
+ */
+function classifyMovementType(distanceM: number, durationMs: number): MovementType {
+  if (durationMs <= 0 || distanceM <= 0) return "unknown";
+  const avgSpeedMs = distanceM / (durationMs / 1000);
+  if (avgSpeedMs < 2.5) return "walking";
+  if (avgSpeedMs < 8.0) return "cycling";
+  return "driving";
 }
 
 /**
@@ -120,6 +139,8 @@ export interface CommuteDetectionResult {
   toPlace: { id: string | null; label: string | null } | null;
   /** Approximate distance traveled in meters */
   distanceM: number;
+  /** Classified movement type based on average speed */
+  movementType: MovementType;
   /** Samples that are part of the commute */
   samples: EvidenceLocationSample[];
 }
@@ -420,6 +441,7 @@ export function generateLocationSegments(
   userPlaces: UserPlaceRow[],
   windowStart: Date,
   windowEnd: Date,
+  options?: { skipDwellFilter?: boolean },
 ): LocationSegment[] {
   // DEBUG: Log function entry
   console.log(`📍 [generateLocationSegments] Called with ${locationSamples.length} samples, window: ${windowStart.toISOString()} - ${windowEnd.toISOString()}`);
@@ -534,12 +556,15 @@ export function generateLocationSegments(
 
     // FIX #2: Skip segments shorter than minimum dwell time
     // This prevents "drive-by" scenarios where user passes near a place
-    const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
-    if (segmentDurationMs < MIN_DWELL_TIME_MS) {
-      if (__DEV__) {
-        console.log(`📍 [filter] Skipping segment at ${place?.label ?? 'unknown'} - duration ${Math.round(segmentDurationMs / 1000 / 60)}min < ${MIN_DWELL_TIME_MS / 1000 / 60}min minimum`);
+    // When skipDwellFilter is true, defer filtering to after cross-hour merging
+    if (!options?.skipDwellFilter) {
+      const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
+      if (segmentDurationMs < MIN_DWELL_TIME_MS) {
+        if (__DEV__) {
+          console.log(`📍 [filter] Skipping segment at ${place?.label ?? 'unknown'} - duration ${Math.round(segmentDurationMs / 1000 / 60)}min < ${MIN_DWELL_TIME_MS / 1000 / 60}min minimum`);
+        }
+        continue;
       }
-      continue;
     }
 
     // Calculate centroid
@@ -656,6 +681,28 @@ export function mergeAdjacentSegments(
 }
 
 /**
+ * Filter out segments shorter than the minimum dwell time.
+ * Used after cross-hour merging to remove genuinely short drive-by segments.
+ */
+export function filterShortSegments(
+  segments: LocationSegment[],
+  minDwellMs: number = MIN_DWELL_TIME_MS,
+): LocationSegment[] {
+  return segments.filter((seg) => {
+    const durationMs = seg.end.getTime() - seg.start.getTime();
+    if (durationMs < minDwellMs) {
+      if (__DEV__) {
+        console.log(
+          `📍 [filterShortSegments] Removing segment at ${seg.placeLabel ?? "unknown"} - duration ${Math.round(durationMs / 1000 / 60)}min < ${minDwellMs / 1000 / 60}min minimum`,
+        );
+      }
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
  * Convert location segments to derived events for reconciliation.
  * Creates events with the proper structure for the reconciliation pipeline.
  *
@@ -674,7 +721,7 @@ export function segmentsToDerivedEvents(
   return segments.map((segment) => ({
     sourceId: segment.sourceId,
     title: segment.meta.kind === "commute"
-      ? "Commute"
+      ? formatMovementLabel(segment.meta.movement_type, segment.meta.destination_place_label)
       : segment.placeLabel
         ? `At ${segment.placeLabel}`
         : "Unknown Location",
@@ -688,6 +735,15 @@ export function segmentsToDerivedEvents(
       longitude: segment.longitude,
     },
   }));
+}
+
+function formatMovementLabel(movementType?: MovementType, destination?: string | null): string {
+  const verb = movementType === "walking" ? "Walking"
+    : movementType === "cycling" ? "Cycling"
+    : movementType === "driving" ? "Driving"
+    : "Traveling";
+  if (destination) return `${verb} to ${destination}`;
+  return verb;
 }
 
 // ============================================================================
@@ -835,6 +891,7 @@ export function detectCommute(
       fromPlace: null,
       toPlace: null,
       distanceM: 0,
+      movementType: "unknown",
       samples: [],
     };
   }
@@ -849,6 +906,7 @@ export function detectCommute(
       fromPlace: null,
       toPlace: null,
       distanceM: 0,
+      movementType: "unknown",
       samples: [],
     };
   }
@@ -861,6 +919,9 @@ export function detectCommute(
   // Calculate distance
   const distanceM = calculatePathDistance(sortedSamples);
 
+  // Classify movement type based on average speed
+  const movementType = classifyMovementType(distanceM, durationMs);
+
   // Find boundary places
   const { fromPlace, toPlace } = findBoundaryPlaces(sortedSamples, userPlaces);
 
@@ -872,7 +933,11 @@ export function detectCommute(
   if (!isLongCommute && durationMs > 0) {
     const durationMinutes = Math.round(durationMs / (60 * 1000));
     const destinationLabel = toPlace?.label ?? "destination";
-    travelAnnotation = `Traveled ${durationMinutes} min to ${destinationLabel}`;
+    const verb = movementType === "walking" ? "Walked"
+      : movementType === "cycling" ? "Cycled"
+      : movementType === "driving" ? "Drove"
+      : "Traveled";
+    travelAnnotation = `${verb} ${durationMinutes} min to ${destinationLabel}`;
   }
 
   return {
@@ -883,6 +948,7 @@ export function detectCommute(
     fromPlace,
     toPlace,
     distanceM,
+    movementType,
     samples: sortedSamples,
   };
 }
@@ -942,6 +1008,7 @@ export function createCommuteSegment(
       destination_place_id: commute.toPlace?.id ?? null,
       destination_place_label: commute.toPlace?.label ?? null,
       distance_m: commute.distanceM,
+      movement_type: commute.movementType,
     },
   };
 }

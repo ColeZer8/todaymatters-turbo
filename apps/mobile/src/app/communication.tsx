@@ -8,6 +8,7 @@ import { fetchGmailEmailEvents } from "@/lib/supabase/services";
 import {
   formatCommunicationTime,
   formatCommunicationTimestamp,
+  getBestEmailTimestamp,
   getDisplayNameFromFromAddress,
   getGmailFromAddress,
   getGmailSubject,
@@ -44,8 +45,9 @@ export default function CommunicationScreen() {
           const fromAddress = getGmailFromAddress(row.meta);
           const senderName = getDisplayNameFromFromAddress(fromAddress);
           const message = subject;
-          const time = formatCommunicationTime(row.created_at);
-          const receivedAt = formatCommunicationTimestamp(row.created_at);
+          const bestTs = getBestEmailTimestamp(row);
+          const time = formatCommunicationTime(bestTs);
+          const receivedAt = formatCommunicationTimestamp(bestTs);
 
           return {
             id: row.id,
