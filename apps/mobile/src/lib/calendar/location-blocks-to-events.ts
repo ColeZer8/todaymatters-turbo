@@ -142,8 +142,13 @@ function locationBlockToEvent(
   const category = locationCategoryToEventCategory(block);
   const startMinutes = dateToMinutesFromMidnight(block.startTime, ymd);
   const endMinutes = dateToMinutesFromMidnight(block.endTime, ymd);
-  // Ensure at least 1 minute duration, clamp to day boundary (1440 = 24h)
-  const duration = Math.max(1, Math.min(endMinutes - startMinutes, 1440 - startMinutes));
+  // Handle edge cases:
+  // - endMinutes <= startMinutes: block spans midnight or is zero-length → clamp to at least 1 min
+  // - Both clamped to 1440: block is entirely outside the target day → 1 min placeholder
+  const rawDuration = endMinutes - startMinutes;
+  const duration = rawDuration > 0
+    ? Math.min(rawDuration, 1440 - startMinutes)
+    : Math.max(1, Math.min(block.durationMinutes, 1440 - startMinutes));
 
   const meta: CalendarEventMeta = {
     category,

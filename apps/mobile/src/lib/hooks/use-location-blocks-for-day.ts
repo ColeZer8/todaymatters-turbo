@@ -381,7 +381,12 @@ export function useLocationBlocksForDay(
   const refresh = useCallback(async () => {
     // Clear inference cache so a fresh 14-day query runs
     inferenceCache.current = null;
-    await fetchData();
+    setIsLoading(true);
+    try {
+      await fetchData();
+    } finally {
+      setIsLoading(false);
+    }
   }, [fetchData]);
 
   return { blocks, inferenceResult, isLoading, error, refresh };
