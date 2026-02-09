@@ -255,8 +255,7 @@ class LocationForegroundService : Service() {
 
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
-            locationPendingIntent!!,
-            Looper.getMainLooper()
+            locationPendingIntent!!
         )
         
         Log.d(TAG, "Location updates started (PendingIntent) with interval=${intervalMs}ms")
