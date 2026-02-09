@@ -58,7 +58,19 @@ export async function fetchCommunicationEventsForDay(
       .limit(200);
 
     if (error) throw handleSupabaseError(error);
-    return (data ?? []) as TmEventRow[];
+
+    // Filter out all-day / multi-day events (holidays, etc.) that leak in
+    // through the 'meeting' type. Real meetings don't span 23+ hours.
+    const ALL_DAY_MS = 23 * 60 * 60_000;
+    const filtered = ((data ?? []) as TmEventRow[]).filter((row) => {
+      if (!row.scheduled_start || !row.scheduled_end) return true;
+      const startMs = new Date(row.scheduled_start).getTime();
+      const endMs = new Date(row.scheduled_end).getTime();
+      if (Number.isNaN(startMs) || Number.isNaN(endMs)) return true;
+      return endMs - startMs < ALL_DAY_MS;
+    });
+
+    return filtered;
   } catch (err) {
     if (__DEV__) {
       console.warn(

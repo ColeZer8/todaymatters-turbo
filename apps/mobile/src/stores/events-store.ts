@@ -181,6 +181,8 @@ export interface ScheduledEvent {
   category: EventCategory;
   /** Whether this is a Big 3 priority item */
   isBig3?: boolean;
+  /** Whether this event spans 24+ hours and should render as an all-day banner */
+  isAllDay?: boolean;
   meta?: CalendarEventMeta;
 }
 

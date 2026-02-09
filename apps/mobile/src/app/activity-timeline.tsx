@@ -139,7 +139,7 @@ export default function ActivityTimelineScreen() {
           );
         };
 
-        const realEvents = planned.filter((e) => !isDerived(e));
+        const realEvents = planned.filter((e) => !isDerived(e) && !e.isAllDay);
 
         if (isToday) {
           const now = new Date();

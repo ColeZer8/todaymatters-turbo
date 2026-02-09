@@ -332,35 +332,15 @@ export const startGoogleServicesOAuth = async (
   }
 
   // ============================================================
-  // ANDROID: Use Michael's exact approach
-  // Open the backend URL directly in browser, let browser handle redirects
-  // Pass access_token as query param since browser can't send Authorization header
-  // After user closes browser, caller checks Supabase for connection status
-  // ============================================================
-  if (Platform.OS === "android") {
-    // Add access token as query parameter for browser-based auth
-    // Backend needs to support ?access_token=... for browser flows (can't send Authorization header)
-    const androidOauthUrl = `${oauthUrl}&access_token=${encodeURIComponent(accessToken)}`;
-    
-    if (__DEV__) {
-      console.log("🔗 [Android] Opening OAuth URL directly with openBrowserAsync:", androidOauthUrl);
-    }
-
-    const result = await WebBrowser.openBrowserAsync(androidOauthUrl, {
-      dismissButtonStyle: "close",
-      showTitle: true,
-    });
-
-    if (__DEV__) {
-      console.log("🔗 [Android] Browser result:", result);
-    }
-
-    return result;
-  }
-
-  // ============================================================
-  // iOS: Fetch redirect URL with auth header, then open Google OAuth URL
-  // This works because iOS ASWebAuthenticationSession handles it gracefully
+  // UNIFIED FLOW (iOS + Android):
+  // 1. Call /start via fetch with JWT in Authorization header (not in browser)
+  // 2. Intercept the 302 redirect to get Google's OAuth consent URL
+  // 3. Open that Google URL in the browser (no auth header needed — it's Google's domain)
+  // 4. After browser closes, caller checks Supabase for connection status
+  //
+  // This works on both platforms because the auth header is sent via fetch,
+  // not the browser. Previously Android passed access_token as a query param
+  // which required backend support. This approach needs no backend changes.
   // ============================================================
   let response: Response;
   try {
@@ -373,8 +353,9 @@ export const startGoogleServicesOAuth = async (
     } as RequestInit);
   } catch (error) {
     if (__DEV__) {
-      console.error("🔗 [iOS] OAuth fetch failed:", {
+      console.error("🔗 OAuth fetch failed:", {
         error,
+        platform: Platform.OS,
         url: oauthUrl,
         message: error instanceof Error ? error.message : String(error),
       });
@@ -385,7 +366,8 @@ export const startGoogleServicesOAuth = async (
   if (__DEV__) {
     const location =
       response.headers.get("location") ?? response.headers.get("Location");
-    console.log("🔗 [iOS] OAuth start response:", {
+    console.log("🔗 OAuth start response:", {
+      platform: Platform.OS,
       status: response.status,
       location,
     });
@@ -416,8 +398,14 @@ export const startGoogleServicesOAuth = async (
     );
   }
 
+  // Ensure account picker shows (lets user pick which Google account)
+  redirectUrl = ensureSelectAccountPrompt(redirectUrl);
+
   if (__DEV__) {
-    console.log("🔗 [iOS] Opening Google OAuth URL with openBrowserAsync:", redirectUrl);
+    console.log("🔗 Opening Google OAuth URL in browser:", {
+      platform: Platform.OS,
+      url: redirectUrl,
+    });
   }
 
   const result = await WebBrowser.openBrowserAsync(redirectUrl, {
@@ -426,7 +414,7 @@ export const startGoogleServicesOAuth = async (
   });
 
   if (__DEV__) {
-    console.log("🔗 [iOS] Browser result:", result);
+    console.log("🔗 Browser result:", { platform: Platform.OS, result });
   }
 
   return result;

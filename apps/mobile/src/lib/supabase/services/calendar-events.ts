@@ -11,6 +11,9 @@ import { formatLocalIso, ymdToLocalDayStart } from "@/lib/calendar/local-time";
 const PLANNED_EVENT_TYPE = "calendar_planned";
 const ACTUAL_EVENT_TYPE = "calendar_actual";
 
+/** Events lasting 23+ hours are treated as all-day banners instead of timeline blocks */
+const ALL_DAY_THRESHOLD_MINUTES = 23 * 60;
+
 type TmEventRow = Database["tm"]["Tables"]["events"]["Row"];
 type TmEventInsert = Database["tm"]["Tables"]["events"]["Insert"];
 type TmEventUpdate = Database["tm"]["Tables"]["events"]["Update"];
@@ -115,6 +118,12 @@ function rowToScheduledEventForDay(
     return null;
 
   // Clip to the visible day window so cross-midnight events render correctly on both days.
+  // Detect all-day events: if the raw (unclipped) duration exceeds the threshold,
+  // mark it as all-day so the UI renders it as a compact banner instead of a
+  // massive timeline block.
+  const rawDurationMinutes = Math.round((endMs - startMs) / 60_000);
+  const isAllDay = rawDurationMinutes >= ALL_DAY_THRESHOLD_MINUTES;
+
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
   const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
   const clippedStartMs = clippedStart.getTime();
@@ -166,6 +175,7 @@ function rowToScheduledEventForDay(
     duration,
     category,
     isBig3: metaParsed?.isBig3 ?? false,
+    isAllDay,
     meta: Object.keys(metaWithActual).length > 0 ? metaWithActual : undefined,
   };
 }
@@ -243,6 +253,9 @@ function rowToScheduledEventForDayFromPublic(
   if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
     return null;
 
+  const rawDurationMinutes = Math.round((endMs - startMs) / 60_000);
+  const isAllDay = rawDurationMinutes >= ALL_DAY_THRESHOLD_MINUTES;
+
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
   const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
   const clippedStartMs = clippedStart.getTime();
@@ -309,6 +322,7 @@ function rowToScheduledEventForDayFromPublic(
     duration,
     category,
     isBig3: Boolean((metaParsed?.isBig3 as boolean | undefined) ?? false),
+    isAllDay,
     meta: metaForDisplay,
   };
 }
@@ -405,6 +419,9 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
   if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs)
     return null;
 
+  const rawDurationMinutes = Math.round((endMs - startMs) / 60_000);
+  const isAllDay = rawDurationMinutes >= ALL_DAY_THRESHOLD_MINUTES;
+
   // Clip to visible day window so cross-midnight meetings render correctly.
   const clippedStart = new Date(Math.max(startMs, dayStart.getTime()));
   const clippedEnd = new Date(Math.min(endMs, dayEnd.getTime()));
@@ -458,6 +475,7 @@ function rowToScheduledEventForDayFromTmGoogleMeeting(
     duration,
     category: "meeting",
     isBig3: false,
+    isAllDay,
     meta: metaForDisplay,
   };
 }

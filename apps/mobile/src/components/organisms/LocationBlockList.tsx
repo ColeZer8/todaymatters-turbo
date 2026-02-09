@@ -428,11 +428,15 @@ export const LocationBlockList = ({
       let commEvents: import("@/lib/supabase/services/communication-events").TmEventRow[] = [];
 
       try {
-        [plannedEvents, actualEvents, commEvents] = await Promise.all([
+        const [rawPlanned, rawActual, rawComm] = await Promise.all([
           fetchPlannedCalendarEventsForDay(userId, date),
           fetchActualCalendarEventsForDay(userId, date),
           fetchCommunicationEventsForDay(userId, date),
         ]);
+        // Filter out all-day events (holidays, multi-day) — they don't belong in timeline blocks
+        plannedEvents = rawPlanned.filter((e) => !e.isAllDay);
+        actualEvents = rawActual.filter((e) => !e.isAllDay);
+        commEvents = rawComm;
       } catch (fetchErr) {
         console.warn("[LocationBlockList] Calendar/comm fetch warning:", fetchErr);
       }

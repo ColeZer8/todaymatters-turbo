@@ -511,6 +511,28 @@ export const ComprehensiveCalendarTemplate = ({
     ? simulatedHour * 60 + simulatedMinute
     : realMinutes;
 
+  // Split all-day events (holidays, multi-day events) from timeline events
+  const allDayPlannedEvents = useMemo(
+    () => plannedEvents.filter((e) => e.isAllDay),
+    [plannedEvents],
+  );
+  const timelinePlannedEvents = useMemo(
+    () => plannedEvents.filter((e) => !e.isAllDay),
+    [plannedEvents],
+  );
+  const allDayActualEvents = useMemo(
+    () => actualEvents.filter((e) => e.isAllDay),
+    [actualEvents],
+  );
+  const timelineActualEvents = useMemo(
+    () => actualEvents.filter((e) => !e.isAllDay),
+    [actualEvents],
+  );
+  const allDayEvents = useMemo(
+    () => [...allDayPlannedEvents, ...allDayActualEvents],
+    [allDayPlannedEvents, allDayActualEvents],
+  );
+
   // Shared values for dragging new event
   const isDraggingNew = useSharedValue(false);
   const dragMinutes = useSharedValue(0);
@@ -743,6 +765,31 @@ export const ComprehensiveCalendarTemplate = ({
           </View>
         </View>
 
+        {/* All-Day Event Banners */}
+        {allDayEvents.length > 0 && (
+          <View style={styles.allDayContainer}>
+            {allDayEvents.map((event) => {
+              const style = CATEGORY_STYLES[event.category] ?? CATEGORY_STYLES.unknown;
+              return (
+                <View
+                  key={event.id}
+                  style={[
+                    styles.allDayBanner,
+                    { backgroundColor: style.bg, borderLeftColor: style.accent },
+                  ]}
+                >
+                  <Text
+                    style={[styles.allDayText, { color: style.text }]}
+                    numberOfLines={1}
+                  >
+                    {event.title}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         <ScrollView
           ref={scrollViewRef}
           scrollEnabled={isScrollEnabled}
@@ -799,7 +846,7 @@ export const ComprehensiveCalendarTemplate = ({
               <GestureDetector gesture={dragGesture}>
                 <View style={styles.eventsContainer}>
                   <View style={styles.column}>
-                    {plannedEvents.map((event) => (
+                    {timelinePlannedEvents.map((event) => (
                       <TimeEventBlock
                         key={event.id}
                         event={event}
@@ -809,7 +856,7 @@ export const ComprehensiveCalendarTemplate = ({
                   </View>
                   <View style={styles.columnDivider} />
                   <View style={styles.column}>
-                    {actualEventsLoading && actualEvents.length === 0 ? (
+                    {actualEventsLoading && timelineActualEvents.length === 0 ? (
                       /* Skeleton shimmer while BRAVO/CHARLIE data loads */
                       <>
                         {[
@@ -835,7 +882,7 @@ export const ComprehensiveCalendarTemplate = ({
                         ))}
                       </>
                     ) : (
-                      actualEvents.map((event) => (
+                      timelineActualEvents.map((event) => (
                         <TimeEventBlock
                           key={event.id}
                           event={event}
@@ -1034,6 +1081,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+  },
+  allDayContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(148,163,184,0.25)",
+    backgroundColor: "rgba(248,250,252,0.8)",
+  },
+  allDayBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+  },
+  allDayText: {
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
   },
   columnHeaders: {
     flexDirection: "row",
