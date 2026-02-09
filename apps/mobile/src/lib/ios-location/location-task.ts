@@ -40,6 +40,71 @@ function normalizeRaw(value: unknown): Json | null {
   }
 }
 
+type IosTelemetryMeta = {
+  provider: string | null;
+  activity: string | null;
+  battery_level: number | null;
+  battery_state: string | null;
+  is_simulator: boolean | null;
+  is_mocked: boolean | null;
+};
+
+function normalizeBatteryLevel(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value < 0 || value > 1) return null;
+  return value;
+}
+
+function normalizeShortString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 64) : null;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function extractIosTelemetryMeta(
+  location: RawLocationObject & Record<string, unknown>,
+): IosTelemetryMeta {
+  const provider =
+    normalizeShortString(location.provider) ??
+    normalizeShortString((location as { coords?: { provider?: unknown } }).coords?.provider) ??
+    "corelocation";
+
+  const activity =
+    normalizeShortString(location.activity) ??
+    normalizeShortString((location as { activityType?: unknown }).activityType) ??
+    normalizeShortString(
+      (location as { motion?: { activity?: unknown } }).motion?.activity,
+    );
+
+  const batteryLevel =
+    normalizeBatteryLevel(location.battery_level) ??
+    normalizeBatteryLevel(location.batteryLevel) ??
+    normalizeBatteryLevel(
+      (location as { battery?: { level?: unknown } }).battery?.level,
+    );
+
+  const batteryState =
+    normalizeShortString(location.battery_state) ??
+    normalizeShortString(location.batteryState) ??
+    normalizeShortString(
+      (location as { battery?: { state?: unknown } }).battery?.state,
+    );
+
+  return {
+    provider,
+    activity,
+    battery_level: batteryLevel,
+    battery_state: batteryState,
+    // In background task we avoid extra platform calls; keep this nullable.
+    is_simulator: null,
+    is_mocked: normalizeBoolean(location.mocked),
+  };
+}
+
 type RawLocationObject = {
   timestamp: number;
   coords: {
@@ -54,7 +119,7 @@ type RawLocationObject = {
 };
 
 function toSample(
-  location: RawLocationObject,
+  location: RawLocationObject & Record<string, unknown>,
 ): Omit<IosLocationSample, "dedupe_key"> | null {
   if (!isFiniteNumber(location.timestamp)) return null;
   if (!isFiniteNumber(location.coords.latitude)) return null;
@@ -75,6 +140,8 @@ function toSample(
     ? (location.mocked ?? null)
     : null;
 
+  const telemetry = extractIosTelemetryMeta(location);
+
   return {
     recorded_at,
     latitude: lat,
@@ -89,6 +156,8 @@ function toSample(
       // Only store what’s useful for debugging/analytics; avoid very large payloads.
       timestamp: location.timestamp,
       coords,
+      telemetry,
+      meta: telemetry,
     }),
   };
 }

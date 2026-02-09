@@ -96,10 +96,22 @@ export interface UserPlaceRow {
   longitude: number | null;
 }
 
+export interface IosLocationTelemetryMeta {
+  provider: string | null;
+  activity: string | null;
+  battery_level: number | null;
+  battery_state: string | null;
+  is_simulator: boolean | null;
+  is_mocked: boolean | null;
+}
+
 export interface EvidenceLocationSample {
   recorded_at: string; // timestamptz — precise timestamp
   latitude: number | null;
   longitude: number | null;
+  is_mocked?: boolean | null;
+  /** Additive telemetry, primarily populated by iOS raw.meta/raw.telemetry payloads. */
+  telemetry?: IosLocationTelemetryMeta | null;
 }
 
 export interface EvidenceBundle {
@@ -149,6 +161,79 @@ function ymdToDayRange(ymd: string): { startIso: string; endIso: string } {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function tmSchema(): any {
   return supabase.schema("tm");
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asBooleanOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function asShortStringOrNull(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 64) : null;
+}
+
+/**
+ * Backward-compatible telemetry mapper for location_samples raw payloads.
+ * Supports both:
+ * - raw.telemetry.{...}
+ * - raw.meta.{...}
+ * Returns null when telemetry payload is missing or malformed.
+ */
+export function extractIosTelemetryFromRaw(
+  raw: unknown,
+): IosLocationTelemetryMeta | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const container = raw as {
+    telemetry?: Record<string, unknown>;
+    meta?: Record<string, unknown>;
+  };
+
+  const telemetry =
+    (container.telemetry && typeof container.telemetry === "object"
+      ? container.telemetry
+      : null) ??
+    (container.meta && typeof container.meta === "object" ? container.meta : null);
+
+  if (!telemetry) return null;
+
+  const mapped: IosLocationTelemetryMeta = {
+    provider: asShortStringOrNull(telemetry.provider),
+    activity: asShortStringOrNull(telemetry.activity),
+    battery_level: asFiniteNumber(telemetry.battery_level),
+    battery_state: asShortStringOrNull(telemetry.battery_state),
+    is_simulator: asBooleanOrNull(telemetry.is_simulator),
+    is_mocked: asBooleanOrNull(telemetry.is_mocked),
+  };
+
+  const hasAny = Object.values(mapped).some((v) => v !== null);
+  return hasAny ? mapped : null;
+}
+
+export function coerceEvidenceLocationSample(row: {
+  recorded_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  is_mocked?: boolean | null;
+  raw?: unknown;
+}): EvidenceLocationSample {
+  const telemetry = extractIosTelemetryFromRaw(row.raw);
+
+  return {
+    recorded_at: row.recorded_at,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
+    is_mocked:
+      typeof row.is_mocked === "boolean"
+        ? row.is_mocked
+        : telemetry?.is_mocked ?? null,
+    telemetry,
+  };
 }
 
 // ============================================================================
@@ -405,7 +490,7 @@ export async function fetchLocationSamplesForDay(
   try {
     const { data, error } = await tmSchema()
       .from("location_samples")
-      .select("recorded_at, latitude, longitude")
+      .select("recorded_at, latitude, longitude, is_mocked, raw")
       .eq("user_id", userId)
       .gte("recorded_at", startIso)
       .lt("recorded_at", endIso)
@@ -422,11 +507,9 @@ export async function fetchLocationSamplesForDay(
         recorded_at: string;
         latitude: number | null;
         longitude: number | null;
-      }) => ({
-        recorded_at: row.recorded_at,
-        latitude: row.latitude ?? null,
-        longitude: row.longitude ?? null,
-      }),
+        is_mocked?: boolean | null;
+        raw?: unknown;
+      }) => coerceEvidenceLocationSample(row),
     );
   } catch (error) {
     if (__DEV__) {
@@ -635,6 +718,8 @@ interface WindowLocationSample {
   latitude: number;
   longitude: number;
   accuracy_m: number | null;
+  is_mocked: boolean | null;
+  telemetry: IosLocationTelemetryMeta | null;
 }
 
 /**
@@ -707,7 +792,7 @@ async function fetchLocationSamplesForWindow(
   try {
     const { data, error } = await tmSchema()
       .from("location_samples")
-      .select("recorded_at, latitude, longitude, accuracy_m")
+      .select("recorded_at, latitude, longitude, accuracy_m, is_mocked, raw")
       .eq("user_id", userId)
       .gte("recorded_at", windowStart)
       .lt("recorded_at", windowEnd)
@@ -726,11 +811,18 @@ async function fetchLocationSamplesForWindow(
         latitude: number;
         longitude: number;
         accuracy_m: number | null;
+        is_mocked?: boolean | null;
+        raw?: unknown;
       }) => ({
         recorded_at: row.recorded_at,
         latitude: row.latitude,
         longitude: row.longitude,
         accuracy_m: row.accuracy_m ?? null,
+        is_mocked:
+          typeof row.is_mocked === "boolean"
+            ? row.is_mocked
+            : extractIosTelemetryFromRaw(row.raw)?.is_mocked ?? null,
+        telemetry: extractIosTelemetryFromRaw(row.raw),
       }),
     );
   } catch (error) {

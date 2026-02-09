@@ -9,6 +9,7 @@ import {
   startIosBackgroundLocationAsync,
   stopIosBackgroundLocationAsync,
   clearPendingLocationSamplesAsync,
+  IOS_DEFAULT_TRACKING_PROFILE,
 } from "@/lib/ios-location";
 import {
   flushPendingAndroidLocationSamplesToSupabaseAsync,
@@ -99,8 +100,9 @@ export function useLocationSamplesSync(
 ): void {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  // iOS still uses the simple fixed interval.
-  const iosFlushIntervalMs = options.flushIntervalMs ?? 2 * 60 * 1000; // 2 min
+  // iOS uses the default tracking profile cadence unless explicitly overridden.
+  const iosFlushIntervalMs =
+    options.flushIntervalMs ?? IOS_DEFAULT_TRACKING_PROFILE.syncFlushIntervalMs;
 
   const lastAuthedUserIdRef = useRef<string | null>(null);
   const isFlushingRef = useRef(false);
@@ -503,7 +505,10 @@ export function useLocationSamplesSync(
 
     // Capture immediately, then periodically while app is open.
     capture();
-    const intervalId = setInterval(capture, FOREGROUND_LOCATION_INTERVAL_MS);
+    const intervalId = setInterval(
+      capture,
+      IOS_DEFAULT_TRACKING_PROFILE.heartbeatIntervalMs,
+    );
 
     // Also capture when app comes back to foreground.
     const appStateListener = AppState.addEventListener(

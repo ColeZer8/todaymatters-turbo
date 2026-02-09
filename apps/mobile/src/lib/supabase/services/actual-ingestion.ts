@@ -101,6 +101,13 @@ export interface LocationSegment {
     movement_type?: MovementType;
     /** True if the location label is fuzzy (low confidence, uses "Near [Area]" format) */
     fuzzy_location?: boolean;
+    /** Optional iOS telemetry promoted from sample raw/meta payloads. */
+    provider?: string | null;
+    activity?: string | null;
+    battery_level?: number | null;
+    battery_state?: string | null;
+    is_simulator?: boolean | null;
+    is_mocked?: boolean | null;
   };
 }
 
@@ -351,6 +358,70 @@ function generateSourceId(
   const segmentStartMs = segmentStart.getTime();
   const placeIdPart = placeId ?? "unknown";
   return `location:${windowStartMs}:${placeIdPart}:${segmentStartMs}`;
+}
+
+function summarizeTelemetry(samples: EvidenceLocationSample[]): {
+  provider: string | null;
+  activity: string | null;
+  battery_level: number | null;
+  battery_state: string | null;
+  is_simulator: boolean | null;
+  is_mocked: boolean | null;
+} {
+  const providerCounts = new Map<string, number>();
+  const activityCounts = new Map<string, number>();
+  const batteryStateCounts = new Map<string, number>();
+  let batteryLevelSum = 0;
+  let batteryLevelCount = 0;
+  let sawSimulator = false;
+  let sawMocked = false;
+
+  for (const sample of samples) {
+    const telemetry = sample.telemetry;
+    const provider = telemetry?.provider;
+    const activity = telemetry?.activity;
+    const batteryState = telemetry?.battery_state;
+    const batteryLevel = telemetry?.battery_level;
+
+    if (provider) providerCounts.set(provider, (providerCounts.get(provider) ?? 0) + 1);
+    if (activity) activityCounts.set(activity, (activityCounts.get(activity) ?? 0) + 1);
+    if (batteryState) {
+      batteryStateCounts.set(
+        batteryState,
+        (batteryStateCounts.get(batteryState) ?? 0) + 1,
+      );
+    }
+    if (typeof batteryLevel === "number" && Number.isFinite(batteryLevel)) {
+      batteryLevelSum += batteryLevel;
+      batteryLevelCount += 1;
+    }
+    if (telemetry?.is_simulator === true) sawSimulator = true;
+    if (sample.is_mocked === true || telemetry?.is_mocked === true) sawMocked = true;
+  }
+
+  const pickTop = (counts: Map<string, number>): string | null => {
+    let best: string | null = null;
+    let bestCount = 0;
+    for (const [key, count] of counts.entries()) {
+      if (count > bestCount) {
+        best = key;
+        bestCount = count;
+      }
+    }
+    return best;
+  };
+
+  return {
+    provider: pickTop(providerCounts),
+    activity: pickTop(activityCounts),
+    battery_level:
+      batteryLevelCount > 0
+        ? Number((batteryLevelSum / batteryLevelCount).toFixed(3))
+        : null,
+    battery_state: pickTop(batteryStateCounts),
+    is_simulator: sawSimulator ? true : null,
+    is_mocked: sawMocked ? true : null,
+  };
 }
 
 /**
@@ -611,6 +682,7 @@ export function generateLocationSegments(
 
     // Calculate confidence
     const confidence = calculateSegmentConfidence(group.samples.length, matchRatio);
+    const telemetry = summarizeTelemetry(group.samples);
 
     // Generate source ID
     const sourceId = generateSourceId(windowStart, placeId, clampedStart);
@@ -631,6 +703,12 @@ export function generateLocationSegments(
         place_label: place?.label ?? null,
         sample_count: group.samples.length,
         confidence,
+        provider: telemetry.provider,
+        activity: telemetry.activity,
+        battery_level: telemetry.battery_level,
+        battery_state: telemetry.battery_state,
+        is_simulator: telemetry.is_simulator,
+        is_mocked: telemetry.is_mocked,
       },
     });
   }

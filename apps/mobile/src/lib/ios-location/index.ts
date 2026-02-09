@@ -17,6 +17,38 @@ export type { IosLocationSupportStatus, IosLocationSample } from "./types";
 export { IOS_BACKGROUND_LOCATION_TASK_NAME } from "./task-names";
 export { clearPendingLocationSamplesAsync } from "./queue";
 
+export interface IosTrackingProfile {
+  desiredAccuracy: "balanced" | "high";
+  distanceFilterM: number;
+  /** Soft stop timeout for low-motion periods (mapped to deferred batching on iOS). */
+  stopTimeoutMs: number;
+  /** Foreground heartbeat cadence while app is active. */
+  heartbeatIntervalMs: number;
+  /** Upload/sync cadence for queued samples. */
+  syncFlushIntervalMs: number;
+}
+
+export const IOS_TRACKING_PROFILES: Record<string, IosTrackingProfile> = {
+  /** Default profile tuned for timeline-quality segmentation without excessive battery cost. */
+  timelineBalanced: {
+    desiredAccuracy: "balanced",
+    distanceFilterM: 50,
+    stopTimeoutMs: 5 * 60 * 1000,
+    heartbeatIntervalMs: 2 * 60 * 1000,
+    syncFlushIntervalMs: 2 * 60 * 1000,
+  },
+  /** Optional profile for denser traces (debug/high-mobility days). */
+  timelineDense: {
+    desiredAccuracy: "high",
+    distanceFilterM: 25,
+    stopTimeoutMs: 2 * 60 * 1000,
+    heartbeatIntervalMs: 60 * 1000,
+    syncFlushIntervalMs: 60 * 1000,
+  },
+};
+
+export const IOS_DEFAULT_TRACKING_PROFILE = IOS_TRACKING_PROFILES.timelineBalanced;
+
 export function getIosLocationSupportStatus(): IosLocationSupportStatus {
   if (Platform.OS !== "ios") return "notIos";
   // Background tasks aren’t reliably supported in Expo Go; require a dev client / production build.
@@ -50,6 +82,71 @@ function normalizeRaw(value: unknown): IosLocationSample["raw"] {
   }
 }
 
+type IosTelemetryMeta = {
+  provider: string | null;
+  activity: string | null;
+  battery_level: number | null;
+  battery_state: string | null;
+  is_simulator: boolean | null;
+  is_mocked: boolean | null;
+};
+
+function normalizeBatteryLevel(value: unknown): number | null {
+  if (!isFiniteNumber(value)) return null;
+  if (value < 0 || value > 1) return null;
+  return value;
+}
+
+function normalizeShortString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 64) : null;
+}
+
+function normalizeBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function extractIosTelemetryMeta(
+  location: RawLocationObject & Record<string, unknown>,
+): IosTelemetryMeta {
+  const provider =
+    normalizeShortString(location.provider) ??
+    normalizeShortString((location as { coords?: { provider?: unknown } }).coords?.provider) ??
+    "corelocation";
+
+  const activity =
+    normalizeShortString(location.activity) ??
+    normalizeShortString((location as { activityType?: unknown }).activityType) ??
+    normalizeShortString(
+      (location as { motion?: { activity?: unknown } }).motion?.activity,
+    );
+
+  const batteryLevel =
+    normalizeBatteryLevel(location.battery_level) ??
+    normalizeBatteryLevel(location.batteryLevel) ??
+    normalizeBatteryLevel(
+      (location as { battery?: { level?: unknown } }).battery?.level,
+    );
+
+  const batteryState =
+    normalizeShortString(location.battery_state) ??
+    normalizeShortString(location.batteryState) ??
+    normalizeShortString(
+      (location as { battery?: { state?: unknown } }).battery?.state,
+    );
+
+  return {
+    provider,
+    activity,
+    battery_level: batteryLevel,
+    battery_state: batteryState,
+    is_simulator:
+      typeof Constants.isDevice === "boolean" ? !Constants.isDevice : null,
+    is_mocked: normalizeBoolean(location.mocked),
+  };
+}
+
 async function loadExpoLocationAsync(): Promise<
   typeof import("expo-location") | null
 > {
@@ -76,7 +173,7 @@ type RawLocationObject = {
 };
 
 function toSample(
-  location: RawLocationObject,
+  location: RawLocationObject & Record<string, unknown>,
   sourceMeta: { collected_via: "foreground_poll" | "background_task" },
 ): Omit<IosLocationSample, "dedupe_key"> | null {
   if (!isFiniteNumber(location.timestamp)) return null;
@@ -94,6 +191,7 @@ function toSample(
 
   const is_mocked =
     typeof location.mocked === "boolean" ? (location.mocked ?? null) : null;
+  const telemetry = extractIosTelemetryMeta(location);
 
   return {
     recorded_at,
@@ -110,6 +208,8 @@ function toSample(
       ...sourceMeta,
       timestamp: location.timestamp,
       coords,
+      telemetry,
+      meta: telemetry,
     }),
   };
 }
@@ -207,14 +307,18 @@ export async function startIosBackgroundLocationAsync(): Promise<void> {
   );
   if (alreadyStarted) return;
 
-  // Production defaults: venue-level tracking with reasonable battery usage.
+  const profile = IOS_DEFAULT_TRACKING_PROFILE;
+
   await Location.startLocationUpdatesAsync(IOS_BACKGROUND_LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 75, // meters
+    accuracy:
+      profile.desiredAccuracy === "high"
+        ? Location.Accuracy.High
+        : Location.Accuracy.Balanced,
+    distanceInterval: profile.distanceFilterM,
     pausesUpdatesAutomatically: true,
-    // iOS-only: allow batching for efficiency.
-    deferredUpdatesInterval: 5 * 60 * 1000, // 5 min
-    deferredUpdatesDistance: 250, // meters
+    // iOS-only: allow batching for efficiency when movement is low.
+    deferredUpdatesInterval: profile.stopTimeoutMs,
+    deferredUpdatesDistance: Math.max(100, profile.distanceFilterM * 4),
     showsBackgroundLocationIndicator: false,
     activityType: Location.ActivityType.Other,
   });
@@ -265,8 +369,12 @@ export async function captureIosLocationSampleNowAsync(
   if (fg.status !== "granted") return { ok: false, reason: "fg_denied" };
 
   try {
+    const profile = IOS_DEFAULT_TRACKING_PROFILE;
     const location = (await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy:
+        profile.desiredAccuracy === "high"
+          ? Location.Accuracy.High
+          : Location.Accuracy.Balanced,
     })) as unknown as RawLocationObject;
 
     const sample = toSample(location, { collected_via: "foreground_poll" });
