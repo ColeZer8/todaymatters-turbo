@@ -64,18 +64,20 @@ import {
   getUsageSummarySafeAsync,
   openUsageAccessSettingsSafeAsync,
 } from "@/lib/android-insights";
-import { flushPendingLocationSamplesToSupabaseAsync } from "@/lib/ios-location";
 import {
-  captureAndroidLocationSampleNowAsync,
+  captureIosLocationSampleNowAsync,
+  flushPendingLocationSamplesToSupabaseAsync,
+  requestIosLocationPermissionsAsync,
+} from "@/lib/ios-location";
+import {
   flushPendingAndroidLocationSamplesToSupabaseAsync,
-  getAndroidLocationDiagnostics,
   openAndroidBatteryOptimizationSettingsAsync,
 } from "@/lib/android-location";
 import {
-  captureIosLocationSampleNowAsync,
-  requestIosLocationPermissionsAsync,
-} from "@/lib/ios-location";
-import { requestAndroidLocationPermissionsAsync } from "@/lib/android-location";
+  captureAndroidLocationSampleNowWithProviderAsync as captureAndroidLocationSampleNowAsync,
+  getAndroidLocationDiagnosticsWithProviderAsync as getAndroidLocationDiagnostics,
+  requestAndroidLocationPermissionsWithProviderAsync as requestAndroidLocationPermissionsAsync,
+} from "@/lib/location-provider/android";
 import { disconnectGoogleFromSupabase } from "@/lib/google-services-oauth";
 import appConfig from "@/lib/config";
 
@@ -404,6 +406,8 @@ export default function ProfileScreen() {
         : "none";
       const summary = [
         `Support: ${diagnostics.support}`,
+        `Provider: ${diagnostics.activeProvider}`,
+        `Transistor flag: ${diagnostics.transistorEnabledByFlag ? "on" : "off"}`,
         `API level: ${diagnostics.androidApiLevel ?? "unknown"}`,
         `Location module: ${diagnostics.locationModule ? "yes" : "no"}`,
         `Services enabled: ${diagnostics.servicesEnabled ? "yes" : "no"}`,
@@ -414,6 +418,8 @@ export default function ProfileScreen() {
         `Can start: ${diagnostics.canStart ? "yes" : "no"}`,
         `Pending samples: ${diagnostics.pendingSamples}`,
         `Last sample: ${diagnostics.lastSampleTimestamp ?? "none"}`,
+        `Last provider sample: ${diagnostics.lastProviderSampleAt ?? "none"}`,
+        `Last provider activity: ${diagnostics.lastProviderActivity ?? "none"}`,
         `Samples (24h): ${diagnostics.sampleCount24h}`,
         `Last heartbeat: ${heartbeat}`,
         `Last task fired: ${diagnostics.lastTaskFiredAt ?? "none"}`,

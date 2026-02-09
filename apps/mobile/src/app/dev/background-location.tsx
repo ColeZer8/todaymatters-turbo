@@ -11,11 +11,11 @@ import { useAuthStore } from "@/stores";
 import { Card, GradientButton, Icon } from "@/components/atoms";
 import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 import {
-  getAndroidLocationDiagnostics,
   getLastSyncTime,
   getMovementState,
   peekPendingAndroidLocationSamplesAsync,
 } from "@/lib/android-location";
+import { getAndroidLocationDiagnosticsWithProviderAsync as getAndroidLocationDiagnostics } from "@/lib/location-provider/android";
 // Import safely to prevent crashes if native module not available
 let getPendingCount: typeof import("expo-background-location").getPendingCount | null = null;
 let isTracking: typeof import("expo-background-location").isTracking | null = null;

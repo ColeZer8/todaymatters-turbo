@@ -13,8 +13,6 @@ import {
 } from "@/lib/ios-location";
 import {
   flushPendingAndroidLocationSamplesToSupabaseAsync,
-  startAndroidBackgroundLocationAsync,
-  stopAndroidBackgroundLocationAsync,
   clearPendingAndroidLocationSamplesAsync,
   peekPendingAndroidLocationSamplesAsync,
   enqueueAndroidLocationSamplesForUserAsync,
@@ -22,10 +20,14 @@ import {
   logError,
   getMovementState,
   recordLastSyncTime,
-  captureAndroidLocationSampleNowAsync,
   getAndroidNotificationPermissionStatusAsync,
-  isAndroidBackgroundLocationRunningAsync,
 } from "@/lib/android-location";
+import {
+  startAndroidBackgroundLocationWithProviderAsync as startAndroidBackgroundLocationAsync,
+  stopAndroidBackgroundLocationWithProviderAsync as stopAndroidBackgroundLocationAsync,
+  captureAndroidLocationSampleNowWithProviderAsync as captureAndroidLocationSampleNowAsync,
+  isAndroidBackgroundLocationRunningWithProviderAsync as isAndroidBackgroundLocationRunningAsync,
+} from "@/lib/location-provider/android";
 import type { MovementState } from "@/lib/android-location";
 // Supabase config for native uploads
 import { SUPABASE_URL, SUPABASE_ANON_KEY, supabase } from "@/lib/supabase/client";

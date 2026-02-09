@@ -187,6 +187,9 @@ importers:
       react-native:
         specifier: 0.81.4
         version: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
+      react-native-background-geolocation:
+        specifier: ^5.0.3
+        version: 5.0.3
       react-native-css-interop:
         specifier: ^0.2.1
         version: 0.2.1(react-native-reanimated@4.1.5(@babel/core@7.28.5)(react-native-worklets@0.5.1(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-svg@15.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(tailwindcss@3.4.18(yaml@2.8.1))
@@ -1780,6 +1783,9 @@ packages:
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
     engines: {node: '>= 10'}
+
+  '@transistorsoft/background-geolocation-types@5.0.1':
+    resolution: {integrity: sha512-cqrb2gTInyx9XOkNjI2bCvvAnMxA0ITBs63pl+WbUVxHJUArw+lygeQVvIcVho1hSusIrbWbFRSQWcoNWxto/Q==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -4820,6 +4826,9 @@ packages:
 
   react-is@19.2.1:
     resolution: {integrity: sha512-L7BnWgRbMwzMAubQcS7sXdPdNLmKlucPlopgAzx7FtYbksWZgEWiuYM5x9T6UqS2Ne0rsgQTq5kY2SGqpzUkYA==}
+
+  react-native-background-geolocation@5.0.3:
+    resolution: {integrity: sha512-/kF3B1+t581qjIQFP28KAK9k9lW4KUvm1uMjgWEtuy4SaGdorPyQlonsEqHUkHm4nIHdDsq6+HhVb1nmMy6oUA==}
 
   react-native-css-interop@0.2.1:
     resolution: {integrity: sha512-B88f5rIymJXmy1sNC/MhTkb3xxBej1KkuAt7TiT9iM7oXz3RM8Bn+7GUrfR02TvSgKm4cg2XiSuLEKYfKwNsjA==}
@@ -8070,6 +8079,8 @@ snapshots:
       tslib: 2.8.1
 
   '@tootallnate/once@2.0.0': {}
+
+  '@transistorsoft/background-geolocation-types@5.0.1': {}
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -12014,6 +12025,12 @@ snapshots:
   react-is@18.3.1: {}
 
   react-is@19.2.1: {}
+
+  react-native-background-geolocation@5.0.3:
+    dependencies:
+      '@babel/runtime': 7.28.4
+      '@transistorsoft/background-geolocation-types': 5.0.1
+      tslib: 2.8.1
 
   react-native-css-interop@0.2.1(react-native-reanimated@4.1.5(@babel/core@7.28.5)(react-native-worklets@0.5.1(@babel/core@7.28.5)(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-svg@15.15.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(tailwindcss@3.4.18(yaml@2.8.1)):
     dependencies:

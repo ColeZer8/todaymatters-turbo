@@ -21,14 +21,16 @@ import {
 import { useOnboardingSync } from "@/lib/supabase/hooks";
 import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
 import {
-  requestAndroidLocationPermissionsAsync,
   getAndroidNotificationPermissionStatusAsync,
   openAndroidNotificationSettingsAsync,
   requestAndroidNotificationPermissionsAsync,
   openAndroidBatteryOptimizationSettingsAsync,
 } from "@/lib/android-location";
 import { startIosBackgroundLocationAsync } from "@/lib/ios-location";
-import { startAndroidBackgroundLocationAsync } from "@/lib/android-location";
+import {
+  requestAndroidLocationPermissionsWithProviderAsync as requestAndroidLocationPermissionsAsync,
+  startAndroidBackgroundLocationWithProviderAsync as startAndroidBackgroundLocationAsync,
+} from "@/lib/location-provider/android";
 import { useAuthStore } from "@/stores";
 import {
   getAndroidInsightsSupportStatus,

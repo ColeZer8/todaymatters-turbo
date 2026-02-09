@@ -112,6 +112,7 @@ export default {
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.ACCESS_BACKGROUND_LOCATION',
+        'android.permission.ACTIVITY_RECOGNITION',
         'android.permission.FOREGROUND_SERVICE',
         'android.permission.FOREGROUND_SERVICE_LOCATION',
         // For restarting location service after device reboot
@@ -145,6 +146,15 @@ export default {
       'expo-secure-store',
       '@livekit/react-native-expo-plugin',
       '@config-plugins/react-native-webrtc',
+      [
+        'react-native-background-geolocation',
+        {
+          license:
+            process.env.EXPO_PUBLIC_TRANSISTOR_LOCATION_LICENSE ??
+            process.env.TRANSISTOR_LOCATION_LICENSE ??
+            'UNDEFINED',
+        },
+      ],
       [
         '@react-native-community/datetimepicker',
         {
