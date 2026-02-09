@@ -17,6 +17,21 @@ import type { InferenceDescription } from "@/lib/supabase/services/activity-infe
 import type { TimelineEvent } from "@/lib/types/timeline-event";
 
 // ============================================================================
+// Place Alternatives (for disambiguation UI)
+// ============================================================================
+
+/** A candidate place near the user's location, returned by location-place-lookup. */
+export interface PlaceAlternative {
+  placeName: string;
+  googlePlaceId: string | null;
+  vicinity: string | null;
+  types: string[] | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
+  distanceMeters: number | null;
+}
+
+// ============================================================================
 // App Usage
 // ============================================================================
 
@@ -104,6 +119,14 @@ export interface LocationBlock {
   hasUserFeedback: boolean;
   /** Whether any summary in this block is locked. */
   isLocked: boolean;
+
+  // -- Place Disambiguation --
+  /** Alternative places near this location (for user selection). */
+  placeAlternatives?: PlaceAlternative[];
+  /** Latitude of the block's location centroid. */
+  latitude?: number | null;
+  /** Longitude of the block's location centroid. */
+  longitude?: number | null;
 
   // -- Timeline --
   /** Merged chronological timeline events for rendering. */

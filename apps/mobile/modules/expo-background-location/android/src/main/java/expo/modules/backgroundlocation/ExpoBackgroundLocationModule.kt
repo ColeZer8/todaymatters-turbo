@@ -193,6 +193,124 @@ class ExpoBackgroundLocationModule : Module() {
                 promise.reject("CHECK_CONFIG_FAILED", e.message, e)
             }
         }
+
+        /**
+         * Get Samsung device setup information.
+         * Samsung Android 11+ requires special handling for background location.
+         */
+        AsyncFunction("getSamsungSetupInfo") { promise: Promise ->
+            try {
+                val manufacturer = Build.MANUFACTURER
+                val model = Build.MODEL
+                val androidVersion = Build.VERSION.SDK_INT
+                val isSamsung = manufacturer.equals("samsung", ignoreCase = true)
+                
+                // Samsung devices running Android 11+ need PendingIntent-based updates
+                // and battery optimization exemption
+                val setupRequired = isSamsung && androidVersion >= Build.VERSION_CODES.R
+                
+                promise.resolve(mapOf(
+                    "isSamsung" to isSamsung,
+                    "manufacturer" to manufacturer,
+                    "model" to model,
+                    "androidVersion" to androidVersion,
+                    "setupRequired" to setupRequired
+                ))
+            } catch (e: Exception) {
+                promise.reject("SAMSUNG_INFO_FAILED", e.message, e)
+            }
+        }
+
+        /**
+         * Get comprehensive diagnostics for troubleshooting location issues.
+         */
+        AsyncFunction("getDiagnostics") { promise: Promise ->
+            try {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                val isIgnoringBatteryOptimizations = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                } else {
+                    true
+                }
+                
+                val isPowerSaveMode = powerManager.isPowerSaveMode
+                
+                val appStandbyBucket = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+                    usageStatsManager.appStandbyBucket
+                } else {
+                    -1
+                }
+                
+                promise.resolve(mapOf(
+                    "batteryOptimization" to mapOf(
+                        "isIgnoringBatteryOptimizations" to isIgnoringBatteryOptimizations,
+                        "isPowerSaveMode" to isPowerSaveMode,
+                        "appStandbyBucket" to appStandbyBucket
+                    ),
+                    "device" to mapOf(
+                        "manufacturer" to Build.MANUFACTURER,
+                        "model" to Build.MODEL,
+                        "androidVersion" to Build.VERSION.SDK_INT,
+                        "androidRelease" to Build.VERSION.RELEASE
+                    ),
+                    "service" to mapOf(
+                        "isRunning" to LocationForegroundService.shouldBeRunning(context),
+                        "storedUserId" to (LocationForegroundService.getStoredUserId(context) ?: ""),
+                        "storedInterval" to LocationForegroundService.getStoredInterval(context)
+                    )
+                ))
+            } catch (e: Exception) {
+                promise.reject("DIAGNOSTICS_FAILED", e.message, e)
+            }
+        }
+
+        /**
+         * Open Samsung battery settings to add app to "Never sleeping apps" list.
+         * On Samsung devices, this deep links to the specific battery optimization page.
+         * On other devices, falls back to standard app details.
+         */
+        AsyncFunction("openSamsungBatterySettings") { promise: Promise ->
+            try {
+                val isSamsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+                
+                val intent = if (isSamsung) {
+                    // Samsung-specific deep link to "Never sleeping apps"
+                    Intent().apply {
+                        action = "com.samsung.android.sm.ACTION_OPEN_CHECKABLE_LISTACTIVITY"
+                        putExtra("activity_type", "never_sleeping_apps")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    // Standard battery optimization settings
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                } else {
+                    // Fallback to app details
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+                
+                try {
+                    context.startActivity(intent)
+                    promise.resolve(mapOf("success" to true))
+                } catch (activityError: Exception) {
+                    // If Samsung intent fails, fall back to standard settings
+                    val fallbackIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(fallbackIntent)
+                    promise.resolve(mapOf("success" to true, "usedFallback" to true))
+                }
+            } catch (e: Exception) {
+                promise.reject("OPEN_SETTINGS_FAILED", e.message, e)
+            }
+        }
     }
 
     /**

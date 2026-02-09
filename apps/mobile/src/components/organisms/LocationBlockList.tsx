@@ -13,9 +13,11 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { Calendar, Inbox, Sparkles, Layers } from "lucide-react-native";
 import { TimelineBlockSection } from "./TimelineBlockSection";
+import type { PlaceSelection } from "@/components/molecules/PlacePickerSheet";
 import { EventDetailSheet } from "@/components/molecules/EventDetailSheet";
 import { CurrentTimeLine } from "@/components/molecules/CurrentTimeLine";
 import type { EnrichedSummary } from "./HourlySummaryList";
@@ -51,6 +53,7 @@ import {
   fetchActualCalendarEventsForDay,
 } from "@/lib/supabase/services/calendar-events";
 import { fetchCommunicationEventsForDay } from "@/lib/supabase/services/communication-events";
+import { createUserPlace } from "@/lib/supabase/services/user-places";
 
 // ============================================================================
 // Types
@@ -522,6 +525,48 @@ export const LocationBlockList = ({
     [filter],
   );
 
+  // Handle place selection from disambiguation sheet
+  const handlePlaceSelected = useCallback(
+    async (block: LocationBlock, selection: PlaceSelection) => {
+      try {
+        const lat = block.latitude
+          ?? block.segments?.find((s) => s.locationLat != null)?.locationLat
+          ?? 0;
+        const lng = block.longitude
+          ?? block.segments?.find((s) => s.locationLng != null)?.locationLng
+          ?? 0;
+
+        if (lat === 0 && lng === 0) {
+          console.warn("[LocationBlockList] No coordinates for place creation");
+          return;
+        }
+
+        await createUserPlace({
+          userId,
+          label: selection.placeName,
+          latitude: lat,
+          longitude: lng,
+          category: selection.category ?? "other",
+          radiusMeters: 150,
+        });
+
+        console.log(
+          `[LocationBlockList] Created user place: "${selection.placeName}" (${selection.category})`,
+        );
+
+        // Refresh to pick up the new place
+        fetchData();
+      } catch (err) {
+        console.error("[LocationBlockList] Failed to create user place:", err);
+        Alert.alert(
+          "Couldn't save place",
+          "Something went wrong saving this location. Please try again.",
+        );
+      }
+    },
+    [userId, fetchData],
+  );
+
   // Render item — passes block context alongside event for overlap/location editing
   const renderItem = useCallback(
     ({ item }: { item: LocationBlock }) => {
@@ -553,10 +598,11 @@ export const LocationBlockList = ({
           currentMinutes={currentMinutes}
           onEventPress={handleBlockEventPress}
           onBannerPress={onBannerPress}
+          onPlaceSelected={handlePlaceSelected}
         />
       );
     },
-    [isToday, currentMinutes, onEventPressProp, onBannerPress, applyFilter],
+    [isToday, currentMinutes, onEventPressProp, onBannerPress, applyFilter, handlePlaceSelected],
   );
 
   const keyExtractor = useCallback(

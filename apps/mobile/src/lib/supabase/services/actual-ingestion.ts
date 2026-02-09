@@ -105,17 +105,50 @@ export interface LocationSegment {
 }
 
 /** Classification of how the user moved between locations */
-export type MovementType = "walking" | "cycling" | "driving" | "unknown";
+export type MovementType = "walking" | "cycling" | "driving" | "stationary" | "unknown";
+
+/**
+ * Maximum realistic speed in m/s to filter GPS noise.
+ * ~150 mph = ~67 m/s is faster than any normal driving.
+ * GPS glitches can show teleportation at unrealistic speeds.
+ */
+const MAX_REALISTIC_SPEED_MS = 67;
+
+/**
+ * Minimum speed in m/s to be considered actual movement.
+ * Below this threshold, movement is likely GPS drift/noise.
+ * 0.3 m/s ≈ 0.7 mph (slower than a slow walk)
+ */
+const MIN_MOVEMENT_SPEED_MS = 0.3;
 
 /**
  * Classify movement type based on average speed.
- * Walking: < 2.5 m/s (~5.5 mph)
- * Cycling: 2.5-8.0 m/s (~5.5-18 mph)
- * Driving: > 8.0 m/s (~18 mph)
+ * 
+ * Speed thresholds (Google Timeline uses similar values):
+ * - Stationary: < 0.3 m/s (~0.7 mph) - GPS noise/drift
+ * - Walking: 0.3-2.5 m/s (~0.7-5.5 mph)
+ * - Cycling: 2.5-8.0 m/s (~5.5-18 mph)
+ * - Driving: > 8.0 m/s (~18 mph)
+ * 
+ * Also includes GPS noise sanity check - speeds above ~150 mph
+ * are treated as GPS errors and classified as unknown.
  */
 function classifyMovementType(distanceM: number, durationMs: number): MovementType {
   if (durationMs <= 0 || distanceM <= 0) return "unknown";
+  
   const avgSpeedMs = distanceM / (durationMs / 1000);
+  
+  // GPS sanity check: unrealistically high speeds are GPS errors
+  if (avgSpeedMs > MAX_REALISTIC_SPEED_MS) {
+    if (__DEV__) {
+      console.log(`📍 [classifyMovement] Unrealistic speed ${(avgSpeedMs * 2.237).toFixed(1)} mph - treating as GPS noise`);
+    }
+    return "unknown";
+  }
+  
+  // Very low speeds are likely GPS drift, not actual movement
+  if (avgSpeedMs < MIN_MOVEMENT_SPEED_MS) return "stationary";
+  
   if (avgSpeedMs < 2.5) return "walking";
   if (avgSpeedMs < 8.0) return "cycling";
   return "driving";
@@ -168,8 +201,14 @@ const DEFAULT_PLACE_RADIUS_M = 100;
 /** Minimum percentage of samples that must match a place for the segment to be labeled as that place */
 const PLACE_MATCH_THRESHOLD = 0.7;
 
-/** Minimum commute duration in milliseconds to create a separate commute segment */
-const MIN_COMMUTE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+/** 
+ * Minimum commute duration in milliseconds to create a separate commute segment.
+ * 
+ * CHANGED: Lowered from 10 minutes to 2 minutes to match Google Timeline granularity.
+ * Google shows every 2-3 minute drive as its own segment (e.g., "Driving 0.7 mi · 3 min").
+ * Short drives (3-5 min) should be their own segments, not collapsed into annotations.
+ */
+const MIN_COMMUTE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
 
 /** Maximum movement speed in m/s to be considered stationary (walking pace ~1.4 m/s) */
 const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
@@ -718,31 +757,110 @@ export function segmentsToDerivedEvents(
   scheduledEnd: Date;
   meta: Record<string, unknown>;
 }> {
-  return segments.map((segment) => ({
-    sourceId: segment.sourceId,
-    title: segment.meta.kind === "commute"
-      ? formatMovementLabel(segment.meta.movement_type, segment.meta.destination_place_label)
-      : segment.placeLabel
+  return segments.map((segment) => {
+    // Calculate duration for commute segments
+    const durationMs = segment.end.getTime() - segment.start.getTime();
+    
+    // Build title - for commutes, include distance and duration like Google Timeline
+    let title: string;
+    if (segment.meta.kind === "commute") {
+      title = formatMovementLabel(
+        segment.meta.movement_type,
+        segment.meta.destination_place_label,
+        segment.meta.distance_m,
+        durationMs
+      );
+    } else {
+      title = segment.placeLabel
         ? `At ${segment.placeLabel}`
-        : "Unknown Location",
-    scheduledStart: segment.start,
-    scheduledEnd: segment.end,
-    meta: {
-      ...segment.meta,
-      source: "derived",
-      source_id: segment.sourceId,
-      latitude: segment.latitude,
-      longitude: segment.longitude,
-    },
-  }));
+        : "Unknown Location";
+    }
+    
+    return {
+      sourceId: segment.sourceId,
+      title,
+      scheduledStart: segment.start,
+      scheduledEnd: segment.end,
+      meta: {
+        ...segment.meta,
+        source: "derived",
+        source_id: segment.sourceId,
+        latitude: segment.latitude,
+        longitude: segment.longitude,
+        // Include formatted distance for display
+        distance_formatted: segment.meta.distance_m 
+          ? formatDistance(segment.meta.distance_m) 
+          : undefined,
+      },
+    };
+  });
 }
 
-function formatMovementLabel(movementType?: MovementType, destination?: string | null): string {
+/**
+ * Format distance in meters to human-readable string.
+ * Uses miles for US-style display (like Google Timeline).
+ */
+function formatDistance(distanceM: number): string {
+  const miles = distanceM / 1609.34;
+  if (miles < 0.1) {
+    // Very short distances in feet
+    const feet = Math.round(distanceM * 3.28084);
+    return `${feet} ft`;
+  }
+  return `${miles.toFixed(1)} mi`;
+}
+
+/**
+ * Format duration in milliseconds to human-readable string.
+ */
+function formatDuration(durationMs: number): string {
+  const minutes = Math.round(durationMs / (60 * 1000));
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${remainingMinutes}min`;
+}
+
+/**
+ * Format movement label for commute segments.
+ * 
+ * Google Timeline style: "Driving · 1.3 mi · 4 min"
+ * When distance/duration available, uses compact format.
+ * Falls back to "Driving → destination" if no metrics.
+ * 
+ * @param movementType - Type of movement (walking, cycling, driving, etc.)
+ * @param destination - Optional destination place label
+ * @param distanceM - Optional distance in meters
+ * @param durationMs - Optional duration in milliseconds
+ */
+function formatMovementLabel(
+  movementType?: MovementType,
+  destination?: string | null,
+  distanceM?: number,
+  durationMs?: number
+): string {
+  // Get the verb for this movement type
   const verb = movementType === "walking" ? "Walking"
     : movementType === "cycling" ? "Cycling"
     : movementType === "driving" ? "Driving"
+    : movementType === "stationary" ? "Stationary"
     : "Traveling";
-  if (destination) return `${verb} to ${destination}`;
+  
+  // If we have distance and duration, use Google Timeline style
+  // Example: "Driving · 1.3 mi · 4 min"
+  if (distanceM && distanceM > 0 && durationMs && durationMs > 0) {
+    const distStr = formatDistance(distanceM);
+    const durStr = formatDuration(durationMs);
+    return `${verb} · ${distStr} · ${durStr}`;
+  }
+  
+  // Fallback: include destination if available
+  if (destination) return `${verb} → ${destination}`;
   return verb;
 }
 
@@ -782,13 +900,39 @@ function calculatePathDistance(samples: EvidenceLocationSample[]): number {
 
 /**
  * Check if a group of samples represents movement (unstable position).
- * Movement is detected when samples don't match any single place consistently.
+ * Movement is detected when:
+ * 1. Samples don't match any single place consistently
+ * 2. Distance traveled exceeds minimum threshold
+ * 3. Speed is above stationary threshold (not just GPS noise)
  */
 function isMovementGroup(
   samples: EvidenceLocationSample[],
   userPlaces: UserPlaceRow[],
 ): boolean {
   if (samples.length < 2) return false;
+
+  // Calculate distance and duration first for speed check
+  const distance = calculatePathDistance(samples);
+  
+  // Not enough distance to be real movement
+  if (distance < MIN_COMMUTE_DISTANCE_M) return false;
+  
+  // Calculate duration to check speed
+  const sortedSamples = [...samples].sort(
+    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+  );
+  const firstTime = new Date(sortedSamples[0].recorded_at).getTime();
+  const lastTime = new Date(sortedSamples[sortedSamples.length - 1].recorded_at).getTime();
+  const durationMs = lastTime - firstTime;
+  
+  // Check if movement type would be stationary (GPS noise)
+  const movementType = classifyMovementType(distance, durationMs);
+  if (movementType === "stationary") {
+    if (__DEV__) {
+      console.log(`📍 [isMovementGroup] Classified as stationary (${distance.toFixed(0)}m in ${(durationMs/1000).toFixed(0)}s) - likely GPS noise`);
+    }
+    return false;
+  }
 
   // Count how many unique places are matched
   const matchedPlaces = new Set<string | null>();
@@ -799,12 +943,10 @@ function isMovementGroup(
   }
 
   // If we see 2+ different places (including null for unknown), it's movement
-  // OR if no samples match any place (all null), check distance traveled
   if (matchedPlaces.size >= 2) return true;
 
-  // Also check if the total distance suggests movement
-  const distance = calculatePathDistance(samples);
-  return distance >= MIN_COMMUTE_DISTANCE_M;
+  // Distance exceeds threshold and speed is not stationary - it's movement
+  return true;
 }
 
 /**
@@ -929,15 +1071,19 @@ export function detectCommute(
   const isLongCommute = durationMs >= MIN_COMMUTE_DURATION_MS;
 
   // Generate travel annotation for short commutes
+  // Uses Google Timeline style: "Drove · 0.7 mi · 3 min"
   let travelAnnotation: string | null = null;
   if (!isLongCommute && durationMs > 0) {
-    const durationMinutes = Math.round(durationMs / (60 * 1000));
-    const destinationLabel = toPlace?.label ?? "destination";
     const verb = movementType === "walking" ? "Walked"
       : movementType === "cycling" ? "Cycled"
       : movementType === "driving" ? "Drove"
+      : movementType === "stationary" ? "Stayed"
       : "Traveled";
-    travelAnnotation = `${verb} ${durationMinutes} min to ${destinationLabel}`;
+    
+    // Include distance and duration in annotation
+    const distStr = formatDistance(distanceM);
+    const durStr = formatDuration(durationMs);
+    travelAnnotation = `${verb} · ${distStr} · ${durStr}`;
   }
 
   return {
@@ -1058,12 +1204,22 @@ export function applyTravelAnnotations(
 }
 
 /**
+ * Minimum gap in milliseconds to check for commute.
+ * 30 seconds is enough to detect movement between nearby places.
+ * Google Timeline shows even 1-minute drives as separate segments.
+ */
+const MIN_COMMUTE_GAP_CHECK_MS = 30 * 1000; // 30 seconds
+
+/**
  * Process location segments with commute detection.
  * This function:
  * 1. Identifies gaps between location segments that might be commutes
  * 2. Detects commutes in those gaps
- * 3. For long commutes (>= 10 min), creates commute segments
- * 4. For short commutes (< 10 min), adds travel annotation to next segment
+ * 3. For commutes >= MIN_COMMUTE_DURATION_MS (2 min), creates commute segments
+ * 4. For very short commutes (< 2 min), adds travel annotation to next segment
+ *
+ * IMPROVED: Now checks for commutes in any gap >= 30 seconds (was 1 minute).
+ * This captures short drives that Google Timeline would show.
  *
  * @param segments - Location segments from generateLocationSegments
  * @param locationSamples - All location samples for commute analysis
@@ -1115,7 +1271,8 @@ export function processSegmentsWithCommutes(
         ? Math.min(...locationSamples.map((s) => new Date(s.recorded_at).getTime()))
         : currentSegment.start.getTime();
 
-      if (currentSegment.start.getTime() - firstSampleTime > 60 * 1000) {
+      // Check any gap >= 30 seconds for potential commute
+      if (currentSegment.start.getTime() - firstSampleTime >= MIN_COMMUTE_GAP_CHECK_MS) {
         const commute = detectCommute(
           locationSamples,
           new Date(firstSampleTime),
@@ -1143,8 +1300,9 @@ export function processSegmentsWithCommutes(
       const gapEnd = nextSegment.start;
       const gapMs = gapEnd.getTime() - gapStart.getTime();
 
-      // Only check for commute if there's a meaningful gap (> 1 min)
-      if (gapMs > 60 * 1000) {
+      // IMPROVED: Check for commute in any gap >= 30 seconds (was 1 minute)
+      // This ensures we capture short drives like Google Timeline does
+      if (gapMs >= MIN_COMMUTE_GAP_CHECK_MS) {
         const commute = detectCommute(locationSamples, gapStart, gapEnd, userPlaces);
         if (commute.isCommute) {
           detectedCommutes.push(commute);
@@ -1154,6 +1312,30 @@ export function processSegmentsWithCommutes(
               result.push(commuteSegment);
             }
           }
+        }
+      }
+    }
+  }
+
+  // Check for commute after last segment (to window end)
+  const lastSegment = sortedSegments[sortedSegments.length - 1];
+  const lastSampleTime = locationSamples.length > 0
+    ? Math.max(...locationSamples.map((s) => new Date(s.recorded_at).getTime()))
+    : lastSegment.end.getTime();
+  
+  if (lastSampleTime - lastSegment.end.getTime() >= MIN_COMMUTE_GAP_CHECK_MS) {
+    const commute = detectCommute(
+      locationSamples,
+      lastSegment.end,
+      new Date(lastSampleTime),
+      userPlaces,
+    );
+    if (commute.isCommute) {
+      detectedCommutes.push(commute);
+      if (commute.isLongCommute) {
+        const commuteSegment = createCommuteSegment(commute, windowStart);
+        if (commuteSegment) {
+          result.push(commuteSegment);
         }
       }
     }

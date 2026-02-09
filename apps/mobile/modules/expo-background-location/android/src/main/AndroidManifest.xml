@@ -43,6 +43,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
+        
+        <!-- BroadcastReceiver for PendingIntent-based location updates -->
+        <!-- Samsung Android 11+ throttles LocationCallback but honors PendingIntent -->
+        <receiver
+            android:name=".LocationUpdatesBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- WorkManager SystemForegroundService with location type (backup mechanism) -->
         <service

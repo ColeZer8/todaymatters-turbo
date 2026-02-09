@@ -20,9 +20,7 @@ import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import org.json.JSONObject
@@ -42,7 +40,7 @@ import kotlin.math.roundToLong
 class LocationForegroundService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var locationCallback: LocationCallback? = null
+    private var locationPendingIntent: PendingIntent? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -50,6 +48,34 @@ class LocationForegroundService : Service() {
     private var userId: String = ""
     private var intervalMinutes: Int = 15
     private var isRunning = false
+    private var lastLocationTime: Long = 0
+    
+    // Health monitoring: Check if we're still receiving locations
+    private val healthCheckRunnable = object : Runnable {
+        override fun run() {
+            val timeSinceLastLocation = System.currentTimeMillis() - lastLocationTime
+            val tenMinutesMs = 10 * 60 * 1000L
+            
+            if (lastLocationTime > 0 && timeSinceLastLocation > tenMinutesMs) {
+                Log.w(TAG, "No location received in ${timeSinceLastLocation / 1000 / 60} minutes, restarting updates")
+                restartLocationUpdates()
+            }
+            
+            // Check again in 5 minutes
+            handler.postDelayed(this, 5 * 60 * 1000L)
+        }
+    }
+    
+    // Periodic restart: Proactively restart every 30 minutes to preempt Samsung throttling
+    private val periodicRestartRunnable = object : Runnable {
+        override fun run() {
+            Log.d(TAG, "Periodic restart to prevent Samsung throttling")
+            restartLocationUpdates()
+            
+            // Restart again in 30 minutes
+            handler.postDelayed(this, 30 * 60 * 1000L)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -77,6 +103,29 @@ class LocationForegroundService : Service() {
             ACTION_STOP -> {
                 stopForegroundTracking()
                 stopSelf()
+            }
+            ACTION_PROCESS_LOCATION -> {
+                // Location forwarded from BroadcastReceiver
+                val latitude = intent.getDoubleExtra(LocationUpdatesBroadcastReceiver.EXTRA_LATITUDE, 0.0)
+                val longitude = intent.getDoubleExtra(LocationUpdatesBroadcastReceiver.EXTRA_LONGITUDE, 0.0)
+                val accuracy = intent.getFloatExtra(LocationUpdatesBroadcastReceiver.EXTRA_ACCURACY, -1f)
+                val altitude = intent.getDoubleExtra(LocationUpdatesBroadcastReceiver.EXTRA_ALTITUDE, Double.NaN)
+                val speed = intent.getFloatExtra(LocationUpdatesBroadcastReceiver.EXTRA_SPEED, -1f)
+                val bearing = intent.getFloatExtra(LocationUpdatesBroadcastReceiver.EXTRA_BEARING, -1f)
+                val time = intent.getLongExtra(LocationUpdatesBroadcastReceiver.EXTRA_TIME, System.currentTimeMillis())
+                
+                // Reconstruct Location object
+                val location = Location("fused").apply {
+                    this.latitude = latitude
+                    this.longitude = longitude
+                    if (accuracy >= 0) this.accuracy = accuracy
+                    if (!altitude.isNaN()) this.altitude = altitude
+                    if (speed >= 0) this.speed = speed
+                    if (bearing >= 0) this.bearing = bearing
+                    this.time = time
+                }
+                
+                handleNewLocation(location)
             }
         }
         
@@ -121,6 +170,12 @@ class LocationForegroundService : Service() {
         // Start location updates
         startLocationUpdates()
         
+        // Start health monitoring (checks every 5 minutes)
+        handler.postDelayed(healthCheckRunnable, 5 * 60 * 1000L)
+        
+        // Start periodic restart (every 30 minutes)
+        handler.postDelayed(periodicRestartRunnable, 30 * 60 * 1000L)
+        
         isRunning = true
         
         // Store running state
@@ -138,10 +193,15 @@ class LocationForegroundService : Service() {
         isRunning = false
         
         // Stop location updates
-        locationCallback?.let {
+        locationPendingIntent?.let {
             fusedLocationClient.removeLocationUpdates(it)
-            locationCallback = null
+            it.cancel()
+            locationPendingIntent = null
         }
+
+        // Stop health monitoring and periodic restart
+        handler.removeCallbacks(healthCheckRunnable)
+        handler.removeCallbacks(periodicRestartRunnable)
 
         // Release wake lock
         releaseWakeLock()
@@ -173,34 +233,52 @@ class LocationForegroundService : Service() {
         }
 
         // Build location request
-        // Use a slightly shorter interval than the desired one to ensure we don't miss samples
         val intervalMs = (intervalMinutes * 60 * 1000).toLong()
         
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
+        // Use BALANCED_POWER_ACCURACY instead of HIGH_ACCURACY to avoid Samsung's
+        // "excessive battery drain" detection, and disable batching to get immediate updates
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, intervalMs)
             .setMinUpdateIntervalMillis(intervalMs / 2) // Allow faster updates if available
-            .setMaxUpdateDelayMillis(intervalMs * 2)    // Max batch delay
-            .setWaitForAccurateLocation(true)
+            .setMaxUpdateDelayMillis(intervalMs)        // No batching - deliver immediately
+            .setWaitForAccurateLocation(false)          // Don't wait for high accuracy
             .build()
 
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    handleNewLocation(location)
-                }
-            }
-        }
+        // Create PendingIntent for location updates
+        // Samsung Android 11+ throttles LocationCallback but honors PendingIntent
+        val intent = Intent(this, LocationUpdatesBroadcastReceiver::class.java)
+        locationPendingIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
 
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
-            locationCallback!!,
+            locationPendingIntent!!,
             Looper.getMainLooper()
         )
         
-        Log.d(TAG, "Location updates started with interval=${intervalMs}ms")
+        Log.d(TAG, "Location updates started (PendingIntent) with interval=${intervalMs}ms")
+    }
+    
+    private fun restartLocationUpdates() {
+        Log.d(TAG, "Restarting location updates")
+        
+        // Stop current updates
+        locationPendingIntent?.let {
+            fusedLocationClient.removeLocationUpdates(it)
+        }
+        
+        // Start fresh
+        startLocationUpdates()
     }
 
     private fun handleNewLocation(location: Location) {
         Log.d(TAG, "New location: lat=${location.latitude}, lng=${location.longitude}")
+        
+        // Track time of last location for health monitoring
+        lastLocationTime = System.currentTimeMillis()
         
         serviceScope.launch {
             try {
@@ -342,6 +420,7 @@ class LocationForegroundService : Service() {
         
         const val ACTION_START = "expo.modules.backgroundlocation.ACTION_START"
         const val ACTION_STOP = "expo.modules.backgroundlocation.ACTION_STOP"
+        const val ACTION_PROCESS_LOCATION = "expo.modules.backgroundlocation.ACTION_PROCESS_LOCATION"
         const val EXTRA_USER_ID = "user_id"
         const val EXTRA_INTERVAL_MINUTES = "interval_minutes"
         

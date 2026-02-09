@@ -13,8 +13,11 @@
  *   2. Fetch location_hourly rows from Supabase
  *   3. Run place inference (14-day window, cached)
  *   4. Fetch BRAVO activity segments
- *   5. Enrich summaries with place labels, segments, inference descriptions
- *   6. Group into LocationBlock[] via groupIntoLocationBlocks()
+ *   5. Auto reverse geocode segments with missing place labels
+ *   6. Enrich summaries with place labels, segments, inference descriptions
+ *   7. Group into LocationBlock[] via:
+ *      - groupSegmentsIntoLocationBlocks() when segments exist (fine-grained)
+ *      - groupIntoLocationBlocks() as fallback (hourly-based)
  *
  * It does NOT include buildTimelineEvents() — that is Activity Timeline
  * specific and remains in LocationBlockList.
@@ -23,8 +26,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { EnrichedSummary } from "@/components/organisms/HourlySummaryList";
-import type { LocationBlock } from "@/lib/types/location-block";
-import { groupIntoLocationBlocks } from "@/lib/utils/group-location-blocks";
+import type { LocationBlock, PlaceAlternative } from "@/lib/types/location-block";
+import {
+  groupIntoLocationBlocks,
+  groupSegmentsIntoLocationBlocks,
+} from "@/lib/utils/group-location-blocks";
 import {
   type HourlySummary,
   fetchHourlySummariesForDate,
@@ -82,6 +88,44 @@ interface LocationHourlyRow {
   radius_m?: number | null;
 }
 
+/** A candidate place near the user's location. */
+interface PlaceAlternativeResult {
+  placeName: string;
+  googlePlaceId: string | null;
+  vicinity: string | null;
+  types: string[] | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
+  distanceMeters: number | null;
+}
+
+/** Response from location-place-lookup edge function */
+interface PlaceLookupResult {
+  geohash7: string;
+  latitude: number;
+  longitude: number;
+  placeName: string | null;
+  googlePlaceId: string | null;
+  vicinity: string | null;
+  types: string[] | null;
+  source: "cache" | "google_places_nearby" | "reverse_geocode" | "none";
+  expiresAt: string | null;
+  placeLatitude: number | null;
+  placeLongitude: number | null;
+  distanceMeters: number | null;
+  alternatives: PlaceAlternativeResult[] | null;
+}
+
+interface PlaceLookupResponse {
+  results: PlaceLookupResult[];
+}
+
+/** Resolved place data including alternatives for disambiguation. */
+interface ResolvedPlaceData {
+  placeName: string;
+  alternatives: PlaceAlternativeResult[];
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -91,6 +135,110 @@ function floorToHour(date: Date): Date {
   const d = new Date(date);
   d.setMinutes(0, 0, 0);
   return d;
+}
+
+/**
+ * Resolve place labels for segments that have coordinates but no label.
+ * Calls the location-place-lookup edge function in batch.
+ * Returns both the resolved name AND alternatives for disambiguation.
+ *
+ * @param segments - Activity segments to resolve
+ * @returns Map of segment ID to resolved place data (name + alternatives)
+ */
+async function resolveUnknownPlaceLabels(
+  segments: ActivitySegment[],
+): Promise<Map<string, ResolvedPlaceData>> {
+  const resolved = new Map<string, ResolvedPlaceData>();
+
+  // Collect segments that need resolution
+  const needsResolution = segments.filter(
+    (s) =>
+      s.locationLat != null &&
+      s.locationLng != null &&
+      (!s.placeLabel ||
+        s.placeLabel === "Unknown Location" ||
+        s.placeLabel === "Unknown"),
+  );
+
+  if (needsResolution.length === 0) return resolved;
+
+  // Build unique coordinate points (dedupe by rounded lat/lng)
+  const pointsByKey = new Map<
+    string,
+    { latitude: number; longitude: number; segmentIds: string[] }
+  >();
+
+  for (const seg of needsResolution) {
+    // Round to 4 decimal places for deduplication (~11m precision)
+    const key = `${seg.locationLat!.toFixed(4)},${seg.locationLng!.toFixed(4)}`;
+    const existing = pointsByKey.get(key);
+    if (existing) {
+      existing.segmentIds.push(seg.id);
+    } else {
+      pointsByKey.set(key, {
+        latitude: seg.locationLat!,
+        longitude: seg.locationLng!,
+        segmentIds: [seg.id],
+      });
+    }
+  }
+
+  const points = Array.from(pointsByKey.values()).map((p) => ({
+    latitude: p.latitude,
+    longitude: p.longitude,
+  }));
+
+  if (points.length === 0) return resolved;
+
+  try {
+    // Call edge function with batched coordinates
+    const { data, error } = await supabase.functions.invoke<PlaceLookupResponse>(
+      "location-place-lookup",
+      {
+        body: { points, radiusMeters: 500 },
+      },
+    );
+
+    if (error) {
+      console.warn(
+        "[useLocationBlocksForDay] Place lookup error:",
+        error.message,
+      );
+      return resolved;
+    }
+
+    if (!data?.results) return resolved;
+
+    // Map results back to segments (include alternatives for disambiguation)
+    for (const result of data.results) {
+      if (!result.placeName) continue;
+
+      const key = `${result.latitude.toFixed(4)},${result.longitude.toFixed(4)}`;
+      const pointData = pointsByKey.get(key);
+      if (pointData) {
+        const placeData: ResolvedPlaceData = {
+          placeName: result.placeName,
+          alternatives: (result.alternatives ?? []) as PlaceAlternativeResult[],
+        };
+        for (const segId of pointData.segmentIds) {
+          resolved.set(segId, placeData);
+        }
+      }
+    }
+
+    if (resolved.size > 0) {
+      console.log(
+        `[useLocationBlocksForDay] Resolved ${resolved.size} unknown place labels`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      "[useLocationBlocksForDay] Place lookup exception:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  return resolved;
 }
 
 // ============================================================================
@@ -210,6 +358,32 @@ export function useLocationBlocksForDay(
           "[useLocationBlocksForDay] Segment fetch warning:",
           segErr,
         );
+      }
+
+      // ------------------------------------------------------------------
+      // 5b. Auto reverse geocode segments with missing place labels
+      // ------------------------------------------------------------------
+      let resolvedLabels = new Map<string, string>();
+      if (allSegments.length > 0) {
+        try {
+          resolvedLabels = await resolveUnknownPlaceLabels(allSegments);
+        } catch (geoErr) {
+          console.warn(
+            "[useLocationBlocksForDay] Reverse geocode warning:",
+            geoErr,
+          );
+        }
+      }
+
+      // Apply resolved labels to segments (create new array with updated labels)
+      if (resolvedLabels.size > 0) {
+        allSegments = allSegments.map((seg) => {
+          const resolvedData = resolvedLabels.get(seg.id);
+          if (resolvedData && (!seg.placeLabel || seg.placeLabel === "Unknown Location" || seg.placeLabel === "Unknown")) {
+            return { ...seg, placeLabel: resolvedData.placeName };
+          }
+          return seg;
+        });
       }
 
       // Build segments-by-hour map
@@ -352,9 +526,36 @@ export function useLocationBlocksForDay(
       });
 
       // ------------------------------------------------------------------
-      // 7. Group enriched summaries into location blocks
+      // 7. Group into location blocks
+      //    - Use segment-based grouping when segments exist (fine-grained)
+      //    - Fall back to hourly-summary-based grouping (coarse)
       // ------------------------------------------------------------------
-      const locationBlocks = groupIntoLocationBlocks(enriched);
+      let locationBlocks: LocationBlock[];
+
+      if (allSegments.length > 0) {
+        // Build alternatives map for place disambiguation
+        const alternativesBySegmentId = new Map<string, PlaceAlternative[]>();
+        if (resolvedLabels.size > 0) {
+          for (const [segId, data] of resolvedLabels) {
+            if (data.alternatives.length > 0) {
+              alternativesBySegmentId.set(segId, data.alternatives as PlaceAlternative[]);
+            }
+          }
+        }
+
+        // NEW: Segment-driven grouping for Google Timeline-like granularity
+        locationBlocks = groupSegmentsIntoLocationBlocks(allSegments, enriched, alternativesBySegmentId);
+        console.log(
+          `[useLocationBlocksForDay] Used segment-based grouping: ${allSegments.length} segments → ${locationBlocks.length} blocks`,
+        );
+      } else {
+        // FALLBACK: Hourly-summary-based grouping for backward compatibility
+        locationBlocks = groupIntoLocationBlocks(enriched);
+        console.log(
+          `[useLocationBlocksForDay] Used hourly-based grouping: ${enriched.length} summaries → ${locationBlocks.length} blocks`,
+        );
+      }
+
       setBlocks(locationBlocks);
     } catch (err) {
       const message =

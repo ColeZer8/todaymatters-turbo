@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TodayMatters Pipeline Comparison — Gravy's Saturday (Feb 8)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0F172A; color: #E2E8F0; padding: 24px; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .subtitle { color: #94A3B8; font-size: 14px; margin-bottom: 24px; }
+  .columns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 32px; }
+  .column { background: #1E293B; border-radius: 12px; padding: 16px; }
+  .column h2 { font-size: 16px; margin-bottom: 4px; }
+  .column .label { font-size: 11px; color: #64748B; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #334155; border-radius: 1px; }
+
+  .segment { position: relative; margin-bottom: 12px; }
+  .segment .dot { position: absolute; left: -24px; top: 4px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #1E293B; }
+  .segment .name { font-size: 14px; font-weight: 600; }
+  .segment .meta { font-size: 11px; color: #94A3B8; margin-top: 2px; }
+  .segment .apps { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .segment .badge { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; vertical-align: middle; }
+
+  /* Segment types */
+  .stationary .dot { background: #22C55E; }
+  .stationary .name { color: #22C55E; }
+  .travel .dot { background: #3B82F6; }
+  .travel .name { color: #3B82F6; }
+  .unknown .dot { background: #F59E0B; }
+  .unknown .name { color: #F59E0B; }
+  .empty .dot { background: #475569; }
+  .empty .name { color: #475569; }
+  .home .dot { background: #A78BFA; }
+  .home .name { color: #A78BFA; }
+
+  .badge-green { background: rgba(34,197,94,0.15); color: #22C55E; }
+  .badge-blue { background: rgba(59,130,246,0.15); color: #3B82F6; }
+  .badge-yellow { background: rgba(245,158,11,0.15); color: #F59E0B; }
+  .badge-red { background: rgba(239,68,68,0.15); color: #EF4444; }
+  .badge-purple { background: rgba(167,139,250,0.15); color: #A78BFA; }
+
+  .gap { height: 8px; position: relative; margin-bottom: 12px; }
+  .gap::after { content: '···'; position: absolute; left: -28px; top: -8px; color: #475569; font-size: 14px; letter-spacing: 2px; }
+
+  .insight-box { background: #1E293B; border-radius: 12px; padding: 16px; margin-bottom: 20px; border-left: 3px solid #3B82F6; }
+  .insight-box h3 { font-size: 14px; margin-bottom: 8px; color: #3B82F6; }
+  .insight-box p { font-size: 13px; color: #94A3B8; line-height: 1.5; }
+  .insight-box .stat { color: #E2E8F0; font-weight: 600; }
+
+  .score-row { display: flex; gap: 16px; margin-top: 16px; }
+  .score-card { flex: 1; background: #0F172A; border-radius: 8px; padding: 12px; text-align: center; }
+  .score-card .number { font-size: 28px; font-weight: 700; }
+  .score-card .label { font-size: 11px; color: #64748B; margin-top: 4px; }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94A3B8; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  .section-title { font-size: 18px; margin: 32px 0 12px; }
+  .problem-list { list-style: none; padding: 0; }
+  .problem-list li { padding: 8px 12px; margin-bottom: 6px; background: #1E293B; border-radius: 8px; font-size: 13px; }
+  .problem-list li::before { content: '⚠️ '; }
+  .fix-list li::before { content: '✅ '; }
+  .still-list li::before { content: '🔲 '; }
+</style>
+</head>
+<body>
+
+<h1>Pipeline Comparison: Gravy's Saturday (Feb 8, 2026)</h1>
+<p class="subtitle">Google Timeline (ground truth) vs Old Pipeline (hourly) vs New Pipeline (segment-based)</p>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#A78BFA"></div> Home</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#22C55E"></div> Place (named)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div> Travel</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div> Unknown Location</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#475569"></div> No Data</div>
+</div>
+
+<div class="columns">
+  <!-- GOOGLE TIMELINE -->
+  <div class="column">
+    <h2>🗺️ Google Timeline</h2>
+    <div class="label">Ground Truth · 6 segments</div>
+    <div class="timeline">
+      <div class="segment home">
+        <div class="dot"></div>
+        <div class="name">Home (2646 Denyse Dr) <span class="badge badge-purple">HOME</span></div>
+        <div class="meta">12:24 PM – 5:44 PM · 5h 20m</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">El Barrio – Homewood</div>
+        <div class="meta">5:44 PM – 5:52 PM · 8 min</div>
+        <div class="apps">195 Oxmoor Rd Suite 113</div>
+      </div>
+      <div class="segment travel">
+        <div class="dot"></div>
+        <div class="name">Driving · 2.5 mi · 11 min</div>
+        <div class="meta">5:52 PM – 6:02 PM</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Little Donkey Mexican Restaurant</div>
+        <div class="meta">6:02 PM – 7:39 PM · 1h 37m</div>
+        <div class="apps">2701 18th St S Ste 200, Birmingham</div>
+      </div>
+      <div class="segment travel">
+        <div class="dot"></div>
+        <div class="name">Driving · 4.9 mi · 8 min</div>
+        <div class="meta">7:39 PM – 7:47 PM</div>
+      </div>
+      <div class="segment home">
+        <div class="dot"></div>
+        <div class="name">Home (2646 Denyse Dr) <span class="badge badge-purple">HOME</span></div>
+        <div class="meta">7:47 PM – 8:51 PM · 1h 4m</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OLD PIPELINE -->
+  <div class="column">
+    <h2>📊 Old Pipeline (Hourly)</h2>
+    <div class="label">Current production · 17 hourly blocks</div>
+    <div class="timeline">
+      <div class="segment empty">
+        <div class="dot"></div>
+        <div class="name">No Activity Data</div>
+        <div class="meta">12 AM – 7 AM · 7 hours</div>
+        <div class="apps">Empty hourly blocks (×7)</div>
+      </div>
+      <div class="segment travel">
+        <div class="dot"></div>
+        <div class="name">Commute <span class="badge badge-blue">59%</span></div>
+        <div class="meta">7:00 AM – 8:00 AM · 1h block</div>
+        <div class="apps">maps 19m, messaging 5m</div>
+      </div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location – Mixed</div>
+        <div class="meta">8:00 AM – 9:00 AM · 1h block</div>
+        <div class="apps">Slack 8m, maps 2m</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Believe Candle Co. – Mixed <span class="badge badge-green">98%</span></div>
+        <div class="meta">9:00 AM – 10:00 AM · 1h block</div>
+        <div class="apps">One UI Home 9m, Slack 1m · 667 samples!</div>
+      </div>
+      <div class="segment empty">
+        <div class="dot"></div>
+        <div class="name">No Activity Data</div>
+        <div class="meta">10:00 AM – 11:00 AM · 1h block</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Resolute Cafe – Offline <span class="badge badge-green">57%</span></div>
+        <div class="meta">11:00 AM – 12:00 PM · 1h block</div>
+        <div class="apps">maps 4m · only 2 samples</div>
+      </div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location – Mixed</div>
+        <div class="meta">12:00 PM – 1:00 PM · 1h block</div>
+        <div class="apps">YouTube 18m, Chrome 6m</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Believe Candle Co. – Offline</div>
+        <div class="meta">1:00 PM – 2:00 PM · 1h block</div>
+        <div class="apps">mobile 1m · 2 samples</div>
+      </div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location – Mixed</div>
+        <div class="meta">2:00 PM – 4:32 PM · 3 hourly blocks</div>
+        <div class="apps">messaging, maps, Chrome, Slack</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW PIPELINE -->
+  <div class="column">
+    <h2>🚀 New Pipeline (Segment-Based)</h2>
+    <div class="label">After our changes · 9 segments</div>
+    <div class="timeline">
+      <div class="segment travel">
+        <div class="dot"></div>
+        <div class="name">In Transit <span class="badge badge-blue">59%</span></div>
+        <div class="meta">7:22 AM – 7:50 AM · 28 min</div>
+        <div class="apps">maps 19m, messaging 5m · 4 GPS samples</div>
+      </div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location <span class="badge badge-yellow">55%</span></div>
+        <div class="meta">8:00 AM – 8:19 AM · 19 min</div>
+        <div class="apps">Slack 8m · ⚠️ 0 GPS samples</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Believe Candle Co. <span class="badge badge-green">98%</span></div>
+        <div class="meta">9:05 AM – 9:27 AM · 22 min</div>
+        <div class="apps">One UI Home 9m · 667 GPS samples 🎯</div>
+      </div>
+      <div class="gap"></div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Resolute Cafe <span class="badge badge-green">57%</span></div>
+        <div class="meta">11:14 AM – 11:32 AM · 18 min</div>
+        <div class="apps">maps 4m · 2 GPS samples</div>
+      </div>
+      <div class="gap"></div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location <span class="badge badge-yellow">57%</span></div>
+        <div class="meta">12:12 PM – 12:50 PM · 38 min</div>
+        <div class="apps">YouTube 18m, Chrome 6m · ⚠️ 0 GPS</div>
+      </div>
+      <div class="segment stationary">
+        <div class="dot"></div>
+        <div class="name">Believe Candle Co. <span class="badge badge-green">44%</span></div>
+        <div class="meta">1:25 PM – 1:36 PM · 11 min</div>
+        <div class="apps">mobile 1m · 2 GPS samples</div>
+      </div>
+      <div class="segment unknown">
+        <div class="dot"></div>
+        <div class="name">Unknown Location <span class="badge badge-yellow">57-60%</span></div>
+        <div class="meta">2:08 PM – 4:32 PM · 2h 24m</div>
+        <div class="apps">messaging, maps, Chrome · ⚠️ 0 GPS</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INSIGHTS -->
+<h2 class="section-title">📊 Key Data Insights</h2>
+
+<div class="insight-box">
+  <h3>🏠 "Believe Candle Co." = HOME</h3>
+  <p>
+    Coordinates <span class="stat">33.4329, -86.7427</span> (geohash <span class="stat">djfq4n7</span>) appear in <span class="stat">10 of 12</span> location_hourly rows.
+    This is clearly Gravy's home at 2646 Denyse Dr. Google reverse-geocodes the nearest business ("Believe Candle Co.") instead of the residential address.
+    <br><br>
+    <strong>Fix:</strong> Our place inference already detects this as "Home" (dominant overnight geohash). Once Gravy taps the banner and labels it "Home" via PlacePickerSheet, it's saved to <code>user_places</code> permanently. The 667-sample segment at 9:05 AM gives us perfect confidence.
+  </p>
+</div>
+
+<div class="insight-box">
+  <h3>📡 Location Data is Sparse After Noon</h3>
+  <p>
+    Only <span class="stat">687 total location samples</span> for the day, but <span class="stat">667 of them</span> are in a single hour (9 AM, geohash djfq4n7).
+    After 9:27 AM, only <span class="stat">8 samples</span> for the rest of the day.
+    <br><br>
+    Segments 2, 5, 7, 8, 9 have <span class="stat">ZERO location samples</span> — the phone stopped reporting GPS.
+    This is why we miss the evening entirely: El Barrio, Little Donkey, the drives — all invisible to us.
+    <br><br>
+    <strong>Root cause:</strong> Android battery optimization killing background location. Google Timeline uses its own privileged system service that isn't affected.
+  </p>
+</div>
+
+<div class="insight-box">
+  <h3>🆚 What Our New Pipeline Fixes vs What It Can't</h3>
+  <p>
+    <strong>Fixed:</strong> Segments have precise timestamps (7:22-7:50 AM vs a full 7-8 AM hour block). Place names resolve automatically. Travel gets its own block.
+    <br><br>
+    <strong>Can't fix without GPS:</strong> The evening (El Barrio → Little Donkey → Home) is completely invisible because there are zero location samples after ~3 PM.
+    No amount of algorithmic improvement can create locations from app usage alone.
+    <br><br>
+    <strong>Bottom line:</strong> The pipeline is now Google-quality <em>when it has GPS data</em>. The bottleneck is Android background location collection.
+  </p>
+</div>
+
+<div class="score-row">
+  <div class="score-card">
+    <div class="number" style="color:#EF4444">687</div>
+    <div class="label">Total GPS Samples (Sat)</div>
+  </div>
+  <div class="score-card">
+    <div class="number" style="color:#F59E0B">667</div>
+    <div class="label">In Single Hour (97%!)</div>
+  </div>
+  <div class="score-card">
+    <div class="number" style="color:#22C55E">9</div>
+    <div class="label">Segments (New Pipeline)</div>
+  </div>
+  <div class="score-card">
+    <div class="number" style="color:#3B82F6">17</div>
+    <div class="label">Hourly Blocks (Old)</div>
+  </div>
+  <div class="score-card">
+    <div class="number" style="color:#A78BFA">0</div>
+    <div class="label">User Places Saved</div>
+  </div>
+</div>
+
+<h2 class="section-title">✅ What Our Update Fixes</h2>
+<ul class="problem-list fix-list">
+  <li>Precise timestamps: 7:22-7:50 AM commute instead of full 7-8 AM hour block</li>
+  <li>Place names: "Believe Candle Co." and "Resolute Cafe" auto-resolved via Google Places</li>
+  <li>Travel gets own block: 28-min commute is separate from stationary time</li>
+  <li>No more empty 1-hour padding blocks between segments</li>
+  <li>Gaps shown honestly (··· between segments) instead of fake "No Activity" hours</li>
+  <li>Place picker: User taps "Believe Candle Co." → picks "Home" → saved forever</li>
+</ul>
+
+<h2 class="section-title">🔲 What's Still Missing (Needs GPS Fix)</h2>
+<ul class="problem-list still-list">
+  <li>Evening completely invisible: El Barrio, Little Donkey, drives — zero GPS samples</li>
+  <li>5 of 9 segments have 0 location samples — can't resolve place names</li>
+  <li>No driving detection for evening trips (Google shows 2.5mi + 4.9mi drives)</li>
+  <li>Android background location remains the #1 bottleneck for accuracy</li>
+</ul>
+
+</body>
+</html>

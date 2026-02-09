@@ -13,7 +13,7 @@
  *   Feedback buttons
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import {
   Clock,
@@ -26,8 +26,13 @@ import {
   ChevronUp,
   Activity,
   Car,
+  Navigation,
 } from "lucide-react-native";
 import type { LocationBlock, BlockAppUsage } from "@/lib/types/location-block";
+import {
+  PlacePickerSheet,
+  type PlaceSelection,
+} from "@/components/molecules/PlacePickerSheet";
 import type { AppCategory } from "@/lib/supabase/services/app-categories";
 import {
   getPlaceIcon,
@@ -63,6 +68,8 @@ export interface LocationBlockCardProps {
   onMarkAccurate?: (summaryIds: string[]) => void;
   onNeedsCorrection?: (summaryIds: string[]) => void;
   onEdit?: (block: LocationBlock) => void;
+  /** Called when user selects a place from disambiguation sheet. */
+  onPlaceSelected?: (block: LocationBlock, selection: PlaceSelection) => void;
 }
 
 // ============================================================================
@@ -258,12 +265,28 @@ export function LocationBlockCard({
   onMarkAccurate,
   onNeedsCorrection,
   onEdit,
+  onPlaceSelected,
 }: LocationBlockCardProps) {
   const [showTimeline, setShowTimeline] = useState(false);
   const [showSegmentEditor, setShowSegmentEditor] = useState(false);
+  const [showPlacePicker, setShowPlacePicker] = useState(false);
   const chronoTimeline = useMemo(
     () => buildChronologicalTimeline(block.apps),
     [block.apps],
+  );
+
+  // Place disambiguation: show picker when alternatives exist
+  const hasAlternatives =
+    !block.type || block.type === "stationary"
+      ? (block.placeAlternatives?.length ?? 0) > 0
+      : false;
+
+  const handlePlaceSave = useCallback(
+    (selection: PlaceSelection) => {
+      setShowPlacePicker(false);
+      onPlaceSelected?.(block, selection);
+    },
+    [block, onPlaceSelected],
   );
 
   // Icon & color
@@ -303,12 +326,28 @@ export function LocationBlockCard({
 
         <View style={styles.headerTextContainer}>
           <View style={styles.headerTopRow}>
-            <Text
-              style={[styles.locationName, { color: placeColor }]}
-              numberOfLines={1}
-            >
-              {block.locationLabel}
-            </Text>
+            {hasAlternatives ? (
+              <TouchableOpacity
+                onPress={() => setShowPlacePicker(true)}
+                style={styles.placeNameTappable}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.locationName, { color: placeColor }]}
+                  numberOfLines={1}
+                >
+                  {block.locationLabel}
+                </Text>
+                <Navigation size={10} color="#94A3B8" style={{ marginLeft: 4, transform: [{ rotate: "90deg" }] }} />
+              </TouchableOpacity>
+            ) : (
+              <Text
+                style={[styles.locationName, { color: placeColor }]}
+                numberOfLines={1}
+              >
+                {block.locationLabel}
+              </Text>
+            )}
             {block.isPlaceInferred && (
               <View style={styles.inferredBadge}>
                 <Sparkles size={9} color="#D97706" />
@@ -462,6 +501,21 @@ export function LocationBlockCard({
           ))}
         </View>
       )}
+
+      {/* ─── Place Picker Bottom Sheet ─── */}
+      {hasAlternatives && (
+        <PlacePickerSheet
+          visible={showPlacePicker}
+          onClose={() => setShowPlacePicker(false)}
+          onSave={handlePlaceSave}
+          currentPlace={block.locationLabel}
+          alternatives={block.placeAlternatives!}
+          latitude={block.latitude ?? 0}
+          longitude={block.longitude ?? 0}
+          startTime={block.startTime}
+          endTime={block.endTime}
+        />
+      )}
     </View>
   );
 }
@@ -510,6 +564,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     flexShrink: 1,
+  },
+  placeNameTappable: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    paddingVertical: 2,
+    paddingRight: 4,
+    borderRadius: 6,
+    backgroundColor: "rgba(59,130,246,0.06)",
   },
   inferredBadge: {
     padding: 2,
