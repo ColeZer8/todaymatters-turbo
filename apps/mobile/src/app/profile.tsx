@@ -65,10 +65,10 @@ import {
   openUsageAccessSettingsSafeAsync,
 } from "@/lib/android-insights";
 import {
-  captureIosLocationSampleNowAsync,
+  captureIosLocationSampleNowWithProviderAsync as captureIosLocationSampleNowAsync,
   flushPendingLocationSamplesToSupabaseAsync,
-  requestIosLocationPermissionsAsync,
-} from "@/lib/ios-location";
+  requestIosLocationPermissionsWithProviderAsync as requestIosLocationPermissionsAsync,
+} from "@/lib/location-provider/ios";
 import {
   flushPendingAndroidLocationSamplesToSupabaseAsync,
   openAndroidBatteryOptimizationSettingsAsync,

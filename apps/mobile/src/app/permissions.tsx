@@ -19,14 +19,16 @@ import {
   type PermissionKey,
 } from "@/stores/onboarding-store";
 import { useOnboardingSync } from "@/lib/supabase/hooks";
-import { requestIosLocationPermissionsAsync } from "@/lib/ios-location";
 import {
   getAndroidNotificationPermissionStatusAsync,
   openAndroidNotificationSettingsAsync,
   requestAndroidNotificationPermissionsAsync,
   openAndroidBatteryOptimizationSettingsAsync,
 } from "@/lib/android-location";
-import { startIosBackgroundLocationAsync } from "@/lib/ios-location";
+import {
+  requestIosLocationPermissionsWithProviderAsync as requestIosLocationPermissionsAsync,
+  startIosBackgroundLocationWithProviderAsync as startIosBackgroundLocationAsync,
+} from "@/lib/location-provider/ios";
 import {
   requestAndroidLocationPermissionsWithProviderAsync as requestAndroidLocationPermissionsAsync,
   startAndroidBackgroundLocationWithProviderAsync as startAndroidBackgroundLocationAsync,

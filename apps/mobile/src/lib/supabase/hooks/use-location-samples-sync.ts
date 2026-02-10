@@ -4,13 +4,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuthStore } from "@/stores";
 import { isLocationAvailableForIngestion } from "@/lib/location-permission";
 import {
-  captureIosLocationSampleNowAsync,
+  captureIosLocationSampleNowWithProviderAsync as captureIosLocationSampleNowAsync,
   flushPendingLocationSamplesToSupabaseAsync,
-  startIosBackgroundLocationAsync,
-  stopIosBackgroundLocationAsync,
+  startIosBackgroundLocationWithProviderAsync as startIosBackgroundLocationAsync,
+  stopIosBackgroundLocationWithProviderAsync as stopIosBackgroundLocationAsync,
   clearPendingLocationSamplesAsync,
   IOS_DEFAULT_TRACKING_PROFILE,
-} from "@/lib/ios-location";
+} from "@/lib/location-provider/ios";
 import {
   flushPendingAndroidLocationSamplesToSupabaseAsync,
   clearPendingAndroidLocationSamplesAsync,

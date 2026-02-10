@@ -12,7 +12,7 @@ import { Card, GradientButton, Icon } from "@/components/atoms";
 import { BottomToolbar } from "@/components/organisms/BottomToolbar";
 import { peekPendingLocationSamplesAsync } from "@/lib/ios-location/queue";
 import { peekPendingAndroidLocationSamplesAsync } from "@/lib/android-location/queue";
-import { flushPendingLocationSamplesToSupabaseAsync } from "@/lib/ios-location";
+import { flushPendingLocationSamplesToSupabaseAsync } from "@/lib/location-provider/ios";
 import { flushPendingAndroidLocationSamplesToSupabaseAsync } from "@/lib/android-location";
 import { fetchRecentLocationSamples } from "@/lib/supabase/services/location-samples";
 import { supabase } from "@/lib/supabase/client";

@@ -289,3 +289,9 @@ export async function captureIosLocationSampleNowWithProviderAsync(
 }
 
 export { flushPendingLocationSamplesToSupabaseAsync };
+
+export {
+  clearPendingLocationSamplesAsync,
+  IOS_DEFAULT_TRACKING_PROFILE,
+} from "@/lib/ios-location";
+export type { IosLocationSample } from "@/lib/ios-location";
