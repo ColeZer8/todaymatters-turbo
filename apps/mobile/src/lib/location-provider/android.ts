@@ -115,8 +115,13 @@ async function loadTransistorAsync(): Promise<
     return null;
 
   try {
-    return await import("react-native-background-geolocation");
-  } catch {
+    const mod = await import("react-native-background-geolocation");
+    // Dynamic import returns module wrapper — .default has the actual API
+    const resolved = (mod as any).default ?? mod;
+    console.log("📍 [transistor] Module loaded successfully, has ready:", typeof resolved.ready);
+    return resolved;
+  } catch (e) {
+    console.warn("📍 [transistor] Failed to load module:", e instanceof Error ? e.message : String(e));
     return null;
   }
 }
@@ -127,21 +132,28 @@ async function ensureTransistorReadyAsync(
   if (transistorReady) return;
 
   const BG = BackgroundGeolocation as any;
-  await BG.ready({
-    reset: false,
-    desiredAccuracy: BG.DesiredAccuracy.Medium,
-    distanceFilter: 50,
-    stopOnTerminate: false,
-    startOnBoot: true,
-    foregroundService: true,
-    preventSuspend: true,
-    debug: false,
-    notification: {
-      title: "TodayMatters is tracking your day",
-      text: "Used to build an hour-by-hour view of your day for schedule comparison.",
-      color: "#2563EB",
-    },
-  });
+  console.log("📍 [transistor] Calling ready()... has ready:", typeof BG.ready);
+  try {
+    await BG.ready({
+      reset: false,
+      desiredAccuracy: BG.DesiredAccuracy?.Medium ?? 10,
+      distanceFilter: 50,
+      stopOnTerminate: false,
+      startOnBoot: true,
+      foregroundService: true,
+      preventSuspend: true,
+      debug: true,
+      notification: {
+        title: "TodayMatters is tracking your day",
+        text: "Used to build an hour-by-hour view of your day for schedule comparison.",
+        color: "#2563EB",
+      },
+    });
+    console.log("📍 [transistor] ready() succeeded ✅");
+  } catch (readyErr) {
+    console.error("📍 [transistor] ready() FAILED:", readyErr instanceof Error ? readyErr.message : String(readyErr));
+    throw readyErr;
+  }
 
   transistorReady = true;
 }
@@ -278,7 +290,8 @@ export async function startAndroidBackgroundLocationWithProviderAsync(): Promise
     return { ok: true, reason: "already_running" };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    return { ok: false, reason: "start_failed", detail };
+    console.error("📍 [transistor] start FAILED, falling back to legacy:", detail);
+    return startLegacyAndroidBackgroundLocationAsync();
   }
 }
 

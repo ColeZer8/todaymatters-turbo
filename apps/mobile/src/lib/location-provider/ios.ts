@@ -90,7 +90,9 @@ async function loadTransistorAsync(): Promise<typeof import("react-native-backgr
     return null;
 
   try {
-    return await import("react-native-background-geolocation");
+    const mod = await import("react-native-background-geolocation");
+    // Dynamic import returns module wrapper — .default has the actual API
+    return (mod as any).default ?? mod;
   } catch {
     return null;
   }
