@@ -104,7 +104,8 @@ function toSample(
 // IMPORTANT: Task definitions must live at module scope (per Expo docs).
 if (
   Platform.OS === "android" &&
-  requireOptionalNativeModule("ExpoTaskManager")
+  requireOptionalNativeModule("ExpoTaskManager") &&
+  process.env.EXPO_PUBLIC_USE_TRANSISTOR_LOCATION !== "true"
 ) {
   console.log("📍 [init] Defining Android location background task...");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
