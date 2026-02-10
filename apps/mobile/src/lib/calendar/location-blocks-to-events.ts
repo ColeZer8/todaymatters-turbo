@@ -82,6 +82,17 @@ export function locationBlocksToScheduledEvents(
 
   // 4. Fill gaps between events
   const plannedSleepRanges = extractPlannedSleepRanges(plannedEvents);
+  
+  // Debug: Log sleep ranges to help diagnose unexpected sleep gap filling
+  if (__DEV__ && plannedSleepRanges.length > 0) {
+    console.log(
+      `[location-blocks-to-events] Planned sleep ranges for ${ymd}:`,
+      plannedSleepRanges.map((r) => 
+        `${Math.floor(r.startMinutes / 60)}:${String(r.startMinutes % 60).padStart(2, "0")}-${Math.floor(r.endMinutes / 60)}:${String(r.endMinutes % 60).padStart(2, "0")}`
+      ).join(", "),
+    );
+  }
+  
   const withGaps = fillGaps(merged, plannedSleepRanges, ymd);
 
   return withGaps;
@@ -298,6 +309,17 @@ function buildGapEvent(
 ): ScheduledEvent {
   const endMinutes = startMinutes + duration;
   const isSleep = overlapsSleep(startMinutes, endMinutes, sleepRanges);
+
+  // Debug: Log when a gap is marked as sleep to help diagnose unexpected sleep blocks
+  if (__DEV__ && isSleep) {
+    const startHour = Math.floor(startMinutes / 60);
+    const endHour = Math.floor(endMinutes / 60);
+    console.log(
+      `[location-blocks-to-events] Gap ${startHour}:00-${endHour}:00 marked as Sleep.`,
+      `Sleep ranges:`,
+      sleepRanges.map((r) => `${Math.floor(r.startMinutes / 60)}:00-${Math.floor(r.endMinutes / 60)}:00`).join(", "),
+    );
+  }
 
   return {
     id: `lb:gap:${ymd}:${startMinutes}`,

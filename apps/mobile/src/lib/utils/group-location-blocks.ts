@@ -319,6 +319,9 @@ function buildBlockFromSegments(
   const inferredPlace = overlappingSummaries[0]?.inferredPlace ?? null;
   const isPlaceInferred = !first.placeId && !!inferredPlace;
 
+  // -- Geohash7: derive from overlapping summaries (summaries carry geohash from location_hourly) --
+  const geohash7 = overlappingSummaries.find((s) => s.geohash7)?.geohash7 ?? null;
+
   // -- Place alternatives (for disambiguation UI) --
   // Collect alternatives from the first segment that has them
   let placeAlternatives: PlaceAlternative[] | undefined;
@@ -345,7 +348,7 @@ function buildBlockFromSegments(
     locationCategory: first.placeCategory ?? null,
     inferredPlace,
     isPlaceInferred,
-    geohash7: null, // Segments don't carry geohash
+    geohash7,
     startTime,
     endTime,
     durationMinutes,

@@ -279,18 +279,22 @@ export default function ActivityTimelineScreen() {
 
   // Location rename -> persist via location-labels service
   const handleLocationRename = useCallback(
-    (geohash7: string, newLabel: string, alwaysUse: boolean, category?: string | null, radiusM?: number) => {
+    async (geohash7: string, newLabel: string, alwaysUse: boolean, category?: string | null, radiusM?: number) => {
       if (!userId || !alwaysUse) return;
-      saveLocationLabel(userId, geohash7, newLabel, {
-        category: category ?? undefined,
-        radius_m: radiusM,
-        latitude: editContext?.latitude ?? undefined,
-        longitude: editContext?.longitude ?? undefined,
-      }).catch((err) => {
+      try {
+        await saveLocationLabel(userId, geohash7, newLabel, {
+          category: category ?? undefined,
+          radius_m: radiusM,
+          latitude: editContext?.latitude ?? undefined,
+          longitude: editContext?.longitude ?? undefined,
+        });
+        // Refresh the timeline to show the new label
+        handleRefresh();
+      } catch (err) {
         if (__DEV__) console.warn("Failed to save location label:", err);
-      });
+      }
     },
-    [userId, editContext],
+    [userId, editContext, handleRefresh],
   );
 
   // Block rename modal state
@@ -320,12 +324,17 @@ export default function ActivityTimelineScreen() {
   }, []);
 
   const handleSaveRename = useCallback(async () => {
-    if (!renameBlock?.geohash7 || !renameText.trim() || !userId) return;
+    // Need either geohash7 OR valid lat/lng coordinates to save
+    const hasGeohash = !!renameBlock?.geohash7;
+    const lat = renameBlock?.latitude ?? renameBlock?.inferredPlace?.latitude ?? undefined;
+    const lng = renameBlock?.longitude ?? renameBlock?.inferredPlace?.longitude ?? undefined;
+    const hasCoords = lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng);
+    
+    if ((!hasGeohash && !hasCoords) || !renameText.trim() || !userId) return;
+    
     setIsSavingRename(true);
     try {
-      const lat = renameBlock.inferredPlace?.latitude ?? undefined;
-      const lng = renameBlock.inferredPlace?.longitude ?? undefined;
-      await saveLocationLabel(userId, renameBlock.geohash7, renameText.trim(), {
+      await saveLocationLabel(userId, renameBlock?.geohash7 ?? null, renameText.trim(), {
         category: renameCategory ?? undefined,
         radius_m: renameRadius,
         latitude: lat,
@@ -480,8 +489,8 @@ export default function ActivityTimelineScreen() {
               <LocationEditSection
                 currentLabel={renameText}
                 geohash7={renameBlock?.geohash7 ?? null}
-                latitude={renameBlock?.inferredPlace?.latitude ?? null}
-                longitude={renameBlock?.inferredPlace?.longitude ?? null}
+                latitude={renameBlock?.latitude ?? renameBlock?.inferredPlace?.latitude ?? null}
+                longitude={renameBlock?.longitude ?? renameBlock?.inferredPlace?.longitude ?? null}
                 userId={userId}
                 alwaysUse={true}
                 selectedCategory={renameCategory}

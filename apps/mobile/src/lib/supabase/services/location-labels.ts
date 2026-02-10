@@ -19,6 +19,62 @@ function tmSchema(): any {
 }
 
 // ============================================================================
+// Geohash Encoding (for client-side fallback)
+// ============================================================================
+
+const BASE32_CHARS = "0123456789bcdefghjkmnpqrstuvwxyz";
+
+/**
+ * Encode lat/lng to a geohash string of the specified precision.
+ * This is a simple implementation used when geohash7 isn't available from the
+ * data pipeline but we have coordinates.
+ */
+function encodeGeohash(
+  latitude: number,
+  longitude: number,
+  precision: number = 7,
+): string {
+  let latMin = -90.0;
+  let latMax = 90.0;
+  let lonMin = -180.0;
+  let lonMax = 180.0;
+  let hash = "";
+  let bit = 0;
+  let ch = 0;
+  let isLon = true;
+
+  while (hash.length < precision) {
+    if (isLon) {
+      const mid = (lonMin + lonMax) / 2;
+      if (longitude >= mid) {
+        ch |= 1 << (4 - bit);
+        lonMin = mid;
+      } else {
+        lonMax = mid;
+      }
+    } else {
+      const mid = (latMin + latMax) / 2;
+      if (latitude >= mid) {
+        ch |= 1 << (4 - bit);
+        latMin = mid;
+      } else {
+        latMax = mid;
+      }
+    }
+    isLon = !isLon;
+    if (bit < 4) {
+      bit++;
+    } else {
+      hash += BASE32_CHARS[ch];
+      bit = 0;
+      ch = 0;
+    }
+  }
+
+  return hash;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -52,10 +108,14 @@ function invalidateCache() {
  *
  * The caller should provide `latitude` / `longitude` when available so the
  * spatial `center` column stays accurate (used by the place-matching pipeline).
+ *
+ * If geohash7 is null or empty but lat/lng are provided, a geohash7 will be
+ * computed client-side. This allows saving location labels even when the
+ * data pipeline didn't provide a geohash (e.g., segment-based blocks).
  */
 export async function saveLocationLabel(
   userId: string,
-  geohash7: string,
+  geohash7: string | null | undefined,
   customLabel: string,
   options?: {
     category?: string;
@@ -66,13 +126,30 @@ export async function saveLocationLabel(
 ): Promise<void> {
   const category = options?.category ?? null;
 
+  // Compute geohash7 from coordinates if not provided
+  let effectiveGeohash7 = geohash7;
+  if (
+    (!effectiveGeohash7 || effectiveGeohash7.trim() === "") &&
+    options?.latitude != null &&
+    options?.longitude != null &&
+    Number.isFinite(options.latitude) &&
+    Number.isFinite(options.longitude)
+  ) {
+    effectiveGeohash7 = encodeGeohash(options.latitude, options.longitude, 7);
+  }
+
+  // If we still don't have a geohash7, we can't save
+  if (!effectiveGeohash7) {
+    throw new Error("Cannot save location label: no geohash7 and no valid coordinates provided");
+  }
+
   try {
     // Check if a user_place already exists for this geohash7
     const { data: existing, error: findError } = await tmSchema()
       .from("user_places")
       .select("id")
       .eq("user_id", userId)
-      .eq("geohash7", geohash7)
+      .eq("geohash7", effectiveGeohash7)
       .maybeSingle();
 
     if (findError) throw handleSupabaseError(findError);
@@ -81,7 +158,7 @@ export async function saveLocationLabel(
       user_id: userId,
       label: customLabel,
       category,
-      geohash7,
+      geohash7: effectiveGeohash7,
     };
 
     if (options?.radius_m != null && Number.isFinite(options.radius_m)) {

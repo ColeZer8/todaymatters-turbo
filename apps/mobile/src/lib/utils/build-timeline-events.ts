@@ -305,6 +305,21 @@ function buildCalendarEvents(
     const { start, end } = scheduledEventToDate(planned_ev, ymd);
     const durationMin = Math.max(1, planned_ev.duration);
 
+    // DEBUG: Log Private Event calculation
+    if (planned_ev.title === "Private Event") {
+      console.log("[buildCalendarEvents] Private Event DEBUG:", {
+        title: planned_ev.title,
+        ymd,
+        startMinutes: planned_ev.startMinutes,
+        durationFromEvent: planned_ev.duration,
+        calculatedStart: start.toISOString(),
+        calculatedEnd: end.toISOString(),
+        calculatedDurationMin: durationMin,
+        timeDiffMs: end.getTime() - start.getTime(),
+        timeDiffMinutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+      });
+    }
+
     // First try matching by plannedEventId
     let matchingActual = actualByPlannedId.get(planned_ev.id);
 
