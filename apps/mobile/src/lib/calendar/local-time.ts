@@ -30,5 +30,6 @@ export function formatLocalIso(date: Date): string {
   const minutes = pad(date.getMinutes());
   const seconds = pad(date.getSeconds());
   const ms = pad(date.getMilliseconds(), 3);
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`;
+  // Fixed: Added timezone suffix to match PostgreSQL timestamptz format
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}+00:00`;
 }
