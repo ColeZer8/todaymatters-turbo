@@ -7,7 +7,7 @@
     "dev": "node ./scripts/expo-dev.mjs",
     "start": "node ./scripts/expo-dev.mjs",
     "android": "expo run:android",
-    "ios": "expo run:ios",
+    "ios": "expo run:ios --device",
     "web": "expo start --web",
     "deploy": "npx expo export -p web && npx eas-cli@latest deploy",
     "android:dev": "APP_ENV=development expo run:android",

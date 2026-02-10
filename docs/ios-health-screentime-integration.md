@@ -64,6 +64,10 @@ This plugin adds:
 - Entitlements:
   - `com.apple.developer.healthkit`
   - `com.apple.developer.family-controls`
+  - `com.apple.developer.family-controls.development` (for Ad Hoc/internal builds)
+
+**Setup:** Family Controls is a restricted capability. See [ios-family-controls-setup.md](./ios-family-controls-setup.md) for requesting approval from Apple and configuring EAS builds.
+
 - Info.plist strings:
   - `NSHealthShareUsageDescription`
   - `NSHealthUpdateUsageDescription`

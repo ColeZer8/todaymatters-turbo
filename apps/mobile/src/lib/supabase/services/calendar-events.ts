@@ -511,12 +511,14 @@ export async function fetchPlannedCalendarEventsForDay(
         .order("scheduled_start", { ascending: true }),
       // Google Calendar ingestion currently stores meetings as `tm.events.type = 'meeting'`.
       // We want those to show up in the PLANNED column, but only for Google Calendar rows.
+      // Filter out private events (they clutter the timeline with no useful info)
       supabase
         .schema("tm")
         .from("events")
         .select("*")
         .eq("user_id", userId)
         .eq("type", "meeting")
+        .neq("title", "Private Event") // Exclude private calendar events
         .lt("scheduled_start", endIso)
         .gt("scheduled_end", startIso)
         .order("scheduled_start", { ascending: true }),

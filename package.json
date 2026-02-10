@@ -7,8 +7,8 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+    "android": "pnpm --filter mobile android",
+    "ios": "pnpm --filter mobile ios"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
