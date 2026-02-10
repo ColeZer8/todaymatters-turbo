@@ -177,6 +177,12 @@ export function useLocationSamplesSync(
                 return;
               }
 
+              // Skip legacy WorkManager fallback when Transistor is the active provider
+              if (process.env.EXPO_PUBLIC_USE_TRANSISTOR_LOCATION === "true") {
+                console.log("📍 [native] Skipping WorkManager fallback (Transistor active)");
+                return;
+              }
+
               if (!BackgroundLocation) {
                 console.warn("📍 [native] BackgroundLocation not available");
                 return;
@@ -325,6 +331,11 @@ export function useLocationSamplesSync(
           },
         );
 
+        // Skip legacy WorkManager fallback when Transistor is the active provider
+        if (process.env.EXPO_PUBLIC_USE_TRANSISTOR_LOCATION === "true") {
+          return;
+        }
+
         // If the foreground-service task can't start for non-permission reasons,
         // ensure the native WorkManager fallback is scheduled (best-effort).
         if (
@@ -417,9 +428,14 @@ export function useLocationSamplesSync(
   // Android foreground location collection: Uses the SAME approach as "Capture Location Now"
   // which we know WORKS. Background task is still registered but not reliable, so we collect
   // location in foreground as a fallback. This runs when app is open.
+  // Skip when Transistor is active — it handles both foreground and background collection.
   useEffect(() => {
     if (Platform.OS !== "android") return;
     if (!isAuthenticated || !userId) return;
+    if (process.env.EXPO_PUBLIC_USE_TRANSISTOR_LOCATION === "true") {
+      console.log("📍 [foreground] Skipping legacy foreground polling (Transistor active)");
+      return;
+    }
 
     let isCancelled = false;
 

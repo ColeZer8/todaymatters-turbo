@@ -261,32 +261,39 @@ export async function startAndroidBackgroundLocationWithProviderAsync(): Promise
     const BG = BackgroundGeolocation as any;
 
     if (!transistorLocationSubscription) {
+      console.log("📍 [transistor] Setting up onLocation listener...");
       transistorLocationSubscription = BG.onLocation((location: Location) => {
+        console.log("📍 [transistor] 🔥 onLocation fired!", JSON.stringify({ lat: location?.coords?.latitude, lng: location?.coords?.longitude, ts: location?.timestamp }));
         const userId = useAuthStore.getState().user?.id ?? null;
-        if (!userId) return;
+        if (!userId) { console.warn("📍 [transistor] No userId, skipping"); return; }
         const sample = toSample(location, { collected_via: "transistor_event" });
-        if (!sample) return;
+        if (!sample) { console.warn("📍 [transistor] toSample returned null"); return; }
 
         lastTransistorSampleAt = sample.recorded_at;
         if ((location as any).activity?.type) {
           lastTransistorActivity = String((location as any).activity.type);
         }
+        console.log("📍 [transistor] Enqueuing sample:", sample.recorded_at);
         void enqueueAndroidLocationSamplesForUserAsync(userId, [sample]);
       });
     }
 
     if (!transistorActivitySubscription) {
       transistorActivitySubscription = BG.onActivityChange((event: unknown) => {
+        console.log("📍 [transistor] Activity changed:", JSON.stringify(event));
         lastTransistorActivity = summarizeActivity((event ?? {}) as { activity?: unknown; confidence?: unknown });
       });
     }
 
     const state = await BG.getState();
+    console.log("📍 [transistor] State:", JSON.stringify({ enabled: state.enabled, isMoving: state.isMoving, trackingMode: state.trackingMode }));
     if (!state.enabled) {
       await BG.start();
+      console.log("📍 [transistor] ✅ start() called successfully");
       return { ok: true, reason: "started" };
     }
 
+    console.log("📍 [transistor] Already running, skipping start()");
     return { ok: true, reason: "already_running" };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
