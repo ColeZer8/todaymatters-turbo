@@ -1,6 +1,10 @@
 import { Platform } from "react-native";
 import Constants, { ExecutionEnvironment } from "expo-constants";
-import type { Location, Subscription, AuthorizationStatus } from "react-native-background-geolocation";
+
+// Types inlined to avoid Metro resolving native module at bundle time
+type Location = { coords: any; timestamp: any; uuid?: string; age?: number; is_moving?: boolean; event?: string; activity?: any; provider?: any; mock?: boolean };
+type Subscription = { remove: () => void };
+type AuthorizationStatus = number;
 import {
   requestIosLocationPermissionsAsync as requestLegacyIosLocationPermissionsAsync,
   startIosBackgroundLocationAsync as startLegacyIosBackgroundLocationAsync,
