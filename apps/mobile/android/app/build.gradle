@@ -96,8 +96,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // EAS uses these when android/ exists; keep in sync with app.config.js version/versionCode
-        versionCode 14
-        versionName "1.0.7"
+        versionCode 15
+        versionName "1.0.8"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

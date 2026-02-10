@@ -1,4 +1,7 @@
 PODS:
+  - CocoaLumberjack (3.8.5):
+    - CocoaLumberjack/Core (= 3.8.5)
+  - CocoaLumberjack/Core (3.8.5)
   - EASClient (1.0.8):
     - ExpoModulesCore
   - EXApplication (7.0.7):
@@ -2024,6 +2027,30 @@ PODS:
     - React-utils (= 0.81.4)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.81.4)
+  - RNBackgroundGeolocation (5.0.3):
+    - CocoaLumberjack (~> 3.8.5)
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - TSLocationManager (~> 4.0.10)
+    - Yoga
   - RNCAsyncStorage (2.2.0):
     - hermes-engine
     - RCTRequired
@@ -2327,6 +2354,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - TSBackgroundFetch (4.0.6)
+  - TSLocationManager (4.0.14):
+    - TSBackgroundFetch (~> 4.0.6)
   - UMAppLoader (6.0.8)
   - WebRTC-SDK (137.7151.04)
   - Yoga (0.0.0)
@@ -2433,6 +2463,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - "ReactCommon/turbomodule/core (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactCommon`)"
   - "ReactNativeDependencies (from `../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)"
+  - "RNBackgroundGeolocation (from `../../../node_modules/.pnpm/react-native-background-geolocation@5.0.3/node_modules/react-native-background-geolocation`)"
   - "RNCAsyncStorage (from `../../../node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.81.4_@babel+core@7.28.5_@types_fgi4ssinuzsxlrp6cciashkc5i/node_modules/@react-native-async-storage/async-storage`)"
   - "RNDateTimePicker (from `../../../node_modules/.pnpm/@react-native-community+datetimepicker@8.5.1_expo@54.0.23_@babel+core@7.28.5_@expo+metro-runt_ayldyxhpl5ciopng54jr62o6ca/node_modules/@react-native-community/datetimepicker`)"
   - "RNGestureHandler (from `../../../node_modules/.pnpm/react-native-gesture-handler@2.28.0_react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1._prkmbkv2fyyyptonqid3wt7ooi/node_modules/react-native-gesture-handler`)"
@@ -2445,7 +2476,10 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
+    - CocoaLumberjack
     - ReachabilitySwift
+    - TSBackgroundFetch
+    - TSLocationManager
     - WebRTC-SDK
 
 EXTERNAL SOURCES:
@@ -2650,6 +2684,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNBackgroundGeolocation:
+    :path: "../../../node_modules/.pnpm/react-native-background-geolocation@5.0.3/node_modules/react-native-background-geolocation"
   RNCAsyncStorage:
     :path: "../../../node_modules/.pnpm/@react-native-async-storage+async-storage@2.2.0_react-native@0.81.4_@babel+core@7.28.5_@types_fgi4ssinuzsxlrp6cciashkc5i/node_modules/@react-native-async-storage/async-storage"
   RNDateTimePicker:
@@ -2670,6 +2706,7 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/react-native@0.81.4_@babel+core@7.28.5_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  CocoaLumberjack: 6a459bc897d6d80bd1b8c78482ec7ad05dffc3f0
   EASClient: 40dd9e740684782610c49becab2643782ea1a20c
   EXApplication: 296622817d459f46b6c5fe8691f4aac44d2b79e7
   EXConstants: fd688cef4e401dcf798a021cfb5d87c890c30ba3
@@ -2771,6 +2808,7 @@ SPEC CHECKSUMS:
   ReactCodegen: 247ade899a5277d2c36afb0b81f0fa4bd878eed4
   ReactCommon: 149b6c05126f2e99f2ed0d3c63539369546f8cae
   ReactNativeDependencies: ed6d1e64802b150399f04f1d5728ec16b437251e
+  RNBackgroundGeolocation: fdadb52dac5ed0c0c48a7e1946ddcd4d50b63ee4
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
   RNDateTimePicker: 19ffa303c4524ec0a2dfdee2658198451c16b7f1
   RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
@@ -2778,6 +2816,8 @@ SPEC CHECKSUMS:
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
   RNSVG: 99ab6158011aece12019b236f168faa7a1e41af6
   RNWorklets: 53b98d69c79705a0fdef0daa5b7282f37908b33f
+  TSBackgroundFetch: 0afbeaae4e1132866e1d4b6e55265af26b5958ae
+  TSLocationManager: 6b8551c21b6faa56513cbb6ae4d62676ac395f34
   UMAppLoader: 145337733539f9af9b3dd97eeaa7f3bd97cacb23
   WebRTC-SDK: 40d4f5ba05cadff14e4db5614aec402a633f007e
   Yoga: 051f086b5ccf465ff2ed38a2cf5a558ae01aaaa1

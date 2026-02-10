@@ -77,10 +77,10 @@ export default {
     orientation: 'default',
     name: 'mobile',
     slug: 'mobile',
-    version: '1.0.7',
+    version: '1.0.8',
     ios: {
       bundleIdentifier: 'com.todaymatters.mobile',
-      buildNumber: '14',
+      buildNumber: '15',
       supportsTablet: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -97,7 +97,7 @@ export default {
     },
     android: {
       package: 'com.todaymatters.mobile',
-      versionCode: 14,
+      versionCode: 15,
       softwareKeyboardLayoutMode: 'resize',
       permissions: [
         'android.permission.RECORD_AUDIO',
@@ -206,7 +206,7 @@ export default {
       checkAutomatically: 'ON_LOAD',
       fallbackToCacheTimeout: 0,
     },
-    runtimeVersion: '1.0.7',
+    runtimeVersion: '1.0.8',
   },
 };
 
