@@ -3,6 +3,9 @@
     "development-simulator": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "ENABLE_FAMILY_CONTROLS": "1"
+      },
       "ios": {
         "simulator": true
       },
@@ -14,6 +17,9 @@
     "development-device": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "ENABLE_FAMILY_CONTROLS": "1"
+      },
       "ios": {
         "simulator": false
       },
@@ -25,16 +31,25 @@
     "testflight": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "ENABLE_FAMILY_CONTROLS": "1"
+      },
       "ios": {
         "simulator": false
       }
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "ENABLE_FAMILY_CONTROLS": "1"
+      },
       "channel": "preview"
     },
     "production": {
       "channel": "production",
+      "env": {
+        "ENABLE_FAMILY_CONTROLS": "1"
+      },
       "android": {
         "buildType": "app-bundle"
       }
