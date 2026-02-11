@@ -54,6 +54,7 @@ import {
 } from "@/lib/supabase/services/calendar-events";
 import { fetchCommunicationEventsForDay } from "@/lib/supabase/services/communication-events";
 import { createUserPlace } from "@/lib/supabase/services/user-places";
+import { getLocationLabels, encodeGeohash } from "@/lib/supabase/services/location-labels";
 
 // ============================================================================
 // Types
@@ -262,6 +263,21 @@ export const LocationBlockList = ({
         console.warn("[LocationBlockList] Place inference warning:", infErr);
       }
 
+      // 3a. Fetch user-saved location labels
+      let userLabels: Record<string, { label: string; category?: string }> = {};
+      try {
+        userLabels = await getLocationLabels(userId);
+        if (__DEV__) {
+          console.log("[LocationBlockList] 🔍 Loaded user labels:", Object.keys(userLabels).length, "places");
+          if (Object.keys(userLabels).length > 0) {
+            console.log("[LocationBlockList] 🔍 User label geohashes:", Object.keys(userLabels));
+            console.log("[LocationBlockList] 🔍 User label names:", Object.values(userLabels).map(v => v.label));
+          }
+        }
+      } catch (labelErr) {
+        console.warn("[LocationBlockList] User labels fetch warning:", labelErr);
+      }
+
       // 4. Build hour -> location map
       const locationByHour = new Map<string, LocationHourlyRow>();
       for (const row of ((locationRows || []) as unknown as LocationHourlyRow[])) {
@@ -311,6 +327,37 @@ export const LocationBlockList = ({
           : null;
 
         // Determine best place label
+        // Priority: user-saved label > pipeline label > inference > google > fallback
+        
+        // Try to find user-saved label by geohash7
+        let userSavedLabel: string | null = null;
+        if (geohash7) {
+          userSavedLabel = userLabels[geohash7]?.label ?? null;
+        }
+        
+        // FALLBACK: If no geohash7 from location_hourly, try generating one from segment coords
+        // This handles cases where location_hourly has no geohash but user saved a label
+        // CRITICAL: Must run BEFORE enrichedLabel computation
+        const hourSegments = segmentsByHour.get(hourKey) || [];
+        if (!userSavedLabel && !geohash7 && hourSegments.length > 0) {
+          const firstSeg = hourSegments.find(s => 
+            s.locationLat != null && 
+            s.locationLng != null && 
+            Number.isFinite(s.locationLat) && 
+            Number.isFinite(s.locationLng)
+          );
+          if (firstSeg) {
+            // Generate geohash7 from segment coordinates (same logic as saveLocationLabel)
+            const generatedGeohash = encodeGeohash(firstSeg.locationLat, firstSeg.locationLng, 7);
+            userSavedLabel = userLabels[generatedGeohash]?.label ?? null;
+            if (__DEV__ && userSavedLabel) {
+              console.log(`[LocationBlockList] ✅ Found user label via GENERATED geohash (${generatedGeohash}):`, userSavedLabel);
+            } else if (__DEV__) {
+              console.log(`[LocationBlockList] 🔍 Tried GENERATED geohash (${generatedGeohash}), no match`);
+            }
+          }
+        }
+        
         const inferredLabel = inferredPlace?.suggestedLabel;
         const hasMeaningfulInference =
           inferredLabel &&
@@ -324,8 +371,26 @@ export const LocationBlockList = ({
           summary.primaryPlaceLabel !== "Location" &&
           summary.primaryPlaceLabel !== "Unknown";
 
+        // DEBUG: Log label resolution for each hour
+        if (__DEV__ && geohash7) {
+          console.log(`[LocationBlockList] 🔍 Hour ${hourKey} label resolution:`, {
+            geohash7,
+            userSavedLabel: userSavedLabel || '(none)',
+            hasUserLabel: !!userSavedLabel,
+            pipelineLabel: locData?.place_label || '(none)',
+            inferredLabel: inferredLabel || '(none)',
+            googleLabel: locData?.google_place_name || '(none)',
+          });
+        }
+
         let enrichedLabel: string | null = null;
-        if (hasUserDefinedLabel) {
+        if (userSavedLabel) {
+          // User-saved labels take highest priority
+          enrichedLabel = userSavedLabel;
+          if (__DEV__) {
+            console.log(`[LocationBlockList] ✅ Using USER LABEL for ${geohash7}:`, enrichedLabel);
+          }
+        } else if (hasUserDefinedLabel) {
           enrichedLabel = summary.primaryPlaceLabel;
         } else {
           enrichedLabel =
@@ -399,8 +464,6 @@ export const LocationBlockList = ({
             }
           }
         }
-
-        const hourSegments = segmentsByHour.get(hourKey) || [];
 
         const result: EnrichedSummary = {
           ...summary,
@@ -529,14 +592,20 @@ export const LocationBlockList = ({
   const handlePlaceSelected = useCallback(
     async (block: LocationBlock, selection: PlaceSelection) => {
       try {
-        const lat = block.latitude
-          ?? block.segments?.find((s) => s.locationLat != null)?.locationLat
-          ?? 0;
-        const lng = block.longitude
-          ?? block.segments?.find((s) => s.locationLng != null)?.locationLng
-          ?? 0;
+        const firstValidSegment = block.segments?.find((s) =>
+          s.locationLat != null &&
+          s.locationLng != null &&
+          Number.isFinite(s.locationLat) &&
+          Number.isFinite(s.locationLng)
+        );
+        const lat = block.inferredPlace?.latitude
+          ?? firstValidSegment?.locationLat
+          ?? null;
+        const lng = block.inferredPlace?.longitude
+          ?? firstValidSegment?.locationLng
+          ?? null;
 
-        if (lat === 0 && lng === 0) {
+        if (lat === null || lng === null) {
           console.warn("[LocationBlockList] No coordinates for place creation");
           return;
         }
@@ -573,11 +642,17 @@ export const LocationBlockList = ({
       const filteredBlock = applyFilter(item);
       const handleBlockEventPress = (event: TimelineEvent) => {
         if (onEventPressProp) {
+          const firstValidSegment = item.segments?.find(s =>
+            s.locationLat != null &&
+            s.locationLng != null &&
+            Number.isFinite(s.locationLat) &&
+            Number.isFinite(s.locationLng)
+          );
           const lat = item.inferredPlace?.latitude
-            ?? item.segments?.find(s => s.locationLat != null)?.locationLat
+            ?? firstValidSegment?.locationLat
             ?? null;
           const lng = item.inferredPlace?.longitude
-            ?? item.segments?.find(s => s.locationLng != null)?.locationLng
+            ?? firstValidSegment?.locationLng
             ?? null;
           onEventPressProp(event, {
             allBlockEvents: filteredBlock.timelineEvents ?? [],

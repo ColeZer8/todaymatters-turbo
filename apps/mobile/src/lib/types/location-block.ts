@@ -131,4 +131,8 @@ export interface LocationBlock {
   // -- Timeline --
   /** Merged chronological timeline events for rendering. */
   timelineEvents?: TimelineEvent[];
+
+  // -- Location Carry-Forward --
+  /** Whether this block was synthetically created by carrying forward a previous location. */
+  isCarriedForward?: boolean;
 }

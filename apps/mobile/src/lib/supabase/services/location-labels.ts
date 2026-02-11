@@ -28,8 +28,10 @@ const BASE32_CHARS = "0123456789bcdefghjkmnpqrstuvwxyz";
  * Encode lat/lng to a geohash string of the specified precision.
  * This is a simple implementation used when geohash7 isn't available from the
  * data pipeline but we have coordinates.
+ * 
+ * Exported for use in other modules that need to match geohashes.
  */
-function encodeGeohash(
+export function encodeGeohash(
   latitude: number,
   longitude: number,
   precision: number = 7,
@@ -92,8 +94,18 @@ let cachedUserId: string | null = null;
 let cachedLabels: Record<string, LocationLabelEntry> | null = null;
 
 function invalidateCache() {
+  if (__DEV__) {
+    console.log('🔍 [invalidateCache] Clearing cache. Previous state:', {
+      hadUserId: !!cachedUserId,
+      hadLabels: !!cachedLabels,
+      labelCount: cachedLabels ? Object.keys(cachedLabels).length : 0,
+    });
+  }
   cachedUserId = null;
   cachedLabels = null;
+  if (__DEV__) {
+    console.log('✅ [invalidateCache] Cache cleared');
+  }
 }
 
 // ============================================================================
@@ -126,6 +138,18 @@ export async function saveLocationLabel(
 ): Promise<void> {
   const category = options?.category ?? null;
 
+  if (__DEV__) {
+    console.log('🔍 [saveLocationLabel] CALLED with:', {
+      userId: userId?.substring(0, 8) + '...',
+      geohash7,
+      customLabel,
+      category,
+      lat: options?.latitude,
+      lng: options?.longitude,
+      radius_m: options?.radius_m,
+    });
+  }
+
   // Compute geohash7 from coordinates if not provided
   let effectiveGeohash7 = geohash7;
   if (
@@ -136,15 +160,24 @@ export async function saveLocationLabel(
     Number.isFinite(options.longitude)
   ) {
     effectiveGeohash7 = encodeGeohash(options.latitude, options.longitude, 7);
+    if (__DEV__) {
+      console.log('🔍 [saveLocationLabel] Computed geohash7 from coords:', effectiveGeohash7);
+    }
   }
 
   // If we still don't have a geohash7, we can't save
   if (!effectiveGeohash7) {
-    throw new Error("Cannot save location label: no geohash7 and no valid coordinates provided");
+    const errorMsg = "Cannot save location label: no geohash7 and no valid coordinates provided";
+    if (__DEV__) console.error('❌ [saveLocationLabel]', errorMsg);
+    throw new Error(errorMsg);
   }
 
   try {
     // Check if a user_place already exists for this geohash7
+    if (__DEV__) {
+      console.log('🔍 [saveLocationLabel] Checking for existing place with geohash7:', effectiveGeohash7);
+    }
+    
     const { data: existing, error: findError } = await tmSchema()
       .from("user_places")
       .select("id")
@@ -152,7 +185,14 @@ export async function saveLocationLabel(
       .eq("geohash7", effectiveGeohash7)
       .maybeSingle();
 
-    if (findError) throw handleSupabaseError(findError);
+    if (findError) {
+      if (__DEV__) console.error('❌ [saveLocationLabel] Find error:', findError);
+      throw handleSupabaseError(findError);
+    }
+
+    if (__DEV__) {
+      console.log('🔍 [saveLocationLabel] Existing place:', existing ? `Found (id: ${existing.id})` : 'Not found');
+    }
 
     const payload: Record<string, unknown> = {
       user_id: userId,
@@ -177,23 +217,51 @@ export async function saveLocationLabel(
 
     if (existing?.id) {
       // Update existing row
+      if (__DEV__) {
+        console.log('🔍 [saveLocationLabel] UPDATING existing place:', payload);
+      }
+      
       const { error } = await tmSchema()
         .from("user_places")
         .update(payload)
         .eq("id", existing.id);
 
-      if (error) throw handleSupabaseError(error);
+      if (error) {
+        if (__DEV__) console.error('❌ [saveLocationLabel] Update error:', error);
+        throw handleSupabaseError(error);
+      }
+      
+      if (__DEV__) {
+        console.log('✅ [saveLocationLabel] UPDATE successful');
+      }
     } else {
       // Insert new row — radius defaults to 100m in the table default
+      if (__DEV__) {
+        console.log('🔍 [saveLocationLabel] INSERTING new place:', payload);
+      }
+      
       const { error } = await tmSchema()
         .from("user_places")
         .insert(payload);
 
-      if (error) throw handleSupabaseError(error);
+      if (error) {
+        if (__DEV__) console.error('❌ [saveLocationLabel] Insert error:', error);
+        throw handleSupabaseError(error);
+      }
+      
+      if (__DEV__) {
+        console.log('✅ [saveLocationLabel] INSERT successful');
+      }
     }
 
     invalidateCache();
+    if (__DEV__) {
+      console.log('✅ [saveLocationLabel] Cache invalidated, operation complete');
+    }
   } catch (error) {
+    if (__DEV__) {
+      console.error('❌ [saveLocationLabel] Caught error:', error);
+    }
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -209,7 +277,15 @@ export async function getLocationLabels(
 ): Promise<Record<string, LocationLabelEntry>> {
   // Return cached if still valid
   if (cachedUserId === userId && cachedLabels !== null) {
+    if (__DEV__) {
+      console.log('🔍 [getLocationLabels] Returning CACHED labels:', Object.keys(cachedLabels).length, 'places');
+      console.log('🔍 [getLocationLabels] Cached geohash7 keys:', Object.keys(cachedLabels));
+    }
     return cachedLabels;
+  }
+
+  if (__DEV__) {
+    console.log('🔍 [getLocationLabels] FETCHING labels for user:', userId?.substring(0, 8) + '...');
   }
 
   try {
@@ -219,7 +295,14 @@ export async function getLocationLabels(
       .eq("user_id", userId)
       .not("geohash7", "is", null);
 
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      if (__DEV__) console.error('❌ [getLocationLabels] Fetch error:', error);
+      throw handleSupabaseError(error);
+    }
+
+    if (__DEV__) {
+      console.log('🔍 [getLocationLabels] Fetched', data?.length || 0, 'rows from database');
+    }
 
     const map: Record<string, LocationLabelEntry> = {};
     for (const row of data ?? []) {
@@ -235,8 +318,17 @@ export async function getLocationLabels(
     cachedUserId = userId;
     cachedLabels = map;
 
+    if (__DEV__) {
+      console.log('✅ [getLocationLabels] Built label map with', Object.keys(map).length, 'entries');
+      console.log('🔍 [getLocationLabels] Map keys (geohash7):', Object.keys(map));
+      console.log('🔍 [getLocationLabels] Map values (labels):', Object.values(map).map(v => v.label));
+    }
+
     return map;
   } catch (error) {
+    if (__DEV__) {
+      console.error('❌ [getLocationLabels] Caught error:', error);
+    }
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }

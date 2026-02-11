@@ -124,24 +124,22 @@ const MAX_REALISTIC_SPEED_MS = 67;
 /**
  * Minimum speed in m/s to be considered actual movement.
  * Below this threshold, movement is likely GPS drift/noise.
- * 0.15 m/s ≈ 0.3 mph - allows very slow walks to be detected.
- * Lowered from 0.3 to match Google's sensitivity for detecting slow movement.
+ * 0.3 m/s ≈ 0.7 mph is above typical GPS noise floor (~0.33 m/s).
+ * This prevents stationary GPS drift from being detected as movement.
  */
-const MIN_MOVEMENT_SPEED_MS = 0.15; // Was 0.3, now 0.15
+const MIN_MOVEMENT_SPEED_MS = 0.3;
 
 /**
  * Classify movement type based on average speed.
  * 
- * Speed thresholds (calibrated to match Google Timeline):
- * - Stationary: < 0.15 m/s (~0.3 mph) - GPS noise/drift
- * - Walking: 0.15-2.2 m/s (~0.3-5 mph) - includes slow walks
+ * Speed thresholds (balanced for accuracy):
+ * - Stationary: < 0.3 m/s (~0.7 mph) - GPS noise/drift threshold
+ * - Walking: 0.3-2.2 m/s (~0.7-5 mph) - typical walking
  * - Cycling: 2.2-7.0 m/s (~5-15.5 mph) - typical cycling speeds
  * - Driving: > 7.0 m/s (~15.5 mph) - car/transit
  * 
- * RECALIBRATED: Lowered thresholds to match Google's sensitivity:
- * - Walking threshold lowered from 2.5 to 2.2 m/s
- * - Cycling threshold lowered from 8.0 to 7.0 m/s
- * - Stationary threshold lowered from 0.3 to 0.15 m/s
+ * The 0.3 m/s stationary threshold is above typical GPS drift (~0.33 m/s from 10m error / 30s interval).
+ * This prevents false positives from stationary GPS noise.
  * 
  * GPS sanity check: speeds above ~150 mph are GPS errors.
  */
@@ -217,11 +215,11 @@ const PLACE_MATCH_THRESHOLD = 0.7;
 /** 
  * Minimum commute duration in milliseconds to create a separate commute segment.
  * 
- * CHANGED: Lowered from 10 minutes to 1 minute to match Google Timeline granularity.
- * Google shows even 1-2 minute walks/drives as separate segments.
- * This ensures we capture all intentional movement, not just longer commutes.
+ * 1 minute allows detection of short but genuine trips (e.g., drive to nearby store).
+ * This is acceptable because GPS accuracy filtering and 0.3 m/s speed threshold
+ * prevent false positives from GPS drift being classified as 1-minute trips.
  */
-const MIN_COMMUTE_DURATION_MS = 1 * 60 * 1000; // 1 minute (was 2)
+const MIN_COMMUTE_DURATION_MS = 1 * 60 * 1000; // 1 minute
 
 /** Maximum movement speed in m/s to be considered stationary (walking pace ~1.4 m/s) */
 const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
@@ -235,10 +233,11 @@ const MIN_DWELL_TIME_MS = 5 * 60 * 1000; // 5 minutes
 
 /** 
  * Minimum total distance traveled to consider as movement.
- * Lowered from 200m to 100m to match Google Timeline's sensitivity.
- * Google detects short walks (e.g., walking 100m to a nearby store).
+ * 100m is reasonable for short walks (e.g., to a nearby store).
+ * This is safe because GPS accuracy filtering removes low-quality samples
+ * that could produce false 100m+ movements from position drift.
  */
-const MIN_COMMUTE_DISTANCE_M = 100; // 100 meters (was 200)
+const MIN_COMMUTE_DISTANCE_M = 100; // 100 meters
 
 /** Maximum gap in milliseconds to merge into adjacent sessions (5 minutes) */
 const MAX_MICRO_GAP_MS = 5 * 60 * 1000;
@@ -258,9 +257,45 @@ const HOME_PLACE_LABELS = ["home", "house", "apartment", "residence", "my place"
 /** Confidence threshold below which location labels become fuzzy (use "Near [Area]" format) */
 export const FUZZY_LOCATION_CONFIDENCE_THRESHOLD = 0.7;
 
+/**
+ * Maximum GPS accuracy (horizontal error) in meters to accept for movement detection.
+ * Samples with accuracy > 30m are likely indoor/urban canyon GPS drift and should be filtered.
+ * This prevents low-quality GPS readings from being misclassified as movement.
+ */
+const MAX_GPS_ACCURACY_M = 30;
+
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Filter location samples by GPS accuracy to remove low-quality readings.
+ * Removes samples with accuracy > MAX_GPS_ACCURACY_M to prevent GPS drift
+ * from being misclassified as movement.
+ * 
+ * @param samples - Location samples to filter
+ * @returns Filtered samples with acceptable GPS accuracy
+ */
+function filterAccurateSamples(samples: EvidenceLocationSample[]): EvidenceLocationSample[] {
+  return samples.filter((sample) => {
+    // Keep samples without accuracy data (backward compatibility)
+    if (sample.accuracy_m === null || sample.accuracy_m === undefined) {
+      return true;
+    }
+    
+    // Filter out low-accuracy GPS (likely indoor/urban canyon drift)
+    if (sample.accuracy_m > MAX_GPS_ACCURACY_M) {
+      if (__DEV__) {
+        console.log(
+          `📍 [filterAccurateSamples] Filtered sample with accuracy ${sample.accuracy_m.toFixed(1)}m > ${MAX_GPS_ACCURACY_M}m`
+        );
+      }
+      return false;
+    }
+    
+    return true;
+  });
+}
 
 /**
  * Calculate the haversine distance between two points in meters.
@@ -570,10 +605,22 @@ export function generateLocationSegments(
     return [];
   }
 
+  // Filter samples by GPS accuracy to remove low-quality readings
+  const accurateSamples = filterAccurateSamples(locationSamples);
+  if (__DEV__ && accurateSamples.length !== locationSamples.length) {
+    console.log(
+      `📍 [generateLocationSegments] Filtered ${locationSamples.length - accurateSamples.length} low-accuracy samples (${accurateSamples.length} remaining)`
+    );
+  }
+
+  if (accurateSamples.length === 0) {
+    return [];
+  }
+
   const segments: LocationSegment[] = [];
 
   // Sort samples by timestamp
-  const sortedSamples = [...locationSamples].sort(
+  const sortedSamples = [...accurateSamples].sort(
     (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
   );
 
@@ -1107,8 +1154,16 @@ export function detectCommute(
     return timestamp >= startTime.getTime() && timestamp <= endTime.getTime();
   });
 
+  // Filter by GPS accuracy to remove low-quality readings
+  const accurateSamples = filterAccurateSamples(windowSamples);
+  if (__DEV__ && accurateSamples.length !== windowSamples.length) {
+    console.log(
+      `📍 [detectCommute] Filtered ${windowSamples.length - accurateSamples.length} low-accuracy samples in commute detection`
+    );
+  }
+
   // Sort by timestamp
-  const sortedSamples = [...windowSamples].sort(
+  const sortedSamples = [...accurateSamples].sort(
     (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
   );
 
@@ -1293,11 +1348,10 @@ export function applyTravelAnnotations(
 
 /**
  * Minimum gap in milliseconds to check for commute.
- * 15 seconds allows detection of very short movements between nearby locations.
- * Google Timeline shows even brief walks/drives (< 1 min) as separate segments.
- * Lowered from 30s to capture more granular movement patterns.
+ * 30 seconds prevents false positives from brief pauses (traffic lights, crosswalks).
+ * Gaps shorter than this are likely normal pauses within a stay, not travel.
  */
-const MIN_COMMUTE_GAP_CHECK_MS = 15 * 1000; // 15 seconds (was 30)
+const MIN_COMMUTE_GAP_CHECK_MS = 30 * 1000; // 30 seconds
 
 /**
  * Process location segments with commute detection.

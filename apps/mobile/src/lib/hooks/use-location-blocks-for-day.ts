@@ -30,6 +30,7 @@ import type { LocationBlock, PlaceAlternative } from "@/lib/types/location-block
 import {
   groupIntoLocationBlocks,
   groupSegmentsIntoLocationBlocks,
+  fillLocationGaps,
 } from "@/lib/utils/group-location-blocks";
 import {
   type HourlySummary,
@@ -363,7 +364,7 @@ export function useLocationBlocksForDay(
       // ------------------------------------------------------------------
       // 5b. Auto reverse geocode segments with missing place labels
       // ------------------------------------------------------------------
-      let resolvedLabels = new Map<string, string>();
+      let resolvedLabels = new Map<string, ResolvedPlaceData>();
       if (allSegments.length > 0) {
         try {
           resolvedLabels = await resolveUnknownPlaceLabels(allSegments);
@@ -556,7 +557,20 @@ export function useLocationBlocksForDay(
         );
       }
 
-      setBlocks(locationBlocks);
+      // ------------------------------------------------------------------
+      // 8. Fill location gaps with carry-forward logic
+      //    - Detects gaps where user was stationary but no GPS samples
+      //    - Carries forward last known location to fill the gap
+      //    - Stops at travel blocks (movement = new location)
+      // ------------------------------------------------------------------
+      const blocksWithGapsFilled = fillLocationGaps(locationBlocks, enriched);
+      if (blocksWithGapsFilled.length !== locationBlocks.length) {
+        console.log(
+          `[useLocationBlocksForDay] Filled gaps: ${locationBlocks.length} blocks → ${blocksWithGapsFilled.length} blocks (${blocksWithGapsFilled.length - locationBlocks.length} gaps filled)`,
+        );
+      }
+
+      setBlocks(blocksWithGapsFilled);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to load location blocks";

@@ -488,7 +488,7 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
   const blockType = isTravel ? "travel" : "stationary";
 
   // -- Movement type & distance for travel blocks --
-  let movementType: "walking" | "cycling" | "driving" | "unknown" | null = null;
+  let movementType: MovementType | null = null;
   let distanceM: number | null = null;
   if (isTravel) {
     const commuteSegments = allSegments.filter(
@@ -496,7 +496,7 @@ function buildBlock(group: EnrichedSummary[]): LocationBlock {
     );
     // Pick the dominant movement type from commute segments
     for (const seg of commuteSegments) {
-      if (seg.movementType && seg.movementType !== "unknown") {
+      if (seg.movementType && seg.movementType !== "unknown" && seg.movementType !== "stationary") {
         movementType = seg.movementType;
         break;
       }
@@ -725,4 +725,294 @@ export function groupIntoLocationBlocks(
   groups.push(currentGroup);
 
   return groups.map(buildBlock);
+}
+
+// ============================================================================
+// Location Carry-Forward (Gap Filling)
+// ============================================================================
+
+/**
+ * Minimum gap duration in milliseconds to consider for carry-forward.
+ * 30 minutes - shorter gaps are likely just data collection pauses.
+ */
+const MIN_GAP_FOR_CARRY_FORWARD_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Maximum gap duration to carry forward a location.
+ * 16 hours - covers overnight stays (e.g., 9pm → 1pm = 16 hours).
+ * Longer than this and we can't be confident the user stayed put.
+ */
+const MAX_CARRY_FORWARD_DURATION_MS = 16 * 60 * 60 * 1000; // 16 hours
+
+/**
+ * Check if a location block has a meaningful location label that should be carried forward.
+ * Filters out unknown/empty/meaningless locations.
+ */
+function hasMeaningfulLocation(block: LocationBlock): boolean {
+  const normalized = block.locationLabel?.trim().toLowerCase() || '';
+  if (!normalized) return false;
+  
+  // Don't carry forward these meaningless labels (normalized to lowercase)
+  const meaninglessLabels = [
+    'unknown location',
+    'unknown',
+    'location',
+    'in transit',
+  ];
+  
+  return !meaninglessLabels.includes(normalized);
+}
+
+/**
+ * Fill gaps in location blocks by carrying forward the last known location.
+ * 
+ * This solves the "overnight stationary period" problem where location data
+ * has gaps because GPS tracking is movement-based (Transistor).
+ * 
+ * Algorithm:
+ * 1. Find gaps between blocks (>30 min)
+ * 2. If gap is after a stationary block (not travel), carry forward that location
+ * 3. Stop carrying forward when we hit a travel block (movement = new location)
+ * 4. Create synthetic "carried forward" blocks to fill the gaps
+ * 
+ * @param blocks - Location blocks sorted chronologically
+ * @param summaries - Hourly summaries for the day (for supplementary data)
+ * @returns Blocks with gaps filled by carried-forward locations
+ */
+export function fillLocationGaps(
+  blocks: LocationBlock[],
+  summaries: EnrichedSummary[],
+): LocationBlock[] {
+  if (blocks.length === 0) return blocks;
+
+  // Sort blocks chronologically
+  const sorted = [...blocks].sort(
+    (a, b) => a.startTime.getTime() - b.startTime.getTime(),
+  );
+
+  const result: LocationBlock[] = [];
+  
+  for (let i = 0; i < sorted.length; i++) {
+    const currentBlock = sorted[i];
+    result.push(currentBlock);
+
+    // Check for gap to next block
+    if (i < sorted.length - 1) {
+      const nextBlock = sorted[i + 1];
+      const gapStart = currentBlock.endTime;
+      const gapEnd = nextBlock.startTime;
+      const gapDurationMs = gapEnd.getTime() - gapStart.getTime();
+
+      // Only fill significant gaps
+      if (
+        gapDurationMs >= MIN_GAP_FOR_CARRY_FORWARD_MS &&
+        gapDurationMs <= MAX_CARRY_FORWARD_DURATION_MS
+      ) {
+        // Only carry forward from stationary blocks with meaningful locations
+        if (currentBlock.type === "stationary" && hasMeaningfulLocation(currentBlock)) {
+          // Don't carry forward if next block has a different meaningful location
+          // (user changed locations during the gap)
+          const currentLoc = currentBlock.locationLabel?.trim().toLowerCase() || '';
+          const nextLoc = nextBlock.locationLabel?.trim().toLowerCase() || '';
+          if (
+            nextBlock.type === "stationary" &&
+            hasMeaningfulLocation(nextBlock) &&
+            nextLoc && nextLoc !== currentLoc
+          ) {
+            if (__DEV__) {
+              console.log(
+                `📍 [fillLocationGaps] ⏭️  Skipping gap - location changed ` +
+                `from "${currentBlock.locationLabel}" to "${nextBlock.locationLabel}"`
+              );
+            }
+            continue; // User moved to a different location
+          }
+
+          // Allow carry-forward before travel blocks, but add a 30min buffer
+          // (assume user left shortly before travel started)
+          let adjustedGapEnd = gapEnd;
+          if (nextBlock.type === "travel") {
+            const bufferMs = 30 * 60 * 1000; // 30 minutes
+            adjustedGapEnd = new Date(gapEnd.getTime() - bufferMs);
+            const adjustedDuration = adjustedGapEnd.getTime() - gapStart.getTime();
+            
+            // If gap becomes too small after buffer, skip it
+            if (adjustedDuration < MIN_GAP_FOR_CARRY_FORWARD_MS) {
+              if (__DEV__) {
+                console.log(
+                  `📍 [fillLocationGaps] ⏭️  Skipping gap before travel - too small after buffer ` +
+                  `(${Math.round(adjustedDuration / 1000 / 60)}min after buffer, need ${MIN_GAP_FOR_CARRY_FORWARD_MS / 1000 / 60}min)`
+                );
+              }
+              continue;
+            }
+
+            if (__DEV__) {
+              console.log(
+                `📍 [fillLocationGaps] 📦 Applying 30min buffer before travel block ` +
+                `(${Math.round((gapEnd.getTime() - adjustedGapEnd.getTime()) / 1000 / 60)}min buffer)`
+              );
+            }
+          }
+
+          if (__DEV__) {
+            console.log(
+              `📍 [fillLocationGaps] Found ${Math.round(gapDurationMs / 1000 / 60)}min gap ` +
+              `from ${gapStart.toISOString()} to ${adjustedGapEnd.toISOString()} ` +
+              `after "${currentBlock.locationLabel}"`
+            );
+          }
+
+          // Create a carried-forward block to fill the gap
+          const carriedBlock = createCarriedForwardBlock(
+            currentBlock,
+            gapStart,
+            adjustedGapEnd,
+            summaries,
+          );
+
+          if (carriedBlock) {
+            result.push(carriedBlock);
+            if (__DEV__) {
+              console.log(
+                `📍 [fillLocationGaps] ✅ Carried forward "${currentBlock.locationLabel}" ` +
+                `to fill ${Math.round((adjustedGapEnd.getTime() - gapStart.getTime()) / 1000 / 60)}min gap`
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Sort final result chronologically
+  return result.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+}
+
+/**
+ * Create a synthetic "carried forward" location block to fill a gap.
+ * 
+ * The block inherits location data from the previous block but has:
+ * - New time range (the gap period)
+ * - Screen time data from overlapping hourly summaries
+ * - Lower confidence score (it's inferred, not measured)
+ * - Special flag to indicate it's a carried-forward block
+ */
+function createCarriedForwardBlock(
+  sourceBlock: LocationBlock,
+  gapStart: Date,
+  gapEnd: Date,
+  summaries: EnrichedSummary[],
+): LocationBlock | null {
+  const durationMinutes = Math.round(
+    (gapEnd.getTime() - gapStart.getTime()) / 60000,
+  );
+
+  // Find overlapping hourly summaries for app usage
+  const gapStartMs = gapStart.getTime();
+  const gapEndMs = gapEnd.getTime();
+  const overlappingSummaries = summaries.filter((s) => {
+    const hourStartMs = s.hourStart.getTime();
+    const hourEndMs = hourStartMs + 60 * 60 * 1000;
+    return hourStartMs < gapEndMs && hourEndMs > gapStartMs;
+  });
+
+  // Aggregate app usage from overlapping summaries
+  const appMap = new Map<
+    string,
+    {
+      appId: string;
+      displayName: string;
+      category: string;
+      totalMinutes: number;
+      sessions: AppSession[];
+    }
+  >();
+
+  for (const summary of overlappingSummaries) {
+    for (const app of summary.appBreakdown) {
+      if (app.minutes < 1) continue;
+      const existing = appMap.get(app.appId);
+      if (existing) {
+        existing.totalMinutes += app.minutes;
+      } else {
+        appMap.set(app.appId, {
+          appId: app.appId,
+          displayName: app.displayName,
+          category: app.category,
+          totalMinutes: app.minutes,
+          sessions: [],
+        });
+      }
+    }
+  }
+
+  const apps: BlockAppUsage[] = Array.from(appMap.values())
+    .sort((a, b) => b.totalMinutes - a.totalMinutes)
+    .map((a) => ({
+      appId: a.appId,
+      displayName: a.displayName,
+      category: a.category,
+      totalMinutes: a.totalMinutes,
+      sessions: a.sessions,
+    }));
+
+  const totalScreenMinutes = overlappingSummaries.reduce(
+    (sum, s) => sum + s.totalScreenMinutes,
+    0,
+  );
+
+  // Infer activity for the gap period
+  const midpointHour = Math.round(
+    (gapStart.getHours() + gapEnd.getHours()) / 2,
+  );
+  const allApps: SummaryAppBreakdown[] = overlappingSummaries.flatMap(
+    (s) => s.appBreakdown,
+  );
+  const inferenceContext: InferenceContext = {
+    activity: sourceBlock.dominantActivity, // Inherit from source block
+    apps: allApps,
+    screenMinutes: totalScreenMinutes,
+    hourOfDay: midpointHour,
+    placeLabel: sourceBlock.locationLabel,
+    previousPlaceLabel: null,
+    inferredPlace: sourceBlock.inferredPlace,
+    locationSamples: 0, // No actual samples - this is carried forward
+    confidence: sourceBlock.confidenceScore * 0.6, // Lower confidence for inferred
+    previousGeohash: null,
+    currentGeohash: sourceBlock.geohash7,
+    locationRadius: null,
+    googlePlaceTypes: null,
+  };
+  const activityInference = generateInferenceDescription(inferenceContext);
+
+  return {
+    id: `${sourceBlock.id}-carried-${gapStart.getTime()}`,
+    type: "stationary",
+    movementType: null,
+    distanceM: null,
+    locationLabel: sourceBlock.locationLabel,
+    locationCategory: sourceBlock.locationCategory,
+    inferredPlace: sourceBlock.inferredPlace,
+    isPlaceInferred: sourceBlock.isPlaceInferred,
+    geohash7: sourceBlock.geohash7,
+    startTime: gapStart,
+    endTime: gapEnd,
+    durationMinutes,
+    apps,
+    totalScreenMinutes,
+    dominantActivity: sourceBlock.dominantActivity,
+    activityInference,
+    confidenceScore: Math.max(0.3, sourceBlock.confidenceScore * 0.6), // Lower confidence
+    totalLocationSamples: 0, // No actual samples
+    summaries: overlappingSummaries,
+    segments: [], // No segments - this is synthetic
+    summaryIds: overlappingSummaries.map((s) => s.id),
+    hasUserFeedback: false,
+    isLocked: false,
+    latitude: sourceBlock.latitude,
+    longitude: sourceBlock.longitude,
+    // Mark as carried forward for UI/debugging
+    isCarriedForward: true,
+  };
 }

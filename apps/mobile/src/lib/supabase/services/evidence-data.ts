@@ -109,6 +109,8 @@ export interface EvidenceLocationSample {
   recorded_at: string; // timestamptz — precise timestamp
   latitude: number | null;
   longitude: number | null;
+  /** GPS accuracy in meters (horizontal accuracy) */
+  accuracy_m: number | null;
   is_mocked?: boolean | null;
   /** Additive telemetry, primarily populated by iOS raw.meta/raw.telemetry payloads. */
   telemetry?: IosLocationTelemetryMeta | null;
@@ -219,6 +221,7 @@ export function coerceEvidenceLocationSample(row: {
   recorded_at: string;
   latitude: number | null;
   longitude: number | null;
+  accuracy_m?: number | null;
   is_mocked?: boolean | null;
   raw?: unknown;
 }): EvidenceLocationSample {
@@ -228,6 +231,7 @@ export function coerceEvidenceLocationSample(row: {
     recorded_at: row.recorded_at,
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    accuracy_m: row.accuracy_m ?? null,
     is_mocked:
       typeof row.is_mocked === "boolean"
         ? row.is_mocked
@@ -490,7 +494,7 @@ export async function fetchLocationSamplesForDay(
   try {
     const { data, error } = await tmSchema()
       .from("location_samples")
-      .select("recorded_at, latitude, longitude, is_mocked, raw")
+      .select("recorded_at, latitude, longitude, accuracy_m, is_mocked, raw")
       .eq("user_id", userId)
       .gte("recorded_at", startIso)
       .lt("recorded_at", endIso)
@@ -507,6 +511,7 @@ export async function fetchLocationSamplesForDay(
         recorded_at: string;
         latitude: number | null;
         longitude: number | null;
+        accuracy_m?: number | null;
         is_mocked?: boolean | null;
         raw?: unknown;
       }) => coerceEvidenceLocationSample(row),

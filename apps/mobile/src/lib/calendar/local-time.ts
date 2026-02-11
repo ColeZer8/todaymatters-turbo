@@ -22,14 +22,8 @@ export function ymdMinutesToLocalDate(ymd: string, minutes: number): Date {
 }
 
 export function formatLocalIso(date: Date): string {
-  const pad = (value: number, length = 2) => String(value).padStart(length, "0");
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  const seconds = pad(date.getSeconds());
-  const ms = pad(date.getMilliseconds(), 3);
-  // Fixed: Added timezone suffix to match PostgreSQL timestamptz format
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}+00:00`;
+  // Fixed: Use proper UTC ISO format instead of lying about timezone
+  // Previously extracted LOCAL time components then claimed they were UTC (+00:00)
+  // This caused query windows to be shifted by the timezone offset (e.g., 6 hours for Chicago)
+  return date.toISOString();
 }

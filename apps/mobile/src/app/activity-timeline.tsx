@@ -308,10 +308,18 @@ export default function ActivityTimelineScreen() {
   const handleBannerPress = useCallback(
     (block: LocationBlock) => {
       if (!userId) return;
-      setRenameBlock(block);
-      setRenameText(block.locationLabel);
-      setRenameCategory(null);
-      setRenameRadius(100);
+      
+      if (__DEV__) {
+        console.log('[ActivityTimeline] Banner pressed:', block.locationLabel);
+      }
+      
+      // Use requestAnimationFrame to ensure any scroll gestures have finished
+      requestAnimationFrame(() => {
+        setRenameBlock(block);
+        setRenameText(block.locationLabel);
+        setRenameCategory(null);
+        setRenameRadius(100);
+      });
     },
     [userId],
   );
@@ -330,21 +338,65 @@ export default function ActivityTimelineScreen() {
     const lng = renameBlock?.longitude ?? renameBlock?.inferredPlace?.longitude ?? undefined;
     const hasCoords = lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng);
     
-    if ((!hasGeohash && !hasCoords) || !renameText.trim() || !userId) return;
+    if (__DEV__) {
+      console.log('🔍 [ActivityTimeline] handleSaveRename - block data:', {
+        blockId: renameBlock?.id?.substring(0, 12),
+        hasGeohash,
+        geohash7: renameBlock?.geohash7 || '(null)',
+        hasCoords,
+        lat,
+        lng,
+        locationLabel: renameBlock?.locationLabel,
+        newLabel: renameText.trim(),
+      });
+    }
+    
+    if ((!hasGeohash && !hasCoords) || !renameText.trim() || !userId) {
+      if (__DEV__) {
+        console.warn('[ActivityTimeline] ❌ Cannot save - missing data:', {
+          hasGeohash,
+          hasCoords,
+          hasText: !!renameText.trim(),
+          hasUserId: !!userId,
+        });
+      }
+      Alert.alert('Cannot Save', 'Missing location data. This block might not have GPS coordinates.');
+      return;
+    }
     
     setIsSavingRename(true);
     try {
+      if (__DEV__) {
+        console.log('[ActivityTimeline] 📝 Saving location label:', {
+          geohash7: renameBlock?.geohash7,
+          willGenerateFromCoords: !renameBlock?.geohash7 && hasCoords,
+          label: renameText.trim(),
+          category: renameCategory,
+          radius: renameRadius,
+          lat,
+          lng,
+        });
+      }
+      
       await saveLocationLabel(userId, renameBlock?.geohash7 ?? null, renameText.trim(), {
         category: renameCategory ?? undefined,
         radius_m: renameRadius,
         latitude: lat,
         longitude: lng,
       });
-      handleRefresh();
+      
+      if (__DEV__) {
+        console.log('[ActivityTimeline] Location label saved successfully, refreshing...');
+      }
+      
+      // Close modal first for better UX
       handleCloseRename();
+      
+      // Then refresh to show the new label
+      handleRefresh();
     } catch (err) {
       Alert.alert("Error", "Failed to save location name");
-      if (__DEV__) console.warn("Failed to save location label:", err);
+      if (__DEV__) console.error("[ActivityTimeline] Failed to save location label:", err);
     } finally {
       setIsSavingRename(false);
     }
