@@ -41,7 +41,6 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "ENABLE_FAMILY_CONTROLS": "1"
       },
       "channel": "preview"
     },
