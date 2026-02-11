@@ -273,6 +273,14 @@ function buildCalendarEvents(
   block: LocationBlock,
   ymd: string,
 ): TimelineEvent[] {
+  console.log("[buildCalendarEvents] INPUT:", {
+    ymd,
+    plannedCount: planned.length,
+    actualCount: actual.length,
+    blockStart: block.startTime.toISOString(),
+    blockEnd: block.endTime.toISOString(),
+  });
+  
   const events: TimelineEvent[] = [];
   const actualByPlannedId = new Map<string, ScheduledEvent>();
 
@@ -339,7 +347,7 @@ function buildCalendarEvents(
       consumedActualIds.add(matchingActual.id);
     }
 
-    events.push({
+    const timelineEvent = {
       id: `cal-${planned_ev.id}`,
       kind: matchingActual ? "meeting" : "scheduled",
       kindLabel: matchingActual ? "Meeting" : "Scheduled",
@@ -354,7 +362,21 @@ function buildCalendarEvents(
       actualEvent: matchingActual,
       blockId: block.id,
       summaryIds: block.summaryIds,
-    });
+    };
+    
+    // DEBUG: Log Private Events to trace the bug
+    if (planned_ev.title === "Private Event") {
+      console.log("[buildCalendarEvents] Created TimelineEvent for Private Event:", {
+        title: timelineEvent.title,
+        startTime: timelineEvent.startTime.toISOString(),
+        endTime: timelineEvent.endTime.toISOString(),
+        durationMinutes: timelineEvent.durationMinutes,
+        originalStartMinutes: planned_ev.startMinutes,
+        originalDuration: planned_ev.duration,
+      });
+    }
+    
+    events.push(timelineEvent);
   }
 
   // Also add actual events that have no planned counterpart

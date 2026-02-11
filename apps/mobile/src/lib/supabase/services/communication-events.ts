@@ -17,7 +17,8 @@ const COMM_EVENT_TYPES = [
   "slack_message",
   "phone_call",
   "sms",
-  "meeting",
+  // "meeting" removed - meetings are calendar events, not communication events
+  // They're fetched via fetchPlannedCalendarEventsForDay which filters Private Events
 ] as const;
 
 /**
@@ -48,6 +49,7 @@ export async function fetchCommunicationEventsForDay(
       .select("*")
       .eq("user_id", userId)
       .in("type", [...COMM_EVENT_TYPES])
+      .neq("title", "Private Event") // Filter out private calendar events
       .or(
         `sent_at.gte.${dayStartIso},received_at.gte.${dayStartIso},scheduled_start.gte.${dayStartIso},created_at.gte.${dayStartIso}`,
       )

@@ -124,21 +124,26 @@ const MAX_REALISTIC_SPEED_MS = 67;
 /**
  * Minimum speed in m/s to be considered actual movement.
  * Below this threshold, movement is likely GPS drift/noise.
- * 0.3 m/s ≈ 0.7 mph (slower than a slow walk)
+ * 0.15 m/s ≈ 0.3 mph - allows very slow walks to be detected.
+ * Lowered from 0.3 to match Google's sensitivity for detecting slow movement.
  */
-const MIN_MOVEMENT_SPEED_MS = 0.3;
+const MIN_MOVEMENT_SPEED_MS = 0.15; // Was 0.3, now 0.15
 
 /**
  * Classify movement type based on average speed.
  * 
- * Speed thresholds (Google Timeline uses similar values):
- * - Stationary: < 0.3 m/s (~0.7 mph) - GPS noise/drift
- * - Walking: 0.3-2.5 m/s (~0.7-5.5 mph)
- * - Cycling: 2.5-8.0 m/s (~5.5-18 mph)
- * - Driving: > 8.0 m/s (~18 mph)
+ * Speed thresholds (calibrated to match Google Timeline):
+ * - Stationary: < 0.15 m/s (~0.3 mph) - GPS noise/drift
+ * - Walking: 0.15-2.2 m/s (~0.3-5 mph) - includes slow walks
+ * - Cycling: 2.2-7.0 m/s (~5-15.5 mph) - typical cycling speeds
+ * - Driving: > 7.0 m/s (~15.5 mph) - car/transit
  * 
- * Also includes GPS noise sanity check - speeds above ~150 mph
- * are treated as GPS errors and classified as unknown.
+ * RECALIBRATED: Lowered thresholds to match Google's sensitivity:
+ * - Walking threshold lowered from 2.5 to 2.2 m/s
+ * - Cycling threshold lowered from 8.0 to 7.0 m/s
+ * - Stationary threshold lowered from 0.3 to 0.15 m/s
+ * 
+ * GPS sanity check: speeds above ~150 mph are GPS errors.
  */
 function classifyMovementType(distanceM: number, durationMs: number): MovementType {
   if (durationMs <= 0 || distanceM <= 0) return "unknown";
@@ -156,8 +161,9 @@ function classifyMovementType(distanceM: number, durationMs: number): MovementTy
   // Very low speeds are likely GPS drift, not actual movement
   if (avgSpeedMs < MIN_MOVEMENT_SPEED_MS) return "stationary";
   
-  if (avgSpeedMs < 2.5) return "walking";
-  if (avgSpeedMs < 8.0) return "cycling";
+  // Recalibrated thresholds to match Google Timeline
+  if (avgSpeedMs < 2.2) return "walking";   // Was 2.5
+  if (avgSpeedMs < 7.0) return "cycling";   // Was 8.0
   return "driving";
 }
 
@@ -211,11 +217,11 @@ const PLACE_MATCH_THRESHOLD = 0.7;
 /** 
  * Minimum commute duration in milliseconds to create a separate commute segment.
  * 
- * CHANGED: Lowered from 10 minutes to 2 minutes to match Google Timeline granularity.
- * Google shows every 2-3 minute drive as its own segment (e.g., "Driving 0.7 mi · 3 min").
- * Short drives (3-5 min) should be their own segments, not collapsed into annotations.
+ * CHANGED: Lowered from 10 minutes to 1 minute to match Google Timeline granularity.
+ * Google shows even 1-2 minute walks/drives as separate segments.
+ * This ensures we capture all intentional movement, not just longer commutes.
  */
-const MIN_COMMUTE_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const MIN_COMMUTE_DURATION_MS = 1 * 60 * 1000; // 1 minute (was 2)
 
 /** Maximum movement speed in m/s to be considered stationary (walking pace ~1.4 m/s) */
 const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
@@ -227,8 +233,12 @@ const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
  */
 const MIN_DWELL_TIME_MS = 5 * 60 * 1000; // 5 minutes
 
-/** Minimum total distance traveled to consider as movement */
-const MIN_COMMUTE_DISTANCE_M = 200; // 200 meters
+/** 
+ * Minimum total distance traveled to consider as movement.
+ * Lowered from 200m to 100m to match Google Timeline's sensitivity.
+ * Google detects short walks (e.g., walking 100m to a nearby store).
+ */
+const MIN_COMMUTE_DISTANCE_M = 100; // 100 meters (was 200)
 
 /** Maximum gap in milliseconds to merge into adjacent sessions (5 minutes) */
 const MAX_MICRO_GAP_MS = 5 * 60 * 1000;
@@ -1283,10 +1293,11 @@ export function applyTravelAnnotations(
 
 /**
  * Minimum gap in milliseconds to check for commute.
- * 30 seconds is enough to detect movement between nearby places.
- * Google Timeline shows even 1-minute drives as separate segments.
+ * 15 seconds allows detection of very short movements between nearby locations.
+ * Google Timeline shows even brief walks/drives (< 1 min) as separate segments.
+ * Lowered from 30s to capture more granular movement patterns.
  */
-const MIN_COMMUTE_GAP_CHECK_MS = 30 * 1000; // 30 seconds
+const MIN_COMMUTE_GAP_CHECK_MS = 15 * 1000; // 15 seconds (was 30)
 
 /**
  * Process location segments with commute detection.
