@@ -704,9 +704,30 @@ export function generateLocationSegments(
     const firstSample = group.samples[0];
     const lastSample = group.samples[group.samples.length - 1];
     const rawSegmentStart = new Date(firstSample.recorded_at);
-    const rawSegmentEnd = new Date(lastSample.recorded_at);
+    let rawSegmentEnd = new Date(lastSample.recorded_at);
     
-    // Use actual sample timestamps for segment boundaries
+    // FIX FOR BATTERY-OPTIMIZED LOGGING:
+    // When there's only 1 sample (user stationary), extend segment end time
+    // to the start of the next group OR end of window (whichever comes first)
+    // This prevents 0-duration segments from being filtered out.
+    if (group.samples.length === 1) {
+      const nextGroup = groups[groupIdx + 1];
+      if (nextGroup && nextGroup.samples.length > 0) {
+        // Extend to start of next group
+        rawSegmentEnd = new Date(nextGroup.samples[0].recorded_at);
+        if (__DEV__) {
+          console.log(`📍 [SINGLE-SAMPLE FIX] Extending segment to next group start: ${rawSegmentEnd.toISOString()}`);
+        }
+      } else {
+        // No next group - extend to end of window
+        rawSegmentEnd = new Date(windowEnd);
+        if (__DEV__) {
+          console.log(`📍 [SINGLE-SAMPLE FIX] Extending segment to window end: ${rawSegmentEnd.toISOString()}`);
+        }
+      }
+    }
+    
+    // Use calculated timestamps for segment boundaries
     // This preserves accurate duration data instead of inflating to fill windows.
     // Gaps between segments will be handled by commute detection or shown as gaps.
     const segmentStart = rawSegmentStart;

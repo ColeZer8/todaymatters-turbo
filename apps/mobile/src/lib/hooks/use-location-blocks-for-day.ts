@@ -305,6 +305,16 @@ export function useLocationBlocksForDay(
         );
       }
 
+      console.log(`[useLocationBlocksForDay] 🔍 DEBUG: location_hourly data for ${date}:`);
+      if (locationRows && locationRows.length > 0) {
+        (locationRows as LocationHourlyRow[]).forEach(row => {
+          const hour = new Date(row.hour_start).getHours();
+          console.log(`  ${hour}:00 - geohash=${row.geohash7}, samples=${row.sample_count}, label="${row.place_label}", google="${row.google_place_name}"`);
+        });
+      } else {
+        console.log('  ❌ No location_hourly rows found');
+      }
+
       // ------------------------------------------------------------------
       // 3. Run place inference (with caching)
       // ------------------------------------------------------------------
@@ -563,7 +573,19 @@ export function useLocationBlocksForDay(
       //    - Carries forward last known location to fill the gap
       //    - Stops at travel blocks (movement = new location)
       // ------------------------------------------------------------------
+      console.log(`[useLocationBlocksForDay] 🔍 DEBUG: Before gap-filling, ${locationBlocks.length} blocks:`);
+      locationBlocks.forEach(b => {
+        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}" (${b.totalLocationSamples} samples, geohash=${b.geohash7})`);
+      });
+      
       const blocksWithGapsFilled = fillLocationGaps(locationBlocks, enriched);
+      
+      console.log(`[useLocationBlocksForDay] 🔍 DEBUG: After gap-filling, ${blocksWithGapsFilled.length} blocks:`);
+      blocksWithGapsFilled.forEach(b => {
+        const carriedFlag = (b as any).isCarriedForward ? ' [CARRIED]' : '';
+        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}" (${b.totalLocationSamples} samples${carriedFlag})`);
+      });
+      
       if (blocksWithGapsFilled.length !== locationBlocks.length) {
         console.log(
           `[useLocationBlocksForDay] Filled gaps: ${locationBlocks.length} blocks → ${blocksWithGapsFilled.length} blocks (${blocksWithGapsFilled.length - locationBlocks.length} gaps filled)`,

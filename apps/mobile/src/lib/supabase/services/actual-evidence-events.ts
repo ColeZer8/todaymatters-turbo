@@ -55,6 +55,8 @@ export async function syncActualEvidenceBlocks({
     const { data, error } = await tmSchema()
       .from("events")
       .select("id, scheduled_start, scheduled_end, meta")
+      .neq('status', 'cancelled')
+      .not('source_id', 'like', '%_R%')
       .eq("user_id", userId)
       .eq("type", "calendar_actual")
       .lt("scheduled_start", endIso)

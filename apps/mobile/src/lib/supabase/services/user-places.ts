@@ -203,6 +203,20 @@ export async function upsertUserPlaceFromSamples(input: {
   }
 
   const centerWkt = `POINT(${centroid.longitude} ${centroid.latitude})`;
+  
+  // Import geohash encoder from location-labels service
+  const { encodeGeohash } = await import("./location-labels");
+  const geohash7 = encodeGeohash(centroid.latitude, centroid.longitude, 7);
+
+  console.log("[upsertUserPlaceFromSamples] 🔍 UPSERTING FROM SAMPLES:", {
+    user_id: input.userId.substring(0, 8) + "...",
+    label: input.label,
+    category: input.category,
+    sampleCount: input.samples.length,
+    centroid,
+    geohash7,
+    radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
+  });
 
   try {
     const existing = await tmSchema()
@@ -214,6 +228,8 @@ export async function upsertUserPlaceFromSamples(input: {
 
     if (existing.error) throw handleSupabaseError(existing.error);
 
+    console.log("[upsertUserPlaceFromSamples] 🔍 EXISTING PLACE:", existing.data ? `Found (id: ${existing.data.id})` : "Not found");
+
     const payload: Record<string, unknown> = {
       user_id: input.userId,
       label: input.label,
@@ -221,28 +237,42 @@ export async function upsertUserPlaceFromSamples(input: {
       category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
+      geohash7, // ✅ CRITICAL: This enables location lookups
     };
 
+    console.log("[upsertUserPlaceFromSamples] 🔍 PAYLOAD:", payload);
+
     if (existing.data?.id) {
+      console.log("[upsertUserPlaceFromSamples] 🔍 UPDATING existing place...");
       const { data, error } = await tmSchema()
         .from("user_places")
         .update(payload)
         .eq("id", existing.data.id)
         .select(USER_PLACE_SELECT)
         .single();
-      if (error) throw handleSupabaseError(error);
+      if (error) {
+        console.error("[upsertUserPlaceFromSamples] ❌ UPDATE ERROR:", error);
+        throw handleSupabaseError(error);
+      }
+      console.log("[upsertUserPlaceFromSamples] ✅ UPDATE SUCCESS:", data);
       return data as UserPlaceRow;
     }
 
+    console.log("[upsertUserPlaceFromSamples] 🔍 INSERTING new place...");
     const { data, error } = await tmSchema()
       .from("user_places")
       .insert(payload)
       .select(USER_PLACE_SELECT)
       .single();
 
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      console.error("[upsertUserPlaceFromSamples] ❌ INSERT ERROR:", error);
+      throw handleSupabaseError(error);
+    }
+    console.log("[upsertUserPlaceFromSamples] ✅ INSERT SUCCESS:", data);
     return data as UserPlaceRow;
   } catch (error) {
+    console.error("[upsertUserPlaceFromSamples] ❌ CAUGHT ERROR:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -261,6 +291,20 @@ export async function createUserPlace(input: {
   radiusMeters?: number;
 }): Promise<UserPlaceRow> {
   const centerWkt = `POINT(${input.longitude} ${input.latitude})`;
+  
+  // Import geohash encoder from location-labels service
+  const { encodeGeohash } = await import("./location-labels");
+  const geohash7 = encodeGeohash(input.latitude, input.longitude, 7);
+
+  console.log("[createUserPlace] 🔍 CREATING USER PLACE:", {
+    user_id: input.userId.substring(0, 8) + "...",
+    label: input.label,
+    category: input.category,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    geohash7,
+    radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
+  });
 
   try {
     const payload: Record<string, unknown> = {
@@ -270,7 +314,10 @@ export async function createUserPlace(input: {
       category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
+      geohash7, // ✅ CRITICAL: This enables location lookups
     };
+
+    console.log("[createUserPlace] 🔍 INSERT PAYLOAD:", payload);
 
     const { data, error } = await tmSchema()
       .from("user_places")
@@ -278,9 +325,20 @@ export async function createUserPlace(input: {
       .select(USER_PLACE_SELECT)
       .single();
 
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      console.error("[createUserPlace] ❌ INSERT ERROR:", error);
+      throw handleSupabaseError(error);
+    }
+    
+    console.log("[createUserPlace] ✅ INSERT SUCCESS:", {
+      id: data.id,
+      label: data.label,
+      user_id: data.user_id.substring(0, 8) + "...",
+    });
+    
     return data as UserPlaceRow;
   } catch (error) {
+    console.error("[createUserPlace] ❌ CAUGHT ERROR:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }
@@ -299,6 +357,20 @@ export async function upsertUserPlaceFromCoordinates(input: {
   radiusMeters?: number;
 }): Promise<UserPlaceRow> {
   const centerWkt = `POINT(${input.longitude} ${input.latitude})`;
+  
+  // Import geohash encoder from location-labels service
+  const { encodeGeohash } = await import("./location-labels");
+  const geohash7 = encodeGeohash(input.latitude, input.longitude, 7);
+
+  console.log("[upsertUserPlaceFromCoordinates] 🔍 UPSERTING USER PLACE:", {
+    user_id: input.userId.substring(0, 8) + "...",
+    label: input.label,
+    category: input.category,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    geohash7,
+    radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
+  });
 
   try {
     const existing = await tmSchema()
@@ -310,6 +382,8 @@ export async function upsertUserPlaceFromCoordinates(input: {
 
     if (existing.error) throw handleSupabaseError(existing.error);
 
+    console.log("[upsertUserPlaceFromCoordinates] 🔍 EXISTING PLACE:", existing.data ? `Found (id: ${existing.data.id})` : "Not found");
+
     const payload: Record<string, unknown> = {
       user_id: input.userId,
       label: input.label,
@@ -317,28 +391,42 @@ export async function upsertUserPlaceFromCoordinates(input: {
       category_id: input.categoryId ?? null,
       radius_m: input.radiusMeters ?? DEFAULT_PLACE_RADIUS_M,
       center: centerWkt,
+      geohash7, // ✅ CRITICAL: This enables location lookups
     };
 
+    console.log("[upsertUserPlaceFromCoordinates] 🔍 PAYLOAD:", payload);
+
     if (existing.data?.id) {
+      console.log("[upsertUserPlaceFromCoordinates] 🔍 UPDATING existing place...");
       const { data, error } = await tmSchema()
         .from("user_places")
         .update(payload)
         .eq("id", existing.data.id)
         .select(USER_PLACE_SELECT)
         .single();
-      if (error) throw handleSupabaseError(error);
+      if (error) {
+        console.error("[upsertUserPlaceFromCoordinates] ❌ UPDATE ERROR:", error);
+        throw handleSupabaseError(error);
+      }
+      console.log("[upsertUserPlaceFromCoordinates] ✅ UPDATE SUCCESS:", data);
       return data as UserPlaceRow;
     }
 
+    console.log("[upsertUserPlaceFromCoordinates] 🔍 INSERTING new place...");
     const { data, error } = await tmSchema()
       .from("user_places")
       .insert(payload)
       .select(USER_PLACE_SELECT)
       .single();
 
-    if (error) throw handleSupabaseError(error);
+    if (error) {
+      console.error("[upsertUserPlaceFromCoordinates] ❌ INSERT ERROR:", error);
+      throw handleSupabaseError(error);
+    }
+    console.log("[upsertUserPlaceFromCoordinates] ✅ INSERT SUCCESS:", data);
     return data as UserPlaceRow;
   } catch (error) {
+    console.error("[upsertUserPlaceFromCoordinates] ❌ CAUGHT ERROR:", error);
     throw error instanceof Error ? error : handleSupabaseError(error);
   }
 }

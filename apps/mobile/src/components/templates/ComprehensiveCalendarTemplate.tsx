@@ -466,6 +466,8 @@ interface ComprehensiveCalendarTemplateProps {
     },
   ) => void | Promise<void>;
   onDeleteActualEvent: (eventId: string) => void | Promise<void>;
+  /** Callback when a new place is added from a session detail modal */
+  onAddPlace?: (placeLabel: string) => void | Promise<void>;
 }
 
 export const ComprehensiveCalendarTemplate = ({
@@ -479,6 +481,7 @@ export const ComprehensiveCalendarTemplate = ({
   onUpdatePlannedEvent,
   onDeletePlannedEvent,
   onUpdateActualEvent,
+  onAddPlace,
   onDeleteActualEvent,
 }: ComprehensiveCalendarTemplateProps) => {
   const router = useRouter();
@@ -1010,6 +1013,15 @@ export const ComprehensiveCalendarTemplate = ({
         onMerge={(mergedEvent) => {
           // Refresh the actual events after merge
           // The parent component should refetch events
+          setIsSessionDetailVisible(false);
+          setSessionDetailEvent(null);
+        }}
+        onAddPlace={(placeLabel) => {
+          // Refresh the actual events after adding a place
+          // The parent component should refetch events to pick up new place labels
+          if (onAddPlace) {
+            onAddPlace(placeLabel);
+          }
           setIsSessionDetailVisible(false);
           setSessionDetailEvent(null);
         }}

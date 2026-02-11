@@ -15,46 +15,26 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import { Calendar, Inbox, Sparkles, Layers } from "lucide-react-native";
+import { Inbox, Sparkles, Layers } from "lucide-react-native";
 import { TimelineBlockSection } from "./TimelineBlockSection";
 import type { PlaceSelection } from "@/components/molecules/PlacePickerSheet";
 import { EventDetailSheet } from "@/components/molecules/EventDetailSheet";
 import { CurrentTimeLine } from "@/components/molecules/CurrentTimeLine";
-import type { EnrichedSummary } from "./HourlySummaryList";
 import type { LocationBlock } from "@/lib/types/location-block";
 import type { TimelineEvent } from "@/lib/types/timeline-event";
-import { groupIntoLocationBlocks } from "@/lib/utils/group-location-blocks";
 import {
   buildTimelineEvents,
   filterCommEventsToTimeRange,
   filterScheduledToTimeRange,
 } from "@/lib/utils/build-timeline-events";
 import {
-  type HourlySummary,
-  fetchHourlySummariesForDate,
-  humanizeActivity,
-} from "@/lib/supabase/services";
-import { supabase } from "@/lib/supabase/client";
-import {
-  inferPlacesFromHistory,
-  type InferredPlace,
-  type PlaceInferenceResult,
-} from "@/lib/supabase/services/place-inference";
-import {
-  generateInferenceDescription,
-  type InferenceContext,
-} from "@/lib/supabase/services/activity-inference-descriptions";
-import {
-  fetchActivitySegmentsForDate,
-  type ActivitySegment,
-} from "@/lib/supabase/services/activity-segments";
-import {
   fetchPlannedCalendarEventsForDay,
   fetchActualCalendarEventsForDay,
 } from "@/lib/supabase/services/calendar-events";
 import { fetchCommunicationEventsForDay } from "@/lib/supabase/services/communication-events";
 import { createUserPlace } from "@/lib/supabase/services/user-places";
-import { getLocationLabels, encodeGeohash } from "@/lib/supabase/services/location-labels";
+import { encodeGeohash } from "@/lib/supabase/services/location-labels";
+import { useLocationBlocksForDay } from "@/lib/hooks/use-location-blocks-for-day";
 
 // ============================================================================
 // Types
@@ -85,16 +65,6 @@ export interface LocationBlockListProps {
   ListHeaderComponent?: React.ComponentType | React.ReactElement | null;
   ListFooterComponent?: React.ComponentType | React.ReactElement | null;
   contentContainerStyle?: object;
-}
-
-interface LocationHourlyRow {
-  hour_start: string;
-  geohash7: string | null;
-  sample_count: number;
-  place_label: string | null;
-  google_place_name: string | null;
-  google_place_types?: string[] | null;
-  radius_m?: number | null;
 }
 
 // ============================================================================
@@ -176,15 +146,6 @@ function formatDateHeader(dateString: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/**
- * Floor a Date to the start of its hour.
- */
-function floorToHour(date: Date): Date {
-  const d = new Date(date);
-  d.setMinutes(0, 0, 0);
-  return d;
-}
-
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -202,14 +163,23 @@ export const LocationBlockList = ({
   ListFooterComponent,
   contentContainerStyle,
 }: LocationBlockListProps) => {
-  const [blocks, setBlocks] = useState<LocationBlock[]>([]);
-  const [inferenceResult, setInferenceResult] =
-    useState<PlaceInferenceResult | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use the shared hook for location blocks
+  const {
+    blocks: baseBlocks,
+    inferenceResult,
+    isLoading,
+    error,
+    refresh,
+  } = useLocationBlocksForDay({
+    userId,
+    date,
+    enabled: true,
+  });
+
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [blocksWithTimeline, setBlocksWithTimeline] = useState<LocationBlock[]>([]);
 
   // Compute "is today" and current minutes for the red NOW line
   const isToday = useMemo(() => {
@@ -224,350 +194,126 @@ export const LocationBlockList = ({
     return now.getHours() * 60 + now.getMinutes();
   }, [isToday]);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setError(null);
-
-      // 1. Fetch CHARLIE summaries
-      const charlieSummaries = await fetchHourlySummariesForDate(userId, date);
-
-      // 2. Fetch location hourly data
-      const startOfDay = `${date}T00:00:00`;
-      const endOfDay = `${date}T23:59:59`;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: locationRows, error: locError } = await (supabase as any)
-        .schema("tm")
-        .from("location_hourly")
-        .select(
-          "hour_start, geohash7, sample_count, place_label, google_place_name, google_place_types, radius_m",
-        )
-        .eq("user_id", userId)
-        .gte("hour_start", startOfDay)
-        .lte("hour_start", endOfDay)
-        .order("hour_start", { ascending: true }) as {
-        data: LocationHourlyRow[] | null;
-        error: unknown;
-      };
-
-      if (locError && (locError as { code?: string })?.code !== "42P01") {
-        console.warn("[LocationBlockList] Location fetch warning:", locError);
-      }
-
-      // 3. Run place inference
-      let inference: PlaceInferenceResult | null = null;
-      try {
-        inference = await inferPlacesFromHistory(userId, 14);
-        setInferenceResult(inference);
-      } catch (infErr) {
-        console.warn("[LocationBlockList] Place inference warning:", infErr);
-      }
-
-      // 3a. Fetch user-saved location labels
-      let userLabels: Record<string, { label: string; category?: string }> = {};
-      try {
-        userLabels = await getLocationLabels(userId);
-        if (__DEV__) {
-          console.log("[LocationBlockList] 🔍 Loaded user labels:", Object.keys(userLabels).length, "places");
-          if (Object.keys(userLabels).length > 0) {
-            console.log("[LocationBlockList] 🔍 User label geohashes:", Object.keys(userLabels));
-            console.log("[LocationBlockList] 🔍 User label names:", Object.values(userLabels).map(v => v.label));
-          }
-        }
-      } catch (labelErr) {
-        console.warn("[LocationBlockList] User labels fetch warning:", labelErr);
-      }
-
-      // 4. Build hour -> location map
-      const locationByHour = new Map<string, LocationHourlyRow>();
-      for (const row of ((locationRows || []) as unknown as LocationHourlyRow[])) {
-        const hourKey = new Date(row.hour_start).toISOString();
-        locationByHour.set(hourKey, row);
-      }
-
-      // 5. Build geohash -> inferred place map
-      const inferenceByGeohash = new Map<string, InferredPlace>();
-      if (inference) {
-        for (const place of inference.inferredPlaces) {
-          inferenceByGeohash.set(place.geohash7, place);
-        }
-      }
-
-      // 6. Fetch ALL activity segments for the day at once (perf improvement)
-      let allSegments: ActivitySegment[] = [];
-      try {
-        allSegments = await fetchActivitySegmentsForDate(userId, date);
-      } catch (segErr) {
-        console.warn("[LocationBlockList] Segment fetch warning:", segErr);
-      }
-
-      // Build segments-by-hour map
-      const segmentsByHour = new Map<string, ActivitySegment[]>();
-      for (const seg of allSegments) {
-        const hourKey = floorToHour(seg.startedAt).toISOString();
-        const existing = segmentsByHour.get(hourKey) || [];
-        existing.push(seg);
-        segmentsByHour.set(hourKey, existing);
-      }
-
-      // 7. Enrich summaries (same logic as HourlySummaryList)
-      const sortedSummaries = [...charlieSummaries].sort(
-        (a, b) => a.hourStart.getTime() - b.hourStart.getTime(),
-      );
-
-      let prevGeohash: string | null = null;
-      let prevPlaceLabel: string | null = null;
-
-      const enriched: EnrichedSummary[] = sortedSummaries.map((summary) => {
-        const hourKey = summary.hourStart.toISOString();
-        const locData = locationByHour.get(hourKey);
-        const geohash7 = locData?.geohash7 || null;
-        const inferredPlace = geohash7
-          ? inferenceByGeohash.get(geohash7) || null
-          : null;
-
-        // Determine best place label
-        // Priority: user-saved label > pipeline label > inference > google > fallback
-        
-        // Try to find user-saved label by geohash7
-        let userSavedLabel: string | null = null;
-        if (geohash7) {
-          userSavedLabel = userLabels[geohash7]?.label ?? null;
-        }
-        
-        // FALLBACK: If no geohash7 from location_hourly, try generating one from segment coords
-        // This handles cases where location_hourly has no geohash but user saved a label
-        // CRITICAL: Must run BEFORE enrichedLabel computation
-        const hourSegments = segmentsByHour.get(hourKey) || [];
-        if (!userSavedLabel && !geohash7 && hourSegments.length > 0) {
-          const firstSeg = hourSegments.find(s => 
-            s.locationLat != null && 
-            s.locationLng != null && 
-            Number.isFinite(s.locationLat) && 
-            Number.isFinite(s.locationLng)
-          );
-          if (firstSeg) {
-            // Generate geohash7 from segment coordinates (same logic as saveLocationLabel)
-            const generatedGeohash = encodeGeohash(firstSeg.locationLat, firstSeg.locationLng, 7);
-            userSavedLabel = userLabels[generatedGeohash]?.label ?? null;
-            if (__DEV__ && userSavedLabel) {
-              console.log(`[LocationBlockList] ✅ Found user label via GENERATED geohash (${generatedGeohash}):`, userSavedLabel);
-            } else if (__DEV__) {
-              console.log(`[LocationBlockList] 🔍 Tried GENERATED geohash (${generatedGeohash}), no match`);
-            }
-          }
-        }
-        
-        const inferredLabel = inferredPlace?.suggestedLabel;
-        const hasMeaningfulInference =
-          inferredLabel &&
-          inferredLabel !== "Unknown Location" &&
-          inferredLabel !== "Location" &&
-          inferredLabel !== "Frequent Location";
-
-        const hasUserDefinedLabel =
-          summary.primaryPlaceLabel &&
-          summary.primaryPlaceLabel !== "Unknown Location" &&
-          summary.primaryPlaceLabel !== "Location" &&
-          summary.primaryPlaceLabel !== "Unknown";
-
-        // DEBUG: Log label resolution for each hour
-        if (__DEV__ && geohash7) {
-          console.log(`[LocationBlockList] 🔍 Hour ${hourKey} label resolution:`, {
-            geohash7,
-            userSavedLabel: userSavedLabel || '(none)',
-            hasUserLabel: !!userSavedLabel,
-            pipelineLabel: locData?.place_label || '(none)',
-            inferredLabel: inferredLabel || '(none)',
-            googleLabel: locData?.google_place_name || '(none)',
-          });
-        }
-
-        let enrichedLabel: string | null = null;
-        if (userSavedLabel) {
-          // User-saved labels take highest priority
-          enrichedLabel = userSavedLabel;
-          if (__DEV__) {
-            console.log(`[LocationBlockList] ✅ Using USER LABEL for ${geohash7}:`, enrichedLabel);
-          }
-        } else if (hasUserDefinedLabel) {
-          enrichedLabel = summary.primaryPlaceLabel;
-        } else {
-          enrichedLabel =
-            locData?.place_label ||
-            (hasMeaningfulInference ? inferredLabel! : null) ||
-            locData?.google_place_name ||
-            inferredLabel ||
-            null;
-        }
-
-        // Regenerate title if needed
-        let enrichedTitle = summary.title;
-        const titleNeedsEnrichment =
-          summary.title.includes("Unknown Location") ||
-          summary.title.includes("Unknown -") ||
-          summary.title === "No Activity Data" ||
-          summary.title.includes("Mixed Activity") ||
-          summary.primaryActivity === "mixed_activity";
-
-        if (titleNeedsEnrichment) {
-          const inferenceCtx: InferenceContext = {
-            activity: summary.primaryActivity,
-            apps: summary.appBreakdown,
-            screenMinutes: summary.totalScreenMinutes,
-            hourOfDay: summary.hourOfDay,
-            placeLabel: enrichedLabel,
-            previousPlaceLabel: prevPlaceLabel,
-            inferredPlace,
-            locationSamples: locData?.sample_count || 0,
-            confidence: summary.confidenceScore,
-            previousGeohash: prevGeohash,
-            currentGeohash: geohash7,
-            locationRadius: locData?.radius_m || null,
-            googlePlaceTypes: locData?.google_place_types || null,
-          };
-          const smartInference = generateInferenceDescription(inferenceCtx);
-
-          if (summary.primaryActivity === "commute") {
-            if (
-              prevPlaceLabel &&
-              enrichedLabel &&
-              enrichedLabel !== "Unknown Location"
-            ) {
-              enrichedTitle = `${prevPlaceLabel} → ${enrichedLabel}`;
-            } else if (
-              enrichedLabel &&
-              enrichedLabel !== "Unknown Location"
-            ) {
-              enrichedTitle = `Commute → ${enrichedLabel}`;
-            } else {
-              enrichedTitle = "In Transit";
-            }
-          } else if (smartInference) {
-            if (
-              enrichedLabel &&
-              enrichedLabel !== "Unknown Location" &&
-              !smartInference.primary
-                .toLowerCase()
-                .includes(enrichedLabel.toLowerCase())
-            ) {
-              enrichedTitle = `${enrichedLabel} - ${smartInference.primary}`;
-            } else {
-              enrichedTitle = smartInference.primary;
-            }
-          } else {
-            const activityLabel = humanizeActivity(summary.primaryActivity);
-            if (enrichedLabel && enrichedLabel !== "Unknown Location") {
-              enrichedTitle = `${enrichedLabel} - ${activityLabel}`;
-            } else {
-              enrichedTitle = activityLabel;
-            }
-          }
-        }
-
-        const result: EnrichedSummary = {
-          ...summary,
-          title: enrichedTitle,
-          primaryPlaceLabel: enrichedLabel,
-          inferredPlace,
-          geohash7,
-          locationSamples: locData?.sample_count || 0,
-          previousGeohash: prevGeohash,
-          previousPlaceLabel: prevPlaceLabel,
-          locationRadius: locData?.radius_m || null,
-          googlePlaceTypes: locData?.google_place_types || null,
-          segments: hourSegments,
-        };
-
-        prevGeohash = geohash7;
-        prevPlaceLabel = enrichedLabel;
-
-        return result;
-      });
-
-      // 8. Group into location blocks
-      const locationBlocks = groupIntoLocationBlocks(enriched);
-
-      // 9. Fetch calendar + communication events for timeline
-      let plannedEvents: import("@/stores").ScheduledEvent[] = [];
-      let actualEvents: import("@/stores").ScheduledEvent[] = [];
-      let commEvents: import("@/lib/supabase/services/communication-events").TmEventRow[] = [];
-
-      try {
-        const [rawPlanned, rawActual, rawComm] = await Promise.all([
-          fetchPlannedCalendarEventsForDay(userId, date),
-          fetchActualCalendarEventsForDay(userId, date),
-          fetchCommunicationEventsForDay(userId, date),
-        ]);
-        // Filter out all-day events (holidays, multi-day) — they don't belong in timeline blocks
-        plannedEvents = rawPlanned.filter((e) => !e.isAllDay);
-        actualEvents = rawActual.filter((e) => !e.isAllDay);
-        commEvents = rawComm;
-      } catch (fetchErr) {
-        console.warn("[LocationBlockList] Calendar/comm fetch warning:", fetchErr);
-      }
-
-      // 10. Build timeline events for each block
-      const now = new Date();
-      const isTodayDate =
-        date ===
-        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const curMin = isTodayDate
-        ? now.getHours() * 60 + now.getMinutes()
-        : -1;
-
-      for (const block of locationBlocks) {
-        const blockComm = filterCommEventsToTimeRange(
-          commEvents,
-          block.startTime,
-          block.endTime,
-        );
-        const blockPlanned = filterScheduledToTimeRange(
-          plannedEvents,
-          block.startTime,
-          block.endTime,
-          date,
-        );
-        const blockActual = filterScheduledToTimeRange(
-          actualEvents,
-          block.startTime,
-          block.endTime,
-          date,
-        );
-
-        block.timelineEvents = buildTimelineEvents(
-          block,
-          blockComm,
-          blockPlanned,
-          blockActual,
-          curMin,
-          date,
-        );
-      }
-
-      setBlocks(locationBlocks);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to load data";
-      setError(message);
-      if (__DEV__) {
-        console.warn("[LocationBlockList] Fetch error:", err);
-      }
-    }
-  }, [userId, date]);
-
-  // Initial load
+  // Build timeline events for each block (Activity Timeline specific logic)
   useEffect(() => {
-    setIsLoading(true);
-    fetchData().finally(() => setIsLoading(false));
-  }, [fetchData]);
+    console.log(`[LocationBlockList] 🔍 useEffect triggered: baseBlocks.length = ${baseBlocks?.length ?? 0}`);
+    if (baseBlocks && baseBlocks.length > 0) {
+      console.log('[LocationBlockList] 🔍 Base blocks from hook:');
+      baseBlocks.forEach(b => {
+        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}" (${b.totalLocationSamples} samples)`);
+      });
+    }
+    
+    if (!baseBlocks || baseBlocks.length === 0) {
+      console.log('[LocationBlockList] 🔍 No baseBlocks, clearing blocksWithTimeline');
+      setBlocksWithTimeline([]);
+      return;
+    }
+
+    // IMMEDIATELY set blocksWithTimeline to baseBlocks (without timeline events)
+    // This ensures the UI shows the correct blocks while async enrichment runs
+    console.log('[LocationBlockList] 🔍 Initializing blocksWithTimeline with baseBlocks (pre-enrichment)');
+    setBlocksWithTimeline(baseBlocks);
+
+    let cancelled = false;
+
+    const buildTimeline = async () => {
+      try {
+        // Fetch calendar + communication events for timeline
+        let plannedEvents: import("@/stores").ScheduledEvent[] = [];
+        let actualEvents: import("@/stores").ScheduledEvent[] = [];
+        let commEvents: import("@/lib/supabase/services/communication-events").TmEventRow[] = [];
+
+        try {
+          const [rawPlanned, rawActual, rawComm] = await Promise.all([
+            fetchPlannedCalendarEventsForDay(userId, date),
+            fetchActualCalendarEventsForDay(userId, date),
+            fetchCommunicationEventsForDay(userId, date),
+          ]);
+          // Filter out all-day events (holidays, multi-day) — they don't belong in timeline blocks
+          plannedEvents = rawPlanned.filter((e) => !e.isAllDay);
+          actualEvents = rawActual.filter((e) => !e.isAllDay);
+          commEvents = rawComm;
+        } catch (fetchErr) {
+          console.warn("[LocationBlockList] Calendar/comm fetch warning:", fetchErr);
+        }
+
+        if (cancelled) return;
+
+        // Build timeline events for each block
+        const now = new Date();
+        const isTodayDate =
+          date ===
+          `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const curMin = isTodayDate
+          ? now.getHours() * 60 + now.getMinutes()
+          : -1;
+
+        const enrichedBlocks = baseBlocks.map((block) => {
+          const blockComm = filterCommEventsToTimeRange(
+            commEvents,
+            block.startTime,
+            block.endTime,
+          );
+          const blockPlanned = filterScheduledToTimeRange(
+            plannedEvents,
+            block.startTime,
+            block.endTime,
+            date,
+          );
+          const blockActual = filterScheduledToTimeRange(
+            actualEvents,
+            block.startTime,
+            block.endTime,
+            date,
+          );
+
+          return {
+            ...block,
+            timelineEvents: buildTimelineEvents(
+              block,
+              blockComm,
+              blockPlanned,
+              blockActual,
+              curMin,
+              date,
+            ),
+          };
+        });
+
+        if (cancelled) {
+          console.log('[LocationBlockList] 🔍 Enrichment was cancelled before completion');
+          return;
+        }
+        
+        console.log(`[LocationBlockList] 🔍 Setting blocksWithTimeline: ${enrichedBlocks.length} blocks`);
+        enrichedBlocks.forEach(b => {
+          console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}" (${b.totalLocationSamples} samples, ${b.timelineEvents?.length ?? 0} events)`);
+        });
+        
+        setBlocksWithTimeline(enrichedBlocks);
+      } catch (err) {
+        console.error("[LocationBlockList] ❌ Timeline build error:", err);
+        if (__DEV__) {
+          console.warn("[LocationBlockList] Timeline build error:", err);
+        }
+      }
+    };
+
+    buildTimeline();
+
+    return () => {
+      console.log('[LocationBlockList] 🔍 Cleanup: marking enrichment as cancelled');
+      cancelled = true;
+    };
+  }, [baseBlocks, userId, date]);
 
   // Pull to refresh
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await fetchData();
+    await refresh();
     setIsRefreshing(false);
-  }, [fetchData]);
+  }, [refresh]);
 
   const handleCloseDetail = useCallback(() => {
     setShowDetail(false);
@@ -591,6 +337,14 @@ export const LocationBlockList = ({
   // Handle place selection from disambiguation sheet
   const handlePlaceSelected = useCallback(
     async (block: LocationBlock, selection: PlaceSelection) => {
+      console.log("[LocationBlockList] 🔍 PLACE SELECTION TRIGGERED:", {
+        blockId: block.id,
+        blockLabel: block.locationLabel,
+        selectionPlaceName: selection.placeName,
+        selectionCategory: selection.category,
+        selectionIsCustom: selection.isCustom,
+      });
+
       try {
         const firstValidSegment = block.segments?.find((s) =>
           s.locationLat != null &&
@@ -605,12 +359,31 @@ export const LocationBlockList = ({
           ?? firstValidSegment?.locationLng
           ?? null;
 
+        console.log("[LocationBlockList] 🔍 EXTRACTED COORDINATES:", {
+          latitude: lat,
+          longitude: lng,
+          source: block.inferredPlace?.latitude ? "inferredPlace" : firstValidSegment ? "firstValidSegment" : "none",
+        });
+
         if (lat === null || lng === null) {
-          console.warn("[LocationBlockList] No coordinates for place creation");
+          console.error("[LocationBlockList] ❌ NO COORDINATES for place creation");
+          Alert.alert(
+            "Cannot Save Location",
+            "No coordinates available for this location. Please try a different block.",
+          );
           return;
         }
 
-        await createUserPlace({
+        console.log("[LocationBlockList] 🔍 CALLING createUserPlace with:", {
+          userId: userId.substring(0, 8) + "...",
+          label: selection.placeName,
+          latitude: lat,
+          longitude: lng,
+          category: selection.category ?? "other",
+          radiusMeters: 150,
+        });
+
+        const result = await createUserPlace({
           userId,
           label: selection.placeName,
           latitude: lat,
@@ -620,20 +393,27 @@ export const LocationBlockList = ({
         });
 
         console.log(
-          `[LocationBlockList] Created user place: "${selection.placeName}" (${selection.category})`,
+          `[LocationBlockList] ✅ USER PLACE CREATED SUCCESSFULLY:`,
+          {
+            id: result.id,
+            label: result.label,
+            category: result.category,
+            user_id: result.user_id.substring(0, 8) + "...",
+          }
         );
 
         // Refresh to pick up the new place
-        fetchData();
+        console.log("[LocationBlockList] 🔄 Refreshing blocks...");
+        refresh();
       } catch (err) {
-        console.error("[LocationBlockList] Failed to create user place:", err);
+        console.error("[LocationBlockList] ❌ FAILED to create user place:", err);
         Alert.alert(
           "Couldn't save place",
-          "Something went wrong saving this location. Please try again.",
+          `Error: ${err instanceof Error ? err.message : "Unknown error"}. Please try again.`,
         );
       }
     },
-    [userId, fetchData],
+    [userId, refresh],
   );
 
   // Render item — passes block context alongside event for overlap/location editing
@@ -687,17 +467,30 @@ export const LocationBlockList = ({
 
   // Count inferred places
   const inferredBlockCount = useMemo(() => {
-    return blocks.filter((b) => b.isPlaceInferred).length;
-  }, [blocks]);
+    return blocksWithTimeline.filter((b) => b.isPlaceInferred).length;
+  }, [blocksWithTimeline]);
 
   // When filtering to "scheduled" only, hide blocks with no matching events
   const displayBlocks = useMemo(() => {
-    if (filter === "both") return blocks;
-    return blocks.filter((b) => {
-      const filtered = applyFilter(b);
-      return (filtered.timelineEvents?.length ?? 0) > 0;
-    });
-  }, [blocks, filter, applyFilter]);
+    let result: LocationBlock[];
+    if (filter === "both") {
+      result = blocksWithTimeline;
+    } else {
+      result = blocksWithTimeline.filter((b) => {
+        const filtered = applyFilter(b);
+        return (filtered.timelineEvents?.length ?? 0) > 0;
+      });
+    }
+    
+    console.log(`[LocationBlockList] 🔍 displayBlocks computed: filter="${filter}", blocksWithTimeline.length=${blocksWithTimeline.length}, displayBlocks.length=${result.length}`);
+    if (result.length > 0) {
+      result.forEach(b => {
+        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}"`);
+      });
+    }
+    
+    return result;
+  }, [blocksWithTimeline, filter, applyFilter]);
 
   // List header
   const renderListHeader = () => {
@@ -715,9 +508,9 @@ export const LocationBlockList = ({
             <Layers size={16} color="#2563EB" />
           </View>
           <Text style={styles.dateHeaderText}>{formatDateHeader(date)}</Text>
-          {blocks.length > 0 && (
+          {blocksWithTimeline.length > 0 && (
             <Text style={styles.blockCount}>
-              {blocks.length} {blocks.length === 1 ? "block" : "blocks"}
+              {blocksWithTimeline.length} {blocksWithTimeline.length === 1 ? "block" : "blocks"}
             </Text>
           )}
         </View>
@@ -750,20 +543,20 @@ export const LocationBlockList = ({
 
   // Show the NOW line after the last block when current time is past all blocks
   const showTrailingNowLine = useMemo(() => {
-    if (!isToday || currentMinutes < 0 || blocks.length === 0) return false;
+    if (!isToday || currentMinutes < 0 || blocksWithTimeline.length === 0) return false;
     // Check if current time is already inside a block (handled by TimelineBlockSection)
-    const insideABlock = blocks.some((b) => {
+    const insideABlock = blocksWithTimeline.some((b) => {
       const bStart = b.startTime.getHours() * 60 + b.startTime.getMinutes();
       const bEnd = b.endTime.getHours() * 60 + b.endTime.getMinutes();
       return currentMinutes >= bStart && currentMinutes < bEnd;
     });
     if (insideABlock) return false;
     // Show after the last block if current time is past its end
-    const lastBlock = blocks[blocks.length - 1];
+    const lastBlock = blocksWithTimeline[blocksWithTimeline.length - 1];
     const lastEnd =
       lastBlock.endTime.getHours() * 60 + lastBlock.endTime.getMinutes();
     return currentMinutes >= lastEnd;
-  }, [isToday, currentMinutes, blocks]);
+  }, [isToday, currentMinutes, blocksWithTimeline]);
 
   const renderFooter = useCallback(() => (
     <View>

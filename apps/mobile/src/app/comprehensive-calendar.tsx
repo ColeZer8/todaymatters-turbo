@@ -522,6 +522,21 @@ export default function ComprehensiveCalendarScreen() {
         },
       );
     }
+    // Listen for user_places changes (location tagging)
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "tm",
+        table: "user_places",
+        filter: `user_id=eq.${userId}`,
+      },
+      () => {
+        // Refresh location blocks to pick up new place labels
+        if (USE_NEW_LOCATION_PIPELINE) void refreshBlocks();
+        void refreshVerification();
+      },
+    );
     channel.subscribe();
     return () => {
       void channel.unsubscribe();
@@ -974,6 +989,14 @@ export default function ComprehensiveCalendarScreen() {
       onDeleteActualEvent={async (eventId) => {
         await deleteActual(eventId);
         removeActualEvent(eventId, selectedDateYmd);
+      }}
+      onAddPlace={async (placeLabel) => {
+        // Refresh location blocks to pick up the new place label
+        if (USE_NEW_LOCATION_PIPELINE) {
+          await refreshBlocks();
+        }
+        // Refresh actual events to show updated labels
+        await refreshActualEventsForSelectedDay();
       }}
     />
   );
