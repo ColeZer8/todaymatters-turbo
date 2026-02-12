@@ -642,8 +642,19 @@ export function buildActualDisplayEvents({
       dataQuality,
     },
   );
+  // BUG #4 FIX: Travel detection runs FIRST on unknown gaps, BEFORE location
+  // blocks fill them. Travel detection is evidence-based (location change between
+  // two different places) and only operates on "unknown" gaps. If location blocks
+  // run first, they consume the gaps and travel is never detected.
+  const withTransitions = replaceUnknownWithTransitions(withSleepFilled, {
+    locationBlocks,
+    ymd,
+    usageSummary,
+    screenTimeSessions: evidence?.screenTimeSessions ?? null,
+    appCategoryOverrides,
+  });
   const withLocationFilled = replaceUnknownWithLocationEvidence(
-    withSleepFilled,
+    withTransitions,
     {
       ymd,
       locationBlocks,
@@ -684,15 +695,7 @@ export function buildActualDisplayEvents({
         appCategoryOverrides,
       )
     : withLocationFilled;
-  // Travel detection always runs — it's evidence-based (location change), not a gap-filling suggestion
-  const withTransitions = replaceUnknownWithTransitions(withProductiveFilled, {
-    locationBlocks,
-    ymd,
-    usageSummary,
-    screenTimeSessions: evidence?.screenTimeSessions ?? null,
-    appCategoryOverrides,
-  });
-  const withPrepWindDown = withTransitions;
+  const withPrepWindDown = withProductiveFilled;
   const withPatternFilled = allowPatterns
     ? applyPatternSuggestions(
         withPrepWindDown,
