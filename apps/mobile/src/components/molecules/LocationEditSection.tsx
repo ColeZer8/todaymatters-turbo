@@ -1,11 +1,16 @@
 /**
  * LocationEditSection — controlled component for the full location edit experience.
  *
- * Includes label input with search, nearby suggestions, "always use" toggle,
- * category picker, radius selector, and mini-map.
+ * Includes:
+ * - Tappable label with inline dropdown for nearby places
+ * - Editable text input with autocomplete suggestions
+ * - Nearby suggestion pills (horizontal row)
+ * - "Always use" toggle, category picker, radius selector, mini-map
+ *
+ * NO modals or bottom sheets — everything renders inline within the existing card.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -14,22 +19,41 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  TextInput,
+  Keyboard,
   StyleSheet,
 } from "react-native";
-import { MapPin, ChevronDown } from "lucide-react-native";
-import { Icon } from "../atoms/Icon";
 import {
-  LocationPickerSheet,
-  type LocationPickerSelection,
-} from "./LocationPickerSheet";
+  MapPin,
+  ChevronDown,
+  Check,
+  Pencil,
+  Coffee,
+  Utensils,
+  Dumbbell,
+  ShoppingBag,
+  GraduationCap,
+  Heart,
+  Fuel,
+  Briefcase,
+  Church,
+  Building2,
+  type LucideIcon,
+} from "lucide-react-native";
+import { Icon } from "../atoms/Icon";
 import {
   fetchNearbyPlaces,
   getFuzzyLocationLabel,
   mapPlaceTypeToCategory,
   getPlaceTypeLabel,
   getGoogleApiKey,
+  searchPlacesAutocomplete,
+  createSessionToken,
+  cancelAutocomplete,
   type GooglePlaceSuggestion,
+  type PlaceAutocompletePrediction,
 } from "@/lib/supabase/services/google-places";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -72,6 +96,67 @@ const RADIUS_OPTIONS: { label: string; value: number }[] = [
   { label: "Large (200m)", value: 200 },
 ];
 
+/** Maximum items in nearby dropdown */
+const DROPDOWN_MAX_NEARBY = 10;
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Debounce hook — delays value updates by `delayMs`.
+ */
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+
+  return debouncedValue;
+}
+
+/**
+ * Map Google place types to a LucideIcon for display.
+ */
+function getIconForTypes(types: string[]): LucideIcon {
+  const typeStr = types.join(",").toLowerCase();
+  if (
+    typeStr.includes("church") ||
+    typeStr.includes("mosque") ||
+    typeStr.includes("synagogue")
+  )
+    return Church;
+  if (typeStr.includes("restaurant") || typeStr.includes("food"))
+    return Utensils;
+  if (typeStr.includes("cafe") || typeStr.includes("coffee")) return Coffee;
+  if (typeStr.includes("store") || typeStr.includes("shopping"))
+    return ShoppingBag;
+  if (typeStr.includes("school") || typeStr.includes("university"))
+    return GraduationCap;
+  if (
+    typeStr.includes("hospital") ||
+    typeStr.includes("doctor") ||
+    typeStr.includes("pharmacy")
+  )
+    return Heart;
+  if (typeStr.includes("gas_station") || typeStr.includes("fuel")) return Fuel;
+  if (typeStr.includes("gym")) return Dumbbell;
+  if (typeStr.includes("office")) return Briefcase;
+  if (typeStr.includes("building") || typeStr.includes("establishment"))
+    return Building2;
+  return MapPin;
+}
+
+/**
+ * Format distance in meters to a readable string.
+ */
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(1)}km`;
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -91,12 +176,37 @@ export const LocationEditSection = ({
   onRadiusChange,
   hideAlwaysUseToggle,
 }: LocationEditSectionProps) => {
-  // Internal state
-  const [showPickerSheet, setShowPickerSheet] = useState(false);
-  const [nearbyPlaces, setNearbyPlaces] = useState<GooglePlaceSuggestion[]>([]);
-  const [neighborhoodName, setNeighborhoodName] = useState<string | null>(null);
+  // ---- Existing state (nearby places, neighborhood, map) ----
+  const [nearbyPlaces, setNearbyPlaces] = useState<GooglePlaceSuggestion[]>(
+    [],
+  );
+  const [neighborhoodName, setNeighborhoodName] = useState<string | null>(
+    null,
+  );
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [mapError, setMapError] = useState(false);
+
+  // ---- NEW: Dropdown state ----
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // ---- NEW: Inline editing + autocomplete state ----
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [autocompleteResults, setAutocompleteResults] = useState<
+    PlaceAutocompletePrediction[]
+  >([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const sessionTokenRef = useRef(createSessionToken());
+  const textInputRef = useRef<TextInput>(null);
+
+  // Debounced search text for autocomplete (300ms)
+  const debouncedEditText = useDebouncedValue(editText, 300);
+
+  const hasCoords = latitude != null && longitude != null;
+
+  // ======================================================================
+  // Effects
+  // ======================================================================
 
   // Fetch nearby places and neighborhood name when lat/lng change
   useEffect(() => {
@@ -128,49 +238,418 @@ export const LocationEditSection = ({
     };
   }, [latitude, longitude]);
 
-  const handlePickerSelect = useCallback(
-    (selection: LocationPickerSelection) => {
-      onLabelChange(selection.label);
-      if (selection.types && selection.types.length > 0) {
-        const category = mapPlaceTypeToCategory(selection.types);
-        onCategoryChange(category);
+  // Autocomplete search when user types in edit mode
+  useEffect(() => {
+    if (!isEditing || !debouncedEditText || debouncedEditText.length < 2) {
+      setAutocompleteResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+
+    searchPlacesAutocomplete(
+      debouncedEditText,
+      latitude,
+      longitude,
+      sessionTokenRef.current,
+    )
+      .then((results) => {
+        if (!cancelled) setAutocompleteResults(results);
+      })
+      .catch(() => {
+        if (!cancelled) setAutocompleteResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedEditText, isEditing, latitude, longitude]);
+
+  // Cleanup autocomplete on unmount
+  useEffect(() => {
+    return () => cancelAutocomplete();
+  }, []);
+
+  // ======================================================================
+  // Handlers
+  // ======================================================================
+
+  /** Select a place from dropdown (nearby or autocomplete). */
+  const selectPlace = useCallback(
+    (label: string, types?: string[]) => {
+      onLabelChange(label);
+      if (types && types.length > 0) {
+        onCategoryChange(mapPlaceTypeToCategory(types));
       }
-      setShowPickerSheet(false);
+      setShowDropdown(false);
+      setIsEditing(false);
+      setEditText("");
+      setAutocompleteResults([]);
+      cancelAutocomplete();
+      Keyboard.dismiss();
     },
     [onLabelChange, onCategoryChange],
   );
 
+  /** Toggle the dropdown (chevron press). */
+  const toggleDropdown = useCallback(() => {
+    if (showDropdown) {
+      // Closing dropdown
+      setShowDropdown(false);
+      setIsEditing(false);
+      setEditText("");
+      setAutocompleteResults([]);
+      cancelAutocomplete();
+      Keyboard.dismiss();
+    } else {
+      // Opening dropdown (nearby mode)
+      setShowDropdown(true);
+    }
+  }, [showDropdown]);
+
+  /** Switch to text editing mode (tap label or "Other..."). */
+  const startEditing = useCallback(() => {
+    setIsEditing(true);
+    setEditText(currentLabel);
+    setShowDropdown(true);
+    // New session token for this editing session
+    sessionTokenRef.current = createSessionToken();
+    // Focus the input after render
+    setTimeout(() => textInputRef.current?.focus(), 100);
+  }, [currentLabel]);
+
+  /** Cancel editing, revert to label display. */
+  const cancelEditing = useCallback(() => {
+    setIsEditing(false);
+    setEditText("");
+    setAutocompleteResults([]);
+    cancelAutocomplete();
+    Keyboard.dismiss();
+    setShowDropdown(false);
+  }, []);
+
+  /** Handle submit from TextInput (return key). */
+  const handleSubmitEditing = useCallback(() => {
+    if (editText.trim()) {
+      selectPlace(editText.trim());
+    } else {
+      cancelEditing();
+    }
+  }, [editText, selectPlace, cancelEditing]);
+
+  /** Backward-compatible handler for pill row selections. */
+  const handlePillSelect = useCallback(
+    (selection: {
+      label: string;
+      placeId?: string;
+      types?: string[];
+    }) => {
+      selectPlace(selection.label, selection.types);
+    },
+    [selectPlace],
+  );
+
   // Build static map URL
   const apiKey = getGoogleApiKey();
-  const hasCoords = latitude != null && longitude != null;
   const staticMapUrl =
     hasCoords && apiKey && !mapError
       ? `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=16&size=600x200&scale=2&maptype=roadmap&markers=color:red%7C${latitude},${longitude}&key=${apiKey}`
       : null;
 
+  // ======================================================================
+  // Render
+  // ======================================================================
+
   return (
     <View>
-      {/* 1. Location Label — Tappable row to open picker sheet */}
-      <Pressable
-        style={styles.card}
-        onPress={() => setShowPickerSheet(true)}
-      >
+      {/* ================================================================
+          1. Location Label Card + Inline Dropdown
+          ================================================================ */}
+      <View style={styles.card}>
+        {/* Label Row */}
         <View style={styles.labelRow}>
           <Icon icon={MapPin} size={18} color="#94A3B8" />
-          <Text
-            style={[
-              styles.labelText,
-              !currentLabel && styles.labelPlaceholder,
-            ]}
-            numberOfLines={1}
-          >
-            {currentLabel || "Tap to pick a location..."}
-          </Text>
-          <Icon icon={ChevronDown} size={18} color="#64748B" />
-        </View>
-      </Pressable>
 
-      {/* 2. Nearby Quick Picks — small horizontal row for fastest pick */}
+          {isEditing ? (
+            <TextInput
+              ref={textInputRef}
+              style={styles.labelInput}
+              value={editText}
+              onChangeText={setEditText}
+              placeholder="Search for a place..."
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmitEditing}
+              onBlur={() => {
+                // Small delay to allow dropdown item press to fire first
+                setTimeout(() => {
+                  if (isEditing && !showDropdown) {
+                    cancelEditing();
+                  }
+                }, 200);
+              }}
+            />
+          ) : (
+            <Pressable onPress={startEditing} style={styles.labelTextWrapper}>
+              <Text
+                style={[
+                  styles.labelText,
+                  !currentLabel && styles.labelPlaceholder,
+                ]}
+                numberOfLines={1}
+              >
+                {currentLabel || "Tap to pick a location..."}
+              </Text>
+            </Pressable>
+          )}
+
+          <Pressable onPress={toggleDropdown} hitSlop={8}>
+            <Icon
+              icon={ChevronDown}
+              size={18}
+              color="#64748B"
+              style={
+                showDropdown
+                  ? { transform: [{ rotate: "180deg" }] }
+                  : undefined
+              }
+            />
+          </Pressable>
+        </View>
+
+        {/* ---- Inline Dropdown ---- */}
+        {showDropdown && (
+          <View style={styles.dropdown}>
+            <View style={styles.dropdownDivider} />
+
+            <ScrollView
+              style={styles.dropdownScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              {isEditing ? (
+                /* ======== Autocomplete Mode ======== */
+                <>
+                  {/* Loading spinner */}
+                  {isSearching &&
+                    autocompleteResults.length === 0 &&
+                    debouncedEditText.length >= 2 && (
+                      <View style={styles.dropdownLoading}>
+                        <ActivityIndicator color="#64748B" size="small" />
+                        <Text style={styles.dropdownLoadingText}>
+                          Searching...
+                        </Text>
+                      </View>
+                    )}
+
+                  {/* Autocomplete results */}
+                  {autocompleteResults.map((prediction) => {
+                    const PlaceIcon = getIconForTypes(prediction.types);
+                    return (
+                      <Pressable
+                        key={prediction.placeId}
+                        style={styles.dropdownItem}
+                        onPress={() =>
+                          selectPlace(prediction.mainText, prediction.types)
+                        }
+                      >
+                        <View style={styles.dropdownItemIconWrap}>
+                          <PlaceIcon size={16} color="#64748B" />
+                        </View>
+                        <View style={styles.dropdownItemBody}>
+                          <Text
+                            style={styles.dropdownItemName}
+                            numberOfLines={1}
+                          >
+                            {prediction.mainText}
+                          </Text>
+                          <Text
+                            style={styles.dropdownItemDetail}
+                            numberOfLines={1}
+                          >
+                            {prediction.secondaryText}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+
+                  {/* No results message */}
+                  {debouncedEditText.length >= 2 &&
+                    !isSearching &&
+                    autocompleteResults.length === 0 && (
+                      <Text style={styles.dropdownEmptyText}>
+                        No results for &ldquo;{debouncedEditText}&rdquo;
+                      </Text>
+                    )}
+
+                  {/* "Use as-is" custom text option */}
+                  {editText.trim().length > 0 && (
+                    <>
+                      <View style={styles.dropdownDivider} />
+                      <Pressable
+                        style={styles.dropdownItem}
+                        onPress={() => selectPlace(editText.trim())}
+                      >
+                        <View
+                          style={[
+                            styles.dropdownItemIconWrap,
+                            styles.dropdownItemIconGreen,
+                          ]}
+                        >
+                          <Check size={16} color="#34C759" />
+                        </View>
+                        <Text style={styles.dropdownItemNameGreen}>
+                          Use &ldquo;{editText.trim()}&rdquo;
+                        </Text>
+                      </Pressable>
+                    </>
+                  )}
+                </>
+              ) : (
+                /* ======== Nearby Places Mode ======== */
+                <>
+                  {/* Current selection (highlighted) */}
+                  {currentLabel ? (
+                    <View
+                      style={[
+                        styles.dropdownItem,
+                        styles.dropdownItemSelected,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.dropdownItemIconWrap,
+                          styles.dropdownItemIconBlue,
+                        ]}
+                      >
+                        <MapPin size={16} color="#3B82F6" />
+                      </View>
+                      <Text
+                        style={[styles.dropdownItemName, styles.dropdownItemNameBlue]}
+                        numberOfLines={1}
+                      >
+                        {currentLabel}
+                      </Text>
+                      <Check size={16} color="#3B82F6" />
+                    </View>
+                  ) : null}
+
+                  {/* Nearby places */}
+                  {nearbyPlaces
+                    .slice(0, DROPDOWN_MAX_NEARBY)
+                    .map((place) => {
+                      // Skip if same as current label
+                      if (place.name === currentLabel) return null;
+                      const PlaceIcon = getIconForTypes(place.types);
+                      return (
+                        <Pressable
+                          key={place.placeId}
+                          style={styles.dropdownItem}
+                          onPress={() =>
+                            selectPlace(place.name, place.types)
+                          }
+                        >
+                          <View style={styles.dropdownItemIconWrap}>
+                            <PlaceIcon size={16} color="#64748B" />
+                          </View>
+                          <View style={styles.dropdownItemBody}>
+                            <Text
+                              style={styles.dropdownItemName}
+                              numberOfLines={1}
+                            >
+                              {place.name}
+                            </Text>
+                            <Text style={styles.dropdownItemDetail}>
+                              {getPlaceTypeLabel(place.types)} ·{" "}
+                              {formatDistance(place.distanceM)}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+
+                  {/* Neighborhood fallback */}
+                  {neighborhoodName && (
+                    <Pressable
+                      style={styles.dropdownItem}
+                      onPress={() => selectPlace(neighborhoodName)}
+                    >
+                      <View style={styles.dropdownItemIconWrap}>
+                        <MapPin size={16} color="#94A3B8" />
+                      </View>
+                      <Text
+                        style={[
+                          styles.dropdownItemName,
+                          { color: "#94A3B8" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {neighborhoodName}
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  {/* Loading state */}
+                  {isLoadingSuggestions && (
+                    <View style={styles.dropdownLoading}>
+                      <ActivityIndicator color="#64748B" size="small" />
+                      <Text style={styles.dropdownLoadingText}>
+                        Finding places...
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Empty state (no nearby places, not loading) */}
+                  {!isLoadingSuggestions &&
+                    nearbyPlaces.length === 0 &&
+                    !neighborhoodName && (
+                      <Text style={styles.dropdownEmptyText}>
+                        No nearby places found
+                      </Text>
+                    )}
+
+                  {/* Divider + "Other..." */}
+                  <View style={styles.dropdownDivider} />
+                  <Pressable
+                    style={styles.dropdownItem}
+                    onPress={startEditing}
+                  >
+                    <View
+                      style={[
+                        styles.dropdownItemIconWrap,
+                        styles.dropdownItemIconMuted,
+                      ]}
+                    >
+                      <Pencil size={16} color="#6B7280" />
+                    </View>
+                    <Text
+                      style={[
+                        styles.dropdownItemName,
+                        { color: "#6B7280" },
+                      ]}
+                    >
+                      Other...
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {/* ================================================================
+          2. Nearby Quick Picks — horizontal pill row
+          ================================================================ */}
       {hasCoords && nearbyPlaces.length > 0 && !isLoadingSuggestions && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>NEARBY</Text>
@@ -183,7 +662,7 @@ export const LocationEditSection = ({
               <Pressable
                 key={place.placeId}
                 onPress={() =>
-                  handlePickerSelect({
+                  handlePillSelect({
                     label: place.name,
                     placeId: place.placeId,
                     types: place.types,
@@ -195,7 +674,7 @@ export const LocationEditSection = ({
                   {place.name}
                 </Text>
                 <Text style={styles.suggestionType}>
-                  {" \u00B7 "}
+                  {" · "}
                   {getPlaceTypeLabel(place.types)}
                 </Text>
               </Pressable>
@@ -220,10 +699,12 @@ export const LocationEditSection = ({
         />
       )}
 
-      {/* 3. "Always use this name" Toggle */}
+      {/* ================================================================
+          3. "Always use this name" Toggle
+          ================================================================ */}
       {!hideAlwaysUseToggle && geohash7 != null && (
         <View style={styles.section}>
-          <View style={styles.card}>
+          <View style={styles.toggleCard}>
             <View style={styles.toggleRow}>
               <Text style={styles.toggleLabel}>Always use this name</Text>
               <Switch
@@ -236,7 +717,9 @@ export const LocationEditSection = ({
         </View>
       )}
 
-      {/* 4. Category Picker */}
+      {/* ================================================================
+          4. Category Picker
+          ================================================================ */}
       {alwaysUse && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PLACE TYPE</Text>
@@ -254,7 +737,7 @@ export const LocationEditSection = ({
                     const newCat = isActive ? null : cat;
                     onCategoryChange(newCat);
                     if (newCat) {
-                      onLabelChange(newCat); // Update label to match category
+                      onLabelChange(newCat);
                     }
                   }}
                   style={[
@@ -279,7 +762,9 @@ export const LocationEditSection = ({
         </View>
       )}
 
-      {/* 5. Radius Toggle */}
+      {/* ================================================================
+          5. Radius Toggle
+          ================================================================ */}
       {alwaysUse && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>DETECTION RADIUS</Text>
@@ -316,7 +801,9 @@ export const LocationEditSection = ({
         </View>
       )}
 
-      {/* 6. Mini-Map */}
+      {/* ================================================================
+          6. Mini-Map
+          ================================================================ */}
       {staticMapUrl && (
         <Image
           source={{ uri: staticMapUrl }}
@@ -324,17 +811,6 @@ export const LocationEditSection = ({
           onError={() => setMapError(true)}
         />
       )}
-
-      {/* Location Picker Sheet */}
-      <LocationPickerSheet
-        visible={showPickerSheet}
-        onClose={() => setShowPickerSheet(false)}
-        onSelect={handlePickerSelect}
-        latitude={latitude}
-        longitude={longitude}
-        currentLabel={currentLabel}
-        initialNearby={nearbyPlaces}
-      />
     </View>
   );
 };
@@ -344,6 +820,7 @@ export const LocationEditSection = ({
 // ============================================================================
 
 const styles = StyleSheet.create({
+  // ---- Card ----
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 12,
@@ -361,13 +838,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // Label row
+  // ---- Label Row ----
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 4,
     gap: 10,
+  },
+  labelTextWrapper: {
+    flex: 1,
   },
   labelText: {
     flex: 1,
@@ -378,19 +858,109 @@ const styles = StyleSheet.create({
   labelPlaceholder: {
     color: "#94A3B8",
   },
+  labelInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#111827",
+    paddingVertical: 12,
+    padding: 0,
+  },
 
-  // Loading
+  // ---- Inline Dropdown ----
+  dropdown: {
+    paddingBottom: 4,
+  },
+  dropdownScroll: {
+    maxHeight: 320,
+    paddingHorizontal: 8,
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 8,
+    marginVertical: 4,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 10,
+  },
+  dropdownItemSelected: {
+    backgroundColor: "#EFF6FF",
+  },
+  dropdownItemIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropdownItemIconBlue: {
+    backgroundColor: "rgba(59,130,246,0.1)",
+  },
+  dropdownItemIconGreen: {
+    backgroundColor: "rgba(52,199,89,0.1)",
+  },
+  dropdownItemIconMuted: {
+    backgroundColor: "rgba(107,114,128,0.1)",
+  },
+  dropdownItemBody: {
+    flex: 1,
+  },
+  dropdownItemName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
+    flexShrink: 1,
+  },
+  dropdownItemNameBlue: {
+    color: "#3B82F6",
+    flex: 1,
+  },
+  dropdownItemNameGreen: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#34C759",
+  },
+  dropdownItemDetail: {
+    fontSize: 13,
+    color: "#94A3B8",
+    marginTop: 1,
+  },
+  dropdownLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    gap: 8,
+  },
+  dropdownLoadingText: {
+    fontSize: 13,
+    color: "#94A3B8",
+  },
+  dropdownEmptyText: {
+    fontSize: 13,
+    color: "#94A3B8",
+    textAlign: "center",
+    paddingVertical: 16,
+  },
+
+  // ---- Loading ----
   loadingIndicator: {
     paddingVertical: 12,
   },
 
-  // Pill row
+  // ---- Pill Row ----
   pillRow: {
     flexDirection: "row",
     gap: 8,
   },
 
-  // Nearby suggestion pills
+  // ---- Nearby suggestion pills ----
   suggestionPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -411,7 +981,7 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
   },
 
-  // Neighborhood fallback pill
+  // ---- Neighborhood fallback pill ----
   neighborhoodPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -428,7 +998,12 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
   },
 
-  // Toggle row
+  // ---- Toggle ----
+  toggleCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
   toggleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -440,7 +1015,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
 
-  // Category / Radius pills
+  // ---- Category / Radius pills ----
   pill: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -463,7 +1038,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
 
-  // Mini-map
+  // ---- Mini-map ----
   miniMap: {
     height: 120,
     borderRadius: 12,
