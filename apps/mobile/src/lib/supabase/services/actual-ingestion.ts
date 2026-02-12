@@ -227,9 +227,9 @@ const STATIONARY_SPEED_THRESHOLD_MS = 0.5; // 0.5 m/s = very slow walk
 /**
  * FIX #2: Minimum dwell time in milliseconds required to tag a location.
  * Prevents "drive-by" scenarios where user passes near a place but doesn't stop.
- * 5 minutes is long enough to filter driving, short enough to capture quick stops.
+ * 3 minutes is short enough to capture brief coffee stops (like Santos Coffee 7 min).
  */
-const MIN_DWELL_TIME_MS = 5 * 60 * 1000; // 5 minutes
+const MIN_DWELL_TIME_MS = 3 * 60 * 1000; // 3 minutes (reduced from 5 to catch brief stops)
 
 /** 
  * Minimum total distance traveled to consider as movement.
@@ -681,8 +681,9 @@ export function generateLocationSegments(
           sample.latitude,
           sample.longitude,
         );
-        // 200m threshold from cluster ANCHOR (start point), not moving center
-        sameCoordinateCluster = distanceFromAnchor < 200;
+        // 100m threshold from cluster ANCHOR (start point), not moving center
+        // Reduced from 200m to catch brief stops like coffee shops
+        sameCoordinateCluster = distanceFromAnchor < 100;
         
         // DEBUG: Log when distance is significant
         if (distanceFromAnchor > 100) {
@@ -794,12 +795,17 @@ export function generateLocationSegments(
     const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
     
     // Classification thresholds (match Google Timeline behavior)
-    // - Average speed > 1.0 m/s (~2.2 mph) = definitely moving
-    // - Total distance > 100m = traveled a meaningful distance
-    const COMMUTE_SPEED_THRESHOLD = 1.0; // m/s
-    const COMMUTE_DISTANCE_THRESHOLD = 100; // meters
+    // CRITICAL FIX: Use AND logic, not OR!
+    // - GPS jitter can accumulate >100m distance while stationary (avgSpeed ~0.5 m/s)
+    // - Using OR incorrectly classifies stationary as travel
+    // - Using AND: must have BOTH meaningful speed AND meaningful distance
+    // Speed data shows: stationary = 0-0.78 m/s, driving = 6.66-8.33 m/s
+    const COMMUTE_SPEED_THRESHOLD = 1.5; // m/s (~3.4 mph, faster than slow walk)
+    const COMMUTE_DISTANCE_THRESHOLD = 200; // meters (requires actual travel, not jitter)
     
-    const isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD || totalDistance > COMMUTE_DISTANCE_THRESHOLD;
+    // BOTH conditions must be true to classify as commute
+    // This prevents GPS jitter (high distance, low speed) from triggering false travel
+    const isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD && totalDistance > COMMUTE_DISTANCE_THRESHOLD;
     
     // Determine segment kind and movement type
     let segmentKind: "location_block" | "commute" = "location_block";
@@ -850,13 +856,42 @@ export function generateLocationSegments(
     });
   }
 
-  // DEBUG: Log results
-  console.log(`📍 [generateLocationSegments] Created ${groups.length} groups, ${segments.length} segments`);
-  for (const seg of segments) {
-    console.log(`📍 [generateLocationSegments] Segment: ${seg.start.toISOString()} - ${seg.end.toISOString()}, place: ${seg.placeLabel ?? 'unknown'}, coords: (${seg.latitude}, ${seg.longitude})`);
+  // Filter out very brief stationary segments (< MIN_DWELL_TIME_MS) to prevent noise
+  // UNLESS they have a meaningful place label (user-defined or from reverse geocoding)
+  const preFilterCount = segments.length;
+  
+  const filteredSegments = segments.filter(seg => {
+    // Keep all commute segments
+    if (seg.meta?.kind === 'commute') {
+      return true;
+    }
+    
+    // For stationary segments, check duration
+    const duration = seg.end.getTime() - seg.start.getTime();
+    const hasMeaningfulPlace = seg.placeLabel !== null && seg.placeLabel !== undefined;
+    
+    // Keep if >= 3 minutes OR has a meaningful place label
+    if (duration >= MIN_DWELL_TIME_MS || hasMeaningfulPlace) {
+      return true;
+    }
+    
+    if (__DEV__) {
+      console.log(`📍 [DWELL FILTER] Removing brief stationary segment (${Math.round(duration / 1000)}s < 180s): ${seg.start.toISOString()}`);
+    }
+    return false;
+  });
+  
+  if (__DEV__ && filteredSegments.length !== preFilterCount) {
+    console.log(`📍 [DWELL FILTER] Removed ${preFilterCount - filteredSegments.length} brief segments`);
   }
 
-  return segments;
+  // DEBUG: Log results
+  console.log(`📍 [generateLocationSegments] Created ${groups.length} groups, ${filteredSegments.length} segments (filtered from ${preFilterCount})`);
+  for (const seg of filteredSegments) {
+    console.log(`📍 [generateLocationSegments] Segment: ${seg.start.toISOString()} - ${seg.end.toISOString()}, place: ${seg.placeLabel ?? 'unknown'}, kind: ${seg.meta?.kind ?? 'location_block'}, coords: (${seg.latitude}, ${seg.longitude})`);
+  }
+
+  return filteredSegments;
 }
 
 /**
