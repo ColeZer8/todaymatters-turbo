@@ -98,6 +98,9 @@ function toSample(
       timestamp: location.timestamp,
       coords,
     }),
+    activity_type: null,
+    activity_confidence: null,
+    is_moving: null,
   };
 }
 

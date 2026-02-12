@@ -497,6 +497,9 @@ export async function captureAndroidLocationSampleNowAsync(
       // Supabase constraint currently allows only 'background'.
       source: "background",
       raw: null,
+      activity_type: null,
+      activity_confidence: null,
+      is_moving: null,
     };
 
     const { enqueued, pendingCount } =
