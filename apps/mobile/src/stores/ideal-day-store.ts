@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { produce } from "immer";
 import {
   Moon,
   Briefcase,
@@ -298,68 +299,53 @@ export const useIdealDayStore = create<IdealDayState>()(
           },
         })),
       toggleDay: (dayIndex) =>
-        set((state) => {
-          // Only custom mode allows toggling days
-          if (state.dayType !== "custom") return state;
+        set((state) =>
+          produce(state, (draft) => {
+            // Only custom mode allows toggling days
+            if (draft.dayType !== "custom") return;
 
-          const currentSelection = state.selectedDaysByType.custom || [];
-          const currentlyEditingDay = currentSelection[0]; // Single day or undefined
-          const isSelected = currentSelection.includes(dayIndex);
+            const currentSelection = draft.selectedDaysByType.custom || [];
+            const currentlyEditingDay = currentSelection[0]; // Single day or undefined
+            const isSelected = currentSelection.includes(dayIndex);
 
-          if (isSelected) {
-            // Tapping the same day = REMOVE custom override entirely
-            // Delete from customDayConfigs, clear selection, day reverts to base
-            const { [dayIndex]: _, ...remainingConfigs } =
-              state.customDayConfigs;
-            return {
-              selectedDaysByType: {
-                ...state.selectedDaysByType,
-                custom: [],
-              },
-              customDayConfigs: remainingConfigs,
-            };
-          } else {
-            // Selecting a different day
-            // First, SAVE current editing day's config (if any)
-            let updatedConfigs = { ...state.customDayConfigs };
-            if (currentlyEditingDay !== undefined) {
-              updatedConfigs[currentlyEditingDay] =
-                state.categoriesByType.custom.map((cat) => ({ ...cat }));
-            }
-
-            // Load the new day's config (from saved custom or from base template)
-            const existingConfig = updatedConfigs[dayIndex];
-            let newCustomCategories: IdealDayCategory[];
-
-            if (existingConfig) {
-              // Day already has a saved custom config - load it
-              newCustomCategories = existingConfig.map((cat) => ({ ...cat }));
+            if (isSelected) {
+              // Tapping the same day = REMOVE custom override entirely
+              // Delete from customDayConfigs, clear selection, day reverts to base
+              delete draft.customDayConfigs[dayIndex];
+              draft.selectedDaysByType.custom = [];
             } else {
-              // No saved config - copy from base template
-              const baseType =
-                dayIndex < 5
-                  ? "weekdays"
-                  : dayIndex === 5
-                    ? "saturday"
-                    : "sunday";
-              newCustomCategories = state.categoriesByType[baseType].map(
-                (cat) => ({ ...cat }),
-              );
-            }
+              // Selecting a different day
+              // First, SAVE current editing day's config (if any)
+              if (currentlyEditingDay !== undefined) {
+                draft.customDayConfigs[currentlyEditingDay] =
+                  draft.categoriesByType.custom.map((cat) => ({ ...cat }));
+              }
 
-            return {
-              selectedDaysByType: {
-                ...state.selectedDaysByType,
-                custom: [dayIndex],
-              },
-              categoriesByType: {
-                ...state.categoriesByType,
-                custom: newCustomCategories,
-              },
-              customDayConfigs: updatedConfigs,
-            };
-          }
-        }),
+              // Load the new day's config (from saved custom or from base template)
+              const existingConfig = draft.customDayConfigs[dayIndex];
+              let newCustomCategories: IdealDayCategory[];
+
+              if (existingConfig) {
+                // Day already has a saved custom config - load it
+                newCustomCategories = existingConfig.map((cat) => ({ ...cat }));
+              } else {
+                // No saved config - copy from base template
+                const baseType =
+                  dayIndex < 5
+                    ? "weekdays"
+                    : dayIndex === 5
+                      ? "saturday"
+                      : "sunday";
+                newCustomCategories = draft.categoriesByType[baseType].map(
+                  (cat) => ({ ...cat }),
+                );
+              }
+
+              draft.selectedDaysByType.custom = [dayIndex];
+              draft.categoriesByType.custom = newCustomCategories;
+            }
+          })
+        ),
     }),
     {
       name: "ideal-day-storage",
