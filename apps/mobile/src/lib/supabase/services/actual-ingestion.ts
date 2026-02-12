@@ -1603,7 +1603,43 @@ export function processSegmentsWithCommutes(
   applyTravelAnnotations(result, detectedCommutes);
 
   // Sort final result by start time
-  return result.sort((a, b) => a.start.getTime() - b.start.getTime());
+  const sortedResult = result.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  // Fix #3: Update commute destinations from the NEXT stationary segment
+  // This prevents "phantom destinations" like showing "Travel → Steel City Chiropractic"
+  // when the user just passed by that business without stopping there.
+  // The correct destination is wherever the user actually stopped.
+  for (let i = 0; i < sortedResult.length; i++) {
+    const segment = sortedResult[i];
+    if (segment.meta.kind === "commute") {
+      // Find the next non-commute (stationary) segment
+      const nextStationary = sortedResult.slice(i + 1).find(s => s.meta.kind !== "commute");
+      if (nextStationary && (nextStationary.placeId || nextStationary.placeLabel)) {
+        // Update destination to be the actual stopping place
+        segment.meta.destination_place_id = nextStationary.placeId;
+        segment.meta.destination_place_label = nextStationary.placeLabel;
+        if (__DEV__) {
+          console.log(
+            `📍 [Fix#3] Updated commute destination: ` +
+            `${segment.meta.destination_place_label ?? 'unknown'} → ${nextStationary.placeLabel ?? 'unknown'}`
+          );
+        }
+      } else if (!nextStationary) {
+        // No next segment found - clear destination to avoid showing random nearby places
+        if (segment.meta.destination_place_id || segment.meta.destination_place_label) {
+          if (__DEV__) {
+            console.log(
+              `📍 [Fix#3] Clearing orphan commute destination: ${segment.meta.destination_place_label ?? 'unknown'}`
+            );
+          }
+          segment.meta.destination_place_id = null;
+          segment.meta.destination_place_label = null;
+        }
+      }
+    }
+  }
+
+  return sortedResult;
 }
 
 // ============================================================================

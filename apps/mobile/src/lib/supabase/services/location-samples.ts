@@ -17,6 +17,10 @@ interface LocationSampleLike {
   source: string;
   dedupe_key: string;
   raw: LocationSamplesInsert["raw"];
+  // Activity detection fields (Fix #1: Activity Type Extraction)
+  activity_type?: string | null;
+  activity_confidence?: number | null;
+  is_moving?: boolean | null;
 }
 
 export interface LocationSampleRow {
@@ -123,6 +127,11 @@ export async function upsertLocationSamples(
     source: s.source,
     dedupe_key: s.dedupe_key,
     raw: s.raw,
+    // Activity detection fields (Fix #1: Activity Type Extraction)
+    // Enables walking/driving/cycling detection for timeline accuracy
+    activity_type: s.activity_type ?? null,
+    activity_confidence: s.activity_confidence ?? null,
+    is_moving: s.is_moving ?? null,
   }));
 
   const { error } = await supabase

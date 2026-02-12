@@ -116,6 +116,13 @@ export interface EvidenceLocationSample {
   is_mocked?: boolean | null;
   /** Additive telemetry, primarily populated by iOS raw.meta/raw.telemetry payloads. */
   telemetry?: IosLocationTelemetryMeta | null;
+  // Activity detection fields (Fix #1: Activity Type Extraction)
+  /** Motion activity type: 'still', 'walking', 'on_foot', 'running', 'on_bicycle', 'in_vehicle', 'unknown' */
+  activity_type?: string | null;
+  /** Confidence percentage (0-100) for activity detection */
+  activity_confidence?: number | null;
+  /** Whether device is currently in motion */
+  is_moving?: boolean | null;
 }
 
 export interface EvidenceBundle {
@@ -227,6 +234,10 @@ export function coerceEvidenceLocationSample(row: {
   speed_mps?: number | null;
   is_mocked?: boolean | null;
   raw?: unknown;
+  // Activity detection fields (Fix #1)
+  activity_type?: string | null;
+  activity_confidence?: number | null;
+  is_moving?: boolean | null;
 }): EvidenceLocationSample {
   const telemetry = extractIosTelemetryFromRaw(row.raw);
 
@@ -241,6 +252,10 @@ export function coerceEvidenceLocationSample(row: {
         ? row.is_mocked
         : telemetry?.is_mocked ?? null,
     telemetry,
+    // Activity detection fields (Fix #1: enables walking/driving detection at places)
+    activity_type: typeof row.activity_type === "string" ? row.activity_type : null,
+    activity_confidence: typeof row.activity_confidence === "number" ? row.activity_confidence : null,
+    is_moving: typeof row.is_moving === "boolean" ? row.is_moving : null,
   };
 }
 
@@ -496,9 +511,10 @@ export async function fetchLocationSamplesForDay(
   const { startIso, endIso } = ymdToDayRange(ymd);
 
   try {
+    // Include activity detection columns (Fix #1: Activity Type Extraction)
     const { data, error } = await tmSchema()
       .from("location_samples")
-      .select("recorded_at, latitude, longitude, accuracy_m, speed_mps, is_mocked, raw")
+      .select("recorded_at, latitude, longitude, accuracy_m, speed_mps, is_mocked, raw, activity_type, activity_confidence, is_moving")
       .eq("user_id", userId)
       .gte("recorded_at", startIso)
       .lt("recorded_at", endIso)
@@ -519,6 +535,9 @@ export async function fetchLocationSamplesForDay(
         speed_mps?: number | null;
         is_mocked?: boolean | null;
         raw?: unknown;
+        activity_type?: string | null;
+        activity_confidence?: number | null;
+        is_moving?: boolean | null;
       }) => coerceEvidenceLocationSample(row),
     );
   } catch (error) {

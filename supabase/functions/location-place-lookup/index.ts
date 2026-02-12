@@ -107,6 +107,36 @@ function encodeGeohash(latitude: number, longitude: number, precision: number): 
   return hash;
 }
 
+// Fix #2: Filter out unhelpful street names that don't provide meaningful location context
+// These are common road signs or generic street types that confuse users when shown as place names
+const UNHELPFUL_STREET_NAMES = new Set([
+  "no outlet",
+  "dead end",
+  "private road",
+  "private drive",
+  "private property",
+  "unnamed road",
+  "unnamed street",
+  "service road",
+  "access road",
+  "frontage road",
+  "driveway",
+  "alley",
+  "parking lot",
+  "cul de sac",
+  "cul-de-sac",
+  "do not enter",
+  "wrong way",
+  "one way",
+]);
+
+function isUnhelpfulStreetName(name: string | null): boolean {
+  if (!name) return true;
+  const normalized = name.toLowerCase().trim();
+  if (normalized.length === 0) return true;
+  return UNHELPFUL_STREET_NAMES.has(normalized);
+}
+
 interface PlaceLookupApiResult {
   placeId: string | null;
   name: string;
@@ -163,7 +193,11 @@ async function fetchReverseGeocode(params: { apiKey: string; latitude: number; l
           city = component.long_name;
         }
         if (!route && types.includes("route")) {
-          route = component.long_name;
+          // Fix #2: Skip unhelpful street names like "No Outlet", "Dead End", etc.
+          const routeName = component.long_name;
+          if (!isUnhelpfulStreetName(routeName)) {
+            route = routeName;
+          }
         }
         if (!adminArea2 && types.includes("administrative_area_level_2")) {
           adminArea2 = component.long_name;

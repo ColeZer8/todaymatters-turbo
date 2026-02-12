@@ -204,6 +204,11 @@ function toSample(
     is_mocked,
     // IMPORTANT: Supabase currently constrains `source` to "background".
     source: "background",
+    // Activity detection fields (Fix #1) - not available from legacy location provider
+    // These are populated by Transistorsoft provider in ios.ts
+    activity_type: null,
+    activity_confidence: null,
+    is_moving: null,
     raw: normalizeRaw({
       ...sourceMeta,
       timestamp: location.timestamp,

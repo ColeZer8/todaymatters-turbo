@@ -152,8 +152,13 @@ function toSample(
     heading_deg: normalizeHeadingDeg(coords.heading),
     is_mocked,
     source: "background",
+    // Activity detection fields (Fix #1) - not available from Expo LocationTask
+    // These are populated by Transistorsoft provider in ios.ts
+    activity_type: null,
+    activity_confidence: null,
+    is_moving: null,
     raw: normalizeRaw({
-      // Only store what’s useful for debugging/analytics; avoid very large payloads.
+      // Only store what's useful for debugging/analytics; avoid very large payloads.
       timestamp: location.timestamp,
       coords,
       telemetry,
@@ -192,7 +197,7 @@ if (Platform.OS === "ios" && requireOptionalNativeModule("ExpoTaskManager")) {
         if (locations.length === 0) return;
 
         // Associate samples to the authenticated user.
-        // Background tasks may run without a session (e.g., after sign-out) — in that case we drop samples.
+        // Background tasks may run without a session (e.g., after sign-out) - in that case we drop samples.
         const sessionResult = await supabase.auth.getSession();
         const userId = sessionResult.data.session?.user?.id ?? null;
         if (!userId) return;
