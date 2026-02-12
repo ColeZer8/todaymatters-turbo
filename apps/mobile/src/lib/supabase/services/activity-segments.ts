@@ -1229,15 +1229,41 @@ function mergeTopApps(
 }
 
 /**
+ * Count existing activity segments for a day (used for pre-delete validation).
+ */
+async function countExistingSegmentsForDay(
+  userId: string,
+  dateYmd: string,
+): Promise<number> {
+  try {
+    const [year, month, day] = dateYmd.split("-").map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+    const { count, error } = await tmSchema()
+      .from("activity_segments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("started_at", dayStart.toISOString())
+      .lt("started_at", dayEnd.toISOString());
+
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Reprocess an entire day's activity segments with place lookups.
  *
- * This will:
- * 1. Delete existing activity segments for the day
- * 2. Re-generate segments for each hour (dwell filter deferred)
- * 3. Merge segments across hour boundaries to prevent time-snapping
- * 4. Apply dwell-time filter on merged results
- * 5. Auto-lookup Google place names for each segment
- * 6. Save the enriched segments
+ * Uses a SAFE generate-then-validate-then-swap pattern:
+ * 1. Generate new segments from raw telemetry (WITHOUT deleting existing data)
+ * 2. Validate the new data: non-empty, correct day, reasonable count
+ * 3. Only THEN delete old data and insert new data
+ * 4. Verify the save succeeded
+ *
+ * If generation or validation fails, existing data is PRESERVED.
  *
  * @returns Object with stats about what was processed
  */
@@ -1262,40 +1288,21 @@ export async function reprocessDayWithPlaceLookup(
   };
 
   try {
-    onProgress?.("Deleting old segments and summaries...");
-    
-    // 1. Delete existing segments for the day
-    await deleteActivitySegmentsForDay(userId, dateYmd);
+    // ====================================================================
+    // PHASE 1: Generate new segments WITHOUT touching existing data
+    // ====================================================================
+    onProgress?.("Generating new segments from raw data...");
 
-    // Also delete existing hourly summaries for the day that are not locked.
-    // Locked summaries represent user edits/confirmations and should not be overwritten.
-    try {
-      const { error } = await tmSchema()
-        .from("hourly_summaries")
-        .delete()
-        .eq("user_id", userId)
-        .eq("local_date", dateYmd)
-        .is("locked_at", null);
-
-      if (error) throw handleSupabaseError(error);
-    } catch (error) {
-      // Non-fatal - keep going, we'll upsert summaries for hours we can process.
-      if (__DEV__) {
-        console.warn(
-          "[ActivitySegments] Failed to delete hourly summaries for day:",
-          error,
-        );
-      }
-    }
-
-    // 2. Process each hour of the day
     const [year, month, day] = dateYmd.split("-").map(Number);
     const currentHour = new Date().getHours();
     const isToday = dateYmd === getTodayYmd();
     const maxHour = isToday ? currentHour : 23;
 
+    // Day boundaries for validation
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
     // Lazy import to avoid creating a module dependency loop at load time.
-    // If this fails, we'll still reprocess segments (useful for debugging).
     let processHourlySummary:
       | ((userId: string, hourStart: Date) => Promise<unknown>)
       | null = null;
@@ -1318,7 +1325,7 @@ export async function reprocessDayWithPlaceLookup(
     for (let hour = 0; hour <= maxHour; hour++) {
       const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
 
-      onProgress?.(`Processing hour ${hour}:00...`);
+      onProgress?.(`Generating hour ${hour}:00...`);
 
       // Generate segments for this hour WITHOUT dwell filtering
       const segments = await generateActivitySegments(userId, hourStart, {
@@ -1347,21 +1354,145 @@ export async function reprocessDayWithPlaceLookup(
       return true;
     });
 
-    // Enrich with place names and save
+    // ====================================================================
+    // PHASE 2: Validate new data BEFORE deleting anything
+    // ====================================================================
+    onProgress?.("Validating new segments...");
+
+    // Check: Did we generate ANY segments?
+    if (filteredSegments.length === 0) {
+      // Check how many segments currently exist
+      const existingCount = await countExistingSegmentsForDay(userId, dateYmd);
+      
+      if (existingCount > 0) {
+        const errorMsg =
+          `Reprocess aborted: Generated 0 segments but ${existingCount} currently exist. ` +
+          `Raw location data may be sparse or unavailable. Existing data preserved.`;
+        if (__DEV__) {
+          console.warn(`[ActivitySegments] ${errorMsg}`);
+        }
+        return { ...stats, error: errorMsg };
+      }
+      // If there are also 0 existing segments, there's nothing to lose — continue
+      // (this allows reprocessing an already-empty day without error)
+    }
+
+    // Check: Are all timestamps within the target day?
+    const invalidSegments = filteredSegments.filter(
+      (seg) => seg.startedAt < dayStart || seg.endedAt > dayEnd,
+    );
+    if (invalidSegments.length > 0) {
+      const errorMsg =
+        `Reprocess aborted: ${invalidSegments.length} segments have timestamps outside ${dateYmd}. ` +
+        `This indicates a data generation bug. Existing data preserved.`;
+      if (__DEV__) {
+        console.warn(`[ActivitySegments] ${errorMsg}`);
+        for (const seg of invalidSegments) {
+          console.warn(
+            `  Invalid: ${seg.startedAt.toISOString()} → ${seg.endedAt.toISOString()} (place: ${seg.placeLabel ?? "unknown"})`,
+          );
+        }
+      }
+      return { ...stats, error: errorMsg };
+    }
+
+    // Check: Do all segments have valid durations?
+    const zeroDurationSegments = filteredSegments.filter(
+      (seg) => seg.endedAt.getTime() <= seg.startedAt.getTime(),
+    );
+    if (zeroDurationSegments.length > 0) {
+      const errorMsg =
+        `Reprocess aborted: ${zeroDurationSegments.length} segments have zero or negative duration. ` +
+        `Existing data preserved.`;
+      if (__DEV__) {
+        console.warn(`[ActivitySegments] ${errorMsg}`);
+      }
+      return { ...stats, error: errorMsg };
+    }
+
+    // Enrich with place names BEFORE the swap
+    let enrichedSegments = filteredSegments;
     if (filteredSegments.length > 0) {
       onProgress?.("Looking up place names...");
-      const enriched = await enrichSegmentsWithPlaceNames(filteredSegments);
-      const placesFound = enriched.filter(
+      enrichedSegments = await enrichSegmentsWithPlaceNames(filteredSegments);
+      const placesFound = enrichedSegments.filter(
         (s, i) => s.placeLabel && !filteredSegments[i].placeLabel,
       ).length;
+      stats.placesLookedUp = placesFound;
+    }
 
-      await saveActivitySegments(enriched);
+    // ====================================================================
+    // PHASE 3: Delete old data and insert new data (the swap)
+    // ====================================================================
+    onProgress?.("Replacing old segments with new data...");
 
-      stats.segmentsCreated += enriched.length;
-      stats.placesLookedUp += placesFound;
+    // Delete existing activity segments for the day
+    const deleteSuccess = await deleteActivitySegmentsForDay(userId, dateYmd);
+    if (!deleteSuccess) {
+      const errorMsg =
+        "Reprocess aborted: Failed to delete old segments. Existing data may be intact. " +
+        "Please try again later.";
+      if (__DEV__) {
+        console.warn(`[ActivitySegments] ${errorMsg}`);
+      }
+      return { ...stats, error: errorMsg };
+    }
+
+    // Delete existing hourly summaries for the day that are not locked.
+    // Locked summaries represent user edits/confirmations and should not be overwritten.
+    try {
+      const { error } = await tmSchema()
+        .from("hourly_summaries")
+        .delete()
+        .eq("user_id", userId)
+        .eq("local_date", dateYmd)
+        .is("locked_at", null);
+
+      if (error) throw handleSupabaseError(error);
+    } catch (error) {
+      // Non-fatal - keep going, we'll upsert summaries for hours we can process.
+      if (__DEV__) {
+        console.warn(
+          "[ActivitySegments] Failed to delete hourly summaries for day:",
+          error,
+        );
+      }
+    }
+
+    // Save the new segments
+    if (enrichedSegments.length > 0) {
+      const saveSuccess = await saveActivitySegments(enrichedSegments);
+      if (!saveSuccess) {
+        const errorMsg =
+          `Reprocess error: Generated ${enrichedSegments.length} segments but save to database failed. ` +
+          `Old data was already removed. The background ingestion task will rebuild data over time.`;
+        if (__DEV__) {
+          console.error(`[ActivitySegments] CRITICAL: ${errorMsg}`);
+        }
+        return { ...stats, error: errorMsg };
+      }
+      stats.segmentsCreated = enrichedSegments.length;
+    }
+
+    // ====================================================================
+    // PHASE 4: Verify the save and regenerate hourly summaries
+    // ====================================================================
+    if (enrichedSegments.length > 0) {
+      onProgress?.("Verifying saved data...");
+      const savedCount = await countExistingSegmentsForDay(userId, dateYmd);
+      if (savedCount === 0 && enrichedSegments.length > 0) {
+        const errorMsg =
+          `Reprocess warning: Saved ${enrichedSegments.length} segments but verification found 0. ` +
+          `Data may not have persisted. The background ingestion task will rebuild data over time.`;
+        if (__DEV__) {
+          console.warn(`[ActivitySegments] ${errorMsg}`);
+        }
+        return { ...stats, error: errorMsg };
+      }
     }
 
     // Generate CHARLIE hourly summaries per hour (reads from saved BRAVO segments)
+    onProgress?.("Generating hourly summaries...");
     for (let hour = 0; hour <= maxHour; hour++) {
       const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
       if (processHourlySummary) {
@@ -1383,14 +1514,14 @@ export async function reprocessDayWithPlaceLookup(
     onProgress?.(
       `Done! ${stats.segmentsCreated} segments, ${stats.placesLookedUp} places looked up, ${stats.summariesGenerated} summaries generated.`,
     );
-    
+
     return stats;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     if (__DEV__) {
       console.error("[ActivitySegments] Reprocess failed:", error);
     }
-    return { ...stats, error: message };
+    return { ...stats, error: `Reprocess failed: ${message}. Existing data may be preserved.` };
   }
 }
 
