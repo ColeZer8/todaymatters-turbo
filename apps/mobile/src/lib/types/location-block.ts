@@ -135,4 +135,8 @@ export interface LocationBlock {
   // -- Location Carry-Forward --
   /** Whether this block was synthetically created by carrying forward a previous location. */
   isCarriedForward?: boolean;
+
+  // -- User-defined Labels --
+  /** Whether this block's label was set by the user (from user_places table). */
+  isUserDefined?: boolean;
 }

@@ -41,7 +41,7 @@ import {
   type PlannedCalendarMeta,
 } from "@/lib/supabase/services/calendar-events";
 import { formatLocalIso } from "@/lib/calendar/local-time";
-import { saveLocationLabel } from "@/lib/supabase/services/location-labels";
+import { saveLocationLabel, getLocationLabels, type LocationLabelEntry } from "@/lib/supabase/services/location-labels";
 import { useAuthStore } from "@/stores";
 import type { ScheduledEvent } from "@/stores";
 import type { TimelineEvent } from "@/lib/types/timeline-event";
@@ -104,6 +104,9 @@ export default function ActivityTimelineScreen() {
   const [filter, setFilter] = useState<TimelineFilter>("both");
   const [isReprocessing, setIsReprocessing] = useState(false);
 
+  // User-defined location labels (client-side overlay for immediate feedback)
+  const [userLabels, setUserLabels] = useState<Record<string, LocationLabelEntry>>({});
+
   // Edit modal state
   const [editEvent, setEditEvent] = useState<TimelineEvent | null>(null);
   const [editContext, setEditContext] = useState<EventPressContext | null>(null);
@@ -113,6 +116,38 @@ export default function ActivityTimelineScreen() {
   const [futureEvents, setFutureEvents] = useState<ScheduledEvent[]>([]);
 
   const isToday = useMemo(() => selectedDate === getTodayYmd(), [selectedDate]);
+
+  // Fetch user-defined location labels on mount and when userId changes
+  useEffect(() => {
+    if (!userId) {
+      setUserLabels({});
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        if (__DEV__) {
+          console.log('[ActivityTimeline] 🏷️ Fetching user location labels...');
+        }
+        const labels = await getLocationLabels(userId);
+        if (cancelled) return;
+        
+        if (__DEV__) {
+          console.log('[ActivityTimeline] 🏷️ Loaded', Object.keys(labels).length, 'user labels');
+        }
+        setUserLabels(labels);
+      } catch (err) {
+        if (__DEV__) {
+          console.warn('[ActivityTimeline] Failed to fetch user labels:', err);
+        }
+        if (!cancelled) setUserLabels({});
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [userId]);
 
   // Fetch future planned events when date changes
   useEffect(() => {
@@ -169,10 +204,27 @@ export default function ActivityTimelineScreen() {
     setSelectedDate(getTodayYmd());
   }, []);
 
-  // Force refresh
-  const handleRefresh = useCallback(() => {
+  // Force refresh — also reloads user labels
+  const handleRefresh = useCallback(async () => {
     setRefreshKey((k) => k + 1);
-  }, []);
+    // Reload user labels to pick up any new saves
+    if (userId) {
+      try {
+        if (__DEV__) {
+          console.log('[ActivityTimeline] 🔄 Refreshing user labels...');
+        }
+        const labels = await getLocationLabels(userId);
+        setUserLabels(labels);
+        if (__DEV__) {
+          console.log('[ActivityTimeline] ✅ User labels refreshed:', Object.keys(labels).length, 'labels');
+        }
+      } catch (err) {
+        if (__DEV__) {
+          console.warn('[ActivityTimeline] Failed to refresh user labels:', err);
+        }
+      }
+    }
+  }, [userId]);
 
   // Reprocess (lightning bolt)
   const handleReprocess = useCallback(async () => {
@@ -489,6 +541,7 @@ export default function ActivityTimelineScreen() {
         date={selectedDate}
         userId={userId}
         filter={filter}
+        userLabels={userLabels}
         onEventPress={handleEventPress}
         onBannerPress={handleBannerPress}
         ListFooterComponent={renderFooter}

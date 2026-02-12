@@ -953,26 +953,40 @@ export async function fetchActivitySegmentsForHour(
  * Fetch all activity segments for a specific date.
  * Returns segments in chronological order with actual start/end times.
  */
+/**
+ * Fetch all activity segments for a specific date.
+ * Returns segments in chronological order with actual start/end times.
+ *
+ * NOW USES the `location_timeline` view which provides:
+ * - User-defined place labels (from tm.user_places) with spatial radius matching
+ * - Google Places cache fallback
+ * - Category fallback
+ *
+ * This ensures that user-saved places like "Home" are applied to ALL segments
+ * within the saved radius, even if GPS variance gives slightly different coords.
+ */
 export async function fetchActivitySegmentsForDate(
   userId: string,
   dateYmd: string, // "YYYY-MM-DD"
 ): Promise<ActivitySegment[]> {
   try {
-    const [year, month, day] = dateYmd.split("-").map(Number);
-    const dayStart = new Date(year, month - 1, day, 0, 0, 0);
-    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0);
-
+    // Query the location_timeline VIEW instead of raw activity_segments table
+    // The view provides:
+    // - location_name: user_place label > segment label > google cache > category > unknown
+    // - is_user_defined: true if matched via user_places spatial join
+    // - user_place_id: the matched user_place id (if any)
+    // - All original segment fields
     const { data, error } = await tmSchema()
-      .from("activity_segments")
+      .from("location_timeline")
       .select("*")
       .eq("user_id", userId)
-      .gte("started_at", dayStart.toISOString())
-      .lt("started_at", dayEnd.toISOString())
+      .eq("local_date", dateYmd)
       .order("started_at", { ascending: true });
 
     if (error) {
       if (error.code === "PGRST204" || error.code === "42P01") {
-        return [];
+        // View or table doesn't exist - fall back to raw table query
+        return fetchActivitySegmentsForDateRaw(userId, dateYmd);
       }
       throw handleSupabaseError(error);
     }
@@ -983,13 +997,16 @@ export async function fetchActivitySegmentsForDate(
       startedAt: new Date(row.started_at as string),
       endedAt: new Date(row.ended_at as string),
       hourBucket: new Date(row.hour_bucket as string),
-      placeId: (row.place_id as string) ?? null,
-      placeLabel: (row.place_label as string) ?? null,
-      placeCategory: (row.place_category as string) ?? null,
-      locationLat: (row.location_lat as number) ?? null,
-      locationLng: (row.location_lng as number) ?? null,
-      inferredActivity: row.inferred_activity as InferredActivityType,
-      activityConfidence: row.activity_confidence as number,
+      // Use user_place_id if matched via spatial join, else fall back to segment's place_id
+      placeId: (row.user_place_id as string) ?? (row.place_id as string) ?? null,
+      // KEY FIX: Use location_name from view (has user-defined label priority)
+      placeLabel: (row.location_name as string) ?? null,
+      // Use user_place_category if available, else segment's category
+      placeCategory: (row.user_place_category as string) ?? (row.segment_place_category as string) ?? null,
+      locationLat: (row.latitude as number) ?? null,
+      locationLng: (row.longitude as number) ?? null,
+      inferredActivity: row.activity as InferredActivityType,
+      activityConfidence: ((row.confidence_pct as number) ?? 0) / 100,
       topApps: (row.top_apps as AppBreakdownItem[]) ?? [],
       totalScreenSeconds: (row.total_screen_seconds as number) ?? 0,
       evidence: (row.evidence as SegmentEvidence) ?? {
@@ -997,7 +1014,7 @@ export async function fetchActivitySegmentsForDate(
         screenSessions: 0,
         hasHealthData: false,
       },
-      sourceIds: (row.source_ids as string[]) ?? [],
+      sourceIds: [],  // View doesn't include source_ids for simplicity
     }));
   } catch (error) {
     if (__DEV__) {
@@ -1005,6 +1022,57 @@ export async function fetchActivitySegmentsForDate(
     }
     return [];
   }
+}
+
+/**
+ * Fallback: Fetch segments directly from activity_segments table.
+ * Used when the location_timeline view is unavailable.
+ */
+async function fetchActivitySegmentsForDateRaw(
+  userId: string,
+  dateYmd: string,
+): Promise<ActivitySegment[]> {
+  const [year, month, day] = dateYmd.split("-").map(Number);
+  const dayStart = new Date(year, month - 1, day, 0, 0, 0);
+  const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0);
+
+  const { data, error } = await tmSchema()
+    .from("activity_segments")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("started_at", dayStart.toISOString())
+    .lt("started_at", dayEnd.toISOString())
+    .order("started_at", { ascending: true });
+
+  if (error) {
+    if (error.code === "PGRST204" || error.code === "42P01") {
+      return [];
+    }
+    throw handleSupabaseError(error);
+  }
+
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    id: row.id as string,
+    userId: row.user_id as string,
+    startedAt: new Date(row.started_at as string),
+    endedAt: new Date(row.ended_at as string),
+    hourBucket: new Date(row.hour_bucket as string),
+    placeId: (row.place_id as string) ?? null,
+    placeLabel: (row.place_label as string) ?? null,
+    placeCategory: (row.place_category as string) ?? null,
+    locationLat: (row.location_lat as number) ?? null,
+    locationLng: (row.location_lng as number) ?? null,
+    inferredActivity: row.inferred_activity as InferredActivityType,
+    activityConfidence: row.activity_confidence as number,
+    topApps: (row.top_apps as AppBreakdownItem[]) ?? [],
+    totalScreenSeconds: (row.total_screen_seconds as number) ?? 0,
+    evidence: (row.evidence as SegmentEvidence) ?? {
+      locationSamples: 0,
+      screenSessions: 0,
+      hasHealthData: false,
+    },
+    sourceIds: (row.source_ids as string[]) ?? [],
+  }));
 }
 
 /**

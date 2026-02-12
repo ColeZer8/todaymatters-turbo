@@ -33,7 +33,7 @@ import {
 } from "@/lib/supabase/services/calendar-events";
 import { fetchCommunicationEventsForDay } from "@/lib/supabase/services/communication-events";
 import { createUserPlace } from "@/lib/supabase/services/user-places";
-import { encodeGeohash } from "@/lib/supabase/services/location-labels";
+import { encodeGeohash, type LocationLabelEntry } from "@/lib/supabase/services/location-labels";
 import { useLocationBlocksForDay } from "@/lib/hooks/use-location-blocks-for-day";
 
 // ============================================================================
@@ -55,6 +55,8 @@ export interface LocationBlockListProps {
   userId: string;
   /** Filter timeline events: actual-only, scheduled-only, or both */
   filter?: TimelineFilterValue;
+  /** User-defined location labels keyed by geohash7, for client-side overlay. */
+  userLabels?: Record<string, LocationLabelEntry>;
   onMarkAccurate?: (summaryIds: string[]) => void;
   onNeedsCorrection?: (summaryIds: string[]) => void;
   onEdit?: (block: LocationBlock) => void;
@@ -154,6 +156,7 @@ export const LocationBlockList = ({
   date,
   userId,
   filter = "both",
+  userLabels,
   onMarkAccurate,
   onNeedsCorrection,
   onEdit,
@@ -470,27 +473,59 @@ export const LocationBlockList = ({
     return blocksWithTimeline.filter((b) => b.isPlaceInferred).length;
   }, [blocksWithTimeline]);
 
+  // Apply user-defined labels to blocks (client-side overlay)
+  const blocksWithUserLabels = useMemo(() => {
+    if (!userLabels || Object.keys(userLabels).length === 0) {
+      return blocksWithTimeline;
+    }
+
+    if (__DEV__) {
+      console.log('[LocationBlockList] 🏷️ Applying user labels overlay:', {
+        userLabelCount: Object.keys(userLabels).length,
+        blockCount: blocksWithTimeline.length,
+        labelKeys: Object.keys(userLabels),
+      });
+    }
+
+    return blocksWithTimeline.map((block) => {
+      // Check if user has a custom label for this geohash
+      if (block.geohash7 && userLabels[block.geohash7]) {
+        const userLabel = userLabels[block.geohash7];
+        if (__DEV__) {
+          console.log(`[LocationBlockList] 🏷️ Applying user label: "${block.locationLabel}" → "${userLabel.label}" (geohash: ${block.geohash7})`);
+        }
+        return {
+          ...block,
+          locationLabel: userLabel.label,
+          locationCategory: userLabel.category || block.locationCategory,
+          isUserDefined: true,
+        };
+      }
+      return block;
+    });
+  }, [blocksWithTimeline, userLabels]);
+
   // When filtering to "scheduled" only, hide blocks with no matching events
   const displayBlocks = useMemo(() => {
     let result: LocationBlock[];
     if (filter === "both") {
-      result = blocksWithTimeline;
+      result = blocksWithUserLabels;
     } else {
-      result = blocksWithTimeline.filter((b) => {
+      result = blocksWithUserLabels.filter((b) => {
         const filtered = applyFilter(b);
         return (filtered.timelineEvents?.length ?? 0) > 0;
       });
     }
     
-    console.log(`[LocationBlockList] 🔍 displayBlocks computed: filter="${filter}", blocksWithTimeline.length=${blocksWithTimeline.length}, displayBlocks.length=${result.length}`);
+    console.log(`[LocationBlockList] 🔍 displayBlocks computed: filter="${filter}", blocksWithUserLabels.length=${blocksWithUserLabels.length}, displayBlocks.length=${result.length}`);
     if (result.length > 0) {
       result.forEach(b => {
-        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}"`);
+        console.log(`  - ${b.startTime.toLocaleTimeString()} - ${b.endTime.toLocaleTimeString()}: "${b.locationLabel}"${b.isUserDefined ? ' (user-defined)' : ''}`);
       });
     }
     
     return result;
-  }, [blocksWithTimeline, filter, applyFilter]);
+  }, [blocksWithUserLabels, filter, applyFilter]);
 
   // List header
   const renderListHeader = () => {

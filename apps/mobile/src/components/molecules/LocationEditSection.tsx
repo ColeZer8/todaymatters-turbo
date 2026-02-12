@@ -248,7 +248,13 @@ export const LocationEditSection = ({
               return (
                 <Pressable
                   key={cat}
-                  onPress={() => onCategoryChange(isActive ? null : cat)}
+                  onPress={() => {
+                    const newCat = isActive ? null : cat;
+                    onCategoryChange(newCat);
+                    if (newCat) {
+                      onLabelChange(newCat); // Update label to match category
+                    }
+                  }}
                   style={[
                     styles.pill,
                     isActive ? styles.pillActive : styles.pillInactive,
