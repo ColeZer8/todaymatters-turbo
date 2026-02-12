@@ -26,9 +26,6 @@ import type {
   PlaceAlternative,
 } from "@/lib/types/location-block";
 
-// 🔥 VERSION CHECK - Verify this file is loaded
-console.log("🔥🔥🔥 GROUP-LOCATION-BLOCKS.TS LOADED - VERSION 2026-02-11-ULTRA-VERBOSE");
-
 // ============================================================================
 // Haversine Distance (for coordinate proximity check)
 // ============================================================================
@@ -70,51 +67,17 @@ function isCommuteSegment(segment: ActivitySegment): boolean {
 
 /**
  * Check if two segments are at the "same place" for grouping purposes.
- * Uses place_id match first, then coordinate proximity as fallback, then label match.
+ * Uses place_id match first, then coordinate proximity as fallback.
  */
 function isSamePlace(seg1: ActivitySegment, seg2: ActivitySegment): boolean {
-  // 🔥 ULTRA VERBOSE DEBUGGING - Print EVERYTHING about both segments
-  console.log(`\n🔥🔥🔥 [isSamePlace] DETAILED COMPARISON:`);
-  console.log(`  SEG1:`, JSON.stringify({
-    placeLabel: seg1.placeLabel,
-    placeId: seg1.placeId,
-    placeCategory: seg1.placeCategory,
-    inferredActivity: seg1.inferredActivity,
-    lat: seg1.locationLat,
-    lng: seg1.locationLng,
-    startTime: seg1.startedAt.toISOString(),
-    endTime: seg1.endedAt.toISOString(),
-  }, null, 2));
-  console.log(`  SEG2:`, JSON.stringify({
-    placeLabel: seg2.placeLabel,
-    placeId: seg2.placeId,
-    placeCategory: seg2.placeCategory,
-    inferredActivity: seg2.inferredActivity,
-    lat: seg2.locationLat,
-    lng: seg2.locationLng,
-    startTime: seg2.startedAt.toISOString(),
-    endTime: seg2.endedAt.toISOString(),
-  }, null, 2));
-
   // Both are commute segments — group them together
-  if (isCommuteSegment(seg1) && isCommuteSegment(seg2)) {
-    console.log(`🔥 [isSamePlace] ✅ BOTH COMMUTE - MERGING`);
-    return true;
-  }
+  if (isCommuteSegment(seg1) && isCommuteSegment(seg2)) return true;
 
   // One is commute, one isn't — different blocks
-  if (isCommuteSegment(seg1) || isCommuteSegment(seg2)) {
-    console.log(`🔥 [isSamePlace] ❌ ONE COMMUTE, ONE NOT - NOT MERGING`);
-    return false;
-  }
+  if (isCommuteSegment(seg1) || isCommuteSegment(seg2)) return false;
 
   // Place ID match (strongest signal)
-  if (seg1.placeId && seg2.placeId && seg1.placeId === seg2.placeId) {
-    console.log(`🔥 [isSamePlace] ✅ PLACE ID MATCH: "${seg1.placeLabel}" (${seg1.placeId}) - MERGING`);
-    return true;
-  } else {
-    console.log(`🔥 [isSamePlace] Place ID check: seg1.placeId="${seg1.placeId}", seg2.placeId="${seg2.placeId}" - NO MATCH`);
-  }
+  if (seg1.placeId && seg2.placeId && seg1.placeId === seg2.placeId) return true;
 
   // Coordinate proximity fallback (< 200m)
   if (
@@ -129,44 +92,10 @@ function isSamePlace(seg1: ActivitySegment, seg2: ActivitySegment): boolean {
       seg2.locationLat,
       seg2.locationLng,
     );
-    console.log(`🔥 [isSamePlace] Distance: ${Math.round(distance)}m (threshold: ${SAME_PLACE_DISTANCE_THRESHOLD_M}m)`);
-    if (distance < SAME_PLACE_DISTANCE_THRESHOLD_M) {
-      console.log(`🔥 [isSamePlace] ✅ PROXIMITY MATCH: "${seg1.placeLabel}" ↔ "${seg2.placeLabel}" (${Math.round(distance)}m) - MERGING`);
-      return true;
-    } else {
-      console.log(`🔥 [isSamePlace] ❌ TOO FAR APART: ${Math.round(distance)}m > ${SAME_PLACE_DISTANCE_THRESHOLD_M}m - NOT MERGING`);
-    }
-  } else {
-    console.log(`🔥 [isSamePlace] Coords check: seg1 (${seg1.locationLat},${seg1.locationLng}), seg2 (${seg2.locationLat},${seg2.locationLng}) - INCOMPLETE COORDS`);
+    if (distance < SAME_PLACE_DISTANCE_THRESHOLD_M) return true;
   }
 
-  // NEW: Place label match for geocoded locations (both have same meaningful label)
-  // This handles cases where reverse geocoding returns the same place name but no place_id
-  const label1 = seg1.placeLabel?.trim().toLowerCase();
-  const label2 = seg2.placeLabel?.trim().toLowerCase();
-  console.log(`🔥 [isSamePlace] Label check: label1="${label1}", label2="${label2}"`);
-  if (
-    label1 &&
-    label2 &&
-    label1 === label2 &&
-    label1 !== 'unknown location' &&
-    label1 !== 'unknown' &&
-    label1 !== 'location'
-  ) {
-    console.log(`🔥 [isSamePlace] ✅ LABEL MATCH: "${seg1.placeLabel}" === "${seg2.placeLabel}" - MERGING`);
-    return true;
-  } else {
-    if (!label1 || !label2) {
-      console.log(`🔥 [isSamePlace] Label check: one or both labels empty`);
-    } else if (label1 !== label2) {
-      console.log(`🔥 [isSamePlace] Label check: labels don't match ("${label1}" !== "${label2}")`);
-    } else if (label1 === 'unknown location' || label1 === 'unknown' || label1 === 'location') {
-      console.log(`🔥 [isSamePlace] Label check: labels match but are meaningless ("${label1}")`);
-    }
-  }
-
-  // Different unknown locations or no match — don't merge
-  console.log(`🔥 [isSamePlace] ❌ FINAL VERDICT: NOT MERGING - No place ID, proximity, or label match`);
+  // Different unknown locations — don't merge
   return false;
 }
 
@@ -458,13 +387,7 @@ export function groupSegmentsIntoLocationBlocks(
   summaries: EnrichedSummary[],
   alternativesBySegmentId?: Map<string, PlaceAlternative[]>,
 ): LocationBlock[] {
-  console.log(`\n🔥🔥🔥 [groupSegmentsIntoLocationBlocks] FUNCTION CALLED!`);
-  console.log(`🔥 Received ${segments.length} segments, ${summaries.length} summaries`);
-  
-  if (segments.length === 0) {
-    console.log(`🔥 [groupSegmentsIntoLocationBlocks] No segments - returning empty array`);
-    return [];
-  }
+  if (segments.length === 0) return [];
 
   // Sort segments chronologically
   const sorted = [...segments].sort(
@@ -475,44 +398,18 @@ export function groupSegmentsIntoLocationBlocks(
   const groups: ActivitySegment[][] = [];
   let currentGroup: ActivitySegment[] = [sorted[0]];
 
-  console.log(`🔥 [groupSegmentsIntoLocationBlocks] Processing ${sorted.length} segments:`);
-  sorted.forEach((seg, idx) => {
-    console.log(`  🔥 ${idx}: ${seg.startedAt.toLocaleTimeString()} - ${seg.endedAt.toLocaleTimeString()}: "${seg.placeLabel}" (ID: ${seg.placeId}, lat/lng: ${seg.locationLat?.toFixed(4)},${seg.locationLng?.toFixed(4)})`);
-  });
-
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1];
     const curr = sorted[i];
 
-    if (__DEV__) {
-      console.log(`\n📍 [groupSegmentsIntoLocationBlocks] Comparing segments ${i - 1} and ${i}:`);
-      console.log(`  Prev: "${prev.placeLabel}" (${prev.startedAt.toLocaleTimeString()} - ${prev.endedAt.toLocaleTimeString()})`);
-      console.log(`  Curr: "${curr.placeLabel}" (${curr.startedAt.toLocaleTimeString()} - ${curr.endedAt.toLocaleTimeString()})`);
-    }
-
     if (isSamePlace(prev, curr)) {
       currentGroup.push(curr);
-      if (__DEV__) {
-        console.log(`  ✅ Merged into current group (now ${currentGroup.length} segments)`);
-      }
     } else {
-      if (__DEV__) {
-        console.log(`  ❌ Starting new group (previous group had ${currentGroup.length} segments)`);
-      }
       groups.push(currentGroup);
       currentGroup = [curr];
     }
   }
   groups.push(currentGroup);
-
-  if (__DEV__) {
-    console.log(`\n📍 [groupSegmentsIntoLocationBlocks] Created ${groups.length} groups:`);
-    groups.forEach((group, idx) => {
-      const first = group[0];
-      const last = group[group.length - 1];
-      console.log(`  Group ${idx}: "${first.placeLabel}" (${group.length} segments, ${first.startedAt.toLocaleTimeString()} - ${last.endedAt.toLocaleTimeString()})`);
-    });
-  }
 
   // Build blocks from groups
   return groups.map((group) => buildBlockFromSegments(group, summaries, alternativesBySegmentId));
@@ -887,33 +784,18 @@ export function fillLocationGaps(
   blocks: LocationBlock[],
   summaries: EnrichedSummary[],
 ): LocationBlock[] {
-  console.log(`\n🔥🔥🔥 [fillLocationGaps] STARTING - Processing ${blocks.length} blocks`);
-  
-  if (blocks.length === 0) {
-    console.log(`🔥 [fillLocationGaps] No blocks to process - returning empty array`);
-    return blocks;
-  }
+  if (blocks.length === 0) return blocks;
 
   // Sort blocks chronologically
   const sorted = [...blocks].sort(
     (a, b) => a.startTime.getTime() - b.startTime.getTime(),
   );
 
-  console.log(`🔥 [fillLocationGaps] Sorted blocks:`);
-  sorted.forEach((block, idx) => {
-    console.log(`  Block ${idx}: "${block.locationLabel}" (${block.type}) ` +
-      `${block.startTime.toLocaleTimeString()} - ${block.endTime.toLocaleTimeString()}`);
-  });
-
   const result: LocationBlock[] = [];
   let lastKnownLocation: LocationBlock | null = null;
   
   for (let i = 0; i < sorted.length; i++) {
     const currentBlock = sorted[i];
-    
-    console.log(`\n🔥 [fillLocationGaps] Processing block ${i}: "${currentBlock.locationLabel}"`);
-    console.log(`  Type: ${currentBlock.type}, hasMeaningful: ${hasMeaningfulLocation(currentBlock)}`);
-    console.log(`  lastKnownLocation: ${lastKnownLocation ? `"${lastKnownLocation.locationLabel}" (${lastKnownLocation.type})` : 'null'}`);
     
     // Check if this is an "Unknown Location" block that should be replaced with carried-forward location
     if (
@@ -922,10 +804,6 @@ export function fillLocationGaps(
       lastKnownLocation &&
       lastKnownLocation.type === "stationary"
     ) {
-      console.log(`🔥 [fillLocationGaps] 🎯 FOUND UNKNOWN LOCATION TO REPLACE!`);
-      console.log(`  Current: "${currentBlock.locationLabel}" (${currentBlock.startTime.toLocaleTimeString()} - ${currentBlock.endTime.toLocaleTimeString()})`);
-      console.log(`  Last known: "${lastKnownLocation.locationLabel}"`);
-      
       // Replace "Unknown Location" block with carried-forward location
       const carriedBlock = createCarriedForwardBlock(
         lastKnownLocation,
@@ -936,35 +814,7 @@ export function fillLocationGaps(
       
       if (carriedBlock) {
         result.push(carriedBlock);
-        console.log(
-          `🔥 [fillLocationGaps] ✅ REPLACED "Unknown Location" block (${currentBlock.startTime.toLocaleTimeString()} - ${currentBlock.endTime.toLocaleTimeString()}) ` +
-          `with carried-forward location "${lastKnownLocation.locationLabel}"`
-        );
         continue; // Skip the original "Unknown Location" block
-      } else {
-        console.log(`🔥 [fillLocationGaps] ⚠️ createCarriedForwardBlock returned null`);
-      }
-    } else {
-      console.log(`🔥 [fillLocationGaps] NOT replacing block - conditions not met`);
-      if (hasMeaningfulLocation(currentBlock)) {
-        console.log(`    ✓ Has meaningful location`);
-      } else {
-        console.log(`    ✗ Does NOT have meaningful location`);
-      }
-      if (currentBlock.type === "stationary") {
-        console.log(`    ✓ Is stationary`);
-      } else {
-        console.log(`    ✗ Is NOT stationary (type: ${currentBlock.type})`);
-      }
-      if (lastKnownLocation) {
-        console.log(`    ✓ Has last known location`);
-        if (lastKnownLocation.type === "stationary") {
-          console.log(`      ✓ Last known is stationary`);
-        } else {
-          console.log(`      ✗ Last known is NOT stationary (type: ${lastKnownLocation.type})`);
-        }
-      } else {
-        console.log(`    ✗ No last known location`);
       }
     }
     
@@ -1068,9 +918,7 @@ export function fillLocationGaps(
   const sortedResult = result.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
   
   // Final merge: combine consecutive blocks at same location
-  console.log(`\n🔥🔥🔥 [fillLocationGaps] Calling mergeConsecutiveBlocks on ${sortedResult.length} blocks`);
   const finalMerged = mergeConsecutiveBlocks(sortedResult);
-  console.log(`🔥 [fillLocationGaps] Final result: ${finalMerged.length} blocks after merging`);
   
   return finalMerged;
 }
@@ -1078,29 +926,19 @@ export function fillLocationGaps(
 /**
  * Check if two LocationBlocks are at the "same place" for merging purposes.
  * Similar to isSamePlace() but operates on blocks instead of segments.
+ * 
+ * NOTE: Does NOT use label matching to avoid over-merging when
+ * the same place name is returned for different physical locations.
  */
 function isSameBlockLocation(block1: LocationBlock, block2: LocationBlock): boolean {
-  console.log(`\n🔥🔥🔥 [isSameBlockLocation] Comparing blocks:`);
-  console.log(`  Block 1: "${block1.locationLabel}" (${block1.type}, geohash: ${block1.geohash7})`);
-  console.log(`  Block 2: "${block2.locationLabel}" (${block2.type}, geohash: ${block2.geohash7})`);
-
   // Both are travel blocks — don't merge (each journey is distinct)
-  if (block1.type === "travel" && block2.type === "travel") {
-    console.log(`🔥 [isSameBlockLocation] ❌ Both travel blocks - NOT merging`);
-    return false;
-  }
+  if (block1.type === "travel" && block2.type === "travel") return false;
 
   // One is travel, one isn't — different blocks
-  if (block1.type === "travel" || block2.type === "travel") {
-    console.log(`🔥 [isSameBlockLocation] ❌ One travel, one stationary - NOT merging`);
-    return false;
-  }
+  if (block1.type === "travel" || block2.type === "travel") return false;
 
   // Geohash7 match (strongest signal, similar to place_id)
-  if (block1.geohash7 && block2.geohash7 && block1.geohash7 === block2.geohash7) {
-    console.log(`🔥 [isSameBlockLocation] ✅ Geohash match: ${block1.geohash7} - MERGING`);
-    return true;
-  }
+  if (block1.geohash7 && block2.geohash7 && block1.geohash7 === block2.geohash7) return true;
 
   // Inferred place ID match
   if (
@@ -1108,7 +946,6 @@ function isSameBlockLocation(block1: LocationBlock, block2: LocationBlock): bool
     block2.inferredPlace?.placeId &&
     block1.inferredPlace.placeId === block2.inferredPlace.placeId
   ) {
-    console.log(`🔥 [isSameBlockLocation] ✅ Inferred place ID match: ${block1.inferredPlace.placeId} - MERGING`);
     return true;
   }
 
@@ -1125,29 +962,11 @@ function isSameBlockLocation(block1: LocationBlock, block2: LocationBlock): bool
       block2.latitude,
       block2.longitude,
     );
-    console.log(`🔥 [isSameBlockLocation] Distance: ${Math.round(distance)}m`);
-    if (distance < SAME_PLACE_DISTANCE_THRESHOLD_M) {
-      console.log(`🔥 [isSameBlockLocation] ✅ Proximity match: ${Math.round(distance)}m - MERGING`);
-      return true;
-    }
+    if (distance < SAME_PLACE_DISTANCE_THRESHOLD_M) return true;
   }
 
-  // Location label match (for geocoded locations)
-  const label1 = block1.locationLabel?.trim().toLowerCase();
-  const label2 = block2.locationLabel?.trim().toLowerCase();
-  if (
-    label1 &&
-    label2 &&
-    label1 === label2 &&
-    label1 !== 'unknown location' &&
-    label1 !== 'unknown' &&
-    label1 !== 'location'
-  ) {
-    console.log(`🔥 [isSameBlockLocation] ✅ Label match: "${block1.locationLabel}" - MERGING`);
-    return true;
-  }
-
-  console.log(`🔥 [isSameBlockLocation] ❌ No match - NOT merging`);
+  // NOTE: Label matching removed - it caused over-merging when
+  // the place lookup returned the same name for different locations
   return false;
 }
 
@@ -1163,12 +982,7 @@ function isSameBlockLocation(block1: LocationBlock, block2: LocationBlock): bool
  * This function merges them into one block: 2:42-7:56 AM "Believe Candle Co."
  */
 function mergeConsecutiveBlocks(blocks: LocationBlock[]): LocationBlock[] {
-  console.log(`\n🔥🔥🔥 [mergeConsecutiveBlocks] Starting with ${blocks.length} blocks`);
-  
-  if (blocks.length === 0) {
-    console.log(`🔥 [mergeConsecutiveBlocks] No blocks to merge`);
-    return blocks;
-  }
+  if (blocks.length === 0) return blocks;
 
   // Sort chronologically
   const sorted = [...blocks].sort(
@@ -1182,13 +996,6 @@ function mergeConsecutiveBlocks(blocks: LocationBlock[]): LocationBlock[] {
     const nextBlock = sorted[i];
 
     if (isSameBlockLocation(currentMerge, nextBlock)) {
-      console.log(
-        `🔥 [mergeConsecutiveBlocks] ✅ Merging "${currentMerge.locationLabel}" ` +
-        `(${currentMerge.startTime.toLocaleTimeString()}-${currentMerge.endTime.toLocaleTimeString()}) ` +
-        `with "${nextBlock.locationLabel}" ` +
-        `(${nextBlock.startTime.toLocaleTimeString()}-${nextBlock.endTime.toLocaleTimeString()})`
-      );
-
       // Merge: extend end time, combine screen time, samples, etc.
       currentMerge = {
         ...currentMerge,
@@ -1216,9 +1023,6 @@ function mergeConsecutiveBlocks(blocks: LocationBlock[]): LocationBlock[] {
         ),
       };
     } else {
-      console.log(
-        `🔥 [mergeConsecutiveBlocks] ❌ NOT merging "${currentMerge.locationLabel}" with "${nextBlock.locationLabel}"`
-      );
       result.push(currentMerge);
       currentMerge = nextBlock;
     }
@@ -1227,7 +1031,6 @@ function mergeConsecutiveBlocks(blocks: LocationBlock[]): LocationBlock[] {
   // Push the final merged block
   result.push(currentMerge);
 
-  console.log(`🔥 [mergeConsecutiveBlocks] ✅ Finished: ${blocks.length} blocks → ${result.length} blocks`);
   return result;
 }
 
