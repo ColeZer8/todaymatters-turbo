@@ -298,6 +298,22 @@ function filterAccurateSamples(samples: EvidenceLocationSample[]): EvidenceLocat
 }
 
 /**
+ * Calculate the average speed from location samples.
+ * Only considers positive, non-null speed values.
+ * 
+ * @param samples - Location samples with speed_mps field
+ * @returns Average speed in m/s, or 0 if no valid speed data
+ */
+function calculateAverageSpeed(samples: EvidenceLocationSample[]): number {
+  const speeds = samples
+    .map(s => s.speed_mps)
+    .filter((s): s is number => s != null && s > 0 && s < MAX_REALISTIC_SPEED_MS);
+  
+  if (speeds.length === 0) return 0;
+  return speeds.reduce((a, b) => a + b, 0) / speeds.length;
+}
+
+/**
  * Calculate the haversine distance between two points in meters.
  */
 function haversineDistance(
@@ -769,20 +785,53 @@ export function generateLocationSegments(
     // Generate source ID
     const sourceId = generateSourceId(windowStart, placeId, clampedStart);
 
+    // =========================================================================
+    // SEGMENT CLASSIFICATION: Stationary vs Commute
+    // =========================================================================
+    // Calculate movement metrics from the samples
+    const avgSpeed = calculateAverageSpeed(group.samples);
+    const totalDistance = calculatePathDistance(group.samples);
+    const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
+    
+    // Classification thresholds (match Google Timeline behavior)
+    // - Average speed > 1.0 m/s (~2.2 mph) = definitely moving
+    // - Total distance > 100m = traveled a meaningful distance
+    const COMMUTE_SPEED_THRESHOLD = 1.0; // m/s
+    const COMMUTE_DISTANCE_THRESHOLD = 100; // meters
+    
+    const isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD || totalDistance > COMMUTE_DISTANCE_THRESHOLD;
+    
+    // Determine segment kind and movement type
+    let segmentKind: "location_block" | "commute" = "location_block";
+    let movementType: MovementType | undefined;
+    
+    if (isMoving) {
+      segmentKind = "commute";
+      movementType = classifyMovementType(totalDistance, segmentDurationMs);
+      
+      if (__DEV__) {
+        console.log(`📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE (avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m, type: ${movementType})`);
+      }
+    } else {
+      if (__DEV__) {
+        console.log(`📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY (avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m)`);
+      }
+    }
+
     segments.push({
       sourceId,
       start: clampedStart,
       end: clampedEnd,
-      placeId,
-      placeLabel: place?.label ?? null,
+      placeId: isMoving ? null : placeId, // Commutes don't have a single place
+      placeLabel: isMoving ? null : (place?.label ?? null),
       latitude: centroid.latitude,
       longitude: centroid.longitude,
       sampleCount: group.samples.length,
       confidence,
       meta: {
-        kind: "location_block",
-        place_id: placeId,
-        place_label: place?.label ?? null,
+        kind: segmentKind,
+        place_id: isMoving ? null : placeId,
+        place_label: isMoving ? null : (place?.label ?? null),
         sample_count: group.samples.length,
         confidence,
         provider: telemetry.provider,
@@ -791,6 +840,12 @@ export function generateLocationSegments(
         battery_state: telemetry.battery_state,
         is_simulator: telemetry.is_simulator,
         is_mocked: telemetry.is_mocked,
+        // Commute-specific metadata
+        ...(isMoving && {
+          intent: "commute" as const,
+          distance_m: totalDistance,
+          movement_type: movementType,
+        }),
       },
     });
   }
