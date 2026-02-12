@@ -32,7 +32,10 @@ import { useOnboardingStore } from "@/stores";
 import type { EventCategory } from "@/stores";
 import type { PatternIndex } from "@/lib/calendar/pattern-recognition";
 import { getPatternSuggestionForRange } from "@/lib/calendar/pattern-recognition";
-import { LocationSearchModal } from "../molecules/LocationSearchModal";
+import {
+  LocationPickerSheet,
+  type LocationPickerSelection,
+} from "../molecules/LocationPickerSheet";
 import { Big3InputModal } from "../molecules/Big3InputModal";
 
 /** Big 3 priorities for today */
@@ -847,11 +850,16 @@ export const AddEventTemplate = ({
         )}
       </ScrollView>
 
-      <LocationSearchModal
+      <LocationPickerSheet
         visible={showLocationPicker}
         onClose={() => setShowLocationPicker(false)}
-        onSelect={setLocation}
-        currentLocation={location}
+        onSelect={(selection: LocationPickerSelection) => {
+          setLocation(selection.label);
+          setShowLocationPicker(false);
+        }}
+        latitude={null}
+        longitude={null}
+        currentLabel={location}
       />
     </View>
   );

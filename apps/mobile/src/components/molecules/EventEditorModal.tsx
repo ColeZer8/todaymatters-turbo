@@ -29,7 +29,10 @@ import DateTimePicker, {
 import { Icon } from "../atoms/Icon";
 import { useOnboardingStore } from "@/stores";
 import type { ScheduledEvent, EventCategory } from "@/stores";
-import { LocationSearchModal } from "./LocationSearchModal";
+import {
+  LocationPickerSheet,
+  type LocationPickerSelection,
+} from "./LocationPickerSheet";
 
 // Life areas with icons - same as AddEventTemplate
 const EVENT_CATEGORY_TO_CORE_VALUE: Partial<Record<EventCategory, string>> = {
@@ -615,11 +618,16 @@ export const EventEditorModal = ({
         </Animated.View>
       </View>
 
-      <LocationSearchModal
+      <LocationPickerSheet
         visible={showLocationPicker}
         onClose={() => setShowLocationPicker(false)}
-        onSelect={setLocation}
-        currentLocation={location}
+        onSelect={(selection: LocationPickerSelection) => {
+          setLocation(selection.label);
+          setShowLocationPicker(false);
+        }}
+        latitude={null}
+        longitude={null}
+        currentLabel={location}
       />
     </Modal>
   );

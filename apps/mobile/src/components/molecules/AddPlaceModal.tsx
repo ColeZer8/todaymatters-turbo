@@ -1,8 +1,14 @@
-import { useState, useCallback, useEffect } from "react";
-import { Modal, View, Text, TextInput, Pressable, ScrollView } from "react-native";
-import { MapPin, Check } from "lucide-react-native";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Modal, View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { MapPin, Check, Search } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import { PLACE_LABEL_SUGGESTIONS, getSuggestedCategory } from "@/lib/supabase/services/user-places";
+import {
+  searchPlacesAutocomplete,
+  createSessionToken,
+  cancelAutocomplete,
+  type PlaceAutocompletePrediction,
+} from "@/lib/supabase/services/google-places";
 
 interface AddPlaceModalProps {
   visible: boolean;
@@ -12,6 +18,10 @@ interface AddPlaceModalProps {
   initialLabel?: string;
   /** Whether a save is in progress */
   isSaving?: boolean;
+  /** GPS latitude for autocomplete location bias */
+  latitude?: number | null;
+  /** GPS longitude for autocomplete location bias */
+  longitude?: number | null;
 }
 
 /**
@@ -24,26 +34,75 @@ export const AddPlaceModal = ({
   onSave,
   initialLabel = "",
   isSaving = false,
+  latitude = null,
+  longitude = null,
 }: AddPlaceModalProps) => {
   const [customLabel, setCustomLabel] = useState(initialLabel);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+
+  // Autocomplete state
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<PlaceAutocompletePrediction[]>([]);
+  const [isLoadingAutocomplete, setIsLoadingAutocomplete] = useState(false);
+  const [sessionToken] = useState(() => createSessionToken());
+  const autocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
     if (visible) {
       setCustomLabel(initialLabel);
       setSelectedSuggestion(null);
+      setAutocompleteSuggestions([]);
+    } else {
+      cancelAutocomplete();
+      if (autocompleteTimerRef.current) {
+        clearTimeout(autocompleteTimerRef.current);
+      }
     }
   }, [visible, initialLabel]);
 
   const handleSelectSuggestion = useCallback((label: string) => {
     setSelectedSuggestion(label);
     setCustomLabel(""); // Clear custom input when selecting a suggestion
+    setAutocompleteSuggestions([]);
   }, []);
 
   const handleCustomInput = useCallback((text: string) => {
     setCustomLabel(text);
     setSelectedSuggestion(null); // Clear suggestion when typing custom
+
+    // Debounced autocomplete search
+    if (autocompleteTimerRef.current) {
+      clearTimeout(autocompleteTimerRef.current);
+    }
+
+    if (text.length < 2) {
+      setAutocompleteSuggestions([]);
+      setIsLoadingAutocomplete(false);
+      return;
+    }
+
+    setIsLoadingAutocomplete(true);
+    autocompleteTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await searchPlacesAutocomplete(
+          text,
+          latitude,
+          longitude,
+          sessionToken
+        );
+        setAutocompleteSuggestions(results);
+      } catch {
+        setAutocompleteSuggestions([]);
+      } finally {
+        setIsLoadingAutocomplete(false);
+      }
+    }, 300);
+  }, [latitude, longitude, sessionToken]);
+
+  const handleAutocompletePick = useCallback((prediction: PlaceAutocompletePrediction) => {
+    setCustomLabel(prediction.mainText);
+    setSelectedSuggestion(null);
+    setAutocompleteSuggestions([]);
   }, []);
 
   const handleSave = useCallback(() => {
@@ -124,22 +183,54 @@ export const AddPlaceModal = ({
             </ScrollView>
           </View>
 
-          {/* Custom input */}
+          {/* Custom input with autocomplete */}
           <View className="mt-5">
             <Text className="text-[12px] font-semibold tracking-wider text-[#94A3B8] mb-2">
-              OR ENTER CUSTOM NAME
+              OR SEARCH / ENTER CUSTOM NAME
             </Text>
-            <TextInput
-              value={customLabel}
-              onChangeText={handleCustomInput}
-              placeholder="e.g., Mom's House, Downtown Office"
-              placeholderTextColor="#94A3B8"
-              className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-[15px] text-[#111827]"
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={canSave ? handleSave : undefined}
-            />
+            <View className="flex-row items-center rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3">
+              <Icon icon={Search} size={16} color="#94A3B8" />
+              <TextInput
+                value={customLabel}
+                onChangeText={handleCustomInput}
+                placeholder="e.g., Starbucks, Mom's House"
+                placeholderTextColor="#94A3B8"
+                className="flex-1 px-2 py-3 text-[15px] text-[#111827]"
+                autoCapitalize="words"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={canSave ? handleSave : undefined}
+              />
+              {isLoadingAutocomplete && (
+                <ActivityIndicator size="small" color="#2563EB" />
+              )}
+            </View>
+
+            {/* Autocomplete suggestions */}
+            {autocompleteSuggestions.length > 0 && (
+              <View className="mt-1 rounded-lg border border-[#E5E7EB] bg-white overflow-hidden">
+                {autocompleteSuggestions.slice(0, 4).map((prediction) => (
+                  <Pressable
+                    key={prediction.placeId}
+                    onPress={() => handleAutocompletePick(prediction)}
+                    className="flex-row items-center px-3 py-2.5 border-b border-[#F2F2F7]"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                  >
+                    <View className="w-7 h-7 rounded-md bg-[#EFF6FF] items-center justify-center mr-2.5">
+                      <Icon icon={MapPin} size={14} color="#2563EB" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-[14px] font-semibold text-[#111827]" numberOfLines={1}>
+                        {prediction.mainText}
+                      </Text>
+                      <Text className="text-[12px] text-[#94A3B8]" numberOfLines={1}>
+                        {prediction.secondaryText}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Info text */}

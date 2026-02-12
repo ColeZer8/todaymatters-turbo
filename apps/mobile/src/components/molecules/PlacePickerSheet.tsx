@@ -9,7 +9,7 @@
  * - Save the selection to user_places
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -37,8 +38,15 @@ import {
   Heart,
   Building2,
   Fuel,
+  Search,
   type LucideIcon,
 } from "lucide-react-native";
+import {
+  searchPlacesAutocomplete,
+  createSessionToken,
+  cancelAutocomplete,
+  type PlaceAutocompletePrediction,
+} from "@/lib/supabase/services/google-places";
 
 // ============================================================================
 // Theme Colors
@@ -203,6 +211,8 @@ export function PlacePickerSheet({
   onSave,
   currentPlace,
   alternatives,
+  latitude,
+  longitude,
   startTime,
   endTime,
 }: PlacePickerSheetProps) {
@@ -216,6 +226,12 @@ export function PlacePickerSheet({
   const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | null>(null);
   const [customName, setCustomName] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
+
+  // Autocomplete state for "Other" custom input
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<PlaceAutocompletePrediction[]>([]);
+  const [isLoadingAutocomplete, setIsLoadingAutocomplete] = useState(false);
+  const [sessionToken] = useState(() => createSessionToken());
+  const autocompleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Animation
   useEffect(() => {
@@ -247,8 +263,58 @@ export function PlacePickerSheet({
       setSelectedCategory(null);
       setCustomName("");
       setShowCustomInput(false);
+      setAutocompleteSuggestions([]);
+      cancelAutocomplete();
+      if (autocompleteTimerRef.current) {
+        clearTimeout(autocompleteTimerRef.current);
+      }
     }
   }, [visible, currentPlace]);
+
+  // Debounced autocomplete for custom name input
+  const handleCustomNameChange = useCallback(
+    (text: string) => {
+      setCustomName(text);
+
+      // Clear previous timer
+      if (autocompleteTimerRef.current) {
+        clearTimeout(autocompleteTimerRef.current);
+      }
+
+      if (text.length < 2) {
+        setAutocompleteSuggestions([]);
+        setIsLoadingAutocomplete(false);
+        return;
+      }
+
+      setIsLoadingAutocomplete(true);
+      autocompleteTimerRef.current = setTimeout(async () => {
+        try {
+          const results = await searchPlacesAutocomplete(
+            text,
+            latitude,
+            longitude,
+            sessionToken
+          );
+          setAutocompleteSuggestions(results);
+        } catch {
+          setAutocompleteSuggestions([]);
+        } finally {
+          setIsLoadingAutocomplete(false);
+        }
+      }, 300);
+    },
+    [latitude, longitude, sessionToken]
+  );
+
+  const handleAutocompletePick = useCallback(
+    (prediction: PlaceAutocompletePrediction) => {
+      setCustomName(prediction.mainText);
+      setSelectedGooglePlaceId(prediction.placeId);
+      setAutocompleteSuggestions([]);
+    },
+    []
+  );
 
   // Build options list: current place + alternatives + "Other"
   const placeOptions = [
@@ -425,19 +491,51 @@ export function PlacePickerSheet({
               </Pressable>
             </View>
 
-            {/* Custom Name Input (shown when "Other" is selected) */}
+            {/* Custom Name Input with Autocomplete (shown when "Other" is selected) */}
             {showCustomInput && (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>CUSTOM NAME</Text>
-                <TextInput
-                  style={styles.customInput}
-                  placeholder="Enter place name..."
-                  placeholderTextColor={COLORS.textSecondary}
-                  value={customName}
-                  onChangeText={setCustomName}
-                  autoFocus
-                  returnKeyType="done"
-                />
+                <View style={styles.autocompleteContainer}>
+                  <View style={styles.autocompleteInputRow}>
+                    <Search size={16} color={COLORS.textSecondary} />
+                    <TextInput
+                      style={styles.autocompleteInput}
+                      placeholder="Search or enter place name..."
+                      placeholderTextColor={COLORS.textSecondary}
+                      value={customName}
+                      onChangeText={handleCustomNameChange}
+                      autoFocus
+                      returnKeyType="done"
+                    />
+                    {isLoadingAutocomplete && (
+                      <ActivityIndicator size="small" color={COLORS.accent} />
+                    )}
+                  </View>
+                </View>
+                {/* Autocomplete suggestions */}
+                {autocompleteSuggestions.length > 0 && (
+                  <View style={styles.autocompleteList}>
+                    {autocompleteSuggestions.slice(0, 5).map((prediction) => (
+                      <Pressable
+                        key={prediction.placeId}
+                        style={styles.autocompleteItem}
+                        onPress={() => handleAutocompletePick(prediction)}
+                      >
+                        <View style={styles.autocompleteItemIcon}>
+                          <MapPin size={14} color={COLORS.accent} />
+                        </View>
+                        <View style={styles.autocompleteItemText}>
+                          <Text style={styles.autocompleteMainText} numberOfLines={1}>
+                            {prediction.mainText}
+                          </Text>
+                          <Text style={styles.autocompleteSecondaryText} numberOfLines={1}>
+                            {prediction.secondaryText}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
               </View>
             )}
 
@@ -630,15 +728,62 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  // Custom Input
-  customInput: {
+  // Autocomplete Input
+  autocompleteContainer: {
+    marginBottom: 0,
+  },
+  autocompleteInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: COLORS.cardBg,
     borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: COLORS.textPrimary,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  autocompleteInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    padding: 0,
+  },
+  autocompleteList: {
+    marginTop: 6,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  autocompleteItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+  },
+  autocompleteItemIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.accentLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  autocompleteItemText: {
+    flex: 1,
+  },
+  autocompleteMainText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  autocompleteSecondaryText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
   },
 
   // Category Pills

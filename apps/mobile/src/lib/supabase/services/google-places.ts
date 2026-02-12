@@ -51,6 +51,39 @@ export interface NearbyPlacesResult {
   suggestions: GooglePlaceSuggestion[];
 }
 
+/** A place autocomplete prediction */
+export interface PlaceAutocompletePrediction {
+  /** Google Place ID */
+  placeId: string;
+  /** Primary text — usually the business/place name */
+  mainText: string;
+  /** Secondary text — usually the address */
+  secondaryText: string;
+  /** Full description (main + secondary combined) */
+  description: string;
+  /** Google place types */
+  types: string[];
+  /** Distance from search origin (if available from Place Details) */
+  distanceM?: number;
+}
+
+// Google Places Autocomplete API response types
+interface AutocompletePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+  types?: string[];
+}
+
+interface AutocompleteResponse {
+  status: string;
+  error_message?: string;
+  predictions?: AutocompletePrediction[];
+}
+
 /** Cached entry for a location query */
 interface CacheEntry {
   /** Cached suggestions */
@@ -93,11 +126,11 @@ interface GooglePlacesResponse {
 /** Cache TTL in milliseconds (15 minutes) */
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
-/** Search radius in meters */
-const SEARCH_RADIUS_M = 100;
+/** Default search radius in meters (750m covers walking distance) */
+const SEARCH_RADIUS_M = 750;
 
 /** Maximum number of suggestions to return */
-const MAX_SUGGESTIONS = 5;
+const MAX_SUGGESTIONS = 10;
 
 /** Coordinate precision for cache keys (4 decimal places = ~11m precision) */
 const CACHE_PRECISION = 4;
@@ -777,4 +810,141 @@ export function clearExpiredReverseGeocodeCache(): number {
   }
 
   return cleared;
+}
+
+// ============================================================================
+// Autocomplete
+// ============================================================================
+
+/**
+ * Generate a UUID v4-style session token for Google Places Autocomplete.
+ *
+ * Session tokens group autocomplete keystrokes + final selection into
+ * a single billing session. Autocomplete requests within a session are
+ * free; only the Place Details call on selection is charged.
+ *
+ * Create one token per user "search session" (e.g., when the picker sheet opens).
+ */
+export function createSessionToken(): string {
+  // Simple UUID v4 generator (no crypto dependency needed)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * In-flight autocomplete request tracker for cancellation.
+ */
+let autocompleteAbortController: AbortController | null = null;
+
+/**
+ * Search for places using Google Places Autocomplete API.
+ *
+ * Uses session tokens so autocomplete requests are free — only the final
+ * Place Details selection is charged ($5/1,000 at Essentials tier).
+ *
+ * @param query - User's search text (e.g., "Starbu")
+ * @param latitude - Latitude for location bias (nearby results ranked higher)
+ * @param longitude - Longitude for location bias
+ * @param sessionToken - Session token from createSessionToken()
+ * @param radiusM - Bias radius in meters (default 5000m / 5km)
+ * @returns Array of autocomplete predictions
+ */
+export async function searchPlacesAutocomplete(
+  query: string,
+  latitude: number | null,
+  longitude: number | null,
+  sessionToken: string,
+  radiusM: number = 5000
+): Promise<PlaceAutocompletePrediction[]> {
+  // Cancel any in-flight request
+  if (autocompleteAbortController) {
+    autocompleteAbortController.abort();
+  }
+  autocompleteAbortController = new AbortController();
+
+  if (!query || query.length < 2) {
+    return [];
+  }
+
+  const apiKey = getGooglePlacesApiKey();
+  if (!apiKey) {
+    if (__DEV__) {
+      console.warn("[GooglePlaces] No API key for autocomplete");
+    }
+    return [];
+  }
+
+  try {
+    const params = new URLSearchParams({
+      input: query,
+      key: apiKey,
+      sessiontoken: sessionToken,
+      // Bias toward establishments (businesses) but don't restrict
+      types: "establishment",
+    });
+
+    // Add location bias if coordinates are available
+    if (latitude != null && longitude != null) {
+      params.set("location", `${latitude},${longitude}`);
+      params.set("radius", radiusM.toString());
+    }
+
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`;
+
+    const response = await fetch(url, {
+      signal: autocompleteAbortController.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data: AutocompleteResponse = await response.json();
+
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      throw new Error(data.error_message || `API status: ${data.status}`);
+    }
+
+    const predictions = data.predictions || [];
+
+    return predictions.map(
+      (prediction): PlaceAutocompletePrediction => ({
+        placeId: prediction.place_id,
+        mainText: prediction.structured_formatting.main_text,
+        secondaryText: prediction.structured_formatting.secondary_text,
+        description: prediction.description,
+        types: prediction.types || [],
+      })
+    );
+  } catch (error) {
+    // Ignore abort errors (expected when user types fast)
+    if (error instanceof Error && error.name === "AbortError") {
+      return [];
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown error in autocomplete";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Autocomplete error:", message);
+    }
+
+    return [];
+  }
+}
+
+/**
+ * Cancel any in-flight autocomplete request.
+ * Call this when the picker sheet closes to clean up.
+ */
+export function cancelAutocomplete(): void {
+  if (autocompleteAbortController) {
+    autocompleteAbortController.abort();
+    autocompleteAbortController = null;
+  }
 }
