@@ -281,7 +281,9 @@ export async function getLocationLabels(
       console.log('🔍 [getLocationLabels] Returning CACHED labels:', Object.keys(cachedLabels).length, 'places');
       console.log('🔍 [getLocationLabels] Cached geohash7 keys:', Object.keys(cachedLabels));
     }
-    return cachedLabels;
+    // CRITICAL FIX: Return deep clone to prevent shared reference mutation
+    // Without this, all components share the same object and mutations propagate
+    return JSON.parse(JSON.stringify(cachedLabels));
   }
 
   if (__DEV__) {
@@ -324,7 +326,8 @@ export async function getLocationLabels(
       console.log('🔍 [getLocationLabels] Map values (labels):', Object.values(map).map(v => v.label));
     }
 
-    return map;
+    // CRITICAL FIX: Return deep clone to prevent shared reference mutation
+    return JSON.parse(JSON.stringify(map));
   } catch (error) {
     if (__DEV__) {
       console.error('❌ [getLocationLabels] Caught error:', error);
