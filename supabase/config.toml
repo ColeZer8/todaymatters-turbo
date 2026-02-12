@@ -52,6 +52,9 @@ verify_jwt = true
 [functions.location-place-lookup]
 verify_jwt = false
 
+[functions.google-places-proxy]
+verify_jwt = false
+
 
 
 

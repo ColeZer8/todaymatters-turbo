@@ -10,6 +10,7 @@
  */
 
 import appConfig from "@/lib/config";
+import { supabase } from "../client";
 
 // ============================================================================
 // Types
@@ -946,5 +947,181 @@ export function cancelAutocomplete(): void {
   if (autocompleteAbortController) {
     autocompleteAbortController.abort();
     autocompleteAbortController = null;
+  }
+}
+
+// ============================================================================
+// Secure Edge Function Proxy
+// ============================================================================
+//
+// These functions route Google Places API calls through the Supabase Edge
+// Function `google-places-proxy`, so the API key never leaves the server.
+//
+// They are drop-in replacements for the direct-API functions above.
+// The UI will migrate to these gradually — do NOT remove the old functions.
+// ============================================================================
+
+/**
+ * Fetch nearby places via the secure Edge Function proxy.
+ *
+ * Equivalent to `fetchNearbyPlaces()` but the API key stays server-side.
+ * Results are returned in the same `NearbyPlacesResult` shape so the UI
+ * can switch with a one-line import change.
+ *
+ * @param latitude  - Latitude of the location
+ * @param longitude - Longitude of the location
+ * @param radiusM   - Search radius in meters (default 750)
+ * @returns NearbyPlacesResult with suggestions or error
+ */
+export async function fetchNearbyPlacesSecure(
+  latitude: number,
+  longitude: number,
+  radiusM: number = SEARCH_RADIUS_M
+): Promise<NearbyPlacesResult> {
+  // Check client-side cache first (same cache as the direct function)
+  const cached = getCachedSuggestions(latitude, longitude);
+  if (cached !== null) {
+    return { success: true, fromCache: true, suggestions: cached };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "google-places-proxy",
+      {
+        body: {
+          action: "nearby" as const,
+          latitude,
+          longitude,
+          radius: radiusM,
+        },
+      }
+    );
+
+    if (error) {
+      throw new Error(
+        typeof error === "object" && "message" in error
+          ? (error as { message: string }).message
+          : String(error)
+      );
+    }
+
+    // The edge function returns { results: NearbyPlaceResult[] }
+    const rawResults: Array<{
+      placeId: string;
+      name: string;
+      vicinity: string;
+      types: string[];
+      latitude: number;
+      longitude: number;
+      distanceM: number;
+      rating?: number;
+      isOpen?: boolean;
+    }> = data?.results ?? [];
+
+    // Map to the existing GooglePlaceSuggestion shape used by the UI
+    const suggestions: GooglePlaceSuggestion[] = rawResults.map((r) => ({
+      placeId: r.placeId,
+      name: r.name,
+      vicinity: r.vicinity,
+      types: r.types,
+      distanceM: r.distanceM,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      rating: r.rating,
+      isOpen: r.isOpen,
+    }));
+
+    // Cache results client-side (same 15-min TTL)
+    cacheSuggestions(latitude, longitude, suggestions);
+
+    return { success: true, fromCache: false, suggestions };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error fetching places via proxy";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Secure nearby error:", message);
+    }
+
+    return { success: false, error: message, fromCache: false, suggestions: [] };
+  }
+}
+
+/**
+ * Search places via autocomplete through the secure Edge Function proxy.
+ *
+ * Equivalent to `searchPlacesAutocomplete()` but the API key stays server-side.
+ * Returns the same `PlaceAutocompletePrediction[]` shape.
+ *
+ * @param query        - User's search text
+ * @param latitude     - Latitude for location bias
+ * @param longitude    - Longitude for location bias
+ * @param sessionToken - Session token from `createSessionToken()`
+ * @param radiusM      - Bias radius in meters (default 5000)
+ * @returns Array of autocomplete predictions
+ */
+export async function searchPlacesAutocompleteSecure(
+  query: string,
+  latitude: number | null,
+  longitude: number | null,
+  sessionToken: string,
+  radiusM: number = 5000
+): Promise<PlaceAutocompletePrediction[]> {
+  if (!query || query.length < 2) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "google-places-proxy",
+      {
+        body: {
+          action: "autocomplete" as const,
+          query,
+          latitude,
+          longitude,
+          sessionToken,
+          radius: radiusM,
+        },
+      }
+    );
+
+    if (error) {
+      throw new Error(
+        typeof error === "object" && "message" in error
+          ? (error as { message: string }).message
+          : String(error)
+      );
+    }
+
+    // The edge function returns { predictions: AutocompletePredictionResult[] }
+    const rawPredictions: Array<{
+      placeId: string;
+      mainText: string;
+      secondaryText: string;
+      description: string;
+      types: string[];
+    }> = data?.predictions ?? [];
+
+    return rawPredictions.map(
+      (p): PlaceAutocompletePrediction => ({
+        placeId: p.placeId,
+        mainText: p.mainText,
+        secondaryText: p.secondaryText,
+        description: p.description,
+        types: p.types,
+      })
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown error in autocomplete proxy";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Secure autocomplete error:", message);
+    }
+
+    return [];
   }
 }
