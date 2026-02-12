@@ -9,7 +9,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   Switch,
   ScrollView,
@@ -17,9 +16,12 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-import { MapPin, Search } from "lucide-react-native";
+import { MapPin, ChevronDown } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
-import { LocationSearchModal } from "./LocationSearchModal";
+import {
+  LocationPickerSheet,
+  type LocationPickerSelection,
+} from "./LocationPickerSheet";
 import {
   fetchNearbyPlaces,
   getFuzzyLocationLabel,
@@ -90,7 +92,7 @@ export const LocationEditSection = ({
   hideAlwaysUseToggle,
 }: LocationEditSectionProps) => {
   // Internal state
-  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showPickerSheet, setShowPickerSheet] = useState(false);
   const [nearbyPlaces, setNearbyPlaces] = useState<GooglePlaceSuggestion[]>([]);
   const [neighborhoodName, setNeighborhoodName] = useState<string | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -126,21 +128,16 @@ export const LocationEditSection = ({
     };
   }, [latitude, longitude]);
 
-  const handleSuggestionTap = useCallback(
-    (suggestion: GooglePlaceSuggestion) => {
-      onLabelChange(suggestion.name);
-      const category = mapPlaceTypeToCategory(suggestion.types);
-      onCategoryChange(category);
+  const handlePickerSelect = useCallback(
+    (selection: LocationPickerSelection) => {
+      onLabelChange(selection.label);
+      if (selection.types && selection.types.length > 0) {
+        const category = mapPlaceTypeToCategory(selection.types);
+        onCategoryChange(category);
+      }
+      setShowPickerSheet(false);
     },
     [onLabelChange, onCategoryChange],
-  );
-
-  const handleSearchSelect = useCallback(
-    (location: string) => {
-      onLabelChange(location);
-      setShowSearchModal(false);
-    },
-    [onLabelChange],
   );
 
   // Build static map URL
@@ -153,69 +150,74 @@ export const LocationEditSection = ({
 
   return (
     <View>
-      {/* 1. Label Row */}
-      <View style={styles.card}>
+      {/* 1. Location Label — Tappable row to open picker sheet */}
+      <Pressable
+        style={styles.card}
+        onPress={() => setShowPickerSheet(true)}
+      >
         <View style={styles.labelRow}>
           <Icon icon={MapPin} size={18} color="#94A3B8" />
-          <TextInput
-            style={styles.labelInput}
-            value={currentLabel}
-            onChangeText={onLabelChange}
-            placeholder="Location name..."
-            placeholderTextColor="#94A3B8"
-          />
-          <Pressable
-            onPress={() => setShowSearchModal(true)}
-            hitSlop={8}
+          <Text
+            style={[
+              styles.labelText,
+              !currentLabel && styles.labelPlaceholder,
+            ]}
+            numberOfLines={1}
           >
-            <Icon icon={Search} size={18} color="#64748B" />
-          </Pressable>
+            {currentLabel || "Tap to pick a location..."}
+          </Text>
+          <Icon icon={ChevronDown} size={18} color="#64748B" />
         </View>
-      </View>
+      </Pressable>
 
-      {/* 2. Nearby Suggestions */}
-      {hasCoords && (
+      {/* 2. Nearby Quick Picks — small horizontal row for fastest pick */}
+      {hasCoords && nearbyPlaces.length > 0 && !isLoadingSuggestions && (
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>NEARBY PLACES</Text>
-          {isLoadingSuggestions ? (
-            <ActivityIndicator
-              color="#64748B"
-              style={styles.loadingIndicator}
-            />
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pillRow}
-            >
-              {nearbyPlaces.map((place) => (
-                <Pressable
-                  key={place.placeId}
-                  onPress={() => handleSuggestionTap(place)}
-                  style={styles.suggestionPill}
-                >
-                  <Text style={styles.suggestionName} numberOfLines={1}>
-                    {place.name}
-                  </Text>
-                  <Text style={styles.suggestionType}>
-                    {" \u00B7 "}
-                    {getPlaceTypeLabel(place.types)}
-                  </Text>
-                </Pressable>
-              ))}
-              {neighborhoodName && (
-                <Pressable
-                  onPress={() => onLabelChange(neighborhoodName)}
-                  style={styles.neighborhoodPill}
-                >
-                  <Text style={styles.neighborhoodText} numberOfLines={1}>
-                    {neighborhoodName}
-                  </Text>
-                </Pressable>
-              )}
-            </ScrollView>
-          )}
+          <Text style={styles.sectionLabel}>NEARBY</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.pillRow}
+          >
+            {nearbyPlaces.slice(0, 5).map((place) => (
+              <Pressable
+                key={place.placeId}
+                onPress={() =>
+                  handlePickerSelect({
+                    label: place.name,
+                    placeId: place.placeId,
+                    types: place.types,
+                  })
+                }
+                style={styles.suggestionPill}
+              >
+                <Text style={styles.suggestionName} numberOfLines={1}>
+                  {place.name}
+                </Text>
+                <Text style={styles.suggestionType}>
+                  {" \u00B7 "}
+                  {getPlaceTypeLabel(place.types)}
+                </Text>
+              </Pressable>
+            ))}
+            {neighborhoodName && (
+              <Pressable
+                onPress={() => onLabelChange(neighborhoodName)}
+                style={styles.neighborhoodPill}
+              >
+                <Text style={styles.neighborhoodText} numberOfLines={1}>
+                  {neighborhoodName}
+                </Text>
+              </Pressable>
+            )}
+          </ScrollView>
         </View>
+      )}
+      {hasCoords && isLoadingSuggestions && (
+        <ActivityIndicator
+          color="#64748B"
+          style={styles.loadingIndicator}
+        />
       )}
 
       {/* 3. "Always use this name" Toggle */}
@@ -323,12 +325,15 @@ export const LocationEditSection = ({
         />
       )}
 
-      {/* Location Search Modal */}
-      <LocationSearchModal
-        visible={showSearchModal}
-        onClose={() => setShowSearchModal(false)}
-        onSelect={handleSearchSelect}
-        currentLocation={currentLabel}
+      {/* Location Picker Sheet */}
+      <LocationPickerSheet
+        visible={showPickerSheet}
+        onClose={() => setShowPickerSheet(false)}
+        onSelect={handlePickerSelect}
+        latitude={latitude}
+        longitude={longitude}
+        currentLabel={currentLabel}
+        initialNearby={nearbyPlaces}
       />
     </View>
   );
@@ -364,11 +369,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 10,
   },
-  labelInput: {
+  labelText: {
     flex: 1,
     fontSize: 16,
     color: "#111827",
     paddingVertical: 12,
+  },
+  labelPlaceholder: {
+    color: "#94A3B8",
   },
 
   // Loading
