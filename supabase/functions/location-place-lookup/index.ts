@@ -125,23 +125,80 @@ async function fetchReverseGeocode(params: { apiKey: string; latitude: number; l
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
     url.searchParams.set("latlng", `${latitude},${longitude}`);
     url.searchParams.set("key", apiKey);
-    url.searchParams.set("result_type", "neighborhood|sublocality|locality");
+    // Don't restrict result_type - let Google return whatever it finds
     const resp = await fetch(url.toString());
-    if (!resp.ok) { console.error("Reverse geocode HTTP error:", resp.status); return null; }
+    if (!resp.ok) { 
+      console.error("Reverse geocode HTTP error:", resp.status);
+      return { placeId: null, name: "Location", vicinity: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, types: ["http_error_fallback"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+    }
     const data = (await resp.json()) as { status: string; error_message?: string; results?: Array<{ address_components: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address: string }> };
-    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") { console.error("Reverse geocode error:", data.error_message ?? data.status); return null; }
-    if (!data.results || data.results.length === 0) return null;
-    let neighborhood: string | null = null, city: string | null = null;
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") { 
+      console.error("Reverse geocode error:", data.error_message ?? data.status);
+      return { placeId: null, name: "Location", vicinity: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, types: ["api_error_fallback"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+    }
+    if (!data.results || data.results.length === 0) {
+      // Ultimate fallback: return coordinate-based name
+      console.log(`[location-place-lookup] Reverse geocode returned no results for ${latitude},${longitude}`);
+      return { placeId: null, name: `Location`, vicinity: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, types: ["coordinate_fallback"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+    }
+    
+    // Extract place info from components with priority chain
+    let neighborhood: string | null = null;
+    let sublocality: string | null = null;
+    let city: string | null = null;
+    let route: string | null = null;
+    let adminArea2: string | null = null; // county level
+    let adminArea1: string | null = null; // state level
+    
     for (const result of data.results) {
       for (const component of result.address_components) {
-        if (component.types.includes("neighborhood") || component.types.includes("sublocality_level_1") || component.types.includes("sublocality")) { if (!neighborhood) neighborhood = component.long_name; }
-        if (component.types.includes("locality") || component.types.includes("administrative_area_level_3")) { if (!city) city = component.long_name; }
+        const types = component.types;
+        if (!neighborhood && (types.includes("neighborhood") || types.includes("sublocality_level_1"))) {
+          neighborhood = component.long_name;
+        }
+        if (!sublocality && types.includes("sublocality")) {
+          sublocality = component.long_name;
+        }
+        if (!city && (types.includes("locality") || types.includes("administrative_area_level_3"))) {
+          city = component.long_name;
+        }
+        if (!route && types.includes("route")) {
+          route = component.long_name;
+        }
+        if (!adminArea2 && types.includes("administrative_area_level_2")) {
+          adminArea2 = component.long_name;
+        }
+        if (!adminArea1 && types.includes("administrative_area_level_1")) {
+          adminArea1 = component.short_name; // Use short_name for state (e.g., "AL" not "Alabama")
+        }
       }
     }
-    const areaName = neighborhood || city;
-    if (!areaName) return null;
-    return { placeId: null, name: `Near ${areaName}`, vicinity: data.results[0]?.formatted_address ?? null, types: ["reverse_geocode_area"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
-  } catch (error) { console.error("Reverse geocode exception:", error); return null; }
+    
+    // Priority chain: neighborhood > sublocality > city > route > county > state > formatted address
+    const areaName = neighborhood || sublocality || city || route || adminArea2 || adminArea1;
+    
+    if (areaName) {
+      console.log(`[location-place-lookup] Reverse geocode: "${areaName}" for ${latitude},${longitude}`);
+      return { placeId: null, name: `Near ${areaName}`, vicinity: data.results[0]?.formatted_address ?? null, types: ["reverse_geocode_area"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+    }
+    
+    // Final fallback: use the formatted address (truncated)
+    const formattedAddr = data.results[0]?.formatted_address;
+    if (formattedAddr) {
+      // Extract first meaningful part of address (before first comma or full if short)
+      const shortAddr = formattedAddr.split(",")[0].trim();
+      console.log(`[location-place-lookup] Reverse geocode fallback to formatted: "${shortAddr}" for ${latitude},${longitude}`);
+      return { placeId: null, name: shortAddr, vicinity: formattedAddr, types: ["reverse_geocode_address"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+    }
+    
+    // Absolute last resort
+    console.log(`[location-place-lookup] Reverse geocode no usable data for ${latitude},${longitude}`);
+    return { placeId: null, name: "Location", vicinity: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, types: ["coordinate_fallback"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+  } catch (error) { 
+    console.error("Reverse geocode exception:", error);
+    // Even on exception, return something rather than null
+    return { placeId: null, name: "Location", vicinity: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`, types: ["error_fallback"], source: "reverse_geocode", placeLatitude: latitude, placeLongitude: longitude, distanceMeters: 0, alternatives: [] };
+  }
 }
 
 // Types that indicate a real, recognizable business/POI

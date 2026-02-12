@@ -652,21 +652,25 @@ export function generateLocationSegments(
       // For samples without user place matches, check coordinate proximity
       // If the sample is >200m from the group's centroid, start a new group
       let sameCoordinateCluster = false;
-      let distanceFromCentroid = 0;
+      let distanceFromAnchor = 0;
       if (currentPlaceId === null && currentGroup.placeId === null) {
-        const groupCentroid = calculateCentroid(currentGroup.samples);
-        distanceFromCentroid = haversineDistance(
-          groupCentroid.latitude,
-          groupCentroid.longitude,
+        // ANCHOR-BASED CLUSTERING FIX:
+        // Compare to FIRST sample (anchor) instead of moving centroid.
+        // This prevents continuous travel from being grouped as one segment
+        // because the centroid would move with the user, allowing indefinite cluster growth.
+        const anchorSample = currentGroup.samples[0];
+        distanceFromAnchor = haversineDistance(
+          anchorSample.latitude!,
+          anchorSample.longitude!,
           sample.latitude,
           sample.longitude,
         );
-        // 200m threshold for considering it the same location cluster
-        sameCoordinateCluster = distanceFromCentroid < 200;
+        // 200m threshold from cluster ANCHOR (start point), not moving center
+        sameCoordinateCluster = distanceFromAnchor < 200;
         
         // DEBUG: Log when distance is significant
-        if (distanceFromCentroid > 100) {
-          console.log(`📍 [CLUSTER DEBUG] Distance from centroid: ${Math.round(distanceFromCentroid)}m, sameCluster: ${sameCoordinateCluster}, sample: (${sample.latitude}, ${sample.longitude}), centroid: (${groupCentroid.latitude}, ${groupCentroid.longitude})`);
+        if (distanceFromAnchor > 100) {
+          console.log(`📍 [CLUSTER DEBUG] Distance from anchor: ${Math.round(distanceFromAnchor)}m, sameCluster: ${sameCoordinateCluster}, sample: (${sample.latitude}, ${sample.longitude}), anchor: (${anchorSample.latitude}, ${anchorSample.longitude})`);
         }
       }
 
@@ -675,7 +679,7 @@ export function generateLocationSegments(
         currentGroup.samples.push(sample);
       } else {
         // DEBUG: Log when starting new group
-        console.log(`📍 [CLUSTER DEBUG] Starting NEW group! sameUserPlace: ${sameUserPlace}, sameCoordinateCluster: ${sameCoordinateCluster}, distance: ${Math.round(distanceFromCentroid)}m`);
+        console.log(`📍 [CLUSTER DEBUG] Starting NEW group! sameUserPlace: ${sameUserPlace}, sameCoordinateCluster: ${sameCoordinateCluster}, distance: ${Math.round(distanceFromAnchor)}m`);
         // Different place/cluster - finalize current group and start new one
         groups.push(currentGroup);
         currentGroup = {
