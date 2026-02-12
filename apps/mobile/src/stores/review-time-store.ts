@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { produce } from "immer";
 export type ReviewCategoryId = "faith" | "family" | "work" | "health" | "other";
 
 export type ReviewBlockSource =
@@ -172,11 +173,11 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
       },
 
       splitTimeBlock: (blockId, splitMinutes) => {
-        const { timeBlocks, assignments, notes, aiSuggestions } = get();
-        const blockIndex = timeBlocks.findIndex((b) => b.id === blockId);
+        const state = get();
+        const blockIndex = state.timeBlocks.findIndex((b) => b.id === blockId);
         if (blockIndex == -1) return;
 
-        const block = timeBlocks[blockIndex];
+        const block = state.timeBlocks[blockIndex];
         if (splitMinutes <= 0 || splitMinutes >= block.duration) return;
 
         const startMinutes = block.startMinutes;
@@ -200,46 +201,43 @@ export const useReviewTimeStore = create<ReviewTimeState>()(
           endTime: block.endTime,
         };
 
-        const newTimeBlocks = [
-          ...timeBlocks.slice(0, blockIndex),
-          firstBlock,
-          secondBlock,
-          ...timeBlocks.slice(blockIndex + 1),
-        ];
+        // Use Immer to safely update all related state in one go
+        set((state) =>
+          produce(state, (draft) => {
+            // Update timeBlocks array
+            draft.timeBlocks.splice(blockIndex, 1, firstBlock, secondBlock);
 
-        const newAssignments = { ...assignments };
-        delete newAssignments[blockId];
-        if (assignments[blockId]) {
-          newAssignments[firstBlock.id] = assignments[blockId];
-          newAssignments[secondBlock.id] = assignments[blockId];
-        }
+            // Move assignment from old block to new blocks
+            const assignment = draft.assignments[blockId];
+            delete draft.assignments[blockId];
+            if (assignment) {
+              draft.assignments[firstBlock.id] = assignment;
+              draft.assignments[secondBlock.id] = assignment;
+            }
 
-        const newNotes = { ...notes };
-        const noteValue = newNotes[blockId];
-        delete newNotes[blockId];
-        if (noteValue) {
-          newNotes[firstBlock.id] = noteValue;
-          newNotes[secondBlock.id] = noteValue;
-        }
+            // Move note from old block to new blocks
+            const noteValue = draft.notes[blockId];
+            delete draft.notes[blockId];
+            if (noteValue) {
+              draft.notes[firstBlock.id] = noteValue;
+              draft.notes[secondBlock.id] = noteValue;
+            }
 
-        const newSuggestions = { ...aiSuggestions };
-        const suggestionValue = newSuggestions[blockId];
-        delete newSuggestions[blockId];
-        if (suggestionValue) {
-          newSuggestions[firstBlock.id] = suggestionValue;
-          newSuggestions[secondBlock.id] = suggestionValue;
-        }
+            // Move AI suggestion from old block to new blocks
+            const suggestionValue = draft.aiSuggestions[blockId];
+            delete draft.aiSuggestions[blockId];
+            if (suggestionValue) {
+              draft.aiSuggestions[firstBlock.id] = suggestionValue;
+              draft.aiSuggestions[secondBlock.id] = suggestionValue;
+            }
 
-        set({
-          timeBlocks: newTimeBlocks,
-          assignments: newAssignments,
-          notes: newNotes,
-          aiSuggestions: newSuggestions,
-          unassignedCount: computeUnassignedCount(
-            newTimeBlocks,
-            newAssignments,
-          ),
-        });
+            // Update unassignedCount
+            draft.unassignedCount = computeUnassignedCount(
+              draft.timeBlocks,
+              draft.assignments,
+            );
+          })
+        );
       },
 
       clearAll: () => {

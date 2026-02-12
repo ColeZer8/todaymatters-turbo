@@ -18,6 +18,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import { produce } from "immer";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight, Plus, Zap } from "lucide-react-native";
@@ -417,6 +418,26 @@ export default function ActivityTimelineScreen() {
     }
     
     setIsSavingRename(true);
+    
+    // Store previous state for rollback (Immer safety)
+    const previousLabels = userLabels;
+    
+    // Optimistic update with Immer - update UI immediately
+    if (renameBlock?.geohash7) {
+      setUserLabels(
+        produce(draft => {
+          draft[renameBlock.geohash7!] = {
+            label: renameText.trim(),
+            category: renameCategory ?? undefined,
+          };
+        })
+      );
+      
+      if (__DEV__) {
+        console.log('[ActivityTimeline] 🚀 Optimistic update applied with Immer');
+      }
+    }
+    
     try {
       if (__DEV__) {
         console.log('[ActivityTimeline] 📝 Saving location label:', {
@@ -438,7 +459,7 @@ export default function ActivityTimelineScreen() {
       });
       
       if (__DEV__) {
-        console.log('[ActivityTimeline] Location label saved successfully, refreshing...');
+        console.log('[ActivityTimeline] ✅ Location label saved successfully, refreshing...');
       }
       
       // Close modal first for better UX
@@ -447,12 +468,19 @@ export default function ActivityTimelineScreen() {
       // Then refresh to show the new label
       handleRefresh();
     } catch (err) {
+      // Rollback optimistic update on error (Immer safety)
+      setUserLabels(previousLabels);
+      
+      if (__DEV__) {
+        console.error('[ActivityTimeline] ❌ Save failed, rolled back optimistic update');
+      }
+      
       Alert.alert("Error", "Failed to save location name");
       if (__DEV__) console.error("[ActivityTimeline] Failed to save location label:", err);
     } finally {
       setIsSavingRename(false);
     }
-  }, [renameBlock, renameText, renameCategory, renameRadius, userId, handleRefresh, handleCloseRename]);
+  }, [renameBlock, renameText, renameCategory, renameRadius, userId, userLabels, handleRefresh, handleCloseRename]);
 
   // Render future events section as list footer — show on today and future dates
   const isFutureDate = useMemo(() => selectedDate > getTodayYmd(), [selectedDate]);
