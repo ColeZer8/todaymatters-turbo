@@ -183,6 +183,32 @@ export const LocationBlockList = ({
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [blocksWithTimeline, setBlocksWithTimeline] = useState<LocationBlock[]>([]);
+  
+  // Dirty tracking: prevent realtime updates from overwriting user edits
+  const [dirtyLocationIds, setDirtyLocationIds] = useState<Set<string>>(new Set());
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+
+  // Helper: Mark a location as being edited (dirty)
+  const handleStartEdit = useCallback((geohash7: string) => {
+    console.log(`[LocationBlockList] 🔒 Marking location as dirty: ${geohash7}`);
+    setEditingLocationId(geohash7);
+    setDirtyLocationIds(prev => {
+      const next = new Set(prev);
+      next.add(geohash7);
+      return next;
+    });
+  }, []);
+
+  // Helper: Clear dirty state after successful save
+  const handleSaveComplete = useCallback((geohash7: string) => {
+    console.log(`[LocationBlockList] ✅ Clearing dirty state for: ${geohash7}`);
+    setDirtyLocationIds(prev => {
+      const next = new Set(prev);
+      next.delete(geohash7);
+      return next;
+    });
+    setEditingLocationId(null);
+  }, []);
 
   // Compute "is today" and current minutes for the red NOW line
   const isToday = useMemo(() => {
@@ -348,6 +374,11 @@ export const LocationBlockList = ({
         selectionIsCustom: selection.isCustom,
       });
 
+      // Mark location as dirty while processing
+      if (block.geohash7) {
+        handleStartEdit(block.geohash7);
+      }
+
       try {
         const firstValidSegment = block.segments?.find((s) =>
           s.locationLat != null &&
@@ -370,6 +401,10 @@ export const LocationBlockList = ({
 
         if (lat === null || lng === null) {
           console.error("[LocationBlockList] ❌ NO COORDINATES for place creation");
+          // Clear dirty state on error
+          if (block.geohash7) {
+            handleSaveComplete(block.geohash7);
+          }
           Alert.alert(
             "Cannot Save Location",
             "No coordinates available for this location. Please try a different block.",
@@ -405,18 +440,27 @@ export const LocationBlockList = ({
           }
         );
 
+        // Clear dirty state after successful save
+        if (block.geohash7) {
+          handleSaveComplete(block.geohash7);
+        }
+
         // Refresh to pick up the new place
         console.log("[LocationBlockList] 🔄 Refreshing blocks...");
         refresh();
       } catch (err) {
         console.error("[LocationBlockList] ❌ FAILED to create user place:", err);
+        // Clear dirty state on error
+        if (block.geohash7) {
+          handleSaveComplete(block.geohash7);
+        }
         Alert.alert(
           "Couldn't save place",
           `Error: ${err instanceof Error ? err.message : "Unknown error"}. Please try again.`,
         );
       }
     },
-    [userId, refresh],
+    [userId, refresh, handleStartEdit, handleSaveComplete],
   );
 
   // Render item — passes block context alongside event for overlap/location editing
@@ -484,10 +528,20 @@ export const LocationBlockList = ({
         userLabelCount: Object.keys(userLabels).length,
         blockCount: blocksWithTimeline.length,
         labelKeys: Object.keys(userLabels),
+        dirtyCount: dirtyLocationIds.size,
       });
     }
 
     return blocksWithTimeline.map((block) => {
+      // SAFETY: Don't apply updates to locations user is editing
+      const isDirty = block.geohash7 && dirtyLocationIds.has(block.geohash7);
+      if (isDirty) {
+        if (__DEV__) {
+          console.log(`[LocationBlockList] 🔒 Skipping update for dirty location: ${block.geohash7}`);
+        }
+        return block; // Keep current state, ignore background updates
+      }
+      
       // Check if user has a custom label for this geohash
       if (block.geohash7 && userLabels[block.geohash7]) {
         const userLabel = userLabels[block.geohash7];
@@ -503,7 +557,7 @@ export const LocationBlockList = ({
       }
       return block;
     });
-  }, [blocksWithTimeline, userLabels]);
+  }, [blocksWithTimeline, userLabels, dirtyLocationIds]);
 
   // When filtering to "scheduled" only, hide blocks with no matching events
   const displayBlocks = useMemo(() => {
