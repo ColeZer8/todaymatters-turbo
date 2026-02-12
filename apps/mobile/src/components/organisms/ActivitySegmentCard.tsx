@@ -18,6 +18,8 @@ import {
   Utensils,
   Activity,
   Moon,
+  Footprints,
+  Bike,
   type LucideIcon,
 } from "lucide-react-native";
 import type {
@@ -80,10 +82,12 @@ function formatDuration(minutes: number): string {
 /**
  * Get icon for activity type
  */
-function getActivityIcon(activity: InferredActivityType, placeCategory: string | null): LucideIcon {
-  // First check if it's a commute
+function getActivityIcon(activity: InferredActivityType, placeCategory: string | null, movementType?: string | null): LucideIcon {
+  // First check if it's a commute — use movement-type-specific icons
   if (activity === "commute" || placeCategory === "commute") {
-    return Car;
+    if (movementType === "walking") return Footprints;
+    if (movementType === "cycling") return Bike;
+    return Car; // driving or unknown
   }
   
   // Check place category
@@ -167,9 +171,13 @@ function getIconColor(activity: InferredActivityType, placeCategory: string | nu
 function getSegmentLabel(segment: ActivitySegment): string {
   const { placeLabel, placeCategory, inferredActivity } = segment;
   
-  // Commute
+  // Commute — use movement-type-specific label
   if (inferredActivity === "commute" || placeCategory === "commute") {
-    return "Traveling";
+    const verb = segment.movementType === "walking" ? "Walking"
+      : segment.movementType === "cycling" ? "Cycling"
+      : segment.movementType === "driving" ? "Driving"
+      : "Traveling";
+    return verb;
   }
   
   // Use place label if available
@@ -235,7 +243,7 @@ export function ActivitySegmentCard({
   compact = false,
 }: ActivitySegmentCardProps) {
   const duration = getDurationMinutes(segment.startedAt, segment.endedAt);
-  const Icon = getActivityIcon(segment.inferredActivity, segment.placeCategory);
+  const Icon = getActivityIcon(segment.inferredActivity, segment.placeCategory, segment.movementType);
   const bgColor = getActivityColor(segment.inferredActivity, segment.placeCategory);
   const iconColor = getIconColor(segment.inferredActivity, segment.placeCategory);
   const label = getSegmentLabel(segment);
@@ -283,7 +291,12 @@ export function ActivitySegmentCard({
         </View>
         <View style={styles.labelContainer}>
           <Text style={styles.label} numberOfLines={1}>
-            {isCommute ? "🚗 " : ""}{label}
+            {isCommute
+              ? segment.movementType === "walking" ? "🚶 "
+                : segment.movementType === "cycling" ? "🚴 "
+                : segment.movementType === "driving" ? "🚗 "
+                : "🚗 "
+              : ""}{label}
           </Text>
           {subtitle && (
             <Text style={styles.subtitle} numberOfLines={1}>

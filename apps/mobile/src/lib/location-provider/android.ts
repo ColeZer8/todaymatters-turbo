@@ -81,6 +81,22 @@ function toSample(
   if (!isFiniteNumber(longitude) || longitude < -180 || longitude > 180)
     return null;
 
+  // Extract activity data from Transistorsoft location object (matches iOS logic)
+  // Enables walking/driving/cycling detection for accurate timeline
+  const activity = location.activity as { type?: string; confidence?: number } | undefined;
+  let activityType: string | null = null;
+  let activityConfidence: number | null = null;
+
+  if (activity && typeof activity === 'object') {
+    // Transistorsoft activity format: { type: 'walking', confidence: 75 }
+    if (typeof activity.type === 'string' && activity.type.length > 0) {
+      activityType = activity.type;
+    }
+    if (typeof activity.confidence === 'number' && Number.isFinite(activity.confidence)) {
+      activityConfidence = Math.round(Math.min(100, Math.max(0, activity.confidence)));
+    }
+  }
+
   return {
     recorded_at,
     latitude,
@@ -93,6 +109,10 @@ function toSample(
     heading_deg: normalizeHeadingDeg(location.coords.heading),
     is_mocked: typeof location.mock === "boolean" ? location.mock : null,
     source: "background",
+    // Activity detection fields (matches iOS — enables walking/driving/cycling detection)
+    activity_type: activityType,
+    activity_confidence: activityConfidence,
+    is_moving: typeof location.is_moving === "boolean" ? location.is_moving : null,
     raw: normalizeRaw({
       ...sourceMeta,
       uuid: location.uuid,

@@ -155,8 +155,15 @@ function buildLocationBlocksFromSamples(
     if (startMinutes < 0 || startMinutes >= 24 * 60) continue;
 
     const isCommute = segment.meta.kind === "commute";
+    // Use activity-specific labels: "Walking", "Driving", "Cycling" instead of generic "Travel"
+    const movementVerb = isCommute
+      ? segment.meta.movement_type === "walking" ? "Walking"
+        : segment.meta.movement_type === "cycling" ? "Cycling"
+        : segment.meta.movement_type === "driving" ? "Driving"
+        : "Travel"
+      : null;
     const locationLabel = isCommute
-      ? "Travel"
+      ? movementVerb!
       : segment.placeLabel ||
         getGooglePlaceNameForSegment(segment, evidence) ||
         "Unknown location";
@@ -183,7 +190,7 @@ function buildLocationBlocksFromSamples(
       startTime: formatMinutesToTime(Math.max(0, startMinutes)),
       endTime: formatMinutesToTime(Math.min(24 * 60, startMinutes + duration)),
       location: locationLabel,
-      activityDetected: isCommute ? "Traveling" : undefined,
+      activityDetected: isCommute ? (movementVerb ?? "Traveling") : undefined,
     });
   }
 

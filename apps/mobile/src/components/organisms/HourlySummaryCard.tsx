@@ -402,7 +402,14 @@ export const HourlySummaryCard = ({
             });
             const durationMin = Math.round((seg.endedAt.getTime() - seg.startedAt.getTime()) / 60000);
             const isCommute = seg.inferredActivity === "commute" || seg.placeCategory === "commute";
-            const label = isCommute ? "🚗 Traveling" : (seg.placeLabel ?? "Activity");
+            // Use movement-type-specific labels and emojis
+            const commuteLabel = isCommute
+              ? seg.movementType === "walking" ? "🚶 Walking"
+                : seg.movementType === "cycling" ? "🚴 Cycling"
+                : seg.movementType === "driving" ? "🚗 Driving"
+                : "🚗 Traveling"
+              : null;
+            const label = isCommute ? commuteLabel! : (seg.placeLabel ?? "Activity");
             
             return (
               <View key={seg.id ?? idx} style={styles.segmentRow}>

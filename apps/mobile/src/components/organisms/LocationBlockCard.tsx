@@ -239,8 +239,15 @@ function SegmentEditorRow({
   const isCommute =
     segment.inferredActivity === "commute" ||
     segment.placeCategory === "commute";
+  // Use movement-type-specific label for commutes
+  const commuteVerb = isCommute
+    ? segment.movementType === "walking" ? "Walking"
+      : segment.movementType === "cycling" ? "Cycling"
+      : segment.movementType === "driving" ? "Driving"
+      : "Traveling"
+    : null;
   const label = isCommute
-    ? "Traveling"
+    ? commuteVerb!
     : segment.placeLabel ?? segment.inferredActivity ?? "Activity";
 
   return (

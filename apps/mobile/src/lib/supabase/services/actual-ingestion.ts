@@ -120,6 +120,163 @@ export interface LocationSegment {
 /** Classification of how the user moved between locations */
 export type MovementType = "walking" | "cycling" | "driving" | "stationary" | "unknown";
 
+// ============================================================================
+// Device Activity Recognition (Transistorsoft)
+// ============================================================================
+
+/**
+ * Minimum confidence threshold for device activity recognition.
+ * Below this, we fall back to GPS speed-based heuristics.
+ * 50% is a reasonable threshold — device activity recognition is still
+ * more accurate than GPS speed math even at moderate confidence.
+ */
+const DEVICE_ACTIVITY_MIN_CONFIDENCE = 50;
+
+/**
+ * Transistorsoft activity types that indicate the device is moving.
+ * These come from iOS CMMotionActivity and Android Activity Recognition API.
+ */
+const MOVING_ACTIVITY_TYPES = new Set([
+  "in_vehicle",
+  "walking",
+  "on_bicycle",
+  "running",
+  "on_foot",
+]);
+
+/**
+ * Map Transistorsoft activity type strings to our MovementType enum.
+ * 
+ * Transistorsoft types → our types:
+ * - `in_vehicle` → `driving`
+ * - `walking` / `on_foot` / `running` → `walking`
+ * - `on_bicycle` → `cycling`
+ * - `still` → `stationary`
+ * - `unknown` → `unknown`
+ */
+function mapDeviceActivityToMovementType(activityType: string): MovementType {
+  switch (activityType) {
+    case "in_vehicle":
+      return "driving";
+    case "walking":
+    case "on_foot":
+    case "running":
+      return "walking";
+    case "on_bicycle":
+      return "cycling";
+    case "still":
+      return "stationary";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * Result of device activity analysis for a group of samples.
+ */
+interface DeviceActivityResult {
+  /** The dominant activity type from device sensors */
+  activityType: string;
+  /** Mapped to our MovementType */
+  movementType: MovementType;
+  /** Whether the device is considered moving */
+  isMoving: boolean;
+  /** Average confidence across high-confidence samples */
+  avgConfidence: number;
+  /** Number of samples with high-confidence activity data */
+  sampleCount: number;
+}
+
+/**
+ * Analyze device activity recognition data from location samples.
+ * 
+ * Transistorsoft provides activity_type and activity_confidence on each
+ * location sample. This function extracts the dominant activity type
+ * from samples that meet the confidence threshold.
+ * 
+ * Returns null if insufficient high-confidence activity data is available,
+ * signaling the caller should fall back to GPS speed heuristics.
+ * 
+ * @param samples - Location samples with optional activity_type and activity_confidence
+ * @returns DeviceActivityResult if sufficient data, null otherwise
+ */
+function getDominantDeviceActivity(
+  samples: EvidenceLocationSample[],
+): DeviceActivityResult | null {
+  // Collect samples with high-confidence activity data
+  const activitiesWithConfidence: Array<{ type: string; confidence: number }> = [];
+
+  for (const sample of samples) {
+    if (
+      sample.activity_type &&
+      typeof sample.activity_type === "string" &&
+      sample.activity_type !== "unknown" &&
+      typeof sample.activity_confidence === "number" &&
+      sample.activity_confidence >= DEVICE_ACTIVITY_MIN_CONFIDENCE
+    ) {
+      activitiesWithConfidence.push({
+        type: sample.activity_type,
+        confidence: sample.activity_confidence,
+      });
+    }
+  }
+
+  // Need at least 1 high-confidence sample; prefer having data from
+  // at least 30% of the segment's samples for reliability
+  if (activitiesWithConfidence.length === 0) {
+    return null;
+  }
+
+  const coverageRatio = activitiesWithConfidence.length / samples.length;
+  if (coverageRatio < 0.2 && activitiesWithConfidence.length < 3) {
+    // Very low coverage AND few samples — not enough to be confident
+    return null;
+  }
+
+  // Find the most common activity type (weighted by confidence)
+  const weightedCounts = new Map<string, number>();
+  let totalConfidence = 0;
+
+  for (const { type, confidence } of activitiesWithConfidence) {
+    weightedCounts.set(type, (weightedCounts.get(type) ?? 0) + confidence);
+    totalConfidence += confidence;
+  }
+
+  // Pick the activity with the highest weighted count
+  let dominantType = "unknown";
+  let maxWeight = 0;
+  for (const [type, weight] of weightedCounts.entries()) {
+    if (weight > maxWeight) {
+      maxWeight = weight;
+      dominantType = type;
+    }
+  }
+
+  const avgConfidence = totalConfidence / activitiesWithConfidence.length;
+  const movementType = mapDeviceActivityToMovementType(dominantType);
+  const isMoving = MOVING_ACTIVITY_TYPES.has(dominantType);
+
+  if (__DEV__) {
+    console.log(
+      `📍 [DeviceActivity] Dominant: ${dominantType} (${movementType}), ` +
+      `isMoving: ${isMoving}, avgConfidence: ${avgConfidence.toFixed(0)}%, ` +
+      `coverage: ${activitiesWithConfidence.length}/${samples.length} samples`
+    );
+  }
+
+  return {
+    activityType: dominantType,
+    movementType,
+    isMoving,
+    avgConfidence,
+    sampleCount: activitiesWithConfidence.length,
+  };
+}
+
+// ============================================================================
+// GPS Speed-Based Movement Detection (Fallback)
+// ============================================================================
+
 /**
  * Maximum realistic speed in m/s to filter GPS noise.
  * ~150 mph = ~67 m/s is faster than any normal driving.
@@ -795,38 +952,85 @@ export function generateLocationSegments(
     // =========================================================================
     // SEGMENT CLASSIFICATION: Stationary vs Commute
     // =========================================================================
-    // Calculate movement metrics from the samples
+    // Calculate movement metrics from the samples (used as fallback)
     const avgSpeed = calculateAverageSpeed(group.samples);
     const totalDistance = calculatePathDistance(group.samples);
     const segmentDurationMs = clampedEnd.getTime() - clampedStart.getTime();
     
-    // Classification thresholds (match Google Timeline behavior)
-    // CRITICAL FIX: Use AND logic, not OR!
-    // - GPS jitter can accumulate >100m distance while stationary (avgSpeed ~0.5 m/s)
-    // - Using OR incorrectly classifies stationary as travel
-    // - Using AND: must have BOTH meaningful speed AND meaningful distance
-    // Speed data shows: stationary = 0-0.78 m/s, driving = 6.66-8.33 m/s
-    const COMMUTE_SPEED_THRESHOLD = 1.5; // m/s (~3.4 mph, faster than slow walk)
-    const COMMUTE_DISTANCE_THRESHOLD = 200; // meters (requires actual travel, not jitter)
-    
-    // BOTH conditions must be true to classify as commute
-    // This prevents GPS jitter (high distance, low speed) from triggering false travel
-    const isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD && totalDistance > COMMUTE_DISTANCE_THRESHOLD;
-    
     // Determine segment kind and movement type
     let segmentKind: "location_block" | "commute" = "location_block";
     let movementType: MovementType | undefined;
+    let isMoving = false;
     
-    if (isMoving) {
-      segmentKind = "commute";
-      movementType = classifyMovementType(totalDistance, segmentDurationMs);
+    // =========================================================================
+    // PRIORITY 1: Device Activity Recognition (Transistorsoft)
+    // Uses iOS CMMotionActivity / Android Activity Recognition API.
+    // More accurate than GPS speed math, especially for:
+    // - Slow walking (dog parks, malls) where GPS speed is noisy
+    // - Short trips where GPS samples are sparse
+    // - Indoor-to-outdoor transitions
+    // =========================================================================
+    const deviceActivity = getDominantDeviceActivity(group.samples);
+    
+    if (deviceActivity) {
+      // Device sensors say we know the activity type
+      isMoving = deviceActivity.isMoving;
       
-      if (__DEV__) {
-        console.log(`📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE (avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m, type: ${movementType})`);
+      if (isMoving) {
+        segmentKind = "commute";
+        movementType = deviceActivity.movementType;
+        
+        if (__DEV__) {
+          console.log(
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE via DEVICE ACTIVITY ` +
+            `(${deviceActivity.activityType} → ${movementType}, confidence: ${deviceActivity.avgConfidence.toFixed(0)}%, ` +
+            `fallback would be: avgSpeed=${avgSpeed.toFixed(2)} m/s, distance=${totalDistance.toFixed(0)}m)`
+          );
+        }
+      } else {
+        // Device says stationary (e.g., activity_type = "still")
+        if (__DEV__) {
+          console.log(
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY via DEVICE ACTIVITY ` +
+            `(${deviceActivity.activityType}, confidence: ${deviceActivity.avgConfidence.toFixed(0)}%)`
+          );
+        }
       }
     } else {
-      if (__DEV__) {
-        console.log(`📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY (avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m)`);
+      // =========================================================================
+      // PRIORITY 2: GPS Speed + Distance Heuristics (Fallback)
+      // Used when device activity data is unavailable or low-confidence.
+      // =========================================================================
+      // Classification thresholds (match Google Timeline behavior)
+      // CRITICAL FIX: Use AND logic, not OR!
+      // - GPS jitter can accumulate >100m distance while stationary (avgSpeed ~0.5 m/s)
+      // - Using OR incorrectly classifies stationary as travel
+      // - Using AND: must have BOTH meaningful speed AND meaningful distance
+      // Speed data shows: stationary = 0-0.78 m/s, driving = 6.66-8.33 m/s
+      const COMMUTE_SPEED_THRESHOLD = 1.5; // m/s (~3.4 mph, faster than slow walk)
+      const COMMUTE_DISTANCE_THRESHOLD = 200; // meters (requires actual travel, not jitter)
+      
+      // BOTH conditions must be true to classify as commute
+      // This prevents GPS jitter (high distance, low speed) from triggering false travel
+      isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD && totalDistance > COMMUTE_DISTANCE_THRESHOLD;
+      
+      if (isMoving) {
+        segmentKind = "commute";
+        movementType = classifyMovementType(totalDistance, segmentDurationMs);
+        
+        if (__DEV__) {
+          console.log(
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE via GPS SPEED ` +
+            `(avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m, type: ${movementType})`
+          );
+        }
+      } else {
+        if (__DEV__) {
+          console.log(
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY via GPS SPEED ` +
+            `(avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m)`
+          );
+        }
       }
     }
 
@@ -1223,7 +1427,23 @@ function isMovementGroup(
 ): boolean {
   if (samples.length < 2) return false;
 
-  // Calculate distance and duration first for speed check
+  // PRIORITY 1: Check device activity recognition
+  const deviceActivity = getDominantDeviceActivity(samples);
+  if (deviceActivity) {
+    if (deviceActivity.isMoving) {
+      if (__DEV__) {
+        console.log(
+          `📍 [isMovementGroup] Device says MOVING (${deviceActivity.activityType}, ` +
+          `confidence: ${deviceActivity.avgConfidence.toFixed(0)}%)`
+        );
+      }
+      return true;
+    }
+    // Device says stationary — still check GPS as a sanity check
+    // (device could report "still" during a very slow drive)
+  }
+
+  // PRIORITY 2: GPS distance/speed heuristics (fallback)
   const distance = calculatePathDistance(samples);
   
   // Not enough distance to be real movement
@@ -1381,8 +1601,26 @@ export function detectCommute(
   // Calculate distance
   const distanceM = calculatePathDistance(sortedSamples);
 
-  // Classify movement type based on average speed
-  const movementType = classifyMovementType(distanceM, durationMs);
+  // Classify movement type: prefer device activity, fall back to GPS speed
+  let movementType: MovementType;
+  const deviceActivity = getDominantDeviceActivity(sortedSamples);
+  if (deviceActivity && deviceActivity.isMoving) {
+    movementType = deviceActivity.movementType;
+    if (__DEV__) {
+      console.log(
+        `📍 [detectCommute] Movement type from DEVICE: ${movementType} ` +
+        `(${deviceActivity.activityType}, confidence: ${deviceActivity.avgConfidence.toFixed(0)}%)`
+      );
+    }
+  } else {
+    movementType = classifyMovementType(distanceM, durationMs);
+    if (__DEV__) {
+      console.log(
+        `📍 [detectCommute] Movement type from GPS SPEED: ${movementType} ` +
+        `(distance: ${distanceM.toFixed(0)}m, duration: ${(durationMs / 1000).toFixed(0)}s)`
+      );
+    }
+  }
 
   // Find boundary places
   const { fromPlace, toPlace } = findBoundaryPlaces(sortedSamples, userPlaces);
