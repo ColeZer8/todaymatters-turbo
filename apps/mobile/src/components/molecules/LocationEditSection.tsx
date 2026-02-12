@@ -42,12 +42,12 @@ import {
 } from "lucide-react-native";
 import { Icon } from "../atoms/Icon";
 import {
-  fetchNearbyPlaces,
+  fetchNearbyPlacesSecure,
   getFuzzyLocationLabel,
   mapPlaceTypeToCategory,
   getPlaceTypeLabel,
   getGoogleApiKey,
-  searchPlacesAutocomplete,
+  searchPlacesAutocompleteSecure,
   createSessionToken,
   cancelAutocomplete,
   type GooglePlaceSuggestion,
@@ -210,22 +210,56 @@ export const LocationEditSection = ({
 
   // Fetch nearby places and neighborhood name when lat/lng change
   useEffect(() => {
-    if (latitude == null || longitude == null) return;
+    if (latitude == null || longitude == null) {
+      if (__DEV__) {
+        console.log("[LocationEditSection] Skipping fetch — no coords", {
+          latitude,
+          longitude,
+        });
+      }
+      return;
+    }
 
     let cancelled = false;
     setIsLoadingSuggestions(true);
 
+    if (__DEV__) {
+      console.log("[LocationEditSection] Fetching nearby places via Edge Function", {
+        latitude,
+        longitude,
+      });
+    }
+
+    // Use secure Edge Function proxy (API key stays server-side)
+    // getFuzzyLocationLabel still uses client-side key — it will gracefully
+    // return null if unavailable, which is fine (neighborhood is a fallback).
     Promise.all([
-      fetchNearbyPlaces(latitude, longitude),
-      getFuzzyLocationLabel(latitude, longitude),
+      fetchNearbyPlacesSecure(latitude, longitude),
+      getFuzzyLocationLabel(latitude, longitude).catch(() => null),
     ])
       .then(([placesResult, fuzzyLabel]) => {
         if (cancelled) return;
+
+        if (__DEV__) {
+          console.log("[LocationEditSection] Nearby places result:", {
+            success: placesResult.success,
+            count: placesResult.suggestions.length,
+            fromCache: placesResult.fromCache,
+            error: placesResult.error,
+            fuzzyLabel,
+          });
+        }
+
+        if (!placesResult.success && placesResult.error) {
+          console.warn("[LocationEditSection] Nearby places error:", placesResult.error);
+        }
+
         setNearbyPlaces(placesResult.suggestions);
         setNeighborhoodName(fuzzyLabel);
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
+        console.warn("[LocationEditSection] Failed to fetch nearby places:", err);
         setNearbyPlaces([]);
         setNeighborhoodName(null);
       })
@@ -238,7 +272,7 @@ export const LocationEditSection = ({
     };
   }, [latitude, longitude]);
 
-  // Autocomplete search when user types in edit mode
+  // Autocomplete search when user types in edit mode (via secure Edge Function)
   useEffect(() => {
     if (!isEditing || !debouncedEditText || debouncedEditText.length < 2) {
       setAutocompleteResults([]);
@@ -249,17 +283,29 @@ export const LocationEditSection = ({
     let cancelled = false;
     setIsSearching(true);
 
-    searchPlacesAutocomplete(
+    if (__DEV__) {
+      console.log("[LocationEditSection] Autocomplete search via Edge Function:", debouncedEditText);
+    }
+
+    searchPlacesAutocompleteSecure(
       debouncedEditText,
       latitude,
       longitude,
       sessionTokenRef.current,
     )
       .then((results) => {
-        if (!cancelled) setAutocompleteResults(results);
+        if (!cancelled) {
+          if (__DEV__) {
+            console.log("[LocationEditSection] Autocomplete results:", results.length);
+          }
+          setAutocompleteResults(results);
+        }
       })
-      .catch(() => {
-        if (!cancelled) setAutocompleteResults([]);
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn("[LocationEditSection] Autocomplete error:", err);
+          setAutocompleteResults([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsSearching(false);
@@ -372,7 +418,7 @@ export const LocationEditSection = ({
           ================================================================ */}
       <View style={styles.card}>
         {/* Label Row */}
-        <View style={styles.labelRow}>
+        <Pressable onPress={toggleDropdown} style={styles.labelRow}>
           <Icon icon={MapPin} size={18} color="#94A3B8" />
 
           {isEditing ? (
@@ -397,7 +443,7 @@ export const LocationEditSection = ({
               }}
             />
           ) : (
-            <Pressable onPress={startEditing} style={styles.labelTextWrapper}>
+            <View style={styles.labelTextWrapper}>
               <Text
                 style={[
                   styles.labelText,
@@ -407,22 +453,20 @@ export const LocationEditSection = ({
               >
                 {currentLabel || "Tap to pick a location..."}
               </Text>
-            </Pressable>
+            </View>
           )}
 
-          <Pressable onPress={toggleDropdown} hitSlop={8}>
-            <Icon
-              icon={ChevronDown}
-              size={18}
-              color="#64748B"
-              style={
-                showDropdown
-                  ? { transform: [{ rotate: "180deg" }] }
-                  : undefined
-              }
-            />
-          </Pressable>
-        </View>
+          <Icon
+            icon={ChevronDown}
+            size={18}
+            color="#64748B"
+            style={
+              showDropdown
+                ? { transform: [{ rotate: "180deg" }] }
+                : undefined
+            }
+          />
+        </Pressable>
 
         {/* ---- Inline Dropdown ---- */}
         {showDropdown && (
@@ -850,7 +894,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   labelText: {
-    flex: 1,
     fontSize: 16,
     color: "#111827",
     paddingVertical: 12,
