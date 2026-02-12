@@ -226,6 +226,77 @@ const GENERIC_ONLY_TYPES = new Set([
   "plus_code", "natural_feature", "floor", "room",
 ]);
 
+// HIGH PRIORITY: Places users typically visit intentionally (food, entertainment, services)
+// These should be preferred over professional service offices
+const HIGH_PRIORITY_TYPES = new Set([
+  // Food & Drink
+  "cafe", "coffee_shop", "restaurant", "bar", "bakery", "food",
+  "meal_delivery", "meal_takeaway", "ice_cream_shop",
+  // Entertainment & Leisure
+  "movie_theater", "bowling_alley", "night_club", "amusement_park",
+  "aquarium", "art_gallery", "casino", "zoo", "museum", "park",
+  "stadium", "tourist_attraction",
+  // Fitness & Wellness  
+  "gym", "fitness_center", "spa", "beauty_salon", "hair_care",
+  // Retail
+  "shopping_mall", "shopping_center", "store", "supermarket",
+  "clothing_store", "convenience_store", "department_store",
+  "electronics_store", "book_store", "pet_store",
+  // Health (consumer-facing)
+  "pharmacy", "hospital", "doctor", "dentist", "veterinary_care",
+  // Services people visit
+  "bank", "post_office", "library", "church", "school", "university",
+  "car_wash", "gas_station", "lodging",
+  // Transit
+  "airport", "train_station", "bus_station", "transit_station",
+]);
+
+// LOW PRIORITY: Professional service offices - users rarely visit these for personal reasons
+// These should be deprioritized vs consumer-facing businesses
+const LOW_PRIORITY_TYPES = new Set([
+  "lawyer", "attorney", "law_firm",
+  "accountant", "accounting",
+  "insurance_agency", "insurance",
+  "real_estate_agency", "real_estate",
+  "finance", "financial_planner", "investment",
+  "tax_preparer",
+  "marketing_agency",
+  "employment_agency",
+  "corporate_office",
+  "consultant",
+]);
+
+/**
+ * Get priority score for a place based on its types.
+ * Higher score = more likely to be the user's actual destination.
+ * 
+ * Priority tiers:
+ * - 3: High priority (cafes, restaurants, stores, entertainment)
+ * - 2: Normal priority (other quality places)
+ * - 1: Low priority (professional services like lawyers, accountants)
+ * - 0: Generic/junk results
+ */
+function getPlacePriorityScore(types: string[] | null | undefined): number {
+  if (!types || types.length === 0) return 0;
+  
+  // Check for low priority types first (deprioritize professional services)
+  const hasLowPriority = types.some((t) => LOW_PRIORITY_TYPES.has(t));
+  if (hasLowPriority) return 1;
+  
+  // Check for high priority types (prefer consumer destinations)
+  const hasHighPriority = types.some((t) => HIGH_PRIORITY_TYPES.has(t));
+  if (hasHighPriority) return 3;
+  
+  // Check for other quality place types
+  const hasQualityType = types.some((t) => QUALITY_PLACE_TYPES.has(t));
+  if (hasQualityType) return 2;
+  
+  // Generic types only
+  if (types.every((t) => GENERIC_ONLY_TYPES.has(t))) return 0;
+  
+  return 1; // Unknown types get low-normal priority
+}
+
 function isJunkResult(types: string[] | null | undefined): boolean {
   if (!types || types.length === 0) return true;
   if (types.some((t) => QUALITY_PLACE_TYPES.has(t))) return false;
@@ -251,9 +322,32 @@ async function fetchNearbyPlace(params: { apiKey: string; latitude: number; long
     const placeLat = r.location?.latitude ?? null;
     const placeLng = r.location?.longitude ?? null;
     const distance = (placeLat != null && placeLng != null) ? haversineDistance(latitude, longitude, placeLat, placeLng) : Infinity;
-    return { place: r, distance, placeLat, placeLng };
-  }).sort((a, b) => a.distance - b.distance);
+    const priority = getPlacePriorityScore(r.types);
+    return { place: r, distance, placeLat, placeLng, priority };
+  });
+  
+  // Sort by: priority (descending), then distance (ascending)
+  // This ensures high-priority places (cafes, restaurants) are preferred over
+  // low-priority places (lawyers, accountants) even if slightly farther away.
+  // Within same priority tier, prefer the closest.
+  placesWithDistance.sort((a, b) => {
+    // First compare by priority (higher is better)
+    if (a.priority !== b.priority) {
+      return b.priority - a.priority; // Descending: 3 > 2 > 1
+    }
+    // Same priority: prefer closer distance
+    return a.distance - b.distance;
+  });
+  
+  // Log candidate analysis for debugging
+  if (placesWithDistance.length > 1) {
+    const topCandidates = placesWithDistance.slice(0, 3).map(p => 
+      `"${p.place.displayName?.text}" (${Math.round(p.distance)}m, priority=${p.priority}, types=${(p.place.types || []).slice(0, 3).join(',')})`
+    ).join(" | ");
+    console.log(`[location-place-lookup] Candidates: ${topCandidates}`);
+  }
 
+  // Prefer OPERATIONAL status within sorted list
   const bestEntry = placesWithDistance.find((p) => p.place.businessStatus === "OPERATIONAL") ?? placesWithDistance[0] ?? null;
   if (!bestEntry?.place?.displayName?.text) return fetchReverseGeocode({ apiKey, latitude, longitude });
   const best = bestEntry.place;
@@ -268,7 +362,7 @@ async function fetchNearbyPlace(params: { apiKey: string; latitude: number; long
     distanceMeters: p.distance === Infinity ? null : Math.round(p.distance),
   }));
 
-  console.log(`[location-place-lookup] Picked "${best.displayName?.text}" at ${Math.round(bestEntry.distance)}m (${alternatives.length} alternatives within ${radiusMeters}m)`);
+  console.log(`[location-place-lookup] Picked "${best.displayName?.text}" at ${Math.round(bestEntry.distance)}m, priority=${bestEntry.priority} (${alternatives.length} alternatives within ${radiusMeters}m)`);
   return {
     placeId: typeof best.id === "string" ? best.id : null,
     name: best.displayName.text,
