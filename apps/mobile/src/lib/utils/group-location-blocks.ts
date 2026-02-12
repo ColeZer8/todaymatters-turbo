@@ -412,7 +412,47 @@ export function groupSegmentsIntoLocationBlocks(
   groups.push(currentGroup);
 
   // Build blocks from groups
-  return groups.map((group) => buildBlockFromSegments(group, summaries, alternativesBySegmentId));
+  const blocks = groups.map((group) => buildBlockFromSegments(group, summaries, alternativesBySegmentId));
+
+  // =========================================================================
+  // FIX #1: Update travel block destinations from next stationary block
+  // =========================================================================
+  // Travel blocks use the last segment's placeLabel as destination, but this
+  // can be wrong if the commute ended before reaching the actual destination.
+  // The correct destination is the next stationary block's location.
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type !== "travel") continue;
+
+    // Find the next stationary block
+    const nextStationary = blocks.slice(i + 1).find((b) => b.type === "stationary");
+    if (!nextStationary) continue;
+
+    // Only update if next block has a meaningful location
+    const nextLabel = nextStationary.locationLabel?.trim();
+    if (!nextLabel || nextLabel === "Unknown Location" || nextLabel === "Unknown") {
+      continue;
+    }
+
+    // Extract verb from current label (e.g., "Walking", "Driving", "Travel")
+    const currentLabel = block.locationLabel ?? "";
+    const arrowIndex = currentLabel.indexOf(" → ");
+    const verb = arrowIndex > 0 ? currentLabel.substring(0, arrowIndex) : "Travel";
+    
+    // Update destination to next stationary block's location
+    const newLabel = `${verb} → ${nextLabel}`;
+    
+    if (__DEV__ && newLabel !== currentLabel) {
+      console.log(
+        `📍 [Fix#1] Updated travel destination: "${currentLabel}" → "${newLabel}"`
+      );
+    }
+    
+    // TypeScript: blocks are mutable since we created them in this function
+    (blocks[i] as LocationBlock).locationLabel = newLabel;
+  }
+
+  return blocks;
 }
 
 // ============================================================================

@@ -19,9 +19,9 @@
 /**
  * Maximum distance in meters to accept a place label without modification.
  * Places within this distance are considered "high confidence" matches.
- * 75m is roughly the size of a small shopping center.
+ * 50m is roughly half a city block - you're definitely AT the place.
  */
-export const PLACE_MAX_CONFIDENT_DISTANCE_M = 75;
+export const PLACE_MAX_CONFIDENT_DISTANCE_M = 50;
 
 /**
  * Maximum distance in meters to use a place label at all (with "Near X" format).

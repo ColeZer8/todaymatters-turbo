@@ -16,6 +16,12 @@ import {
   type UserAppCategoryOverrides,
 } from "./app-categories";
 
+import {
+  formatPlaceName,
+  PLACE_MAX_CONFIDENT_DISTANCE_M,
+  PLACE_MAX_FUZZY_DISTANCE_M,
+} from "./place-confidence";
+
 // ============================================================================
 // Sleep Detection Types
 // ============================================================================
@@ -824,12 +830,66 @@ export function generateLocationSegments(
       }
     }
 
+    // =========================================================================
+    // FIX #2: Apply "Near" prefix for distance tiers
+    // =========================================================================
+    // Calculate distance from segment centroid to matched place coordinates.
+    // Distance tiers:
+    //   0-50m:   "Dog Park"        (precise - you're AT the place)
+    //   50-150m: "Near Dog Park"   (close but not exact)
+    //   >150m:   "Near [Area]"     (should have been rejected, but add "Near" anyway)
+    let formattedPlaceLabel: string | null = null;
+    let useFuzzyFormat = false;
+    
+    if (!isMoving && place?.label) {
+      // Calculate distance from segment centroid to place coordinates
+      let distanceToPlace: number | null = null;
+      if (place.latitude != null && place.longitude != null) {
+        distanceToPlace = haversineDistance(
+          centroid.latitude,
+          centroid.longitude,
+          place.latitude,
+          place.longitude,
+        );
+      }
+      
+      // Apply distance-based formatting
+      if (distanceToPlace !== null) {
+        if (distanceToPlace <= PLACE_MAX_CONFIDENT_DISTANCE_M) {
+          // 0-50m: exact match, no prefix (you're AT the place)
+          formattedPlaceLabel = place.label;
+          useFuzzyFormat = false;
+        } else if (distanceToPlace <= PLACE_MAX_FUZZY_DISTANCE_M) {
+          // 50-150m: close but not exact, add "Near" prefix
+          formattedPlaceLabel = formatPlaceName(place.label, true);
+          useFuzzyFormat = true;
+          if (__DEV__) {
+            console.log(
+              `📍 [Fix#2] Applied "Near" prefix: "${place.label}" → "${formattedPlaceLabel}" (distance: ${Math.round(distanceToPlace)}m)`
+            );
+          }
+        } else {
+          // >150m: too far, add "Near" prefix
+          formattedPlaceLabel = formatPlaceName(place.label, true);
+          useFuzzyFormat = true;
+          if (__DEV__) {
+            console.log(
+              `📍 [Fix#2] Applied "Near" prefix (far): "${place.label}" → "${formattedPlaceLabel}" (distance: ${Math.round(distanceToPlace)}m)`
+            );
+          }
+        }
+      } else {
+        // No coordinates on place, use label as-is
+        formattedPlaceLabel = place.label;
+      }
+    }
+
     segments.push({
       sourceId,
       start: clampedStart,
       end: clampedEnd,
       placeId: isMoving ? null : placeId, // Commutes don't have a single place
-      placeLabel: isMoving ? null : (place?.label ?? null),
+      placeLabel: isMoving ? null : formattedPlaceLabel,
       latitude: centroid.latitude,
       longitude: centroid.longitude,
       sampleCount: group.samples.length,
@@ -837,7 +897,7 @@ export function generateLocationSegments(
       meta: {
         kind: segmentKind,
         place_id: isMoving ? null : placeId,
-        place_label: isMoving ? null : (place?.label ?? null),
+        place_label: isMoving ? null : formattedPlaceLabel,
         sample_count: group.samples.length,
         confidence,
         provider: telemetry.provider,
@@ -846,6 +906,8 @@ export function generateLocationSegments(
         battery_state: telemetry.battery_state,
         is_simulator: telemetry.is_simulator,
         is_mocked: telemetry.is_mocked,
+        // Fuzzy location flag for UI display
+        fuzzy_location: useFuzzyFormat,
         // Commute-specific metadata
         ...(isMoving && {
           intent: "commute" as const,
