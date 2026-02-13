@@ -199,6 +199,15 @@ export const LocationEditSection = ({
   const sessionTokenRef = useRef(createSessionToken());
   const textInputRef = useRef<TextInput>(null);
 
+  // ---- NEW: Custom place type naming state ----
+  const [showCustomNameInput, setShowCustomNameInput] = useState(
+    selectedCategory === "Other" && currentLabel !== "Other",
+  );
+  const [customName, setCustomName] = useState(
+    selectedCategory === "Other" && currentLabel !== "Other" ? currentLabel : "",
+  );
+  const customNameInputRef = useRef<TextInput>(null);
+
   // Debounced search text for autocomplete (300ms)
   const debouncedEditText = useDebouncedValue(editText, 300);
 

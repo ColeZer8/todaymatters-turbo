@@ -625,6 +625,8 @@ export interface ReverseGeocodeResult {
   city: string | null;
   /** Neighborhood name if available */
   neighborhood: string | null;
+  /** Street name if available (e.g., "Oak Street", "Elm Avenue") */
+  streetName: string | null;
 }
 
 /** Google Geocoding API response types */
@@ -687,10 +689,11 @@ export async function reverseGeocode(
 
   try {
     // Build API URL for reverse geocoding
+    // No result_type filter — let Google return all detail levels so we can
+    // extract street names (route), neighborhoods, and cities from a single call.
     const params = new URLSearchParams({
       latlng: `${latitude},${longitude}`,
       key: apiKey,
-      result_type: "neighborhood|sublocality|locality|administrative_area_level_3",
     });
     const url = `https://maps.googleapis.com/maps/api/geocode/json?${params}`;
 
@@ -883,8 +886,6 @@ export async function searchPlacesAutocomplete(
       input: query,
       key: apiKey,
       sessiontoken: sessionToken,
-      // Bias toward establishments (businesses) but don't restrict
-      types: "establishment",
     });
 
     // Add location bias if coordinates are available

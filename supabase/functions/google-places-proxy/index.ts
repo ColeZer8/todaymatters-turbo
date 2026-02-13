@@ -365,7 +365,6 @@ async function handleAutocomplete(
   const params = new URLSearchParams({
     input: query.trim(),
     key: apiKey,
-    types: "establishment",
   });
 
   if (sessionToken) {
