@@ -4,9 +4,10 @@
  * Secure proxy for Google Places API calls from the mobile app.
  * The client never needs the API key — it stays server-side as a Supabase Secret.
  *
- * Supports two actions:
+ * Supports three actions:
  *   - "nearby"       → Google Places Nearby Search (New API)
  *   - "autocomplete" → Google Places Autocomplete (New API)
+ *   - "geocode"      → Google Geocoding API (reverse geocode lat/lng)
  *
  * Usage from client:
  *   supabase.functions.invoke('google-places-proxy', {
@@ -15,6 +16,10 @@
  *
  *   supabase.functions.invoke('google-places-proxy', {
  *     body: { action: 'autocomplete', query: 'Starbucks', latitude: 33.5, longitude: -86.8, sessionToken: 'uuid' }
+ *   })
+ *
+ *   supabase.functions.invoke('google-places-proxy', {
+ *     body: { action: 'geocode', latitude: 33.5, longitude: -86.8 }
  *   })
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -50,7 +55,13 @@ interface AutocompleteRequest {
   radius?: number; // bias radius, default 5000
 }
 
-type ProxyRequest = NearbyRequest | AutocompleteRequest;
+interface GeocodeRequest {
+  action: "geocode";
+  latitude: number;
+  longitude: number;
+}
+
+type ProxyRequest = NearbyRequest | AutocompleteRequest | GeocodeRequest;
 
 // Google Places Nearby Search (New API) response
 interface GoogleNewNearbyPlace {
@@ -443,6 +454,65 @@ async function handleAutocomplete(
 }
 
 // ============================================================================
+// Reverse Geocode (Google Geocoding API — legacy REST)
+// ============================================================================
+
+async function handleGeocode(
+  apiKey: string,
+  req: GeocodeRequest
+): Promise<Response> {
+  const { latitude, longitude } = req;
+
+  // Validate coordinates
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return errorResponse("Invalid or missing latitude/longitude");
+  }
+
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`;
+
+  const resp = await fetch(url);
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error(
+      `[google-places-proxy] Geocode error ${resp.status}:`,
+      text
+    );
+    return errorResponse("Google Geocoding API error", 502);
+  }
+
+  const data = await resp.json();
+
+  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+    console.error(
+      "[google-places-proxy] Geocode API status:",
+      data.status,
+      data.error_message
+    );
+    return errorResponse(
+      data.error_message ?? `Geocoding failed: ${data.status}`,
+      502
+    );
+  }
+
+  console.log(
+    `[google-places-proxy] Geocode: ${latitude.toFixed(4)},${longitude.toFixed(4)} → ${data.results?.length ?? 0} results`
+  );
+
+  // Return the full Google response — the client does its own parsing
+  return jsonResponse(data);
+}
+
+// ============================================================================
 // Main Handler
 // ============================================================================
 
@@ -496,7 +566,7 @@ serve(async (req: Request) => {
     const body = (await req.json()) as Partial<ProxyRequest>;
 
     if (!body || !body.action) {
-      return errorResponse('Missing "action" field. Use "nearby" or "autocomplete".');
+      return errorResponse('Missing "action" field. Use "nearby", "autocomplete", or "geocode".');
     }
 
     switch (body.action) {
@@ -509,9 +579,12 @@ serve(async (req: Request) => {
           body as AutocompleteRequest
         );
 
+      case "geocode":
+        return await handleGeocode(googleApiKey, body as GeocodeRequest);
+
       default:
         return errorResponse(
-          `Unknown action "${body.action}". Use "nearby" or "autocomplete".`
+          `Unknown action "${body.action}". Use "nearby", "autocomplete", or "geocode".`
         );
     }
   } catch (error) {

@@ -44,7 +44,7 @@ import { Icon } from "../atoms/Icon";
 import {
   fetchNearbyPlacesSecure,
   getFuzzyLocationLabel,
-  reverseGeocode,
+  reverseGeocodeSecure,
   mapPlaceTypeToCategory,
   getPlaceTypeLabel,
   getGoogleApiKey,
@@ -244,12 +244,11 @@ export const LocationEditSection = ({
       });
     }
 
-    // Use secure Edge Function proxy (API key stays server-side)
-    // reverseGeocode uses client-side key — it will gracefully
-    // return null if unavailable, which is fine (street/neighborhood are fallbacks).
+    // Both calls route through the secure Edge Function proxy
+    // (API key stays server-side).
     Promise.all([
       fetchNearbyPlacesSecure(latitude, longitude),
-      reverseGeocode(latitude, longitude).catch(() => null),
+      reverseGeocodeSecure(latitude, longitude).catch(() => null),
     ])
       .then(([placesResult, geocodeResult]) => {
         if (cancelled) return;

@@ -789,6 +789,133 @@ export async function reverseGeocode(
 }
 
 /**
+ * Reverse geocode coordinates via the secure Edge Function proxy.
+ *
+ * Drop-in replacement for `reverseGeocode()` but the Google API key stays
+ * server-side. Returns the same `ReverseGeocodeResult` shape so the UI
+ * can switch with a one-line import change.
+ *
+ * @param latitude  - Latitude of the location
+ * @param longitude - Longitude of the location
+ * @returns ReverseGeocodeResult with area/street/neighborhood information
+ */
+export async function reverseGeocodeSecure(
+  latitude: number,
+  longitude: number
+): Promise<ReverseGeocodeResult> {
+  // Check cache first (same cache as the direct function)
+  const cacheKey = getCacheKey(latitude, longitude);
+  const cached = reverseGeocodeCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return { ...cached.result, fromCache: true };
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "google-places-proxy",
+      {
+        body: {
+          action: "geocode" as const,
+          latitude,
+          longitude,
+        },
+      }
+    );
+
+    if (error) {
+      throw new Error(
+        typeof error === "object" && "message" in error
+          ? (error as { message: string }).message
+          : String(error)
+      );
+    }
+
+    // The edge function returns the raw Google Geocoding API response:
+    // { status: "OK", results: GoogleGeocodingResult[] }
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      throw new Error(data.error_message || `API status: ${data.status}`);
+    }
+
+    // Parse results — same extraction logic as reverseGeocode()
+    let areaName: string | null = null;
+    let city: string | null = null;
+    let neighborhood: string | null = null;
+    let streetName: string | null = null;
+
+    if (data.results && data.results.length > 0) {
+      for (const result of data.results) {
+        for (const component of result.address_components) {
+          // Look for street name (route component)
+          if (component.types.includes("route")) {
+            if (!streetName) {
+              streetName = component.long_name;
+            }
+          }
+          // Look for neighborhood (most specific)
+          if (
+            component.types.includes("neighborhood") ||
+            component.types.includes("sublocality_level_1") ||
+            component.types.includes("sublocality")
+          ) {
+            if (!neighborhood) {
+              neighborhood = component.long_name;
+            }
+          }
+          // Look for city
+          if (
+            component.types.includes("locality") ||
+            component.types.includes("administrative_area_level_3")
+          ) {
+            if (!city) {
+              city = component.long_name;
+            }
+          }
+        }
+      }
+    }
+
+    // Determine best area name: prefer neighborhood, fall back to city
+    areaName = neighborhood || city;
+
+    const successResult: ReverseGeocodeResult = {
+      success: true,
+      fromCache: false,
+      areaName,
+      city,
+      neighborhood,
+      streetName,
+    };
+
+    // Cache the result (same 15-min TTL)
+    reverseGeocodeCache.set(cacheKey, {
+      result: successResult,
+      cachedAt: Date.now(),
+    });
+
+    return successResult;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown error in secure reverse geocoding";
+
+    if (__DEV__) {
+      console.warn("[GooglePlaces] Secure reverse geocode error:", message);
+    }
+
+    return {
+      success: false,
+      error: message,
+      fromCache: false,
+      areaName: null,
+      city: null,
+      neighborhood: null,
+      streetName: null,
+    };
+  }
+}
+
+/**
  * Get a fuzzy location label from coordinates.
  * Returns a descriptive label like "Oak Street, Crestwood" or "Near Downtown".
  *
