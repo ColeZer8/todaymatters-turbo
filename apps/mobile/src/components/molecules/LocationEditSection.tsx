@@ -245,14 +245,31 @@ export const LocationEditSection = ({
     }
 
     // Use secure Edge Function proxy (API key stays server-side)
-    // getFuzzyLocationLabel still uses client-side key — it will gracefully
-    // return null if unavailable, which is fine (neighborhood is a fallback).
+    // reverseGeocode uses client-side key — it will gracefully
+    // return null if unavailable, which is fine (street/neighborhood are fallbacks).
     Promise.all([
       fetchNearbyPlacesSecure(latitude, longitude),
-      getFuzzyLocationLabel(latitude, longitude).catch(() => null),
+      reverseGeocode(latitude, longitude).catch(() => null),
     ])
-      .then(([placesResult, fuzzyLabel]) => {
+      .then(([placesResult, geocodeResult]) => {
         if (cancelled) return;
+
+        // Build fuzzy label from geocode result
+        let fuzzyLabel: string | null = null;
+        let rawNeighborhood: string | null = null;
+        let rawStreetName: string | null = null;
+
+        if (geocodeResult && geocodeResult.success) {
+          rawNeighborhood = geocodeResult.neighborhood;
+          rawStreetName = geocodeResult.streetName;
+
+          // Build the fuzzy label (same logic as getFuzzyLocationLabel)
+          if (rawStreetName && rawNeighborhood) {
+            fuzzyLabel = `${rawStreetName}, ${rawNeighborhood}`;
+          } else if (geocodeResult.areaName) {
+            fuzzyLabel = `Near ${geocodeResult.areaName}`;
+          }
+        }
 
         if (__DEV__) {
           console.log("[LocationEditSection] Nearby places result:", {
@@ -261,6 +278,8 @@ export const LocationEditSection = ({
             fromCache: placesResult.fromCache,
             error: placesResult.error,
             fuzzyLabel,
+            streetName: rawStreetName,
+            neighborhood: rawNeighborhood,
           });
         }
 
@@ -270,12 +289,16 @@ export const LocationEditSection = ({
 
         setNearbyPlaces(placesResult.suggestions);
         setNeighborhoodName(fuzzyLabel);
+        setNeighborhoodRaw(rawNeighborhood);
+        setStreetName(rawStreetName);
       })
       .catch((err) => {
         if (cancelled) return;
         console.warn("[LocationEditSection] Failed to fetch nearby places:", err);
         setNearbyPlaces([]);
         setNeighborhoodName(null);
+        setNeighborhoodRaw(null);
+        setStreetName(null);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingSuggestions(false);
@@ -635,8 +658,55 @@ export const LocationEditSection = ({
                       );
                     })}
 
-                  {/* Neighborhood fallback */}
-                  {neighborhoodName && (
+                  {/* Street name option */}
+                  {streetName && streetName !== currentLabel && (
+                    <Pressable
+                      style={styles.dropdownItem}
+                      onPress={() => selectPlace(streetName)}
+                    >
+                      <View style={styles.dropdownItemIconWrap}>
+                        <Text style={styles.dropdownItemEmoji}>🛣️</Text>
+                      </View>
+                      <View style={styles.dropdownItemBody}>
+                        <Text
+                          style={styles.dropdownItemName}
+                          numberOfLines={1}
+                        >
+                          {streetName}
+                        </Text>
+                        <Text style={styles.dropdownItemDetail}>Street</Text>
+                      </View>
+                    </Pressable>
+                  )}
+
+                  {/* Neighborhood option */}
+                  {neighborhoodRaw && neighborhoodRaw !== currentLabel && (
+                    <Pressable
+                      style={styles.dropdownItem}
+                      onPress={() => selectPlace(neighborhoodRaw)}
+                    >
+                      <View style={styles.dropdownItemIconWrap}>
+                        <Text style={styles.dropdownItemEmoji}>🏘️</Text>
+                      </View>
+                      <View style={styles.dropdownItemBody}>
+                        <Text
+                          style={styles.dropdownItemName}
+                          numberOfLines={1}
+                        >
+                          {neighborhoodRaw}
+                        </Text>
+                        <Text style={styles.dropdownItemDetail}>
+                          Neighborhood
+                        </Text>
+                      </View>
+                    </Pressable>
+                  )}
+
+                  {/* Combined fuzzy label fallback (e.g., "Oak Street, Crestwood" or "Near Downtown") */}
+                  {neighborhoodName &&
+                    neighborhoodName !== currentLabel &&
+                    neighborhoodName !== streetName &&
+                    neighborhoodName !== neighborhoodRaw && (
                     <Pressable
                       style={styles.dropdownItem}
                       onPress={() => selectPlace(neighborhoodName)}
@@ -737,7 +807,29 @@ export const LocationEditSection = ({
                 </Text>
               </Pressable>
             ))}
-            {neighborhoodName && (
+            {streetName && (
+              <Pressable
+                onPress={() => onLabelChange(streetName)}
+                style={styles.streetPill}
+              >
+                <Text style={styles.streetPillEmoji}>🛣️</Text>
+                <Text style={styles.streetPillText} numberOfLines={1}>
+                  {streetName}
+                </Text>
+              </Pressable>
+            )}
+            {neighborhoodRaw && (
+              <Pressable
+                onPress={() => onLabelChange(neighborhoodRaw)}
+                style={styles.neighborhoodPill}
+              >
+                <Text style={styles.streetPillEmoji}>🏘️</Text>
+                <Text style={styles.neighborhoodText} numberOfLines={1}>
+                  {neighborhoodRaw}
+                </Text>
+              </Pressable>
+            )}
+            {neighborhoodName && !streetName && !neighborhoodRaw && (
               <Pressable
                 onPress={() => onLabelChange(neighborhoodName)}
                 style={styles.neighborhoodPill}
@@ -1092,6 +1184,27 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
   },
 
+  // ---- Street name pill ----
+  streetPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    gap: 4,
+  },
+  streetPillEmoji: {
+    fontSize: 12,
+  },
+  streetPillText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#166534",
+  },
+
   // ---- Neighborhood fallback pill ----
   neighborhoodPill: {
     flexDirection: "row",
@@ -1102,11 +1215,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    gap: 4,
   },
   neighborhoodText: {
     fontSize: 14,
     fontWeight: "500",
     color: "#94A3B8",
+  },
+
+  // ---- Dropdown emoji icon ----
+  dropdownItemEmoji: {
+    fontSize: 16,
+    textAlign: "center" as const,
   },
 
   // ---- Toggle ----

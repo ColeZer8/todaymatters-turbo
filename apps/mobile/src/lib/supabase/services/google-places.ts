@@ -684,6 +684,7 @@ export async function reverseGeocode(
       areaName: null,
       city: null,
       neighborhood: null,
+      streetName: null,
     };
   }
 
@@ -710,14 +711,21 @@ export async function reverseGeocode(
       throw new Error(data.error_message || `API status: ${data.status}`);
     }
 
-    // Parse results to find area name
+    // Parse results to find area name, street name, and neighborhood
     let areaName: string | null = null;
     let city: string | null = null;
     let neighborhood: string | null = null;
+    let streetName: string | null = null;
 
     if (data.results && data.results.length > 0) {
       for (const result of data.results) {
         for (const component of result.address_components) {
+          // Look for street name (route component)
+          if (component.types.includes("route")) {
+            if (!streetName) {
+              streetName = component.long_name; // e.g., "Oak Street"
+            }
+          }
           // Look for neighborhood (most specific)
           if (
             component.types.includes("neighborhood") ||
@@ -750,6 +758,7 @@ export async function reverseGeocode(
       areaName,
       city,
       neighborhood,
+      streetName,
     };
 
     // Cache the result
@@ -774,17 +783,23 @@ export async function reverseGeocode(
       areaName: null,
       city: null,
       neighborhood: null,
+      streetName: null,
     };
   }
 }
 
 /**
  * Get a fuzzy location label from coordinates.
- * Returns "Near [Area]" or "Near [City]" for display when location confidence is low.
+ * Returns a descriptive label like "Oak Street, Crestwood" or "Near Downtown".
+ *
+ * Priority:
+ * 1. "Street, Neighborhood" (e.g., "Oak Street, Crestwood") — if both available
+ * 2. "Near Neighborhood" (e.g., "Near Crestwood") — if only neighborhood
+ * 3. "Near City" (e.g., "Near Santa Monica") — if only city
  *
  * @param latitude - Latitude of the location
  * @param longitude - Longitude of the location
- * @returns A fuzzy label like "Near Downtown" or "Near Santa Monica", or null if unable to geocode
+ * @returns A fuzzy label, or null if unable to geocode
  */
 export async function getFuzzyLocationLabel(
   latitude: number,
@@ -792,11 +807,21 @@ export async function getFuzzyLocationLabel(
 ): Promise<string | null> {
   const result = await reverseGeocode(latitude, longitude);
 
-  if (!result.success || !result.areaName) {
+  if (!result.success) {
     return null;
   }
 
-  return `Near ${result.areaName}`;
+  // Prefer "Street, Neighborhood" when both are available
+  if (result.streetName && result.neighborhood) {
+    return `${result.streetName}, ${result.neighborhood}`;
+  }
+
+  // Fall back to "Near Area"
+  if (result.areaName) {
+    return `Near ${result.areaName}`;
+  }
+
+  return null;
 }
 
 /**
