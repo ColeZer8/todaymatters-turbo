@@ -21,9 +21,21 @@ import {
   Platform,
   UIManager,
 } from "react-native";
-import { ChevronDown, ChevronUp } from "lucide-react-native";
+import {
+  ChevronDown,
+  ChevronUp,
+  Smartphone,
+  Mail,
+  Hash,
+  Phone,
+  Calendar,
+  Globe,
+  MessageSquare,
+  type LucideIcon,
+} from "lucide-react-native";
+import { Icon } from "@/components/atoms/Icon";
 import type { LocationBlock } from "@/lib/types/location-block";
-import type { TimelineEvent } from "@/lib/types/timeline-event";
+import type { TimelineEvent, TimelineEventKind } from "@/lib/types/timeline-event";
 import { getPlaceIcon, getTravelIcon } from "@/lib/utils/place-icons";
 import { getLocationBannerColor } from "@/lib/utils/place-icons";
 import { LocationBanner } from "@/components/molecules/LocationBanner";
@@ -40,6 +52,71 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// ============================================================================
+// Icon Mapping
+// ============================================================================
+
+const KIND_ICONS: Record<TimelineEventKind, LucideIcon> = {
+  app: Smartphone,
+  email: Mail,
+  slack_message: Hash,
+  phone_call: Phone,
+  meeting: Calendar,
+  sms: MessageSquare,
+  website: Globe,
+  scheduled: Calendar,
+};
+
+function getEventIcon(kind: TimelineEventKind): LucideIcon {
+  return KIND_ICONS[kind] ?? Smartphone;
+}
+
+// ============================================================================
+// Icon Summary Builder
+// ============================================================================
+
+interface EventKindSummary {
+  kind: TimelineEventKind;
+  icon: LucideIcon;
+  totalMinutes: number;
+  count: number;
+}
+
+/**
+ * Extract unique event kinds with their icons, sorted by total duration.
+ * Limits to top 6 kinds for a clean icon row.
+ */
+function buildIconSummary(events: TimelineEvent[]): EventKindSummary[] {
+  if (events.length === 0) return [];
+
+  // Group by kind and aggregate
+  const kindMap = new Map<TimelineEventKind, { totalMinutes: number; count: number }>();
+  for (const event of events) {
+    const existing = kindMap.get(event.kind);
+    if (existing) {
+      existing.totalMinutes += event.durationMinutes;
+      existing.count += 1;
+    } else {
+      kindMap.set(event.kind, { totalMinutes: event.durationMinutes, count: 1 });
+    }
+  }
+
+  // Convert to array and sort by total duration descending
+  const summary: EventKindSummary[] = Array.from(kindMap.entries()).map(
+    ([kind, { totalMinutes, count }]) => ({
+      kind,
+      icon: getEventIcon(kind),
+      totalMinutes,
+      count,
+    })
+  );
+
+  summary.sort((a, b) => b.totalMinutes - a.totalMinutes);
+
+  // Limit to top 6 for clean display
+  return summary.slice(0, 6);
 }
 
 // ============================================================================
@@ -199,6 +276,9 @@ export const TimelineBlockSection = ({
 
   // Build summary
   const summary = useMemo(() => buildEventSummary(events), [events]);
+  
+  // Build icon summary for collapsed view
+  const iconSummary = useMemo(() => buildIconSummary(events), [events]);
 
   // Toggle expand/collapse with animation
   const toggleExpanded = useCallback(() => {
@@ -244,33 +324,51 @@ export const TimelineBlockSection = ({
 
       {/* ─── Collapsible Summary / Expand Toggle ─── */}
       {hasEvents && (
-        <TouchableOpacity
-          style={styles.summaryRow}
-          onPress={toggleExpanded}
-          activeOpacity={0.6}
-          accessibilityLabel={
-            expanded ? "Collapse activity details" : "Expand activity details"
-          }
-          accessibilityRole="button"
-        >
-          {expanded ? (
-            <ChevronUp size={16} color="#2563EB" />
-          ) : (
-            <ChevronDown size={16} color="#64748B" />
-          )}
-          <Text
-            style={[
-              styles.summaryText,
-              expanded && styles.summaryTextExpanded,
-            ]}
-            numberOfLines={1}
+        <View>
+          <TouchableOpacity
+            style={styles.summaryRow}
+            onPress={toggleExpanded}
+            activeOpacity={0.6}
+            accessibilityLabel={
+              expanded ? "Collapse activity details" : "Expand activity details"
+            }
+            accessibilityRole="button"
           >
-            {expanded ? "Activity Details" : summary.text}
-          </Text>
-          <Text style={styles.eventCount}>
-            {events.length} {events.length === 1 ? "item" : "items"}
-          </Text>
-        </TouchableOpacity>
+            {expanded ? (
+              <ChevronUp size={16} color="#2563EB" />
+            ) : (
+              <ChevronDown size={16} color="#64748B" />
+            )}
+            <Text
+              style={[
+                styles.summaryText,
+                expanded && styles.summaryTextExpanded,
+              ]}
+              numberOfLines={1}
+            >
+              {expanded ? "Activity Details" : summary.text}
+            </Text>
+            <Text style={styles.eventCount}>
+              {events.length} {events.length === 1 ? "item" : "items"}
+            </Text>
+          </TouchableOpacity>
+
+          {/* ─── Icon Row (Collapsed View Only) ─── */}
+          {!expanded && iconSummary.length > 0 && (
+            <View style={styles.iconRow}>
+              {iconSummary.map((item) => (
+                <View key={item.kind} style={styles.iconWrapper}>
+                  <Icon
+                    icon={item.icon}
+                    size={24}
+                    color="#64748B"
+                    style={styles.iconOpacity}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       )}
 
       {/* ─── Expanded Event List ─── */}
@@ -408,5 +506,25 @@ const styles = StyleSheet.create({
   // ── Empty ──
   emptyRow: {
     height: 8,
+  },
+
+  // ── Icon Row (Collapsed Summary) ──
+  iconRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(148, 163, 184, 0.15)",
+  },
+  iconWrapper: {
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  iconOpacity: {
+    opacity: 0.75,
   },
 });
