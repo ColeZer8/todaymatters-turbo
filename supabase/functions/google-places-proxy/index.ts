@@ -6,7 +6,7 @@
  *
  * Supports two actions:
  *   - "nearby"       → Google Places Nearby Search (New API)
- *   - "autocomplete" → Google Places Autocomplete (Legacy API)
+ *   - "autocomplete" → Google Places Autocomplete (New API)
  *
  * Usage from client:
  *   supabase.functions.invoke('google-places-proxy', {
@@ -70,21 +70,22 @@ interface GoogleNewNearbyResponse {
   error?: { message?: string; code?: number };
 }
 
-// Google Places Autocomplete (Legacy) response
-interface GoogleAutocompletePrediction {
-  place_id: string;
-  description: string;
-  structured_formatting: {
-    main_text: string;
-    secondary_text: string;
+// Google Places Autocomplete (New API) response
+interface GoogleNewAutocompleteSuggestion {
+  placePrediction?: {
+    placeId?: string;
+    text?: { text?: string };
+    structuredFormat?: {
+      mainText?: { text?: string };
+      secondaryText?: { text?: string };
+    };
+    types?: string[];
   };
-  types?: string[];
 }
 
-interface GoogleAutocompleteResponse {
-  status: string;
-  error_message?: string;
-  predictions?: GoogleAutocompletePrediction[];
+interface GoogleNewAutocompleteResponse {
+  suggestions?: GoogleNewAutocompleteSuggestion[];
+  error?: { message?: string; code?: number };
 }
 
 // Standardised output types returned to client
@@ -347,7 +348,7 @@ async function handleNearby(
 }
 
 // ============================================================================
-// Autocomplete (Google Places Legacy API — free with session tokens)
+// Autocomplete (Google Places API — New)
 // ============================================================================
 
 async function handleAutocomplete(
@@ -362,13 +363,13 @@ async function handleAutocomplete(
 
   const radius = Math.max(1000, Math.min(50000, req.radius ?? 5000));
 
-  const params = new URLSearchParams({
+  // Build request body for the new Places Autocomplete API
+  const requestBody: Record<string, unknown> = {
     input: query.trim(),
-    key: apiKey,
-  });
+  };
 
   if (sessionToken) {
-    params.set("sessiontoken", sessionToken);
+    requestBody.sessionToken = sessionToken;
   }
 
   // Add location bias if provided
@@ -378,12 +379,23 @@ async function handleAutocomplete(
     Number.isFinite(req.latitude) &&
     Number.isFinite(req.longitude)
   ) {
-    params.set("location", `${req.latitude},${req.longitude}`);
-    params.set("radius", radius.toString());
+    requestBody.locationBias = {
+      circle: {
+        center: { latitude: req.latitude, longitude: req.longitude },
+        radius,
+      },
+    };
   }
 
-  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`;
-  const resp = await fetch(url);
+  const url = "https://places.googleapis.com/v1/places:autocomplete";
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+    },
+    body: JSON.stringify(requestBody),
+  });
 
   if (!resp.ok) {
     const text = await resp.text();
@@ -394,29 +406,34 @@ async function handleAutocomplete(
     return errorResponse("Google Autocomplete API error", 502);
   }
 
-  const data: GoogleAutocompleteResponse = await resp.json();
+  const data: GoogleNewAutocompleteResponse = await resp.json();
 
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+  if (data.error) {
     console.error(
-      "[google-places-proxy] Autocomplete status:",
-      data.status,
-      data.error_message
+      "[google-places-proxy] Autocomplete API error:",
+      data.error.message
     );
     return errorResponse(
-      data.error_message ?? `Autocomplete status: ${data.status}`,
+      data.error.message ?? "Google Autocomplete API error",
       502
     );
   }
 
+  // Map new API response → client's expected format
   const predictions: AutocompletePredictionResult[] = (
-    data.predictions ?? []
-  ).map((p) => ({
-    placeId: p.place_id,
-    mainText: p.structured_formatting.main_text,
-    secondaryText: p.structured_formatting.secondary_text,
-    description: p.description,
-    types: p.types ?? [],
-  }));
+    data.suggestions ?? []
+  )
+    .filter((s) => s.placePrediction != null)
+    .map((s) => {
+      const p = s.placePrediction!;
+      return {
+        placeId: p.placeId ?? "",
+        mainText: p.structuredFormat?.mainText?.text ?? "",
+        secondaryText: p.structuredFormat?.secondaryText?.text ?? "",
+        description: p.text?.text ?? "",
+        types: p.types ?? [],
+      };
+    });
 
   console.log(
     `[google-places-proxy] Autocomplete: "${query}" → ${predictions.length} predictions`
