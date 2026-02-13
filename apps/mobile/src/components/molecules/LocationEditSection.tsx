@@ -44,6 +44,7 @@ import { Icon } from "../atoms/Icon";
 import {
   fetchNearbyPlacesSecure,
   getFuzzyLocationLabel,
+  reverseGeocode,
   mapPlaceTypeToCategory,
   getPlaceTypeLabel,
   getGoogleApiKey,
@@ -183,6 +184,10 @@ export const LocationEditSection = ({
   const [neighborhoodName, setNeighborhoodName] = useState<string | null>(
     null,
   );
+  /** Raw neighborhood name without "Near " prefix (e.g., "Crestwood") */
+  const [neighborhoodRaw, setNeighborhoodRaw] = useState<string | null>(null);
+  /** Street name from reverse geocoding (e.g., "Oak Street") */
+  const [streetName, setStreetName] = useState<string | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [mapError, setMapError] = useState(false);
 
@@ -787,10 +792,32 @@ export const LocationEditSection = ({
                 <Pressable
                   key={cat}
                   onPress={() => {
-                    const newCat = isActive ? null : cat;
-                    onCategoryChange(newCat);
-                    if (newCat) {
-                      onLabelChange(newCat);
+                    if (cat === "Other") {
+                      if (isActive) {
+                        // Deselecting "Other" — clear custom name input
+                        onCategoryChange(null);
+                        setShowCustomNameInput(false);
+                        setCustomName("");
+                      } else {
+                        // Selecting "Other" — show custom name input, don't set label to "Other"
+                        onCategoryChange("Other");
+                        setShowCustomNameInput(true);
+                        // Pre-fill with current label if it's not a standard category
+                        const isStandardCategory = CATEGORIES.some(
+                          (c) => c !== "Other" && c === currentLabel,
+                        );
+                        setCustomName(isStandardCategory ? "" : currentLabel);
+                        setTimeout(() => customNameInputRef.current?.focus(), 100);
+                      }
+                    } else {
+                      const newCat = isActive ? null : cat;
+                      onCategoryChange(newCat);
+                      if (newCat) {
+                        onLabelChange(newCat);
+                      }
+                      // Hide custom name input when selecting a standard category
+                      setShowCustomNameInput(false);
+                      setCustomName("");
                     }
                   }}
                   style={[
@@ -806,12 +833,44 @@ export const LocationEditSection = ({
                         : styles.pillTextInactive,
                     ]}
                   >
-                    {cat}
+                    {cat === "Other" ? "Other..." : cat}
                   </Text>
                 </Pressable>
               );
             })}
           </ScrollView>
+
+          {/* Custom name input — shown when "Other" is selected */}
+          {showCustomNameInput && (
+            <View style={styles.customNameContainer}>
+              <TextInput
+                ref={customNameInputRef}
+                style={styles.customNameInput}
+                value={customName}
+                onChangeText={(text) => {
+                  setCustomName(text);
+                  if (text.trim()) {
+                    onLabelChange(text.trim());
+                  }
+                }}
+                placeholder='Enter custom name (e.g., Grandma&apos;s House)'
+                placeholderTextColor="#94A3B8"
+                returnKeyType="done"
+                autoCapitalize="words"
+                onSubmitEditing={() => {
+                  if (customName.trim()) {
+                    onLabelChange(customName.trim());
+                  }
+                  Keyboard.dismiss();
+                }}
+              />
+              {customName.trim().length > 0 && (
+                <View style={styles.customNameCheckWrap}>
+                  <Check size={18} color="#34C759" />
+                </View>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -1088,6 +1147,30 @@ const styles = StyleSheet.create({
   },
   pillTextInactive: {
     color: "#64748B",
+  },
+
+  // ---- Custom Name Input ----
+  customNameContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  customNameInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#111827",
+    paddingVertical: 10,
+    padding: 0,
+  },
+  customNameCheckWrap: {
+    marginLeft: 8,
+    opacity: 0.8,
   },
 
   // ---- Mini-map ----
