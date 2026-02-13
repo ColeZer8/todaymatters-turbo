@@ -21,7 +21,8 @@
         "ENABLE_FAMILY_CONTROLS": "1"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "buildConfiguration": "Debug"
       },
       "android": {
         "buildType": "apk"

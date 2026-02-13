@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "main": "expo-router/entry",
   "scripts": {
     "build": "expo export -p web",
