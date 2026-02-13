@@ -40,6 +40,13 @@ export interface GooglePlaceSuggestion {
   iconUrl?: string;
 }
 
+/** Address context extracted from nearby place address components */
+export interface AddressContext {
+  streetName: string | null;
+  neighborhood: string | null;
+  city: string | null;
+}
+
 /** Result from a nearby places search */
 export interface NearbyPlacesResult {
   /** Whether the search was successful */
@@ -50,6 +57,8 @@ export interface NearbyPlacesResult {
   fromCache: boolean;
   /** Place suggestions */
   suggestions: GooglePlaceSuggestion[];
+  /** Address context (street/neighborhood) from the closest place — fallback for geocode */
+  addressContext?: AddressContext | null;
 }
 
 /** A place autocomplete prediction */
@@ -1230,10 +1239,19 @@ export async function fetchNearbyPlacesSecure(
       isOpen: r.isOpen,
     }));
 
+    // Extract address context (street/neighborhood) from the response
+    // This comes from the closest place's addressComponents and serves as
+    // a fallback when the Geocoding API isn't available.
+    const addressContext: AddressContext | null = data?.addressContext ?? null;
+
+    if (__DEV__) {
+      console.log("[GooglePlaces] fetchNearbyPlacesSecure: addressContext from nearby:", addressContext);
+    }
+
     // Cache results client-side (same 15-min TTL)
     cacheSuggestions(latitude, longitude, suggestions);
 
-    return { success: true, fromCache: false, suggestions };
+    return { success: true, fromCache: false, suggestions, addressContext };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown error fetching places via proxy";

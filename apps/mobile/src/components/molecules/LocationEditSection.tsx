@@ -53,6 +53,7 @@ import {
   cancelAutocomplete,
   type GooglePlaceSuggestion,
   type PlaceAutocompletePrediction,
+  type AddressContext,
 } from "@/lib/supabase/services/google-places";
 
 // ============================================================================
@@ -270,6 +271,24 @@ export const LocationEditSection = ({
           }
         }
 
+        // FALLBACK: If geocode failed, use addressContext from nearby places
+        // (extracted from the closest place's addressComponents via Places API)
+        if (!rawStreetName && !rawNeighborhood && placesResult.addressContext) {
+          const ctx = placesResult.addressContext;
+          rawStreetName = ctx.streetName;
+          rawNeighborhood = ctx.neighborhood;
+
+          if (rawStreetName && rawNeighborhood) {
+            fuzzyLabel = `${rawStreetName}, ${rawNeighborhood}`;
+          } else if (rawNeighborhood || ctx.city) {
+            fuzzyLabel = `Near ${rawNeighborhood || ctx.city}`;
+          }
+
+          if (__DEV__) {
+            console.log("[LocationEditSection] Using addressContext fallback from nearby:", ctx);
+          }
+        }
+
         if (__DEV__) {
           console.log("[LocationEditSection] Nearby places result:", {
             success: placesResult.success,
@@ -279,6 +298,9 @@ export const LocationEditSection = ({
             fuzzyLabel,
             streetName: rawStreetName,
             neighborhood: rawNeighborhood,
+            geocodeSuccess: geocodeResult?.success ?? null,
+            geocodeError: geocodeResult?.error ?? null,
+            hadAddressContextFallback: !!(placesResult.addressContext && (!geocodeResult || !geocodeResult.success)),
           });
         }
 

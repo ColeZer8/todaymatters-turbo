@@ -64,6 +64,13 @@ interface GeocodeRequest {
 type ProxyRequest = NearbyRequest | AutocompleteRequest | GeocodeRequest;
 
 // Google Places Nearby Search (New API) response
+interface GoogleNewAddressComponent {
+  longText?: string;
+  shortText?: string;
+  types?: string[];
+  languageCode?: string;
+}
+
 interface GoogleNewNearbyPlace {
   id?: string;
   displayName?: { text?: string };
@@ -74,6 +81,7 @@ interface GoogleNewNearbyPlace {
   rating?: number;
   currentOpeningHours?: { openNow?: boolean };
   primaryType?: string;
+  addressComponents?: GoogleNewAddressComponent[];
 }
 
 interface GoogleNewNearbyResponse {
@@ -296,7 +304,7 @@ async function handleNearby(
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.types,places.businessStatus,places.location,places.rating,places.currentOpeningHours",
+        "places.id,places.displayName,places.formattedAddress,places.types,places.businessStatus,places.location,places.rating,places.currentOpeningHours,places.addressComponents",
     },
     body: JSON.stringify(requestBody),
   });
@@ -351,11 +359,57 @@ async function handleNearby(
     .slice(0, 10)
     .map(({ _priority, ...rest }) => rest); // strip internal field
 
+  // Extract address context (street name, neighborhood) from the closest place's
+  // address components. This provides the same data as the Geocoding API but uses
+  // the Places API (New) which is already enabled — no extra API needed.
+  let addressContext: {
+    streetName: string | null;
+    neighborhood: string | null;
+    city: string | null;
+  } | null = null;
+
+  // Look at ALL raw places (before filtering) for address components
+  for (const p of places) {
+    if (!p.addressComponents || p.addressComponents.length === 0) continue;
+
+    let street: string | null = null;
+    let hood: string | null = null;
+    let city: string | null = null;
+
+    for (const comp of p.addressComponents) {
+      const types = comp.types ?? [];
+      if (types.includes("route") && !street) {
+        street = comp.longText ?? null;
+      }
+      if (
+        (types.includes("neighborhood") ||
+          types.includes("sublocality_level_1") ||
+          types.includes("sublocality")) &&
+        !hood
+      ) {
+        hood = comp.longText ?? null;
+      }
+      if (
+        (types.includes("locality") ||
+          types.includes("administrative_area_level_3")) &&
+        !city
+      ) {
+        city = comp.longText ?? null;
+      }
+    }
+
+    if (street || hood) {
+      addressContext = { streetName: street, neighborhood: hood, city };
+      break; // Use the first place that has useful address data
+    }
+  }
+
   console.log(
-    `[google-places-proxy] Nearby: ${results.length} results for ${latitude.toFixed(4)},${longitude.toFixed(4)} r=${radius}m`
+    `[google-places-proxy] Nearby: ${results.length} results for ${latitude.toFixed(4)},${longitude.toFixed(4)} r=${radius}m` +
+      (addressContext ? ` (address: ${addressContext.streetName ?? "?"}, ${addressContext.neighborhood ?? "?"})` : " (no address context)")
   );
 
-  return jsonResponse({ results });
+  return jsonResponse({ results, addressContext });
 }
 
 // ============================================================================
