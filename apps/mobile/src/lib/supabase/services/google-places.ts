@@ -807,11 +807,18 @@ export async function reverseGeocodeSecure(
   const cacheKey = getCacheKey(latitude, longitude);
   const cached = reverseGeocodeCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    if (__DEV__) {
+      console.log("[GooglePlaces] reverseGeocodeSecure: returning cached result", cached.result);
+    }
     return { ...cached.result, fromCache: true };
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke(
+    if (__DEV__) {
+      console.log("[GooglePlaces] reverseGeocodeSecure: calling Edge Function", { latitude, longitude });
+    }
+
+    const { data, error, response } = await supabase.functions.invoke(
       "google-places-proxy",
       {
         body: {
@@ -822,12 +829,42 @@ export async function reverseGeocodeSecure(
       }
     );
 
+    if (__DEV__) {
+      console.log("[GooglePlaces] reverseGeocodeSecure: Edge Function response", {
+        hasData: data != null,
+        hasError: error != null,
+        errorType: error?.constructor?.name,
+        errorMessage: error?.message,
+        httpStatus: response?.status,
+        dataKeys: data ? Object.keys(data) : null,
+      });
+    }
+
     if (error) {
-      throw new Error(
+      // Try to extract the actual error body from the response
+      // The FunctionsHttpError wraps the Response object as `context`
+      let errorDetail = "";
+      try {
+        if (error.context && typeof error.context.json === "function") {
+          const errorBody = await error.context.json();
+          errorDetail = JSON.stringify(errorBody);
+          if (__DEV__) {
+            console.error("[GooglePlaces] reverseGeocodeSecure: Edge Function error body:", errorBody);
+          }
+        }
+      } catch {
+        // Response body may already be consumed
+      }
+
+      const baseMsg =
         typeof error === "object" && "message" in error
           ? (error as { message: string }).message
-          : String(error)
-      );
+          : String(error);
+      throw new Error(errorDetail ? `${baseMsg} — ${errorDetail}` : baseMsg);
+    }
+
+    if (__DEV__) {
+      console.log("[GooglePlaces] reverseGeocodeSecure: Google API response status:", data?.status, "results:", data?.results?.length ?? 0);
     }
 
     // The edge function returns the raw Google Geocoding API response:
@@ -876,6 +913,15 @@ export async function reverseGeocodeSecure(
 
     // Determine best area name: prefer neighborhood, fall back to city
     areaName = neighborhood || city;
+
+    if (__DEV__) {
+      console.log("[GooglePlaces] reverseGeocodeSecure: ✅ extracted", {
+        streetName,
+        neighborhood,
+        city,
+        areaName,
+      });
+    }
 
     const successResult: ReverseGeocodeResult = {
       success: true,
