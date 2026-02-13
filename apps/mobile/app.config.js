@@ -1,9 +1,9 @@
 /**
  * Expo Configuration with Environment-Specific Support
- * 
+ *
  * This file replaces app.json and adds support for dev/staging/prod environments.
  * Environment variables are loaded from process.env based on APP_ENV.
- * 
+ *
  * For local development: Use .env file with EXPO_PUBLIC_* variables
  * For EAS builds: Use EAS Secrets or environment-specific variables
  */
@@ -14,7 +14,7 @@ import path from 'node:path';
 import dotenv from 'dotenv';
 
 // Ensure env vars are loaded for app.config evaluation in monorepo setups.
-// Expo often loads env automatically, but in Turborepos it’s easy to put `.env` at the workspace root.
+// Expo often loads env automatically, but in Turborepos it's easy to put `.env` at the workspace root.
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '..', '..');
 
@@ -85,7 +85,7 @@ export default {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSMicrophoneUsageDescription: 'TodayMatters uses your microphone to have voice conversations with your AI coach.',
-        // Location tracking (iOS only) for “planned day vs actual day” analysis.
+        // Location tracking (iOS only) for "planned day vs actual day" analysis.
         // Requires explicit user consent; we request When In Use first, then Always (background) if enabled.
         NSLocationWhenInUseUsageDescription:
           'TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).',
@@ -107,7 +107,7 @@ export default {
         'android.permission.WAKE_LOCK',
         'android.permission.BLUETOOTH',
         'android.permission.POST_NOTIFICATIONS',
-        // Location tracking (Android) for “planned day vs actual day” analysis.
+        // Location tracking (Android) for "planned day vs actual day" analysis.
         // Foreground + background location + foreground service (required for background reliability).
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.ACCESS_FINE_LOCATION',
@@ -119,6 +119,9 @@ export default {
         'android.permission.RECEIVE_BOOT_COMPLETED',
         // For requesting battery optimization exemption
         'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+        // SMS reading for automatic text message syncing
+        'android.permission.READ_SMS',
+        'android.permission.RECEIVE_SMS',
       ],
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
@@ -149,10 +152,11 @@ export default {
       [
         'react-native-background-geolocation',
         {
-          license:
-            process.env.EXPO_PUBLIC_TRANSISTOR_LOCATION_LICENSE ??
-            process.env.TRANSISTOR_LOCATION_LICENSE ??
-            'UNDEFINED',
+          // Platform-specific license keys
+          license: {
+            ios: process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS || 'UNDEFINED',
+            android: process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_ANDROID || 'UNDEFINED',
+          },
         },
       ],
       [

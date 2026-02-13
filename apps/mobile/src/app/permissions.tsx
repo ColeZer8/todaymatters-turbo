@@ -47,6 +47,10 @@ import {
   getCachedScreenTimeSummarySafeAsync,
 } from "@/lib/ios-insights";
 import { syncIosScreenTimeSummary } from "@/lib/supabase/services/screen-time-sync";
+import {
+  requestSMSPermissions,
+  checkSMSPermissions,
+} from "@/lib/android/sms-service";
 
 export default function PermissionsScreen() {
   const router = useRouter();
@@ -277,6 +281,47 @@ export default function PermissionsScreen() {
       }
     }, []);
 
+  const ensureAndroidSMSPermissionIfNeeded =
+    useCallback(async (): Promise<boolean> => {
+      console.log('🔵 [Permissions] ensureAndroidSMSPermissionIfNeeded called');
+      
+      if (Platform.OS !== "android") {
+        console.log('🔵 [Permissions] Not Android, returning true');
+        return true;
+      }
+
+      try {
+        console.log('🔵 [Permissions] Calling requestSMSPermissions()...');
+        const granted = await requestSMSPermissions();
+        console.log('🔵 [Permissions] requestSMSPermissions() returned:', granted);
+        
+        if (granted) {
+          console.log("✅ [Permissions] SMS permissions granted!");
+          return true;
+        }
+
+        console.log('🔵 [Permissions] Permissions not granted, showing alert');
+        Alert.alert(
+          "SMS permission needed",
+          "To automatically track events from incoming text messages, please allow SMS access.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => {
+                void Linking.openSettings();
+              },
+            },
+          ],
+        );
+        return false;
+      } catch (error) {
+        console.error('🔴 [Permissions] ensureAndroidSMSPermissionIfNeeded failed:', error);
+        // Return false to indicate failure, but don't crash
+        return false;
+      }
+    }, []);
+
   const promptBatteryOptimizationIfNeeded = useCallback(async (): Promise<void> => {
     if (Platform.OS !== "android") return;
     
@@ -411,6 +456,18 @@ export default function PermissionsScreen() {
               togglePermission("appUsage");
             }
           }
+
+          if (Platform.OS === "android") {
+            try {
+              const smsOk = await ensureAndroidSMSPermissionIfNeeded();
+              if (!smsOk) {
+                togglePermission("sms");
+              }
+            } catch (e) {
+              if (__DEV__) console.warn("[Permissions] SMS permission check failed:", e);
+              togglePermission("sms");
+            }
+          }
         }
       } catch (e) {
         if (__DEV__) console.error("[Permissions] handleAllowAllToggle failed:", e);
@@ -420,6 +477,7 @@ export default function PermissionsScreen() {
   }, [
     allEnabled,
     ensureAndroidNotificationsPermissionIfNeeded,
+    ensureAndroidSMSPermissionIfNeeded,
     ensureIosScreenTimePermissionIfNeeded,
     ensureAndroidUsageAccessIfNeeded,
     ensureLocationPermissionIfNeeded,
@@ -486,6 +544,23 @@ export default function PermissionsScreen() {
             }
           }
 
+          if (key === "sms" && nextEnabled) {
+            console.log('🔵 [Permissions] SMS toggle tapped, requesting permission...');
+            try {
+              const ok = await ensureAndroidSMSPermissionIfNeeded();
+              console.log('🔵 [Permissions] ensureAndroidSMSPermissionIfNeeded returned:', ok);
+              if (!ok) {
+                console.log('🔴 [Permissions] Permission denied, not toggling');
+                return;
+              }
+              console.log('✅ [Permissions] Permission granted, will toggle');
+            } catch (e) {
+              console.error('🔴 [Permissions] SMS toggle failed:', e);
+              return;
+            }
+          }
+
+          console.log('🔵 [Permissions] Calling togglePermission for key:', key);
           togglePermission(key);
         } catch (e) {
           if (__DEV__) console.error("[Permissions] handleTogglePermission failed:", e);
@@ -495,6 +570,7 @@ export default function PermissionsScreen() {
     },
     [
       ensureAndroidNotificationsPermissionIfNeeded,
+      ensureAndroidSMSPermissionIfNeeded,
       ensureIosScreenTimePermissionIfNeeded,
       ensureAndroidUsageAccessIfNeeded,
       ensureLocationPermissionIfNeeded,
@@ -554,6 +630,20 @@ export default function PermissionsScreen() {
           } catch (e) {
             if (__DEV__) console.warn("[Permissions] App usage check on continue failed:", e);
             togglePermission("appUsage");
+            // Don't block continue
+          }
+        }
+
+        if (Platform.OS === "android" && permissions.sms) {
+          try {
+            const ok = await ensureAndroidSMSPermissionIfNeeded();
+            if (!ok) {
+              togglePermission("sms");
+              // Don't block continue - user can proceed without SMS
+            }
+          } catch (e) {
+            if (__DEV__) console.warn("[Permissions] SMS check on continue failed:", e);
+            togglePermission("sms");
             // Don't block continue
           }
         }

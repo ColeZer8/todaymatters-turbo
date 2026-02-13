@@ -25,6 +25,7 @@ import {
   useInsightsSync,
   useLocationSamplesSync,
   useOnboardingSync,
+  useSMSSync,
 } from "@/lib/supabase/hooks";
 import { registerIosLocationBackgroundTaskAsync } from "@/lib/ios-location/register";
 import { registerAndroidLocationBackgroundTaskAsync } from "@/lib/android-location/register";
@@ -63,6 +64,9 @@ export default function Layout() {
   useLocationSamplesSync();
   useInsightsSync();
   useActualIngestionScheduler();
+  
+  // Android-only: start SMS listener when authenticated and permissions granted
+  useSMSSync();
 
   useEffect(() => {
     if (Platform.OS === "android") {

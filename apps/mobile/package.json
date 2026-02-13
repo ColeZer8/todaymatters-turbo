@@ -26,6 +26,7 @@
     "@livekit/react-native": "^2.9.5",
     "@livekit/react-native-expo-plugin": "^1.0.1",
     "@livekit/react-native-webrtc": "^137.0.2",
+    "@maniac-tech/react-native-expo-read-sms": "9.0.2-alpha",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "^8.5.1",
     "@supabase/supabase-js": "^2.81.1",

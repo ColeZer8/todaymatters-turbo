@@ -87,6 +87,9 @@ importers:
       '@livekit/react-native-webrtc':
         specifier: ^137.0.2
         version: 137.0.2(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))
+      '@maniac-tech/react-native-expo-read-sms':
+        specifier: 9.0.2-alpha
+        version: 9.0.2-alpha(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))
@@ -1246,6 +1249,11 @@ packages:
       '@livekit/react-native-webrtc': ^137.0.2
       livekit-client: ^2.15.8
       react: '*'
+      react-native: '*'
+
+  '@maniac-tech/react-native-expo-read-sms@9.0.2-alpha':
+    resolution: {integrity: sha512-KHZwlwLR9O76WfiZEaHO50fioKJKiHbrlD/rTQy7mUdVdRfm6ikp+en2MxZow3gO1dIZAReyWwdyiAekE/tXUQ==}
+    peerDependencies:
       react-native: '*'
 
   '@next/env@14.2.5':
@@ -7459,6 +7467,10 @@ snapshots:
       - '@livekit/krisp-noise-filter'
       - react-dom
       - tslib
+
+  '@maniac-tech/react-native-expo-read-sms@9.0.2-alpha(react-native@0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0))':
+    dependencies:
+      react-native: 0.81.4(@babel/core@7.28.5)(@types/react@19.1.17)(react@19.1.0)
 
   '@next/env@14.2.5': {}
 

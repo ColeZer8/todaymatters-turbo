@@ -7,3 +7,4 @@ export * from "./use-location-samples-sync";
 export * from "./use-insights-sync";
 export * from "./use-actual-ingestion";
 export * from "./use-actual-ingestion-scheduler";
+export * from "./use-sms-sync";

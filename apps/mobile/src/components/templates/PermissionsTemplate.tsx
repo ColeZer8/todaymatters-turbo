@@ -14,9 +14,10 @@ import {
   Users,
   Globe,
   Smartphone,
+  MessageSquare,
   LucideIcon,
 } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ONBOARDING_STEPS,
@@ -30,7 +31,8 @@ export type PermissionKey =
   | "location"
   | "contacts"
   | "browsing"
-  | "appUsage";
+  | "appUsage"
+  | "sms";
 
 export interface IndividualPermissions {
   calendar: boolean;
@@ -40,6 +42,7 @@ export interface IndividualPermissions {
   contacts: boolean;
   browsing: boolean;
   appUsage: boolean;
+  sms: boolean;
 }
 
 interface PermissionRowConfig {
@@ -99,6 +102,13 @@ const PERMISSION_ROWS: PermissionRowConfig[] = [
     description: "Read app usage to estimate screen time.",
     icon: Smartphone,
     bgColor: "bg-orange-500",
+  },
+  {
+    key: "sms",
+    title: "Text Messages",
+    description: "Read incoming SMS for automatic event tracking.",
+    icon: MessageSquare,
+    bgColor: "bg-teal-500",
   },
 ];
 
@@ -254,7 +264,13 @@ export const PermissionsTemplate = ({
             {/* Individual Permissions */}
             {showIndividual && (
               <View className="mt-2">
-                {PERMISSION_ROWS.map((row, index) => {
+                {PERMISSION_ROWS.filter((row) => {
+                  // Filter out SMS on non-Android platforms
+                  if (row.key === "sms" && Platform.OS !== "android") {
+                    return false;
+                  }
+                  return true;
+                }).map((row, index, filteredArray) => {
                   const showNotificationsAction =
                     row.key === "notifications" && !!notificationSettingsAction;
                   return (
@@ -263,7 +279,7 @@ export const PermissionsTemplate = ({
                       config={row}
                       enabled={permissions[row.key]}
                       onToggle={() => onTogglePermission(row.key)}
-                      showDivider={index < PERMISSION_ROWS.length - 1}
+                      showDivider={index < filteredArray.length - 1}
                       helperText={
                         showNotificationsAction
                           ? notificationSettingsAction?.helperText

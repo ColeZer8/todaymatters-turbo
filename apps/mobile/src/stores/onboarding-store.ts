@@ -12,6 +12,7 @@ export interface PermissionsData extends Record<string, boolean> {
   contacts: boolean;
   browsing: boolean;
   appUsage: boolean;
+  sms: boolean;
 }
 
 export type PermissionKey = keyof PermissionsData;
@@ -265,6 +266,7 @@ const DEFAULT_PERMISSIONS: PermissionsData = {
   contacts: true,
   browsing: true,
   appUsage: true,
+  sms: true,
 };
 
 const normalizePermissions = (
@@ -277,6 +279,7 @@ const normalizePermissions = (
   contacts: source?.contacts ?? DEFAULT_PERMISSIONS.contacts,
   browsing: source?.browsing ?? DEFAULT_PERMISSIONS.browsing,
   appUsage: source?.appUsage ?? DEFAULT_PERMISSIONS.appUsage,
+  sms: source?.sms ?? DEFAULT_PERMISSIONS.sms,
 });
 
 // Predefined Core Values (curated starter list)
@@ -692,6 +695,7 @@ export const useOnboardingStore = create<OnboardingState>()(
             contacts: value,
             browsing: value,
             appUsage: value,
+            sms: value,
           },
         }),
 

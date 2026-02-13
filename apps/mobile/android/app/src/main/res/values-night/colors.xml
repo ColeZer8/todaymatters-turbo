@@ -1,7 +1,0 @@
-<resources>
-  <color name="timePicker_background">#1e293b</color>
-  <color name="timePicker_headerBackground">#0f172a</color>
-  <color name="timePicker_numbersBackgroundColor">#334155</color>
-  <color name="timePicker_numbersSelectorColor">#3b82f6</color>
-  <color name="timePicker_numbersTextColor">#f1f5f9</color>
-</resources>
