@@ -22,6 +22,7 @@ const SHOULD_USE_TRANSISTOR_LOCATION =
 let transistorReady = false;
 let transistorLocationSubscription: Subscription | null = null;
 let transistorFallbackActivated = false;
+let transistorInitLogPrinted = false;
 
 type TransistorInitStep =
   | "module_load"
@@ -231,6 +232,13 @@ async function ensureTransistorReadyAsync(
   if (transistorReady) return true;
   if (transistorFallbackActivated) return false;
 
+  if (!transistorInitLogPrinted) {
+    transistorInitLogPrinted = true;
+    console.log(
+      `📍 [ios-transistor] init: appVersion=${Constants.nativeAppVersion ?? "unknown"} build=${Constants.nativeBuildVersion ?? "unknown"} useTransistor=${SHOULD_USE_TRANSISTOR_LOCATION}`,
+    );
+  }
+
   try {
     await BackgroundGeolocation.ready({
       geolocation: {
@@ -250,6 +258,7 @@ async function ensureTransistorReadyAsync(
     });
 
     transistorReady = true;
+    console.log("📍 [ios-transistor] ready: success");
     return true;
   } catch (error) {
     activateTransistorFallback("ready", error);

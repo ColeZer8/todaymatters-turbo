@@ -112,7 +112,7 @@ export default {
     version: '1.0.12',
     ios: {
       bundleIdentifier: 'com.todaymatters.mobile',
-      buildNumber: '19',
+      buildNumber: '20',
       supportsTablet: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
