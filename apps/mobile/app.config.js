@@ -69,6 +69,23 @@ const getEnvVars = () => {
   return ENV[env] || ENV.development;
 };
 
+function resolveTransistorLicense() {
+  const iosLicense = process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS;
+  const androidLicense = process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_ANDROID;
+  const easPlatform = process.env.EAS_BUILD_PLATFORM;
+
+  if (easPlatform === 'android') return androidLicense || 'UNDEFINED';
+  if (easPlatform === 'ios') return iosLicense || 'UNDEFINED';
+
+  // Local heuristic for `expo run:android` / `expo run:ios`.
+  const argv = process.argv.join(' ').toLowerCase();
+  if (argv.includes('android')) return androidLicense || iosLicense || 'UNDEFINED';
+  if (argv.includes('ios')) return iosLicense || androidLicense || 'UNDEFINED';
+
+  // Default for generic dev-server flows.
+  return iosLicense || androidLicense || 'UNDEFINED';
+}
+
 export default {
   expo: {
     // Preserve all existing app.json configuration
@@ -152,11 +169,10 @@ export default {
       [
         'react-native-background-geolocation',
         {
-          // Platform-specific license keys
-          license: {
-            ios: process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS || 'UNDEFINED',
-            android: process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_ANDROID || 'UNDEFINED',
-          },
+          // NOTE: Expo plugin expects a STRING license token, not an object.
+          // Passing an object serializes to "[object Object]" and causes
+          // "token needs 3 segments" at runtime.
+          license: resolveTransistorLicense(),
         },
       ],
       [
