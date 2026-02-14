@@ -1132,6 +1132,15 @@ export async function deleteActivitySegmentsForDay(
 }
 
 /**
+ * Check whether an ActivitySegment represents travel/commute.
+ */
+function isCommuteActivitySegment(segment: ActivitySegment): boolean {
+  return (
+    segment.inferredActivity === "commute" || segment.placeCategory === "commute"
+  );
+}
+
+/**
  * Merge adjacent ActivitySegments that share the same place across hour boundaries.
  * Sorts by startedAt, then merges consecutive segments at the same place/coordinate cluster.
  */
@@ -1154,7 +1163,14 @@ function mergeAdjacentActivitySegments(
 
     let shouldMerge = false;
     if (gap <= maxGapMs) {
-      if (current.placeId !== null && current.placeId === next.placeId) {
+      const currentIsCommute = isCommuteActivitySegment(current);
+      const nextIsCommute = isCommuteActivitySegment(next);
+
+      // Never merge commute with stationary segments.
+      // But do merge commute→commute across hour boundaries.
+      if (currentIsCommute || nextIsCommute) {
+        shouldMerge = currentIsCommute && nextIsCommute;
+      } else if (current.placeId !== null && current.placeId === next.placeId) {
         shouldMerge = true;
       } else if (
         current.placeId === null &&
@@ -1255,6 +1271,36 @@ async function countExistingSegmentsForDay(
 }
 
 /**
+ * Count existing commute segments for a day (used for regression guardrails).
+ */
+async function countExistingCommuteSegmentsForDay(
+  userId: string,
+  dateYmd: string,
+): Promise<number> {
+  try {
+    const [year, month, day] = dateYmd.split("-").map(Number);
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+    const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+    const { data, error } = await tmSchema()
+      .from("activity_segments")
+      .select("id, inferred_activity, place_category")
+      .eq("user_id", userId)
+      .gte("started_at", dayStart.toISOString())
+      .lt("started_at", dayEnd.toISOString());
+
+    if (error) return 0;
+    const rows = data ?? [];
+    return rows.filter(
+      (row: { inferred_activity?: string | null; place_category?: string | null }) =>
+        row.inferred_activity === "commute" || row.place_category === "commute",
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Reprocess an entire day's activity segments with place lookups.
  *
  * Uses a SAFE generate-then-validate-then-swap pattern:
@@ -1302,6 +1348,13 @@ export async function reprocessDayWithPlaceLookup(
     const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0);
     const dayEnd = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
 
+    // Baseline counts for non-destructive reprocess guardrails
+    const existingCountBefore = await countExistingSegmentsForDay(userId, dateYmd);
+    const existingCommuteCountBefore = await countExistingCommuteSegmentsForDay(
+      userId,
+      dateYmd,
+    );
+
     // Lazy import to avoid creating a module dependency loop at load time.
     let processHourlySummary:
       | ((userId: string, hourStart: Date) => Promise<unknown>)
@@ -1341,12 +1394,21 @@ export async function reprocessDayWithPlaceLookup(
     const mergedSegments = mergeAdjacentActivitySegments(allDaySegments);
 
     // Now apply dwell-time filter on the merged result
+    // Commutes get a lower threshold to avoid losing short-but-real travel segments.
+    const MIN_STATIONARY_SEGMENT_MS = 5 * 60 * 1000;
+    const MIN_COMMUTE_SEGMENT_MS = 2 * 60 * 1000;
+
     const filteredSegments = mergedSegments.filter((seg) => {
       const durationMs = seg.endedAt.getTime() - seg.startedAt.getTime();
-      if (durationMs < 5 * 60 * 1000) {
+      const isCommute = isCommuteActivitySegment(seg);
+      const minDurationMs = isCommute
+        ? MIN_COMMUTE_SEGMENT_MS
+        : MIN_STATIONARY_SEGMENT_MS;
+
+      if (durationMs < minDurationMs) {
         if (__DEV__) {
           console.log(
-            `📍 [reprocess] Removing merged segment at ${seg.placeLabel ?? "unknown"} - duration ${Math.round(durationMs / 1000 / 60)}min < 5min minimum`,
+            `📍 [reprocess] Removing ${isCommute ? "commute" : "stationary"} segment at ${seg.placeLabel ?? "unknown"} - duration ${Math.round(durationMs / 1000 / 60)}min < ${Math.round(minDurationMs / 1000 / 60)}min minimum`,
           );
         }
         return false;
@@ -1361,12 +1423,9 @@ export async function reprocessDayWithPlaceLookup(
 
     // Check: Did we generate ANY segments?
     if (filteredSegments.length === 0) {
-      // Check how many segments currently exist
-      const existingCount = await countExistingSegmentsForDay(userId, dateYmd);
-      
-      if (existingCount > 0) {
+      if (existingCountBefore > 0) {
         const errorMsg =
-          `Reprocess aborted: Generated 0 segments but ${existingCount} currently exist. ` +
+          `Reprocess aborted: Generated 0 segments but ${existingCountBefore} currently exist. ` +
           `Raw location data may be sparse or unavailable. Existing data preserved.`;
         if (__DEV__) {
           console.warn(`[ActivitySegments] ${errorMsg}`);
@@ -1375,6 +1434,40 @@ export async function reprocessDayWithPlaceLookup(
       }
       // If there are also 0 existing segments, there's nothing to lose — continue
       // (this allows reprocessing an already-empty day without error)
+    }
+
+    // Guardrail for in-progress days:
+    // if regenerated data collapses dramatically, preserve existing timeline.
+    const regeneratedCommuteCount = filteredSegments.filter((seg) =>
+      isCommuteActivitySegment(seg),
+    ).length;
+
+    if (isToday && existingCountBefore > 0 && filteredSegments.length > 0) {
+      const minAllowedCount = Math.max(3, Math.floor(existingCountBefore * 0.5));
+      if (filteredSegments.length < minAllowedCount) {
+        const errorMsg =
+          `Reprocess aborted: Regenerated ${filteredSegments.length} segments from ${existingCountBefore} existing ` +
+          `(>${Math.round((1 - filteredSegments.length / existingCountBefore) * 100)}% drop). ` +
+          `Likely partial telemetry sync. Existing data preserved.`;
+        if (__DEV__) {
+          console.warn(`[ActivitySegments] ${errorMsg}`);
+        }
+        return { ...stats, error: errorMsg };
+      }
+    }
+
+    if (
+      isToday &&
+      existingCommuteCountBefore > 0 &&
+      regeneratedCommuteCount === 0
+    ) {
+      const errorMsg =
+        `Reprocess aborted: Existing day has ${existingCommuteCountBefore} commute segment(s) but regenerated data has none. ` +
+        `Likely missing movement samples. Existing data preserved.`;
+      if (__DEV__) {
+        console.warn(`[ActivitySegments] ${errorMsg}`);
+      }
+      return { ...stats, error: errorMsg };
     }
 
     // Check: Are all timestamps within the target day?
