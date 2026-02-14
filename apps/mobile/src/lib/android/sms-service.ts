@@ -1,8 +1,9 @@
-import { 
-  startReadSMS, 
-  checkIfHasSMSPermission, 
+import {
+  startReadSMS,
+  checkIfHasSMSPermission,
+  requestReadSMSPermission,
 } from "@maniac-tech/react-native-expo-read-sms";
-import { PermissionsAndroid, Platform, Linking, Alert } from "react-native";
+import { Platform, Linking, Alert } from "react-native";
 
 /**
  * Open Android Settings for TodayMatters app
@@ -40,9 +41,17 @@ export async function requestSMSPermissions(): Promise<boolean> {
       return true;
     }
 
-    // Show alert directing user to Settings (workaround for Expo dev build issues)
-    console.log('🔧 [SMS Service] Showing Settings redirect alert...');
-    
+    // First attempt native runtime permission prompt
+    console.log('🔧 [SMS Service] Requesting native SMS runtime permission...');
+    const grantedByPrompt = await requestReadSMSPermission();
+
+    if (grantedByPrompt) {
+      console.log('✅ [SMS Service] SMS permission granted via native prompt');
+      return true;
+    }
+
+    // Fallback path: direct user to Settings
+    console.log('🔧 [SMS Service] Native prompt denied/unavailable; showing Settings redirect alert...');
     return new Promise((resolve) => {
       Alert.alert(
         'Enable SMS Permissions',
@@ -58,17 +67,11 @@ export async function requestSMSPermissions(): Promise<boolean> {
           },
           {
             text: 'Open Settings',
-            onPress: async () => {
+            onPress: () => {
               console.log('🔧 [SMS Service] Opening Settings...');
               openAndroidSettings();
-              
-              // Wait a bit then check if permissions were granted
-              setTimeout(async () => {
-                const updatedPermission = await checkIfHasSMSPermission();
-                const granted = updatedPermission.hasReadSmsPermission && updatedPermission.hasReceiveSmsPermission;
-                console.log('✅ [SMS Service] Permissions after Settings:', granted);
-                resolve(granted);
-              }, 1000);
+              // User will grant manually; caller should re-check on return.
+              resolve(false);
             },
           },
         ]
