@@ -10,6 +10,7 @@
 
 import withIosInsights from './plugins/with-ios-insights';
 import withAndroidInsights from './plugins/with-android-insights';
+import withTransistorLicense from './plugins/with-transistor-license';
 import path from 'node:path';
 import dotenv from 'dotenv';
 
@@ -69,21 +70,35 @@ const getEnvVars = () => {
   return ENV[env] || ENV.development;
 };
 
+function toLicenseString(value) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized === 'UNDEFINED') return undefined;
+  return normalized;
+}
+
+const transistorIosLicense = toLicenseString(process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS);
+const transistorAndroidLicense = toLicenseString(process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_ANDROID);
+
+if (!transistorIosLicense) {
+  console.warn(
+    '[config][transistor] Missing EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS (or set to UNDEFINED). iOS Info.plist TSLocationManagerLicense will be UNDEFINED; set a valid iOS license before building iOS.'
+  );
+}
+
 function resolveTransistorLicense() {
-  const iosLicense = process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_IOS;
-  const androidLicense = process.env.EXPO_PUBLIC_TRANSISTOR_LICENSE_ANDROID;
   const easPlatform = process.env.EAS_BUILD_PLATFORM;
 
-  if (easPlatform === 'android') return androidLicense || 'UNDEFINED';
-  if (easPlatform === 'ios') return iosLicense || 'UNDEFINED';
+  if (easPlatform === 'android') return transistorAndroidLicense || 'UNDEFINED';
+  if (easPlatform === 'ios') return transistorIosLicense || 'UNDEFINED';
 
   // Local heuristic for `expo run:android` / `expo run:ios`.
   const argv = process.argv.join(' ').toLowerCase();
-  if (argv.includes('android')) return androidLicense || iosLicense || 'UNDEFINED';
-  if (argv.includes('ios')) return iosLicense || androidLicense || 'UNDEFINED';
+  if (argv.includes('android')) return transistorAndroidLicense || transistorIosLicense || 'UNDEFINED';
+  if (argv.includes('ios')) return transistorIosLicense || transistorAndroidLicense || 'UNDEFINED';
 
   // Default for generic dev-server flows.
-  return iosLicense || androidLicense || 'UNDEFINED';
+  return transistorIosLicense || transistorAndroidLicense || 'UNDEFINED';
 }
 
 export default {
@@ -204,6 +219,7 @@ export default {
           },
         },
       ],
+      withTransistorLicense,
       withIosInsights,
       withAndroidInsights,
     ],
