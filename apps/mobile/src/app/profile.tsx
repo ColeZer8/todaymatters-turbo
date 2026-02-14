@@ -54,6 +54,7 @@ import {
   getScreenTimeAuthorizationStatusSafeAsync,
   presentScreenTimeReportSafeAsync,
   requestScreenTimeAuthorizationSafeAsync,
+  requestHealthKitAuthorizationAsync,
   getHealthSummarySafeAsync,
   getTodayActivityRingsSummarySafeAsync,
   getLatestWorkoutSummarySafeAsync,
@@ -203,6 +204,15 @@ export default function ProfileScreen() {
       return;
     }
     try {
+      const authorized = await requestHealthKitAuthorizationAsync();
+      if (!authorized) {
+        Alert.alert(
+          "Health permission needed",
+          "Please allow TodayMatters to read Health data, then try again.",
+        );
+        return;
+      }
+
       const [summary, rings, workout] = await Promise.all([
         getHealthSummarySafeAsync("today"),
         getTodayActivityRingsSummarySafeAsync(),
@@ -726,6 +736,12 @@ export default function ProfileScreen() {
             label: "🧪 Sync Health (dev)",
             icon: Calendar,
             onPress: handleDevSyncHealth,
+          },
+          {
+            id: "dev-ios-insights",
+            label: "🧪 iOS Insights Permissions (dev)",
+            icon: Calendar,
+            onPress: () => router.push("/dev/ios-insights"),
           },
           {
             id: "dev-flush-location",

@@ -109,10 +109,10 @@ export default {
     orientation: 'default',
     name: 'mobile',
     slug: 'mobile',
-    version: '1.0.12',
+    version: '1.0.14',
     ios: {
       bundleIdentifier: 'com.todaymatters.mobile',
-      buildNumber: '20',
+      buildNumber: '22',
       supportsTablet: true,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
@@ -244,7 +244,7 @@ export default {
       checkAutomatically: 'ON_LOAD',
       fallbackToCacheTimeout: 0,
     },
-    runtimeVersion: '1.0.12',
+    runtimeVersion: '1.0.14',
   },
 };
 
