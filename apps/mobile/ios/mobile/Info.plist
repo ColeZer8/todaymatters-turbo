@@ -107,6 +107,8 @@
     </array>
     <key>UIUserInterfaceStyle</key>
     <string>Automatic</string>
+    <key>TSLocationManagerLicense</key>
+    <string>eyJhbGciOiJFZERTQSIsImtpZCI6ImVkMjU1MTktbWFpbi12MSJ9.eyJvcyI6ImlvcyIsImFwcF9pZCI6ImNvbS50b2RheW1hdHRlcnMubW9iaWxlIiwib3JkZXJfbnVtYmVyIjoxNTQ4NSwicmVuZXdhbF91cmwiOiJodHRwczovL3Nob3AudHJhbnNpc3RvcnNvZnQuY29tL2NhcnQvMTY1MDc4NjE1MDU6MT9ub3RlPTEwMjk4IiwiY3VzdG9tZXJfaWQiOjkzNzMsInByb2R1Y3QiOiJyZWFjdC1uYXRpdmUtYmFja2dyb3VuZC1nZW9sb2NhdGlvbiIsImtleV92ZXJzaW9uIjoxLCJhbGxvd2VkX3N1ZmZpeGVzIjpbIi5kZXYiLCIuZGV2ZWxvcG1lbnQiLCIuc3RhZ2luZyIsIi5zdGFnZSIsIi5xYSIsIi51YXQiLCIudGVzdCIsIi5kZWJ1ZyJdLCJtYXhfYnVpbGRfc3RhbXAiOjIwMjcwMzEzLCJncmFjZV9idWlsZHMiOjAsImVudGl0bGVtZW50cyI6WyJjb3JlIl0sImlhdCI6MTc3MTAyMjQzN30.aE1FHJxGjNpWgjv2XseVuXrEsgK-jgkIyE5eEk1BCXNOSy91aaI2ZDMyV6jSECyTLnPc8F1kIlaeaAUdMODZBw</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
   </dict>
