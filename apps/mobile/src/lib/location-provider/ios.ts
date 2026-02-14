@@ -21,6 +21,106 @@ const SHOULD_USE_TRANSISTOR_LOCATION =
 
 let transistorReady = false;
 let transistorLocationSubscription: Subscription | null = null;
+let transistorFallbackActivated = false;
+
+type TransistorInitStep =
+  | "module_load"
+  | "ready"
+  | "request_permission"
+  | "start"
+  | "stop"
+  | "capture_now";
+
+type TransistorErrorKind =
+  | "license_or_token_invalid"
+  | "native_module_unavailable"
+  | "permission_error"
+  | "configuration_error"
+  | "runtime_error";
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (typeof error.message === "string" && error.message.trim().length > 0) {
+      return error.message.trim();
+    }
+    return error.name || "Unknown error";
+  }
+
+  if (typeof error === "string") {
+    const trimmed = error.trim();
+    return trimmed.length > 0 ? trimmed : "Unknown error";
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function classifyTransistorError(
+  step: TransistorInitStep,
+  error: unknown,
+): TransistorErrorKind {
+  const rawCode =
+    typeof (error as { code?: unknown } | null)?.code === "string"
+      ? ((error as { code: string }).code ?? "")
+      : "";
+  const haystack = `${rawCode} ${errorMessage(error)}`.toLowerCase();
+
+  if (
+    /license|licen[cs]e|token|unauthori[sz]ed|not authorized|forbidden|invalid key|invalid api key|401|403/.test(
+      haystack,
+    )
+  ) {
+    return "license_or_token_invalid";
+  }
+
+  if (
+    /native module|module not found|cannot find module|null is not an object|unimplemented/.test(
+      haystack,
+    )
+  ) {
+    return "native_module_unavailable";
+  }
+
+  if (/permission|denied|restricted|not allowed/.test(haystack)) {
+    return "permission_error";
+  }
+
+  if (
+    step === "module_load" ||
+    step === "ready" ||
+    /config|configuration|missing|invalid/.test(haystack)
+  ) {
+    return "configuration_error";
+  }
+
+  return "runtime_error";
+}
+
+function logTransistorDiagnostic(
+  step: TransistorInitStep,
+  error: unknown,
+  fallbackActivated: boolean,
+): void {
+  const kind = classifyTransistorError(step, error);
+  const message = errorMessage(error);
+
+  console.warn(
+    `📍 [ios-transistor] ${step} failed (${kind}): ${message}; fallbackActivated=${fallbackActivated}`,
+  );
+}
+
+function activateTransistorFallback(step: TransistorInitStep, error: unknown): void {
+  transistorReady = false;
+  transistorFallbackActivated = true;
+
+  transistorLocationSubscription?.remove();
+  transistorLocationSubscription = null;
+
+  logTransistorDiagnostic(step, error, true);
+}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -63,14 +163,19 @@ function toSample(
   const activity = location.activity as { type?: string; confidence?: number } | undefined;
   let activityType: string | null = null;
   let activityConfidence: number | null = null;
-  
-  if (activity && typeof activity === 'object') {
+
+  if (activity && typeof activity === "object") {
     // Transistorsoft activity format: { type: 'walking', confidence: 75 }
-    if (typeof activity.type === 'string' && activity.type.length > 0) {
+    if (typeof activity.type === "string" && activity.type.length > 0) {
       activityType = activity.type;
     }
-    if (typeof activity.confidence === 'number' && Number.isFinite(activity.confidence)) {
-      activityConfidence = Math.round(Math.min(100, Math.max(0, activity.confidence)));
+    if (
+      typeof activity.confidence === "number" &&
+      Number.isFinite(activity.confidence)
+    ) {
+      activityConfidence = Math.round(
+        Math.min(100, Math.max(0, activity.confidence)),
+      );
     }
   }
 
@@ -108,39 +213,48 @@ async function loadTransistorAsync(): Promise<typeof import("react-native-backgr
   if (!SHOULD_USE_TRANSISTOR_LOCATION) return null;
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient)
     return null;
+  if (transistorFallbackActivated) return null;
 
   try {
     const mod = await import("react-native-background-geolocation");
     // Dynamic import returns module wrapper — .default has the actual API
     return (mod as any).default ?? mod;
-  } catch {
+  } catch (error) {
+    activateTransistorFallback("module_load", error);
     return null;
   }
 }
 
 async function ensureTransistorReadyAsync(
   BackgroundGeolocation: typeof import("react-native-background-geolocation"),
-): Promise<void> {
-  if (transistorReady) return;
+): Promise<boolean> {
+  if (transistorReady) return true;
+  if (transistorFallbackActivated) return false;
 
-  await BackgroundGeolocation.ready({
-    geolocation: {
-      desiredAccuracy: BackgroundGeolocation.DesiredAccuracy.Medium,
-      distanceFilter: 75,
-      stopTimeout: 5,
-      locationAuthorizationRequest: "Always",
-      pausesLocationUpdatesAutomatically: true,
-      showsBackgroundLocationIndicator: false,
-      activityType: BackgroundGeolocation.ActivityType.Other,
-    },
-    app: {
-      stopOnTerminate: false,
-      startOnBoot: true,
-      preventSuspend: true,
-    },
-  });
+  try {
+    await BackgroundGeolocation.ready({
+      geolocation: {
+        desiredAccuracy: BackgroundGeolocation.DesiredAccuracy.Medium,
+        distanceFilter: 75,
+        stopTimeout: 5,
+        locationAuthorizationRequest: "Always",
+        pausesLocationUpdatesAutomatically: true,
+        showsBackgroundLocationIndicator: false,
+        activityType: BackgroundGeolocation.ActivityType.Other,
+      },
+      app: {
+        stopOnTerminate: false,
+        startOnBoot: true,
+        preventSuspend: true,
+      },
+    });
 
-  transistorReady = true;
+    transistorReady = true;
+    return true;
+  } catch (error) {
+    activateTransistorFallback("ready", error);
+    return false;
+  }
 }
 
 function mapTransistorAuthorizationStatus(status: AuthorizationStatus): {
@@ -201,7 +315,11 @@ function mapTransistorAuthorizationStatus(status: AuthorizationStatus): {
 }
 
 export function isUsingTransistorLocationProvider(): boolean {
-  return SHOULD_USE_TRANSISTOR_LOCATION && Platform.OS === "ios";
+  return (
+    SHOULD_USE_TRANSISTOR_LOCATION &&
+    Platform.OS === "ios" &&
+    !transistorFallbackActivated
+  );
 }
 
 export async function requestIosLocationPermissionsWithProviderAsync() {
@@ -210,8 +328,12 @@ export async function requestIosLocationPermissionsWithProviderAsync() {
     return requestLegacyIosLocationPermissionsAsync();
   }
 
+  const ready = await ensureTransistorReadyAsync(BackgroundGeolocation);
+  if (!ready) {
+    return requestLegacyIosLocationPermissionsAsync();
+  }
+
   try {
-    await ensureTransistorReadyAsync(BackgroundGeolocation);
     const status = await BackgroundGeolocation.requestPermission();
     const mapped = mapTransistorAuthorizationStatus(status);
 
@@ -222,7 +344,8 @@ export async function requestIosLocationPermissionsWithProviderAsync() {
       notificationsRequired: false,
       hasNativeModule: true,
     };
-  } catch {
+  } catch (error) {
+    activateTransistorFallback("request_permission", error);
     return requestLegacyIosLocationPermissionsAsync();
   }
 }
@@ -234,9 +357,13 @@ export async function startIosBackgroundLocationWithProviderAsync(): Promise<voi
     return;
   }
 
-  try {
-    await ensureTransistorReadyAsync(BackgroundGeolocation);
+  const ready = await ensureTransistorReadyAsync(BackgroundGeolocation);
+  if (!ready) {
+    await startLegacyIosBackgroundLocationAsync();
+    return;
+  }
 
+  try {
     if (!transistorLocationSubscription) {
       transistorLocationSubscription = BackgroundGeolocation.onLocation(
         (location) => {
@@ -253,7 +380,8 @@ export async function startIosBackgroundLocationWithProviderAsync(): Promise<voi
     if (!state.enabled) {
       await BackgroundGeolocation.start();
     }
-  } catch {
+  } catch (error) {
+    activateTransistorFallback("start", error);
     await startLegacyIosBackgroundLocationAsync();
   }
 }
@@ -269,7 +397,8 @@ export async function stopIosBackgroundLocationWithProviderAsync(): Promise<void
     transistorLocationSubscription?.remove();
     transistorLocationSubscription = null;
     await BackgroundGeolocation.stop();
-  } catch {
+  } catch (error) {
+    logTransistorDiagnostic("stop", error, transistorFallbackActivated);
     await stopLegacyIosBackgroundLocationAsync();
   }
 }
@@ -283,8 +412,12 @@ export async function captureIosLocationSampleNowWithProviderAsync(
     return captureLegacyIosLocationSampleNowAsync(userId, options);
   }
 
+  const ready = await ensureTransistorReadyAsync(BackgroundGeolocation);
+  if (!ready) {
+    return captureLegacyIosLocationSampleNowAsync(userId, options);
+  }
+
   try {
-    await ensureTransistorReadyAsync(BackgroundGeolocation);
     const location = await BackgroundGeolocation.getCurrentPosition({
       samples: 1,
       persist: false,
@@ -309,7 +442,8 @@ export async function captureIosLocationSampleNowWithProviderAsync(
     }
 
     return { ok: true as const, enqueued: enqueueResult.enqueued };
-  } catch {
+  } catch (error) {
+    logTransistorDiagnostic("capture_now", error, transistorFallbackActivated);
     return captureLegacyIosLocationSampleNowAsync(userId, options);
   }
 }
