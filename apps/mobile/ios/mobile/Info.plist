@@ -67,6 +67,8 @@
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).</string>
+    <key>NSMotionUsageDescription</key>
+    <string>TodayMatters uses motion activity to improve location timeline accuracy (for example, distinguishing walking, driving, and stationary periods).</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>TodayMatters uses your microphone to have voice conversations with your AI coach.</string>
     <key>NSUserActivityTypes</key>

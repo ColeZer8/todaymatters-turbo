@@ -123,6 +123,8 @@ export default {
           'TodayMatters uses your location to compare your planned day to your actual day (e.g., meeting vs lunch vs commute).',
         NSLocationAlwaysAndWhenInUseUsageDescription:
           'TodayMatters uses your location in the background to build an hour-by-hour view of your day for schedule comparison.',
+        NSMotionUsageDescription:
+          'TodayMatters uses motion activity to improve location timeline accuracy (for example, distinguishing walking, driving, and stationary periods).',
         // Background modes must include location for background updates.
         UIBackgroundModes: ['audio', 'location', 'fetch'],
       },
