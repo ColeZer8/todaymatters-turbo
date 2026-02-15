@@ -1001,34 +1001,42 @@ export function generateLocationSegments(
       // PRIORITY 2: GPS Speed + Distance Heuristics (Fallback)
       // Used when device activity data is unavailable or low-confidence.
       // =========================================================================
-      // Classification thresholds (match Google Timeline behavior)
-      // CRITICAL FIX: Use AND logic, not OR!
-      // - GPS jitter can accumulate >100m distance while stationary (avgSpeed ~0.5 m/s)
-      // - Using OR incorrectly classifies stationary as travel
-      // - Using AND: must have BOTH meaningful speed AND meaningful distance
-      // Speed data shows: stationary = 0-0.78 m/s, driving = 6.66-8.33 m/s
-      const COMMUTE_SPEED_THRESHOLD = 1.5; // m/s (~3.4 mph, faster than slow walk)
-      const COMMUTE_DISTANCE_THRESHOLD = 200; // meters (requires actual travel, not jitter)
+      // Tiered classification to handle both GPS jitter and real short-distance travel
+      // 
+      // HIGH-CONFIDENCE TRAVEL: Clearly fast (>2 m/s) OR clearly far (>500m)
+      // - Catches short drives at normal speed (150m at 8 m/s = driving to nearby store)
+      // - Catches long walks/slow drives (600m at 1 m/s = slow traffic or long walk)
+      // - Either indicator alone is strong enough signal
+      //
+      // MEDIUM-CONFIDENCE TRAVEL: Moderate speed (>0.8 m/s) AND moderate distance (>80m)
+      // - Catches real movement with both indicators present
+      // - Rejects GPS jitter (typically <0.8 m/s, even if accumulated distance is high)
+      // - Walking at 1.4 m/s for 180m = real walking, not drift
+      //
+      // GPS JITTER REJECTION: Stationary drift is ~0.5 m/s, fails speed threshold
+      // - Example: 150m accumulated at 0.5 m/s = NOT high confidence (not fast enough)
+      //   AND NOT medium confidence (speed < 0.8 m/s) = correctly filtered
+      const isHighConfidenceTravel = avgSpeed > 2.0 || totalDistance > 500;
+      const isMediumConfidenceTravel = avgSpeed > 0.8 && totalDistance > 80;
       
-      // BOTH conditions must be true to classify as commute
-      // This prevents GPS jitter (high distance, low speed) from triggering false travel
-      isMoving = avgSpeed > COMMUTE_SPEED_THRESHOLD && totalDistance > COMMUTE_DISTANCE_THRESHOLD;
+      isMoving = isHighConfidenceTravel || isMediumConfidenceTravel;
       
       if (isMoving) {
         segmentKind = "commute";
         movementType = classifyMovementType(totalDistance, segmentDurationMs);
         
         if (__DEV__) {
+          const confidenceLevel = isHighConfidenceTravel ? "HIGH" : "MEDIUM";
           console.log(
-            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE via GPS SPEED ` +
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → COMMUTE via GPS (${confidenceLevel} confidence) ` +
             `(avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m, type: ${movementType})`
           );
         }
       } else {
         if (__DEV__) {
           console.log(
-            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY via GPS SPEED ` +
-            `(avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m)`
+            `📍 [CLASSIFY] Segment ${clampedStart.toISOString()} → STATIONARY via GPS ` +
+            `(avgSpeed: ${avgSpeed.toFixed(2)} m/s, distance: ${totalDistance.toFixed(0)}m - below travel thresholds)`
           );
         }
       }
